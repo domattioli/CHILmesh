@@ -5,4 +5,4 @@ The repository focuses on a class for representing triangular, quadrangular, and
 Connectivity representation for elements (faces) is Node1-Node2-Node3-Node4, where Node4==Node3 for triangular elements. The functionality for all methods are inspired by MATLAB's built-in 'delaunayTriangulation()' class.
 
 #### Citation:
-> Mattioli, D. D. (2017). QuADMESH+: A Quadrangular ADvanced Mesh Generator for Hydrodynamic >Models [Master's thesis, Ohio State University]. OhioLINK Electronic Theses and Dissertations Center. http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088
+> Mattioli, D. D. (2017). QuADMESH+: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models [Master's thesis, Ohio State University]. OhioLINK Electronic Theses and Dissertations Center. http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088
