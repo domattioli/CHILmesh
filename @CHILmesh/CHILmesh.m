@@ -1969,7 +1969,7 @@ end
                 
                 % Convert to matrix, if necessary.
                 if any(strcmpi(p.Results.Store,{'Matrix','Mat','M','matrix','mat','m'}))
-                    EdgeIDs	= MYcell2mat(EdgeIDs,'zero');
+                    EdgeIDs	= NDcell2mat(EdgeIDs,'zero');
                 end
                 
             else
@@ -2032,7 +2032,7 @@ end
                 
                 % Convert to matrix, if necessary.
                 if any(strcmpi(p.Results.Store,{'Matrix','Mat','M','matrix','mat','m'}))
-                    ElemIDs	= MYcell2mat(ElemIDs,'zero');
+                    ElemIDs	= NDcell2mat(ElemIDs,'zero');
                 end
                 
             else
