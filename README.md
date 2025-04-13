@@ -159,7 +159,7 @@ The following pieces of work inspired contributions to this repository:
 - [ADMESH](https://doi.org/10.1007/s10236-012-0574-0)
 - See the rest of the citations in the thesis [QuADMESH-Thesis.pdf](https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf)
 - Original work was funded by [Aquaveo](https://aquaveo.com/) and contributed to by Alan Zundel.
-- FEM Smoother paper](https://api.semanticscholar.org/CorpusID:34335417)
+- [FEM Smoother paper](https://api.semanticscholar.org/CorpusID:34335417)
   - [Inspiring MATLAB implementation](https://github.com/CHLNDDEV/OceanMesh2D/blob/Projection/utilities/direct_smoother_lur.m)
 - [Angle-Based Smoother paper](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf)
   - The MATLAB code was originally developed for a master's thesis research project (2015–2017) at **The Ohio State University**.
