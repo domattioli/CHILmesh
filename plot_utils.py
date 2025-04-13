@@ -340,26 +340,23 @@ class CHILmeshPlotMixin:
             fig = ax.figure
         self.axis_chilmesh(ax=ax)  # ensures consistent scaling and view
 
-
         # Compute element quality (returns q, angles, stats)
         q, _, _ = self.elem_quality(elem_ids=elem_ids)
 
         # Bin and color by quality
         bins = np.linspace(0, 1, 21)
         norm = plt.Normalize(vmin=0, vmax=1)
-        colors = cm.get_cmap(cmap)(norm(bins[:-1]))
-
+        colors = cm.get_cmap(cmap + "_r")(norm(bins[:-1]))
         for i in range(len(bins) - 1):
             bin_ids = elem_ids[(q >= bins[i]) & (q < bins[i + 1])]
             if len(bin_ids):
                 self.plot_elem(bin_ids, color=colors[i], edge_color='k', linewidth=0.5, ax=ax)
 
-        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap + "_r")
         sm.set_array([])
         plt.colorbar(sm, ax=ax, label='Element Quality')
         ax.set_title("Element Quality")
         return fig, ax
-
 
 
     def _ensure_array(self, maybe_scalar):
