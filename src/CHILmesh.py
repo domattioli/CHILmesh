@@ -1,4 +1,4 @@
-from plot_utils import CHILmeshPlotMixin
+from src.plot_utils import CHILmeshPlotMixin
 
 import numpy as np
 import matplotlib.pyplot as plt
