@@ -154,7 +154,8 @@ plt.show()
   url          = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
 }
 ```
-- [Read the pdf for free here](https://github.com/user-attachments/files/19727558/QuADMESH__Thesis_Doc.pdf)
+- [Read the pdf for free here](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
+
 
 
 #### Acknowledgements
