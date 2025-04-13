@@ -40,7 +40,7 @@
 - 2023/09/19 MATLAB code revisited; repo initiated
 - 2017/08/01 Nascent MATLAB version of the code
 #### Future Work
-[![RL-QuADMESH_Project](https://img.shields.io/badge/GitHub-RL--QuADMESH-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/RL-QuADMESH)
+[![MeQuADMESHR_Project](https://img.shields.io/badge/GitHub-MeADMESHR-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/MeADMESHR)
 
 
 ## Table of Contents
