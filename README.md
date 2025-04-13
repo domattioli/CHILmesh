@@ -76,6 +76,7 @@ source .myenv/bin/activate
 ### To-Do📌
 - Finish porting all functionality from original MATLAB code to python.
   - Add support for generating Delaunay meshes from scratch via zero-input CHILmesh().
+  - Add support for delaunay trainagulation object input/output.
   - Add support for [.gmsh](https://gmsh.info/doc/texinfo/gmsh.html) input/output.
   - Imperfections in the porting leading bugs, e.g., elements near 1st vertex being ignored in the plot() and plot_layer() methods but not plot_quality()
   - Extend .write_to_fort14() to support quadrilateral output
