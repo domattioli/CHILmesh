@@ -3,7 +3,7 @@
 </h1>
 
 <p align="center">
-  <strong><a href="#">Dominik Mattioli</a><sup>1†</sup>, <a href="#">Ethan Kubatko</a><sup>2</sup></strong><br>
+  <strong><a href="https://scholar.google.com/citations?user=IBFSkOcAAAAJ&hl=en">Dominik Mattioli</a><sup>1†</sup>, <a href="https://scholar.google.com/citations?user=mYPzjIwAAAAJ&hl=en">Ethan Kubatko</a><sup>2</sup></strong><br>
   <sup>†</sup>Corresponding author<br><br>
   <sup>1</sup>Penn State University<br>
   <sup>2</sup>Computational Hydrodynamics and Informatics Lab (CHIL), The Ohio State University
