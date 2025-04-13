@@ -38,6 +38,18 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         return self.layers
     
+    def change_points(self, new_points, acknowledge_change=False):
+        """
+        Change the mesh's (x,y,z) locations of its points.
+
+        Parameters:
+            new_points: New coordinates for the points
+            acknowledge_change: If True, acknowledges the change in the mesh
+        """
+        assert acknowledge_change, "acknowledge_change must be True to change points -- this will change the mesh, make sure you understand this before using this method within a broader algorithm."
+        if new_points.shape[1] == 2:    self.points[:, :2] = new_points
+        elif new_points.shape[1] == 3:  self.points = new_points
+        else:                           raise ValueError("new_points must have 2 or 3 columns")
 
     def __init__( self, connectivity: Optional[np.ndarray] = None, 
                  points: Optional[np.ndarray] = None, 
@@ -668,9 +680,11 @@ class CHILmesh(CHILmeshPlotMixin):
                     v1 = coords[(j+1)%3] - coords[j]
                     v2 = coords[(j-1)%3] - coords[j]
                     
-                    # Normalize vectors
-                    v1_norm = v1 / np.linalg.norm(v1)
-                    v2_norm = v2 / np.linalg.norm(v2)
+                    # Normalize vectors safely to avoid runtime warnings of NaN
+                    # v1_norm = v1 / np.linalg.norm(v1)
+                    # v2_norm = v2 / np.linalg.norm(v2)
+                    v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
+                    v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
                     
                     # Calculate angle in degrees
                     dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
@@ -775,88 +789,94 @@ class CHILmesh(CHILmeshPlotMixin):
         
         # Calculate statistics for the computed quality
         stats = {
-            'mean': np.mean(quality),
-            'median': np.median(quality),
-            'min': np.min(quality),
-            'max': np.max(quality),
-            'std': np.std(quality)
+            'mean': float(np.mean(quality)),
+            'median': float(np.median(quality)),
+            'min': float(np.min(quality)),
+            'max': float(np.max(quality)),
+            'std': float(np.std(quality))
         }
         return quality, angles, stats
     
-    def smooth(self) -> None:
+    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *kwargs) -> np.ndarray:
         """
-        Perform a single-pass smoothing iteration using the Durand et al. (2019) FEM-based approach.
-        """
-        n = self.n_verts
-        K = lil_matrix((2 * n, 2 * n))  # global stiffness matrix
-        F = np.zeros(2 * n)            # global force vector
-
-        # Mark boundary nodes (fixed)
-        is_boundary = np.zeros(n, dtype=bool)
-        boundary_edges = self.boundary_edges()
-        for e in boundary_edges:
-            v1, v2 = self.adjacencies['Edge2Vert'][e]
-            is_boundary[v1] = True
-            is_boundary[v2] = True
-
-        # Precompute signed areas for all elements
-        elem_areas = np.abs( self.signed_area() )
+        Perform mesh smoothing using a modified FEM-based approach.
         
-        # Loop over elements to build global stiffness matrix and force vector
-        for elem_id in range(self.n_elems):
-            verts = self.connectivity_list[elem_id]
-            verts = verts[verts >= 0]
-            coords = self.points[verts, :2]
-            m = len(verts)
+        Parameters:
+            method: Smoothing method ('FEM','angle-based')
+            acknowledge_change: If True, acknowledges the change in the mesh
+        """
+        assert acknowledge_change, "acknowledge_change must be True to change mesh -- this will change the mesh, make sure you understand this before using this method within a broader algorithm."
+        if method.lower() == 'fem':
+            new_points = self.direct_smoother( *kwargs )
+        elif method.lower() == 'angle-based':
+            new_points = self.angle_based_smoother( *kwargs )
+        else:
+            raise ValueError(f"Unknown smoothing method: {method}")
+        self.change_points( new_points, acknowledge_change=True )
+        return new_points
+    
+    def angle_based_smoother( self, angle_limit: float = 30.0 ) -> np.ndarray:
+        """
+        Perform angle-based smoothing of the mesh.
+        Based on this: https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf
+        Parameters:
+            angle_limit: Maximum allowable angle deviation in degrees
+        """
+        # Placeholder for angle-based smoothing logic
+        # This would involve checking angles and adjusting points accordingly
+        # For now, just return the original points
+        raise NotImplementedError("Angle-based smoothing not implemented yet.")
+        return self.points
+    
+    def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
+        """
+        Perform direct FEM smoothing with fixed boundary nodes.
+        Based on the triangle stiffness formulation in Balendran (2006).
 
-            # Skip degenerate or invalid elements
-            if m < 3 or coords.shape[0] != m:
-                continue
+        Based on this: https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=04b231a13f94e9720d763b434f387d03240faf9a
+        Parameters:
+            kinf: Large stiffness value for fixed boundary vertices
+        """
+        import numpy as np
+        from scipy.sparse import csr_matrix
+        from scipy.sparse.linalg import spsolve
 
-            # Build reference element (equilateral triangle or square)
-            if m == 3:
-                ref = np.array([[0, 0], [1, 0], [0.5, np.sqrt(3)/2]])
-            elif m == 4:
-                ref = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
-            else:
-                continue
+        p = self.points[:, :2]  # Only use x, y
+        t = self.connectivity_list[:, :3]  # Assume triangles only
 
-            # Compute affine map A from ref → coords using least squares
-            A, res, _, _ = np.linalg.lstsq(ref, coords, rcond=None)
-            ref_mapped = ref @ A
-            Ue = coords - ref_mapped
+        # Identify boundary nodes
+        edge_verts = self.edge2vert(self.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
 
-            # Local stiffness matrix: identity scaled by element size
-            area = elem_areas[elem_id]
-            if area < 1e-12: continue  # skip degenerate element
-            Ke = np.eye(2 * m) * area
+        n = self.n_verts
+        D = 2.0 * np.eye(2)
+        T = np.array([[-1, -np.sqrt(3)], [np.sqrt(3), -1]])
 
-            # Local force vector
-            fe = Ke @ Ue.flatten()
+        rows, cols, data = [], [], []
+        for tri in t:
+            for i in range(3):
+                for j in range(3):
+                    block = D if i == j else T if j == (i+1)%3 else T.T
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*tri[i]+di)
+                            cols.append(2*tri[j]+dj)
+                            data.append(block[di, dj])
 
-            # Assemble into global system
-            for i, vi in enumerate(verts):
-                for j, vj in enumerate(verts):
-                    K[2*vi:2*vi+2, 2*vj:2*vj+2] += Ke[2*i:2*i+2, 2*j:2*j+2]
-                F[2*vi:2*vi+2] += fe[2*i:2*i+2]
+        K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
+        F = np.zeros(2*n)
 
-        # Apply boundary conditions (fixed nodes)
-        for vi in range(n):
-            if is_boundary[vi]:
-                K[2*vi, :] = 0
-                K[2*vi+1, :] = 0
-                K[:, 2*vi] = 0
-                K[:, 2*vi+1] = 0
-                K[2*vi, 2*vi] = 1
-                K[2*vi+1, 2*vi+1] = 1
-                F[2*vi:2*vi+2] = 0
+        # Apply boundary constraints
+        for v in boundary_nodes:
+            F[2*v:2*v+2] = kinf * p[v]
+            K[2*v, 2*v] = kinf
+            K[2*v+1, 2*v+1] = kinf
 
-        # Solve for displacements
-        U = spsolve(K.tocsr(), F)
-
-        # Update node positions
-        self.points[:, 0] += U[0::2]
-        self.points[:, 1] += U[1::2]
+        c = spsolve(K, F)
+        new_points = np.zeros_like(self.points)
+        new_points[:, :2] = c.reshape(-1, 2)
+        new_points[:, 2] = self.points[:, 2]  # preserve z if needed
+        return new_points    
 
 
     def copy( self ) -> "CHILmesh":
