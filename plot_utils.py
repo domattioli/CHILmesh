@@ -43,53 +43,67 @@ class CHILmeshPlotMixin:
         
         return ax
 
-    def plot( self, elem_ids: Optional[np.ndarray] = None, elem_color: str = 'none', 
-             edge_color: str = 'k', linewidth: float = 1.0, linestyle: str = '-' ) -> Tuple[plt.Figure, plt.Axes]:
+
+    def plot(self, elem_ids=None, elem_color='none', edge_color='k',
+            linewidth=1.0, linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
         """
         Plot the mesh.
-        
+
         Parameters:
             elem_ids: IDs of elements to plot. If None, all elements are plotted.
-            elem_color: Color of elements.
-            edge_color: Color of edges.
-            linewidth: Width of edge lines.
-            linestyle: Style of edge lines.
+            elem_color: Color of elements (set to 'none' for edge-only).
+            edge_color: Color of element or edge outlines.
+            linewidth: Line width.
+            linestyle: Line style.
+            ax: Optional matplotlib axis. Creates a new one if not provided.
+
+        Returns:
+            (fig, ax): matplotlib Figure and Axes
         """
-        if elem_ids is None: elem_ids = np.arange( self.n_elems )
-        ax = self.axis_chilmesh()
-        
-        if elem_color == 'none':
-            edges = self.elem2edge( elem_ids ).flatten()
-            edges = edges[edges > 0]  # Remove zero edges
-            self.plot_edge( edges, color=edge_color, linewidth=linewidth, linestyle=linestyle )
+        if elem_ids is None:
+            elem_ids = np.arange(self.n_elems)
+        elif np.isscalar(elem_ids):
+            elem_ids = np.array([elem_ids])
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 6))
         else:
-            # Identify types of elements
-            tri_elems, quad_elems = self._elem_type( elem_ids )
-            
-            # Plot triangular elements
+            fig = ax.figure
+
+        ax.set_aspect('equal')
+        ax.set_facecolor('white')
+        ax.tick_params(labelsize=12, width=1.5)
+
+        x = self.points[:, 0]
+        y = self.points[:, 1]
+        offset = 0.01 * max(x.max() - x.min(), y.max() - y.min())
+        ax.set_xlim([x.min() - offset, x.max() + offset])
+        ax.set_ylim([y.min() - offset, y.max() + offset])
+
+        if elem_color == 'none':
+            edges = self.elem2edge(elem_ids).flatten()
+            edges = edges[edges > 0]
+            self.plot_edge(edges, color=edge_color, linewidth=linewidth, linestyle=linestyle, ax=ax)
+        else:
+            tri_elems, quad_elems = self._elem_type(elem_ids)
+
             for elem_id in tri_elems:
-                # Get vertices of the triangle
                 vertices = self.connectivity_list[elem_id]
                 if self.type != "Triangular":
-                    vertices = vertices[:3]  # Only use first 3 vertices for triangles
-                
+                    vertices = vertices[:3]
                 coords = self.points[vertices, :2]
-                tri = plt.Polygon( coords, facecolor=elem_color, edgecolor=edge_color, 
-                                  linewidth=linewidth, linestyle=linestyle )
-                ax.add_patch( tri )
-            
-            # Plot quadrilateral elements
+                tri = plt.Polygon(coords, facecolor=elem_color, edgecolor=edge_color,
+                                linewidth=linewidth, linestyle=linestyle)
+                ax.add_patch(tri)
+
             for elem_id in quad_elems:
-                # Get vertices of the quad
                 vertices = self.connectivity_list[elem_id]
                 coords = self.points[vertices, :2]
-                quad = plt.Polygon( coords, facecolor=elem_color, edgecolor=edge_color,
-                                   linewidth=linewidth, linestyle=linestyle )
-                ax.add_patch( quad )
+                quad = plt.Polygon(coords, facecolor=elem_color, edgecolor=edge_color,
+                                linewidth=linewidth, linestyle=linestyle)
+                ax.add_patch(quad)
 
-        # Add title using self.grid_name if it exists
-        if hasattr(self, 'grid_name') and self.grid_name:   ax.set_title(f"'{self.grid_name}' - CHILmesh plot")
-        return plt.gcf(), ax
+        return fig, ax
 
     def plot_edge(self, edge_ids=None, color='g', linewidth=2.5, linestyle='-', ax=None):
         if edge_ids is None:
@@ -249,16 +263,27 @@ class CHILmeshPlotMixin:
                     ax.text(x, y, f'E{i}', color='blue', ha='center')
         return fig, ax
     
-    def plot_layer(self, layers=None, cmap='viridis') -> Tuple[plt.Figure, plt.Axes]:
+    def plot_layer(self, layers=None, cmap='viridis', ax=None) -> Tuple[plt.Figure, plt.Axes]:
         """
         Plot the specified mesh layers with different colors.
 
         Parameters:
             layers: Indices of layers to plot. If None, all layers are plotted.
             cmap: Colormap to use for the layers.
+            ax: Optional matplotlib axis to plot on.
+        
+        Returns:
+            (fig, ax): Matplotlib Figure and Axes
         """
-        if layers is None:  layers = range(self.n_layers)
-        fig, ax = self.plot()
+        if layers is None:
+            layers = range(self.n_layers)
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 8))
+        else:
+            fig = ax.figure
+
+        ax.set_aspect('equal')
 
         cmap_obj = cm.get_cmap(cmap, self.n_layers)
         norm = BoundaryNorm(boundaries=np.arange(self.n_layers + 1), ncolors=self.n_layers)
@@ -278,7 +303,6 @@ class CHILmeshPlotMixin:
                     continue
                 vertices = self.connectivity_list[elem_id]
                 valid_indices = [v for v in vertices if v > 0 and v < len(self.points)]
-
                 if len(valid_indices) >= 3:
                     polygon = self.points[valid_indices, :2]
                     ax.fill(polygon[:, 0], polygon[:, 1], color=color, edgecolor='k',
@@ -289,27 +313,42 @@ class CHILmeshPlotMixin:
         plt.colorbar(sm, ax=ax, label='Layer',
                     ticks=np.arange(0, self.n_layers) + 0.5,
                     format='%d')
+
         ax.set_title(f"Mesh Layers ({self.n_layers} total)")
         return fig, ax
 
-    
-    def plot_quality(self, elem_ids=None, cmap='cool') -> Tuple[plt.Figure, plt.Axes]:
+    def plot_quality(self, elem_ids=None, cmap='cool', ax=None) -> Tuple[plt.Figure, plt.Axes]:
         """
         Plot element quality as a contour map.
 
         Parameters:
             elem_ids: IDs of elements to plot. If None, all elements are plotted.
             cmap: Colormap to use.
-        """
-        if elem_ids is None:        elem_ids = np.arange(self.n_elems)
-        elif np.isscalar(elem_ids): elem_ids = np.array([elem_ids])
-        fig, ax = self.plot()
+            ax: Optional matplotlib axis to plot on.
 
-        # Compute the qualities for the elements in the mesh.
+        Returns:
+            (fig, ax): Matplotlib Figure and Axes
+        """
+        if elem_ids is None:
+            elem_ids = np.arange(self.n_elems)
+        elif np.isscalar(elem_ids):
+            elem_ids = np.array([elem_ids])
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 8))
+        else:
+            fig = ax.figure
+        self.axis_chilmesh(ax=ax)  # ensures consistent scaling and view
+
+
+        # Compute element quality (returns q, angles, stats)
         q, _, _ = self.elem_quality(elem_ids=elem_ids)
+
+        # Bin and color by quality
         bins = np.linspace(0, 1, 21)
         norm = plt.Normalize(vmin=0, vmax=1)
-        colors = cm.get_cmap(cmap + "_r")(norm(bins[:-1]))
+        colors = cm.get_cmap(cmap)(norm(bins[:-1]))
+
         for i in range(len(bins) - 1):
             bin_ids = elem_ids[(q >= bins[i]) & (q < bins[i + 1])]
             if len(bin_ids):
@@ -320,6 +359,7 @@ class CHILmeshPlotMixin:
         plt.colorbar(sm, ax=ax, label='Element Quality')
         ax.set_title("Element Quality")
         return fig, ax
+
 
 
     def _ensure_array(self, maybe_scalar):
