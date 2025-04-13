@@ -1,5 +1,5 @@
 <h1 align="center">
-  CHILmesh: Triangular, Quadrangular and Mixed-Element Advanced and Automatic Mesh Generator for Hydrodynamic Domains
+  CHILmesh: representing triangular, quadrangular and mixed-element (2D) meshes for advanced and automatic mesh generation for hydrodynamic domains.
 </h1>
 
 <p align="center">
@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/badge/OSU_CHIL-ADMESH-66bb33?logo=github&logoColor=ba0c2f&labelColor=ffffff" alt="OSU CHIL ADMESH">
   </a>
   <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf">
-    <img src="https://img.shields.io/badge/Thesis-QuADMESH%2B-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH+ Thesis">
+    <img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis">
   </a>
   <a href="https://scholar.google.com/citations?view_op=view_citation&hl=en&user=IBFSkOcAAAAJ&citation_for_view=IBFSkOcAAAAJ:u5HHmVD_uO8C">
     <img src="https://img.shields.io/badge/Scholar-Profile-4285F4?logo=google-scholar&logoColor=white" alt="Google Scholar">
@@ -36,9 +36,9 @@
 
 
 ## Releases
-2. 2025/04/12 Python version of our code
-1. 2022/01/01 MATLAB code revisited
-0. 2017/11/01 Nascent MATLAB version of the code
+- 2025/04/12 Python version of our code
+- 2023/09/19 MATLAB code revisited; repo initiated
+- 2017/08/01 Nascent MATLAB version of the code
 #### Future Work
 [![RL-QuADMESH_Project](https://img.shields.io/badge/GitHub-RL--QuADMESH-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/RL-QuADMESH)
 
@@ -55,7 +55,12 @@
 
 
 ## Installation
-- To-do
+```bash
+git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
+python -m venv .myenv
+source .myenv/bin/activate
+.myenv/bin/pip install matplotlib numpy scipy
+```
 
 
 ## Key Features
@@ -68,7 +73,7 @@
 - `.fort.14` file input/output for ADCIRC models
 - API inspired by MATLAB’s `delaunayTriangulation()`
 
-### To-Do 📌
+### To-Do📌
 - Finish porting all functionality from original MATLAB code to python.
   - Add support for generating Delaunay meshes from scratch via zero-input CHILmesh().
   - Add support for [.gmsh](https://gmsh.info/doc/texinfo/gmsh.html) input/output.
@@ -76,7 +81,7 @@
   - Extend .write_to_fort14() to support quadrilateral output
 
 ### Example Usage:
-```
+```python
 # Load mesh
 from CHILmesh import CHILmesh
 mesh = CHILmesh.read_from_fort14("annulus_200pts.fort.14", grid_name="Annulus_200pts.fort.14")
@@ -132,14 +137,11 @@ plt.show()
 ```
 ![image](https://github.com/user-attachments/assets/7fdeda18-ad4a-4fd1-ad14-1f8cbc56e7da)
 
-> **Note**: Element connectivity follows the format `Node1-Node2-Node3-Node4`,  
-> where `Node4 == Node3` for triangular elements.
+> **Note**: When mesh is mixed-element, connectivity (elem2vert adjacency) follows the format `Node1-Node2-Node3-Node4`, such that `Node4 == Node3` for triangular elements.
 
-***
 
 ### BibTeX:
 > Mattioli, D. D. (2017). QuADMESH+: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models [Master's thesis, Ohio State University]. OhioLINK Electronic Theses and Dissertations Center. http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088
-  - [Read the pdf for free here](https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf)
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
   author       = {Mattioli, Dominik D.},
@@ -150,12 +152,14 @@ plt.show()
   url          = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
 }
 ```
+- [Read the pdf for free here](https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf)
 
 #### Acknowledgements
-The following pieces of work inspired this code:
-- Original work was funded by [Aquaveo](https://aquaveo.com/) and contributed to by Alan Zundel
-  - The MATLAB code was originally developed for a master's thesis research project (2015–2017) at **The Ohio State University** 
-- fem smoother paper and the direct lur https://github.com/CHLNDDEV/OceanMesh2D/blob/Projection/utilities/direct_smoother_lur.m
-- angle based smoother
-- dustins admesh
-- see the rest of the citations in the thesis [QuADMESH-Thesis.pdf](https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf)
+The following pieces of work inspired contributions to this repository:
+- [ADMESH](https://doi.org/10.1007/s10236-012-0574-0)
+- See the rest of the citations in the thesis [QuADMESH-Thesis.pdf](https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf)
+- Original work was funded by [Aquaveo](https://aquaveo.com/) and contributed to by Alan Zundel.
+- FEM Smoother paper](https://api.semanticscholar.org/CorpusID:34335417)
+  - [Inspiring MATLAB implementation](https://github.com/CHLNDDEV/OceanMesh2D/blob/Projection/utilities/direct_smoother_lur.m)
+- [Angle-Based Smoother paper](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf)
+  - The MATLAB code was originally developed for a master's thesis research project (2015–2017) at **The Ohio State University**.
