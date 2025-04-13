@@ -6,7 +6,33 @@ The repository focuses on a class for representing triangular, quadrangular, and
 ![donut_triangulation_layers_verts](https://github.com/user-attachments/assets/1da016bc-ef71-48bc-a563-f7d5022b98ed)
  
 
-Connectivity representation for elements (faces) is Node1-Node2-Node3-Node4, where Node4==Node3 for triangular elements. The functionality for all methods are inspired by MATLAB's built-in 'delaunayTriangulation()' class.
+NOTE: Connectivity representation for elements (faces) is Node1-Node2-Node3-Node4, where Node4==Node3 for triangular elements. The functionality for all methods are inspired by MATLAB's built-in 'delaunayTriangulation()' class.
+
+
+### Example Usage:
+```
+from CHILmesh import *
+import matplotlib.pyplot as plt
+
+# Create a random triangulation
+# mesh = CHILmesh( ) # random delaunay
+
+# Visualize the mesh
+mesh = CHILmesh.from_fort14("donut_domain.fort.14", grid_name="Donut Mesh")
+fig, ax = mesh.plot();  # assuming CHILmeshPlotMixin provides a plot method
+mesh.plot_point( 1, ax=ax  );
+mesh.plot_edge( 1, ax=ax  );
+mesh.plot_elem( 1, ax=ax  );
+plt.show()
+mesh.plot_layer();
+plt.show()
+fix, ax = mesh.plot_quality()
+plt.show()
+```
+![image](https://github.com/user-attachments/assets/5abb94b1-6a25-4afa-a487-7352ada0be22)
+![image](https://github.com/user-attachments/assets/531c9e68-b2e8-4024-944b-d5fcefd3ddbb)
+![image](https://github.com/user-attachments/assets/22e9eae0-e637-458a-bd37-3f7fa7171693)
+
 
 [![View CHILmesh on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh)
 
