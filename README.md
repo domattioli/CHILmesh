@@ -59,7 +59,7 @@
 git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
 python -m venv .myenv
 source .myenv/bin/activate
-.myenv/bin/pip install matplotlib numpy scipy
+.myenv/bin/pip install requirements.txt
 ```
 
 
@@ -83,7 +83,7 @@ source .myenv/bin/activate
 ### Example Usage:
 ```python
 # Load mesh
-from CHILmesh import CHILmesh
+from CHILmesh import *
 mesh = CHILmesh.read_from_fort14("annulus_200pts.fort.14", grid_name="Annulus_200pts.fort.14")
 # mesh = CHILmesh() # random delaunay to-do
 
