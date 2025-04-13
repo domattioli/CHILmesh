@@ -4,10 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy.spatial import Delaunay
-from typing import List, Tuple, Optional, Dict, Set, Union, Any
+from typing import List, Tuple, Optional as Opt, Dict, Set, Union, Any
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
 from copy import deepcopy
+from pathlib import Path
+
+__all__ = ['CHILmesh', 'write_fort14']
 
 class CHILmesh(CHILmeshPlotMixin):
     """
@@ -51,9 +54,7 @@ class CHILmesh(CHILmeshPlotMixin):
         elif new_points.shape[1] == 3:  self.points = new_points
         else:                           raise ValueError("new_points must have 2 or 3 columns")
 
-    def __init__( self, connectivity: Optional[np.ndarray] = None, 
-                 points: Optional[np.ndarray] = None, 
-                 grid_name: Optional[str] = None ) -> None:
+    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None ) -> None:
         """
         Initialize a CHILmesh object.
         
@@ -75,7 +76,7 @@ class CHILmesh(CHILmeshPlotMixin):
         self.n_edges: int = 0
         self.n_layers: int = 0
         self.layers: Dict[str, List] = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
-        self.type: Optional[str] = None
+        self.type: Opt[str] = None
         
         # If no inputs are provided, create a random Delaunay triangulation
         if connectivity is None and points is None:
@@ -131,7 +132,7 @@ class CHILmesh(CHILmeshPlotMixin):
             elif self.connectivity_list.shape[1] == 4:
                 self.connectivity_list[elem_id] = self.connectivity_list[elem_id, [0, 3, 2, 1]]
     
-    def signed_area( self, elem_ids: Optional[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
+    def signed_area( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
         Calculate the signed area of elements.
         
@@ -171,7 +172,7 @@ class CHILmesh(CHILmeshPlotMixin):
         
         return areas
     
-    def _elem_type( self, elem_ids: Optional[Union[int, List[int], np.ndarray]] = None 
+    def _elem_type( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None 
                   ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Identify triangular and quadrilateral elements.
@@ -412,7 +413,7 @@ class CHILmesh(CHILmeshPlotMixin):
         boundary_mask = (edge2elem[:, 1] == 0)  # Second element is zero
         return np.where( boundary_mask )[0]
     
-    def edge2vert( self, edge_ids: Optional[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
+    def edge2vert( self, edge_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
         Get vertices that define specified edges.
         
@@ -431,7 +432,7 @@ class CHILmesh(CHILmeshPlotMixin):
         
         return self.adjacencies["Edge2Vert"][edge_ids]
     
-    def elem2edge( self, elem_ids: Optional[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
+    def elem2edge( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
         Get edges that define specified elements.
         
@@ -450,7 +451,7 @@ class CHILmesh(CHILmeshPlotMixin):
         
         return self.adjacencies["Elem2Edge"][elem_ids]
     
-    def edge2elem( self, edge_ids: Optional[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
+    def edge2elem( self, edge_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
         Get elements adjacent to specified edges.
         
@@ -597,7 +598,7 @@ class CHILmesh(CHILmeshPlotMixin):
     
     
     @staticmethod
-    def from_fort14(filepath: str, grid_name: str = None) -> "CHILmesh":
+    def read_from_fort14(filepath: str, grid_name: str = None) -> "CHILmesh":
         """
         Load a mesh from a FORT.14 file.
         
@@ -641,6 +642,16 @@ class CHILmesh(CHILmeshPlotMixin):
                 elements[i] = node_indices
         
         return CHILmesh(connectivity=elements, points=points, grid_name=grid_name or header)
+    
+    def write_to_fort14( self, filename: str, grid_name: Opt[str] = "CHILmesh Grid") -> bool:
+        """
+        Export the current mesh to ADCIRC .fort.14 format.
+
+        Parameters:
+            filename: Path to save the file
+            grid_name: Optional title for the mesh
+        """
+        return CHILmesh.write_to_fort14(filename, self.points, self.connectivity_list, grid_name)
 
     def interior_angles(self, elem_ids=None) -> np.ndarray:
         """
@@ -830,12 +841,18 @@ class CHILmesh(CHILmeshPlotMixin):
     
     def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
         """
-        Perform direct FEM smoothing with fixed boundary nodes.
+        Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
         Based on the triangle stiffness formulation in Balendran (2006).
 
-        Based on this: https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=04b231a13f94e9720d763b434f387d03240faf9a
         Parameters:
             kinf: Large stiffness value for fixed boundary vertices
+
+        Reference:
+            Zhou, M., & Shimada, K. (2000). 
+            "An angle-based approach to two-dimensional mesh smoothing". 
+            In *Proceedings of the 9th International Meshing Roundtable*, 373–384. 
+            Sandia National Laboratories.
+            https://api.semanticscholar.org/CorpusID:34335417
         """
         import numpy as np
         from scipy.sparse import csr_matrix
@@ -882,3 +899,32 @@ class CHILmesh(CHILmeshPlotMixin):
     def copy( self ) -> "CHILmesh":
         """ Returns: a deep copy of the  new CHILmesh object with the same properties."""
         return deepcopy(self)
+    
+
+def write_fort14( filename: Path, points: np.ndarray, elements: np.ndarray, grid_name: str ) -> bool:
+    """
+    Write mesh data to a .fort.14 ADCIRC file.
+
+    Parameters:
+        filename: Output path
+        points: (n_nodes, 2 or 3) numpy array of node coordinates
+        elements: (n_elems, 3) array of triangle vertex indices (0-based)
+        grid_name: Header string
+    """
+    try:
+        with open(filename, 'w') as f:
+            f.write(f"{grid_name}\n")
+            f.write(f"{len(elements)} {len(points)}\n")
+
+            for i, pt in enumerate(points, start=1):
+                x, y = pt[:2]
+                z = pt[2] if len(pt) == 3 else 0.0
+                f.write(f"{i} {x:.8f} {y:.8f} {z:.8f}\n")
+
+            for i, tri in enumerate(elements, start=1):
+                n1, n2, n3 = tri + 1  # switch to 1-based indexing
+                f.write(f"{i} 3 {n1} {n2} {n3}\n")
+        return True
+    except Exception as e:
+        print(f"Error writing fort14 file {filename}: {e}")
+        return False

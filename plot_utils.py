@@ -123,7 +123,7 @@ class CHILmeshPlotMixin:
 
         return fig, ax
 
-    def plot_elem(self, elem_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None):
+    def plot_elem(self, elem_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
         elem_ids = self._ensure_array(elem_ids)
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
@@ -151,7 +151,7 @@ class CHILmeshPlotMixin:
 
         return fig, ax
     
-    def plot_face(self, face_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None):
+    def plot_face(self, face_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
         """
         Plot faces of the mesh (alias for plot_elem).
         
