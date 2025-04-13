@@ -83,7 +83,7 @@ source .myenv/bin/activate
 ### Example Usage:
 ```python
 # Load mesh
-from CHILmesh import *
+from src.CHILmesh import CHILmesh
 mesh = CHILmesh.read_from_fort14("annulus_200pts.fort.14", grid_name="Annulus_200pts.fort.14")
 # mesh = CHILmesh() # random delaunay to-do
 
