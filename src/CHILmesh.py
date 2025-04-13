@@ -1,4 +1,8 @@
-from src.plot_utils import CHILmeshPlotMixin
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))
+
+from utils.plot_utils import CHILmeshPlotMixin
 
 import numpy as np
 import matplotlib.pyplot as plt
