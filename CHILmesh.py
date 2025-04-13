@@ -15,6 +15,27 @@ class CHILmesh(CHILmeshPlotMixin):
     focusing on the mesh layers approach described in Mattioli's thesis.
     """
     
+    @property
+    def grid_name(self):
+        """Grid name property."""
+        return self._grid_name
+    
+    @grid_name.setter
+    def grid_name(self, value):
+        """Set grid name."""
+        self._grid_name = value
+    
+    @property
+    def Layers(self):
+        """
+        Backwards compatibility property to access layers with uppercase name.
+        
+        Returns:
+            The layers dictionary
+        """
+        return self.layers
+    
+
     def __init__( self, connectivity: Optional[np.ndarray] = None, 
                  points: Optional[np.ndarray] = None, 
                  grid_name: Optional[str] = None ) -> None:
@@ -441,121 +462,101 @@ class CHILmesh(CHILmeshPlotMixin):
         # Reset layers
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
         
-        # Get edges and edge neighbors
-        edge2vert = self.adjacencies["Edge2Vert"]
-        edge2elem = self.adjacencies["Edge2Elem"].copy()  # Work on a copy to modify
+        # Get boundary edges (edges with only one adjacent element)
+        edge2elem = self.adjacencies["Edge2Elem"]
+        boundary_mask = (edge2elem[:, 1] == 0)
+        boundary_edges = np.where(boundary_mask)[0]
         
         # Keep track of which elements have been assigned to a layer
-        assigned_elements = set()
+        remaining_elements = set(range(self.n_elems))
         
+        # Get element-to-element connectivity using edge2elem
+        elem2elem = [[] for _ in range(self.n_elems)]
+        for edge_idx, (e1, e2) in enumerate(edge2elem):
+            if e1 >= 0 and e2 >= 0:  # Both elements exist
+                elem2elem[e1].append(e2)
+                elem2elem[e2].append(e1)
+        
+        # Process layers from the boundary inward
         layer_idx = 0
-        
-        # Continue until all elements are assigned to a layer or we can't find any more
-        while len(assigned_elements) < self.n_elems:
-            # Identify boundary edges of current layer
-            if layer_idx == 0:
-                # First layer - use all mesh boundaries (external and internal)
-                boundary_mask = (edge2elem[:, 1] == 0)  # Second element is zero
-                boundary_edges = np.where(boundary_mask)[0]
-                
-                # If no boundary edges found, break the loop
-                if len(boundary_edges) == 0:
-                    break
-                    
-                outer_vertices = np.unique(edge2vert[boundary_edges].flatten())
-                self.layers["OV"].append(outer_vertices)
-            else:
-                # Subsequent layers - use edges with only one neighbor
-                boundary_mask = np.sum(edge2elem > 0, axis=1) == 1
-                boundary_edges = np.where(boundary_mask)[0]
-                
-                # If no boundary edges found, but we still have unassigned elements,
-                # we might have isolated components - break the loop
-                if len(boundary_edges) == 0:
-                    break
-                    
-                outer_vertices = np.unique(edge2vert[boundary_edges].flatten())
-                self.layers["OV"].append(outer_vertices)
-            
+        while remaining_elements and len(boundary_edges) > 0:
+            # Get boundary vertices
+            edge2vert = self.adjacencies["Edge2Vert"]
+            outer_vertices = np.array(list(set(edge2vert[boundary_edges].flatten())))
+            self.layers["OV"].append(outer_vertices)
             self.layers["bEdgeIDs"].append(boundary_edges)
             
-            # Identify outer elements of layer (adjacent to boundary edges)
+            # Get outer elements (elements adjacent to boundary edges)
             outer_elems = []
             for edge_idx in boundary_edges:
-                for elem_idx in edge2elem[edge_idx]:
-                    if elem_idx > 0:  # Skip 0 (no element) and negative (processed)
-                        outer_elems.append(elem_idx)
+                elems = edge2elem[edge_idx]
+                for elem in elems:
+                    if elem >= 0 and elem in remaining_elements:
+                        outer_elems.append(elem)
             
-            if not outer_elems:  # If no outer elements found, break loop
+            # Convert to numpy array of integers
+            outer_elems = np.array(list(set(outer_elems)), dtype=int)
+            
+            # Skip if no outer elements found
+            if len(outer_elems) == 0:
                 break
                 
-            outer_elems = np.unique(outer_elems)
             self.layers["OE"].append(outer_elems)
-            assigned_elements.update(outer_elems)
+            for elem in outer_elems:
+                remaining_elements.remove(elem)
             
-            # Mark used edges in edge2elem
-            for elem_idx in outer_elems:
-                edge2elem[edge2elem == elem_idx] = -1  # Mark as processed
-            
-            # Identify all edges connected to outer vertices
-            layer_edges = []
-            for v in outer_vertices:
-                for i, (v1, v2) in enumerate(edge2vert):
-                    if v == v1 or v == v2:
-                        layer_edges.append(i)
-                        
-            layer_edges = np.unique(layer_edges)
-            
-            # Identify inner elements of layer (using these layer edges)
+            # Get inner elements (neighbors of outer elements that haven't been assigned yet)
             inner_elems = []
-            for edge_idx in layer_edges:
-                for elem_idx in edge2elem[edge_idx]:
-                    if elem_idx > 0:  # Skip 0 (no element) and negative (processed)
-                        inner_elems.append(elem_idx)
+            for elem in outer_elems:
+                for neighbor in elem2elem[elem]:
+                    if neighbor in remaining_elements:
+                        inner_elems.append(neighbor)
             
-            inner_elems = np.unique(inner_elems)
+            # Convert to numpy array of integers and remove duplicates
+            inner_elems = np.array(list(set(inner_elems)), dtype=int)
+            
+            # Store inner elements
             self.layers["IE"].append(inner_elems)
-            assigned_elements.update(inner_elems)
+            for elem in inner_elems:
+                if elem in remaining_elements:
+                    remaining_elements.remove(elem)
             
-            # Mark used edges in edge2elem
-            for elem_idx in inner_elems:
-                edge2elem[edge2elem == elem_idx] = -1  # Mark as processed
+            # Get inner vertices
+            all_vertices = set()
+            for elem in np.concatenate((outer_elems, inner_elems)):
+                vertices = self.connectivity_list[elem]
+                for v in vertices:
+                    if v > 0:  # Skip zero vertices
+                        all_vertices.add(v)
             
-            # Identify inner vertices (vertices of outer and inner elements not in outer vertices)
-            all_vertices = []
+            inner_vertices = np.array(list(all_vertices - set(outer_vertices)), dtype=int)
+            self.layers["IV"].append(inner_vertices)
             
-            # Combine outer and inner elements for this layer
-            layer_elems = np.concatenate((outer_elems, inner_elems))
-            
-            # Make sure we have valid element indices
-            for elem_idx in layer_elems:
-                # Safety check - make sure index is valid integer
-                if not isinstance(elem_idx, (int, np.integer)) or elem_idx < 0 or elem_idx >= self.n_elems:
+            # Get new boundary by finding edges that have one element in the remaining set
+            # and one element in the processed set
+            boundary_edges = []
+            for edge_idx, (e1, e2) in enumerate(edge2elem):
+                # Skip boundary edges of the original mesh
+                if e2 < 0:
                     continue
                     
-                vertices = self.connectivity_list[elem_idx]
-                for v in vertices:
-                    if v != 0:  # Skip zero vertices
-                        all_vertices.append(v)
+                # An edge is a boundary if exactly one of its adjacent elements 
+                # is in the remaining set
+                if ((e1 in remaining_elements) != (e2 in remaining_elements)):
+                    boundary_edges.append(edge_idx)
             
-            all_vertices = np.unique(all_vertices)
-            inner_vertices = np.setdiff1d(all_vertices, outer_vertices)
-            self.layers["IV"].append(inner_vertices)
+            boundary_edges = np.array(boundary_edges, dtype=int)
             
             # Move to next layer
             layer_idx += 1
-            
-            # Break if we've processed all elements or are stuck
-            if len(assigned_elements) >= self.n_elems or len(outer_elems) + len(inner_elems) == 0:
-                break
-        
-        # Check if all elements were assigned
-        if len(assigned_elements) < self.n_elems:
-            print(f"Warning: Only {len(assigned_elements)} out of {self.n_elems} elements were assigned to layers")
         
         # Set number of layers
         self.n_layers = layer_idx
-
+        
+        # # Print summary
+        # print(f"Created {self.n_layers} mesh layers")
+        # for i in range(self.n_layers):
+        #     print(f"  Layer {i}: {len(self.layers['OE'][i])} outer elements, {len(self.layers['IE'][i])} inner elements")
 
     def get_layer( self, layer_idx: int ) -> Dict[str, np.ndarray]:
         """
@@ -578,6 +579,7 @@ class CHILmesh(CHILmeshPlotMixin):
             "IV": self.layers["IV"][layer_idx],
             "bEdgeIDs": self.layers["bEdgeIDs"][layer_idx]
         }
+    
     
     @staticmethod
     def from_fort14(filepath: str, grid_name: str = None) -> "CHILmesh":
@@ -624,3 +626,157 @@ class CHILmesh(CHILmeshPlotMixin):
                 elements[i] = node_indices
         
         return CHILmesh(connectivity=elements, points=points, grid_name=grid_name or header)
+
+    def interior_angles(self, elem_ids=None) -> np.ndarray:
+        """
+        Calculate interior angles of mesh elements.
+        
+        Parameters:
+            elem_ids: Indices of elements to evaluate.
+                If None, all elements are evaluated.
+        
+        Returns:
+            Array of interior angles for each element
+        """
+        if elem_ids is None:
+            elem_ids = np.arange(self.n_elems)
+        
+        if np.isscalar(elem_ids):
+            elem_ids = [elem_ids]
+        
+        # Determine element types
+        tri_elems, quad_elems = self._elem_type(elem_ids)
+        
+        # Maximum number of angles per element
+        max_angles = 4 if len(quad_elems) > 0 else 3
+        
+        # Initialize angles array
+        angles = np.zeros((len(elem_ids), max_angles))
+        
+        # Calculate angles for each element
+        for i, elem_id in enumerate(elem_ids):
+            if elem_id in tri_elems:
+                # Triangle angles
+                vertices = self.connectivity_list[elem_id][:3]  # First 3 vertices for triangles
+                coords = self.points[vertices, :2]  # Get x,y coordinates
+                
+                # Calculate angles at each vertex
+                for j in range(3):
+                    v1 = coords[(j+1)%3] - coords[j]
+                    v2 = coords[(j-1)%3] - coords[j]
+                    
+                    # Normalize vectors
+                    v1_norm = v1 / np.linalg.norm(v1)
+                    v2_norm = v2 / np.linalg.norm(v2)
+                    
+                    # Calculate angle in degrees
+                    dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
+                    angle = np.arccos(dot_product) * 180 / np.pi
+                    angles[i, j] = angle
+                    
+            elif elem_id in quad_elems:
+                # Quadrilateral angles
+                vertices = self.connectivity_list[elem_id]  # All 4 vertices
+                coords = self.points[vertices, :2]  # Get x,y coordinates
+                
+                # Calculate angles at each vertex
+                for j in range(4):
+                    v1 = coords[(j+1)%4] - coords[j]
+                    v2 = coords[(j-1)%4] - coords[j]
+                    
+                    # Normalize vectors
+                    v1_norm = v1 / np.linalg.norm(v1)
+                    v2_norm = v2 / np.linalg.norm(v2)
+                    
+                    # Calculate angle in degrees
+                    dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
+                    angle = np.arccos(dot_product) * 180 / np.pi
+                    angles[i, j] = angle
+        return angles
+
+    def elem_quality(self, elem_ids=None, quality_type='skew') -> Tuple[np.ndarray, np.ndarray, dict]:
+        """
+        Calculate the quality of mesh elements.
+        
+        Parameters:
+            elem_ids: Indices of elements to evaluate.
+                If None, all elements are evaluated.
+            quality_type: Type of quality metric to use.
+                'skew', 'skewness', 'angular skewness': Measures deviation from ideal angles
+        
+        Returns:
+            Tuple of (Quality, Angles) where:
+            - Quality: Array of quality measurements for each element
+            - Angles: Array of interior angles for each element
+        """
+        if elem_ids is None:
+            elem_ids = np.arange(self.n_elems)
+        
+        if np.isscalar(elem_ids):
+            elem_ids = [elem_ids]
+        
+        # Determine element types
+        tri_elems, quad_elems = self._elem_type(elem_ids)
+        
+        # Calculate interior angles
+        angles = self.interior_angles(elem_ids)
+        
+        # Initialize quality array
+        quality = np.zeros(len(elem_ids))
+        
+        # Compute quality based on the selected metric
+        if quality_type in ['skew', 'skewness', 'angular skewness']:
+            # Process triangular elements
+            tri_mask = np.array([elem_id in tri_elems for elem_id in elem_ids])
+            if np.any(tri_mask):
+                # Get angles for triangular elements
+                tri_angles = angles[tri_mask, :3]
+                
+                # Calculate max and min angles
+                tri_max = np.max(tri_angles, axis=1)
+                tri_min = np.min(tri_angles, axis=1)
+                
+                # Equiangular skew for triangles (ideal angle = 60°)
+                quality[tri_mask] = 1 - np.maximum(
+                    (tri_max - 60) / (180 - 60),
+                    (60 - tri_min) / 60
+                )
+            
+            # Process quadrilateral elements
+            quad_mask = np.array([elem_id in quad_elems for elem_id in elem_ids])
+            if np.any(quad_mask):
+                # Get angles for quadrilateral elements
+                quad_angles = angles[quad_mask, :]
+                
+                # Calculate max and min angles
+                quad_max = np.max(quad_angles, axis=1)
+                quad_min = np.min(quad_angles, axis=1)
+                
+                # Equiangular skew for quads (ideal angle = 90°)
+                quality[quad_mask] = 1 - np.maximum(
+                    (quad_max - 90) / (180 - 90),
+                    (90 - quad_min) / 90
+                )
+            
+            # Handle poor angle calculations (concave elements, etc.)
+            # For triangles, sum of angles should be close to 180°
+            tri_sum_mask = tri_mask & (np.sum(angles[:, :3], axis=1) <= 179.99)
+            quality[tri_sum_mask] = 0
+            
+            # For quads, sum of angles should be close to 360°
+            quad_sum_mask = quad_mask & (np.sum(angles, axis=1) <= 359.99)
+            quality[quad_sum_mask] = 0
+        
+        else:
+            raise ValueError(f"Unknown quality type: {quality_type}")
+        
+        # Calculate statistics for the computed quality
+        stats = {
+            'mean': np.mean(quality),
+            'median': np.median(quality),
+            'min': np.min(quality),
+            'max': np.max(quality),
+            'std': np.std(quality)
+        }
+        return quality, angles, stats
+    
