@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy.spatial import Delaunay
 from typing import List, Tuple, Optional, Dict, Set, Union, Any
+from scipy.sparse import lil_matrix
+from scipy.sparse.linalg import spsolve
+from copy import deepcopy
 
 class CHILmesh(CHILmeshPlotMixin):
     """
@@ -780,3 +783,82 @@ class CHILmesh(CHILmeshPlotMixin):
         }
         return quality, angles, stats
     
+    def smooth(self) -> None:
+        """
+        Perform a single-pass smoothing iteration using the Durand et al. (2019) FEM-based approach.
+        """
+        n = self.n_verts
+        K = lil_matrix((2 * n, 2 * n))  # global stiffness matrix
+        F = np.zeros(2 * n)            # global force vector
+
+        # Mark boundary nodes (fixed)
+        is_boundary = np.zeros(n, dtype=bool)
+        boundary_edges = self.boundary_edges()
+        for e in boundary_edges:
+            v1, v2 = self.adjacencies['Edge2Vert'][e]
+            is_boundary[v1] = True
+            is_boundary[v2] = True
+
+        # Precompute signed areas for all elements
+        elem_areas = np.abs( self.signed_area() )
+        
+        # Loop over elements to build global stiffness matrix and force vector
+        for elem_id in range(self.n_elems):
+            verts = self.connectivity_list[elem_id]
+            verts = verts[verts >= 0]
+            coords = self.points[verts, :2]
+            m = len(verts)
+
+            # Skip degenerate or invalid elements
+            if m < 3 or coords.shape[0] != m:
+                continue
+
+            # Build reference element (equilateral triangle or square)
+            if m == 3:
+                ref = np.array([[0, 0], [1, 0], [0.5, np.sqrt(3)/2]])
+            elif m == 4:
+                ref = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
+            else:
+                continue
+
+            # Compute affine map A from ref → coords using least squares
+            A, res, _, _ = np.linalg.lstsq(ref, coords, rcond=None)
+            ref_mapped = ref @ A
+            Ue = coords - ref_mapped
+
+            # Local stiffness matrix: identity scaled by element size
+            area = elem_areas[elem_id]
+            if area < 1e-12: continue  # skip degenerate element
+            Ke = np.eye(2 * m) * area
+
+            # Local force vector
+            fe = Ke @ Ue.flatten()
+
+            # Assemble into global system
+            for i, vi in enumerate(verts):
+                for j, vj in enumerate(verts):
+                    K[2*vi:2*vi+2, 2*vj:2*vj+2] += Ke[2*i:2*i+2, 2*j:2*j+2]
+                F[2*vi:2*vi+2] += fe[2*i:2*i+2]
+
+        # Apply boundary conditions (fixed nodes)
+        for vi in range(n):
+            if is_boundary[vi]:
+                K[2*vi, :] = 0
+                K[2*vi+1, :] = 0
+                K[:, 2*vi] = 0
+                K[:, 2*vi+1] = 0
+                K[2*vi, 2*vi] = 1
+                K[2*vi+1, 2*vi+1] = 1
+                F[2*vi:2*vi+2] = 0
+
+        # Solve for displacements
+        U = spsolve(K.tocsr(), F)
+
+        # Update node positions
+        self.points[:, 0] += U[0::2]
+        self.points[:, 1] += U[1::2]
+
+
+    def copy( self ) -> "CHILmesh":
+        """ Returns: a deep copy of the  new CHILmesh object with the same properties."""
+        return deepcopy(self)
