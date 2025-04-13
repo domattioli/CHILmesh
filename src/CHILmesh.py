@@ -613,6 +613,11 @@ class CHILmesh(CHILmeshPlotMixin):
         Returns:
             A CHILmesh object
         """
+        # Get the absolute path to the project root directory
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        fort14_dir = os.path.join(root_dir, 'doc', 'domains', 'fort_14')
+        filepath = os.path.join(fort14_dir, filename)
+        
         with open(filepath, 'r') as f:
             # Read header
             header = f.readline().strip()
@@ -638,13 +643,11 @@ class CHILmesh(CHILmeshPlotMixin):
                 # Skip the element index, look at the number of nodes
                 num_nodes = int(line[1])
                 
-                if num_nodes != 3:
-                    raise ValueError(f"Only triangular elements supported, found element with {num_nodes} nodes")
+                if num_nodes != 3:    raise ValueError(f"Only triangular elements supported, found element with {num_nodes} nodes.")
                     
                 # Convert 1-based node indices to 0-based
                 node_indices = [int(line[j+2]) - 1 for j in range(num_nodes)]
                 elements[i] = node_indices
-        
         return CHILmesh(connectivity=elements, points=points, grid_name=grid_name or header)
     
     def write_to_fort14( self, filename: str, grid_name: Opt[str] = "CHILmesh Grid") -> bool:
