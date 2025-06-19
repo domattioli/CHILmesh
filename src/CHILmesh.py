@@ -277,8 +277,13 @@ class CHILmesh(CHILmeshPlotMixin):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
                 
-                # Skip invalid edges (vertices with value 0)
-                if v1 == 0 or v2 == 0:
+                # Skip invalid edges (negative vertex ids)
+                # In MATLAB the value 0 signified a placeholder for a missing
+                # vertex in mixed element meshes.  In this Python port we use
+                # 0-based indexing, therefore vertex id ``0`` is valid and
+                # should not be discarded.  Only negative ids are considered
+                # invalid.
+                if v1 < 0 or v2 < 0:
                     continue
                 
                 # Store edge as a sorted tuple to avoid duplicates
@@ -310,8 +315,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
                 
-                # Skip invalid edges (vertices with value 0)
-                if v1 == 0 or v2 == 0:
+                # Skip invalid edges (negative vertex ids)
+                if v1 < 0 or v2 < 0:
                     continue
                 
                 # Find the edge index
@@ -357,7 +362,10 @@ class CHILmesh(CHILmeshPlotMixin):
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             for v in vertices:
-                if v != 0:  # Skip zero vertices
+                # Skip invalid vertex ids (negative values represent
+                # placeholders in mixed-element meshes).  Zero is a valid
+                # vertex index in this Python implementation.
+                if v >= 0:
                     vert2elem[v].append( elem_id )
         
         return vert2elem
@@ -385,8 +393,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
                 
-                # Skip invalid edges (vertices with value 0)
-                if v1 == 0 or v2 == 0:
+                # Skip invalid edges (negative vertex ids)
+                if v1 < 0 or v2 < 0:
                     continue
                 
                 # Find the edge index
@@ -546,7 +554,9 @@ class CHILmesh(CHILmeshPlotMixin):
             for elem in np.concatenate((outer_elems, inner_elems)):
                 vertices = self.connectivity_list[elem]
                 for v in vertices:
-                    if v > 0:  # Skip zero vertices
+                    # Ignore negative placeholders (if any).  Vertex index
+                    # 0 is valid in this implementation.
+                    if v >= 0:
                         all_vertices.add(v)
             
             inner_vertices = np.array(list(all_vertices - set(outer_vertices)), dtype=int)
