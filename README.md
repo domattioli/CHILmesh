@@ -56,9 +56,15 @@
 
 ## Installation
 Install via pip:
-
 ```bash
 pip install chilmesh
+```
+Or:
+```bash
+git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
+python -m venv .myenv
+source .myenv/bin/activate
+.myenv/bin/pip install requirements.txt
 ```
 
 
