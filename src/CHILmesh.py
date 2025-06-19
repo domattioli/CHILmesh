@@ -613,23 +613,17 @@ class CHILmesh(CHILmeshPlotMixin):
     
     
     @staticmethod
-    def read_from_fort14(filepath: str, grid_name: str = None) -> "CHILmesh":
+    def read_from_fort14(full_file_name: Path) -> "CHILmesh":
         """
         Load a mesh from a FORT.14 file.
-        
+    
         Parameters:
-            filepath: Path to the FORT.14 file
-            grid_name: Optional name for the grid
-            
+            full_file_name: Path object pointing to the FORT.14 file
+    
         Returns:
             A CHILmesh object
         """
-        # Open the provided fort.14 file path directly.  The previous
-        # implementation attempted to prepend the repository's ``doc``
-        # directory which caused incorrect paths when an absolute path was
-        # supplied.  The caller is now expected to provide a valid file path.
-        
-        with open(filepath, 'r') as f:
+        with open(full_file_name, 'r') as f:
             # Read header
             header = f.readline().strip()
             
