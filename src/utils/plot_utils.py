@@ -82,7 +82,7 @@ class CHILmeshPlotMixin:
 
         if elem_color == 'none':
             edges = self.elem2edge(elem_ids).flatten()
-            edges = edges[edges > 0]
+            edges = edges[edges >= 0]
             self.plot_edge(edges, color=edge_color, linewidth=linewidth, linestyle=linestyle, ax=ax)
         else:
             tri_elems, quad_elems = self._elem_type(elem_ids)
@@ -211,7 +211,7 @@ class CHILmeshPlotMixin:
             centroids = np.zeros( ( len( ids ), 2 ) )
             for i, elem_id in enumerate( ids ):
                 vertices = self.connectivity_list[elem_id]
-                vertices = vertices[vertices > 0]  # Remove zero vertices
+                vertices = vertices[vertices >= 0]  # Ignore negative placeholders
                 centroids[i, 0] = np.mean( self.points[vertices, 0] )
                 centroids[i, 1] = np.mean( self.points[vertices, 1] )
             
@@ -257,7 +257,7 @@ class CHILmeshPlotMixin:
             for i in ids:
                 if i < self.n_elems:
                     vertices = self.connectivity_list[i]
-                    vertices = vertices[vertices > 0]
+                    vertices = vertices[vertices >= 0]
                     x = np.mean(self.points[vertices, 0])
                     y = np.mean(self.points[vertices, 1])
                     ax.text(x, y, f'E{i}', color='blue', ha='center')
@@ -302,7 +302,7 @@ class CHILmeshPlotMixin:
                 if elem_id < 0 or elem_id >= len(self.connectivity_list):
                     continue
                 vertices = self.connectivity_list[elem_id]
-                valid_indices = [v for v in vertices if v > 0 and v < len(self.points)]
+                valid_indices = [v for v in vertices if v >= 0 and v < len(self.points)]
                 if len(valid_indices) >= 3:
                     polygon = self.points[valid_indices, :2]
                     ax.fill(polygon[:, 0], polygon[:, 1], color=color, edgecolor='k',
