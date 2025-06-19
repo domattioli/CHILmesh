@@ -85,8 +85,11 @@ source .myenv/bin/activate
 ### Example Usage:
 ```python
 # Load mesh
+import matplotlib.pyplot as plt
 from src.CHILmesh import CHILmesh
-mesh = CHILmesh.read_from_fort14("annulus_200pts.fort.14", grid_name="Annulus_200pts.fort.14")
+
+domain_ffn = '/kaggle/working/CHILmesh/doc/domains/fort_14/donut_domain.fort.14'
+mesh = CHILmesh.read_from_fort14( domain_ffn )
 # mesh = CHILmesh() # random delaunay to-do
 
 # Set up 2x3 subplot grid
