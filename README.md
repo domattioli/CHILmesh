@@ -55,11 +55,10 @@
 
 
 ## Installation
+Install via pip:
+
 ```bash
-git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
-python -m venv .myenv
-source .myenv/bin/activate
-.myenv/bin/pip install requirements.txt
+pip install chilmesh
 ```
 
 
@@ -86,7 +85,7 @@ source .myenv/bin/activate
 # Load mesh
 import matplotlib.pyplot as plt
 import numpy as np
-from src.CHILmesh import CHILmesh
+from chilmesh import CHILmesh
 
 # Randomly generate and triangulate points inside the donut domain.
 domain_ffn = '/kaggle/working/CHILmesh/doc/domains/fort_14/annulus_200pts.fort.14'

@@ -1,10 +1,6 @@
-import os
-import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent))
-import os
 
-from utils.plot_utils import CHILmeshPlotMixin
+from .utils.plot_utils import CHILmeshPlotMixin
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,7 +10,6 @@ from typing import List, Tuple, Optional as Opt, Dict, Set, Union, Any
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
 from copy import deepcopy
-from pathlib import Path
 
 __all__ = ['CHILmesh', 'write_fort14']
 
