@@ -613,53 +613,42 @@ class CHILmesh(CHILmeshPlotMixin):
     
     
     @staticmethod
-    def read_from_fort14(filepath: str, grid_name: str = None) -> "CHILmesh":
+    def read_from_fort14(full_file_name: Path) -> "CHILmesh":
         """
         Load a mesh from a FORT.14 file.
-        
+    
         Parameters:
-            filepath: Path to the FORT.14 file
-            grid_name: Optional name for the grid
-            
+            full_file_name: Path object pointing to the FORT.14 file
+    
         Returns:
             A CHILmesh object
         """
-        # Get the absolute path to the project root directory
-        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        fort14_dir = os.path.join(root_dir, 'doc', 'domains', 'fort_14')
-        filepath = os.path.join(fort14_dir, grid_name )
-        
-        with open(filepath, 'r') as f:
+        with open(full_file_name, 'r') as f:
             # Read header
             header = f.readline().strip()
-            
+    
             # Read element and node counts
             counts = f.readline().strip().split()
             n_elements = int(counts[0])
             n_nodes = int(counts[1])
-            
+    
             # Read nodes
             points = np.zeros((n_nodes, 3))  # x, y, z
             for i in range(n_nodes):
                 line = f.readline().strip().split()
-                # Fort14 format: node_idx x y z
-                # Assuming the node index is 1-based
                 points[i] = [float(line[1]), float(line[2]), float(line[3])]
-            
+    
             # Read elements
             elements = np.zeros((n_elements, 3), dtype=int)
             for i in range(n_elements):
                 line = f.readline().strip().split()
-                # Fort14 format: elem_idx num_nodes node1 node2 node3
-                # Skip the element index, look at the number of nodes
                 num_nodes = int(line[1])
-                
-                if num_nodes != 3:    raise ValueError(f"Only triangular elements supported, found element with {num_nodes} nodes.")
-                    
-                # Convert 1-based node indices to 0-based
+                if num_nodes != 3:
+                    raise ValueError(f"Only triangular elements supported, found element with {num_nodes} nodes.")
                 node_indices = [int(line[j+2]) - 1 for j in range(num_nodes)]
                 elements[i] = node_indices
-        return CHILmesh(connectivity=elements, points=points, grid_name=grid_name or header)
+        return CHILmesh( connectivity=elements, points=points, grid_name=header )
+
     
     def write_to_fort14( self, filename: str, grid_name: Opt[str] = "CHILmesh Grid") -> bool:
         """
