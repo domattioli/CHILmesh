@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
+import os
 
 from utils.plot_utils import CHILmeshPlotMixin
 
