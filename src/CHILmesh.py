@@ -627,7 +627,7 @@ class CHILmesh(CHILmeshPlotMixin):
         # Get the absolute path to the project root directory
         root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         fort14_dir = os.path.join(root_dir, 'doc', 'domains', 'fort_14')
-        filepath = os.path.join(fort14_dir, filename)
+        filepath = os.path.join(fort14_dir, grid_name )
         
         with open(filepath, 'r') as f:
             # Read header
