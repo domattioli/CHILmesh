@@ -40,7 +40,7 @@
 - 2023/09/19 MATLAB code revisited; repo initiated
 - 2017/08/01 Nascent MATLAB version of the code
 #### Future Work
-[![MeQuADMESHR_Project](https://img.shields.io/badge/GitHub-MeADMESHR-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/MeADMESHR)
+[![MADMESHR_Project](https://img.shields.io/badge/GitHub-MeADMESHR-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/MADMESHR)
 
 
 ## Table of Contents
@@ -78,7 +78,6 @@ source .myenv/bin/activate
   - Add support for generating Delaunay meshes from scratch via zero-input CHILmesh().
   - Add support for delaunay trainagulation object input/output.
   - Add support for [.gmsh](https://gmsh.info/doc/texinfo/gmsh.html) input/output.
-  - Imperfections in the porting leading bugs, e.g., elements near 1st vertex being ignored in the plot() and plot_layer() methods but not plot_quality()
   - Extend .write_to_fort14() to support quadrilateral output
 - pip installation
 
@@ -86,9 +85,11 @@ source .myenv/bin/activate
 ```python
 # Load mesh
 import matplotlib.pyplot as plt
+import numpy as np
 from src.CHILmesh import CHILmesh
 
-domain_ffn = '/kaggle/working/CHILmesh/doc/domains/fort_14/donut_domain.fort.14'
+# Randomly generate and triangulate points inside the donut domain.
+domain_ffn = '/kaggle/working/CHILmesh/doc/domains/fort_14/annulus_200pts.fort.14'
 mesh = CHILmesh.read_from_fort14( domain_ffn )
 # mesh = CHILmesh() # random delaunay to-do
 
@@ -139,14 +140,16 @@ ax.set_title(f"Smoothed: Quality Map (Median: {np.median(q):.2f}, Std: {np.std(q
 plt.tight_layout()
 plt.subplots_adjust(top=0.9)  # leave space for suptitle
 plt.show()
+#fig.savefig("result.png", dpi=600, bbox_inches='tight')
 ```
-![image](https://github.com/user-attachments/assets/7fdeda18-ad4a-4fd1-ad14-1f8cbc56e7da)
+![result](https://github.com/user-attachments/assets/b0bb73a9-579b-4ba2-9621-0bb431ec9aa9)
+
 
 > **Note**: When mesh is mixed-element, connectivity (elem2vert adjacency) follows the format `Node1-Node2-Node3-Node4`, such that `Node4 == Node3` for triangular elements.
 
 
 ### BibTeX:
-> Mattioli, D. O. (2017). QuADMESH+: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models [Master's thesis, Ohio State University]. OhioLINK Electronic Theses and Dissertations Center. http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088
+> DO Mattioli (2017). QuADMESH+: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models [Master's thesis, Ohio State University]. OhioLINK Electronic Theses and Dissertations Center. http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
   author       = {Mattioli, Dominik O.},
