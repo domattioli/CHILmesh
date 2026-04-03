@@ -147,7 +147,7 @@ plt.subplots_adjust(top=0.9)  # leave space for suptitle
 plt.show()
 #fig.savefig("result.png", dpi=600, bbox_inches='tight')
 ```
-![result](https://github.com/user-attachments/assets/b0bb73a9-579b-4ba2-9621-0bb431ec9aa9)
+![result](https://github.com/domattioli/CHILmesh/blob/19bd7926afd8f244bb775ab7225a6bac055c008d/tests/output/annulus_smoothed_retri.png)
 
 
 > **Note**: When mesh is mixed-element, connectivity (elem2vert adjacency) follows the format `Node1-Node2-Node3-Node4`, such that `Node4 == Node3` for triangular elements.
