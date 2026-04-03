@@ -377,37 +377,34 @@ class CHILmesh(CHILmeshPlotMixin):
         Returns:
             Edge-to-element adjacency
         """
-        # Initialize with zeros - at most 2 elements per edge
-        edge2elem = np.zeros( ( self.n_edges, 2 ), dtype=int )
-        
+        # Initialize with -1 sentinel (no adjacent element)
+        edge2elem = np.full( ( self.n_edges, 2 ), -1, dtype=int )
+
         # Iterate through elements and their edges
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             n_vertices = 3 if self.type == "Triangular" else 4
-            
+
             # For each edge of the element
             for i in range( n_vertices ):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
-                
+
                 # Skip invalid edges (negative vertex ids)
                 if v1 < 0 or v2 < 0:
                     continue
-                
+
                 # Find the edge index
                 edge = tuple( sorted( [int(v1), int(v2)] ) )
                 for edge_id, e in enumerate( edge2vert ):
                     if set( e ) == set( edge ):
                         # Check if edge already has an element assigned
-                        if edge2elem[edge_id, 0] == 0:
-                            edge2elem[edge_id, 0] = elem_id + 1  # +1 to avoid 0
+                        if edge2elem[edge_id, 0] == -1:
+                            edge2elem[edge_id, 0] = elem_id
                         else:
-                            edge2elem[edge_id, 1] = elem_id + 1
+                            edge2elem[edge_id, 1] = elem_id
                         break
-        
-        # Adjust indices (remove the +1 offset)
-        edge2elem[edge2elem > 0] -= 1
-        
+
         return edge2elem
     
     def boundary_edges( self ) -> np.ndarray:
@@ -419,7 +416,7 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         # Boundary edges have only one adjacent element
         edge2elem = self.adjacencies["Edge2Elem"]
-        boundary_mask = (edge2elem[:, 1] == 0)  # Second element is zero
+        boundary_mask = (edge2elem[:, 1] == -1)  # Second element is sentinel
         return np.where( boundary_mask )[0]
     
     def edge2vert( self, edge_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
@@ -489,7 +486,7 @@ class CHILmesh(CHILmeshPlotMixin):
         
         # Get boundary edges (edges with only one adjacent element)
         edge2elem = self.adjacencies["Edge2Elem"]
-        boundary_mask = (edge2elem[:, 1] == 0)
+        boundary_mask = (edge2elem[:, 1] == -1)
         boundary_edges = np.where(boundary_mask)[0]
         
         # Keep track of which elements have been assigned to a layer
@@ -498,7 +495,7 @@ class CHILmesh(CHILmeshPlotMixin):
         # Get element-to-element connectivity using edge2elem
         elem2elem = [[] for _ in range(self.n_elems)]
         for edge_idx, (e1, e2) in enumerate(edge2elem):
-            if e1 >= 0 and e2 >= 0:  # Both elements exist
+            if e1 >= 0 and e2 >= 0:  # Both elements exist (sentinel is -1)
                 elem2elem[e1].append(e2)
                 elem2elem[e2].append(e1)
         
