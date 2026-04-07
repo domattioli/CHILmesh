@@ -117,21 +117,48 @@ class CHILmesh(CHILmeshPlotMixin):
             self._mesh_layers()
     
     def _ensure_ccw_orientation( self ) -> None:
-        """Ensure counter-clockwise orientation of elements"""
-        # Calculate signed area of each element
+        """Ensure counter-clockwise orientation of every element.
+
+        For mixed-element meshes (4-column connectivity containing both real
+        quads and padded triangles) the flip permutation must be selected per
+        element: a triangle pads its 4th slot with a repeated vertex, and
+        applying the quad permutation ``[0, 3, 2, 1]`` to such a row would
+        scramble it (B4).
+        """
         areas = self.signed_area()
-        
-        # Find elements with clockwise orientation (negative area)
-        cw_elements = np.where( areas < 0 )[0]
-        
-        # Flip orientation of clockwise elements
+        cw_elements = np.where(areas < 0)[0]
+        if cw_elements.size == 0:
+            return
+
+        if self.connectivity_list.shape[1] == 3:
+            self.connectivity_list[cw_elements] = self.connectivity_list[
+                cw_elements
+            ][:, [0, 2, 1]]
+            return
+
+        # 4-column connectivity: classify each CW row before flipping.
+        tri_elems, _ = self._elem_type(cw_elements)
+        tri_set = set(tri_elems.tolist())
         for elem_id in cw_elements:
-            # For triangular elements (3 vertices)
-            if self.connectivity_list.shape[1] == 3:
-                self.connectivity_list[elem_id] = self.connectivity_list[elem_id, [0, 2, 1]]
-            # For quadrilateral elements (4 vertices)
-            elif self.connectivity_list.shape[1] == 4:
-                self.connectivity_list[elem_id] = self.connectivity_list[elem_id, [0, 3, 2, 1]]
+            row = self.connectivity_list[elem_id]
+            if elem_id in tri_set:
+                # Padded triangle: only the first 3 slots carry geometry,
+                # the 4th slot is a repeated pad. Flip in place and re-pad.
+                # Find the slot that holds the pad (any duplicate of another).
+                a, b, c, d = row.tolist()
+                # Identify the three distinct vertices (in row order, ignoring
+                # the duplicated one) and reverse them to flip CCW.
+                seen = []
+                for v in (a, b, c, d):
+                    if v not in seen:
+                        seen.append(v)
+                if len(seen) != 3:
+                    # Fallback: degenerate row, leave as-is.
+                    continue
+                v0, v1, v2 = seen
+                self.connectivity_list[elem_id] = np.array([v0, v2, v1, v0])
+            else:
+                self.connectivity_list[elem_id] = row[[0, 3, 2, 1]]
     
     def signed_area( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
