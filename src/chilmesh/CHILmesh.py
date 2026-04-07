@@ -653,8 +653,15 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             filename: Path to save the file
             grid_name: Optional title for the mesh
+
+        Returns:
+            ``True`` on success.
+
+        Note:
+            Prior to 0.1.1 this method recursed into itself instead of
+            delegating to the module-level ``write_fort14`` writer (B1).
         """
-        return CHILmesh.write_to_fort14(filename, self.points, self.connectivity_list, grid_name)
+        return write_fort14(filename, self.points, self.connectivity_list, grid_name)
 
     def interior_angles(self, elem_ids=None) -> np.ndarray:
         """
