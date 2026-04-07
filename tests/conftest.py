@@ -10,20 +10,37 @@ from __future__ import annotations
 import pytest
 
 import chilmesh
+from chilmesh import examples as _examples
 
 FIXTURE_NAMES = ["annulus", "donut", "block_o", "structured"]
 
 
-# Cache built meshes across tests so the O(n^2) adjacency build (deferred to
-# the 0.1.2 perf release) doesn't dominate the test runtime. Tests that mutate
-# the mesh in place must call ``.copy()`` first.
+# Memoize the example loaders for the duration of the test session so the
+# O(n^2) adjacency build (deferred to the 0.1.2 perf release) doesn't
+# dominate the test runtime. Block_O alone takes ~30s on first load and
+# is touched by many parametrized tests. Tests that mutate a mesh in place
+# must call ``.copy()`` first.
 _MESH_CACHE: dict = {}
 
 
+def _make_cached(name):
+    original = getattr(_examples, name)
+
+    def cached():
+        if name not in _MESH_CACHE:
+            _MESH_CACHE[name] = original()
+        return _MESH_CACHE[name]
+
+    cached.__wrapped__ = original
+    return cached
+
+
+for _n in FIXTURE_NAMES:
+    setattr(_examples, _n, _make_cached(_n))
+
+
 def _load(name: str):
-    if name not in _MESH_CACHE:
-        _MESH_CACHE[name] = getattr(chilmesh.examples, name)()
-    return _MESH_CACHE[name]
+    return getattr(_examples, name)()
 
 
 @pytest.fixture(params=FIXTURE_NAMES)
@@ -35,7 +52,7 @@ def mesh(request):
 @pytest.fixture(params=FIXTURE_NAMES)
 def fresh_mesh(request):
     """Yield a fresh (uncached) mesh — for tests that need to mutate."""
-    return getattr(chilmesh.examples, request.param)()
+    return getattr(_examples, request.param).__wrapped__()
 
 
 @pytest.fixture(params=FIXTURE_NAMES)
