@@ -89,12 +89,24 @@ environment).
   patches `chilmesh.examples` so each fixture is loaded at most once
   per test run. Block_O alone takes ~30s on first load (the O(n²)
   `_build_elem2edge` is the culprit; deferred to 0.1.2 per audit).
-- Added `.github/workflows/ci.yml` (Py 3.10/3.11/3.12 × ubuntu/macos),
-  installs editable, runs pytest, builds sdist+wheel, runs `twine
-  check`, and smoke-tests `chilmesh.examples.annulus()` from the
-  installed wheel in a fresh venv. **No coverage gate yet** (deferred
-  to 0.1.2 per audit). **No release.yml yet** — that needs your
-  morning approval.
+- CI workflow staged at `ci/ci.yml.pending` (Py 3.10/3.11/3.12 ×
+  ubuntu/macos): installs editable, runs pytest, builds sdist+wheel,
+  runs `twine check`, smoke-tests `chilmesh.examples.annulus()` from
+  the installed wheel in a fresh venv. **No coverage gate yet**
+  (deferred to 0.1.2 per audit). **No release.yml yet** — that needs
+  your morning approval. **Action required**: the GitHub PAT used by
+  this session lacks the `workflow` scope, so I could not push the
+  file directly into `.github/workflows/`. Move it manually:
+
+  ```bash
+  mkdir -p .github/workflows
+  git mv ci/ci.yml.pending .github/workflows/ci.yml
+  git commit -m "ci: enable GitHub Actions workflow"
+  git push
+  ```
+
+  …or rerun this push from a session whose PAT has the `workflow`
+  scope.
 - Added `CHANGELOG.md`.
 - Added a minimal `.gitignore` for build artefacts.
 
