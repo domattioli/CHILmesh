@@ -2,11 +2,6 @@
   CHILmesh: representing triangular, quadrangular and mixed-element (2D) meshes for advanced and automatic mesh generation for hydrodynamic domains.
 </h1>
 
-> **Status: alpha (pre-1.0). The public API is not yet stable.**
-> CHILmesh is a research-grade Python implementation of the layer-based 2D
-> mesh abstraction from the QuADMESH thesis. Pin a version in your project
-> until 1.0 ships.
-
 <p align="center">
   <strong><a href="https://scholar.google.com/citations?user=IBFSkOcAAAAJ&hl=en">Dominik Mattioli</a><sup>1†</sup>, <a href="https://scholar.google.com/citations?user=mYPzjIwAAAAJ&hl=en">Ethan Kubatko</a><sup>2</sup></strong><br>
   <sup>†</sup>Corresponding author<br><br>
