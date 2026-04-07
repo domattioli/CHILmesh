@@ -150,9 +150,7 @@ plt.show()
 [![MADMESHR_Project](https://img.shields.io/badge/GitHub-MADMESHR-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/MADMESHR)
 
 [MADMESHR](https://github.com/domattioli/MADMESHR) is a downstream research
-project that builds on CHILmesh. CHILmesh remains a general-purpose 2D
-mesh library and is intentionally agnostic to MADMESHR's reinforcement-
-learning concepts; MADMESHR depends on CHILmesh, not the reverse.
+project that builds on CHILmesh.
 
 
 ### BibTeX:
