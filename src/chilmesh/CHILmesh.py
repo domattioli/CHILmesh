@@ -638,7 +638,10 @@ class CHILmesh(CHILmeshPlotMixin):
                 num_nodes = int(line[1])
                 if num_nodes != 3:
                     raise ValueError(f"Only triangular elements supported, found element with {num_nodes} nodes.")
-                node_indices = [int(line[j+2]) - 1 for j in range(num_nodes)]
+                # Some legacy fort.14 generators emit node indices in
+                # float form ("1.000000"). Tolerate both decimal and
+                # integer literals via int(float(...)).
+                node_indices = [int(float(line[j + 2])) - 1 for j in range(num_nodes)]
                 elements[i] = node_indices
         return CHILmesh( connectivity=elements, points=points, grid_name=header )
 
