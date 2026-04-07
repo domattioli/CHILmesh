@@ -747,20 +747,22 @@ class CHILmesh(CHILmeshPlotMixin):
                 # Quadrilateral angles
                 vertices = self.connectivity_list[elem_id]  # All 4 vertices
                 coords = self.points[vertices, :2]  # Get x,y coordinates
-                
-                # Calculate angles at each vertex
+
+                # Calculate angles at each vertex.  Use the same epsilon
+                # guard as the triangle path so degenerate quads with
+                # zero-length edges produce a real number (typically 0)
+                # rather than NaN, which would slip past elem_quality's
+                # ``<= 359.99 -> zero out`` check (B5).
                 for j in range(4):
-                    v1 = coords[(j+1)%4] - coords[j]
-                    v2 = coords[(j-1)%4] - coords[j]
-                    
-                    # Normalize vectors
-                    v1_norm = v1 / np.linalg.norm(v1)
-                    v2_norm = v2 / np.linalg.norm(v2)
-                    
-                    # Calculate angle in degrees
+                    v1 = coords[(j + 1) % 4] - coords[j]
+                    v2 = coords[(j - 1) % 4] - coords[j]
+
+                    v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
+                    v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
+
                     dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
                     angle = np.arccos(dot_product) * 180 / np.pi
-                    angles[i, j] = angle
+                    angles[i, j] = float(np.real(angle))
         return angles
 
     def elem_quality(self, elem_ids=None, quality_type='skew') -> Tuple[np.ndarray, np.ndarray, dict]:
