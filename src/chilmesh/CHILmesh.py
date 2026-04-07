@@ -195,22 +195,26 @@ class CHILmesh(CHILmeshPlotMixin):
             # All triangular elements
             return elem_ids, np.array( [] )
         
-        # Check for triangular elements in a quad/mixed-element mesh
-        tri_mask = np.zeros( len( elem_ids ), dtype=bool )
-        
-        for i, elem_id in enumerate( elem_ids ):
-            # Check for redundant vertices or zero-valued vertices
-            vertices = self.connectivity_list[elem_id]
-            if (vertices[0] == vertices[1] or
-                vertices[1] == vertices[2] or
-                vertices[2] == vertices[3] or
-                vertices[3] == vertices[0] or
-                vertices[3] == 0):
-                tri_mask[i] = True
-        
+        # Detect padded triangles in a 4-column connectivity table by
+        # looking for any repeated vertex within the row. Vertex id ``0`` is a
+        # *valid* vertex in this Python (0-indexed) port — the original code
+        # treated ``vertices[3] == 0`` as a sentinel, which silently demoted
+        # any quad whose 4th vertex happened to be 0 (B3).
+        rows = self.connectivity_list[elem_ids]
+        # A triangle padded into a quad row will have at least one repeated
+        # vertex (typically ``v3 == v0`` or ``v3 == v2``).
+        tri_mask = (
+            (rows[:, 0] == rows[:, 1])
+            | (rows[:, 1] == rows[:, 2])
+            | (rows[:, 2] == rows[:, 3])
+            | (rows[:, 3] == rows[:, 0])
+            | (rows[:, 0] == rows[:, 2])
+            | (rows[:, 1] == rows[:, 3])
+        )
+
         tri_elems = elem_ids[tri_mask]
         quad_elems = elem_ids[~tri_mask]
-        
+
         return tri_elems, quad_elems
     
     def _build_adjacencies( self ) -> None:
