@@ -4,18 +4,65 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chilmesh"
-version = "0.1.0"
-description = "Advanced mesh generation and smoothing for hydrodynamic domains"
+version = "0.1.1"
+description = "Layer-based 2D triangular, quadrilateral and mixed-element mesh library with first-class ADCIRC fort.14 I/O"
 authors = [{name = "Dominik Mattioli"}]
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.8"
-dependencies = [
-    "numpy",
-    "matplotlib",
-    "scipy",
+requires-python = ">=3.10"
+keywords = [
+    "mesh",
+    "adcirc",
+    "fort.14",
+    "hydrodynamics",
+    "ocean",
+    "smoothing",
+    "quadrilateral",
+    "finite-element",
+    "mesh-quality",
+    "computational-geometry",
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Hydrology",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.23",
+    "scipy>=1.10",
+    "matplotlib>=3.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "pytest-cov",
+    "build",
+    "twine",
+]
+
+[project.urls]
+Homepage = "https://github.com/domattioli/CHILmesh"
+Source = "https://github.com/domattioli/CHILmesh"
+Issues = "https://github.com/domattioli/CHILmesh/issues"
+Changelog = "https://github.com/domattioli/CHILmesh/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/domattioli/CHILmesh#readme"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["chilmesh", "chilmesh.utils"]
+packages = ["chilmesh", "chilmesh.utils", "chilmesh.data"]
+
+[tool.setuptools.package-data]
+"chilmesh.data" = ["*.fort.14", "*.14"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
