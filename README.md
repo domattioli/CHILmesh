@@ -2,6 +2,11 @@
   CHILmesh: representing triangular, quadrangular and mixed-element (2D) meshes for advanced and automatic mesh generation for hydrodynamic domains.
 </h1>
 
+> **Status: alpha (pre-1.0). The public API is not yet stable.**
+> CHILmesh is a research-grade Python implementation of the layer-based 2D
+> mesh abstraction from the QuADMESH thesis. Pin a version in your project
+> until 1.0 ships.
+
 <p align="center">
   <strong><a href="https://scholar.google.com/citations?user=IBFSkOcAAAAJ&hl=en">Dominik Mattioli</a><sup>1†</sup>, <a href="https://scholar.google.com/citations?user=mYPzjIwAAAAJ&hl=en">Ethan Kubatko</a><sup>2</sup></strong><br>
   <sup>†</sup>Corresponding author<br><br>
@@ -36,35 +41,32 @@
 
 
 ## Releases
+- 2026/04 0.1.1 - Honest hotfix: bug-fix release with regression tests, package data, and chilmesh.examples
 - 2025/04/12 Python version of our code
 - 2023/09/19 MATLAB code revisited; repo initiated
 - 2017/08/01 Nascent MATLAB version of the code
-#### Future Work
-[![MADMESHR_Project](https://img.shields.io/badge/GitHub-MeADMESHR-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/MADMESHR)
-
 
 ## Table of Contents
 - [Releases](#releases)
-- [Future Work](#future-work)
 - [Installation](#installation)
 - [Key Features](#key-features)
-- [To-Do](#to-do)
 - [Example Usage](#example-usage)
+- [See also](#see-also--downstream-projects)
 - [BibTeX](#bibtex)
 - [Acknowledgements](#acknowledgements)
 
 
 ## Installation
-Install via pip:
+Install the latest release from PyPI:
 ```bash
 pip install chilmesh
 ```
-Or:
+Or install from source:
 ```bash
 git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
 python -m venv .myenv
 source .myenv/bin/activate
-.myenv/bin/pip install requirements.txt
+pip install -e .
 ```
 
 
@@ -78,25 +80,16 @@ source .myenv/bin/activate
 - `.fort.14` file input/output for ADCIRC models
 - API inspired by MATLAB’s `delaunayTriangulation()`
 
-### To-Do📌
-- Finish porting all functionality from original MATLAB code to python.
-  - Add support for generating Delaunay meshes from scratch via zero-input CHILmesh().
-  - Add support for delaunay trainagulation object input/output.
-  - Add support for [.gmsh](https://gmsh.info/doc/texinfo/gmsh.html) input/output.
-  - Extend .write_to_fort14() to support quadrilateral output
-- pip installation
-
 ### Example Usage:
 ```python
 # Load mesh
 import matplotlib.pyplot as plt
 import numpy as np
-from chilmesh import CHILmesh
+import chilmesh
 
-# Randomly generate and triangulate points inside the donut domain.
-domain_ffn = '/kaggle/working/CHILmesh/doc/domains/fort_14/annulus_200pts.fort.14'
-mesh = CHILmesh.read_from_fort14( domain_ffn )
-# mesh = CHILmesh() # random delaunay to-do
+# Load one of the bundled example meshes (no file paths required).
+mesh = chilmesh.examples.annulus()
+# Other built-ins: chilmesh.examples.donut(), .block_o(), .structured()
 
 # Set up 2x3 subplot grid
 fig, axs = plt.subplots(2, 3, figsize=(18, 10))
@@ -151,6 +144,13 @@ plt.show()
 
 
 > **Note**: When mesh is mixed-element, connectivity (elem2vert adjacency) follows the format `Node1-Node2-Node3-Node4`, such that `Node4 == Node3` for triangular elements.
+
+
+## See also / Downstream projects
+[![MADMESHR_Project](https://img.shields.io/badge/GitHub-MADMESHR-121013?logo=github&logoColor=white&labelColor=gray)](https://github.com/domattioli/MADMESHR)
+
+[MADMESHR](https://github.com/domattioli/MADMESHR) is a downstream research
+project that builds on CHILmesh.
 
 
 ### BibTeX:

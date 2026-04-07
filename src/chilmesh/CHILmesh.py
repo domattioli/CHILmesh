@@ -117,21 +117,48 @@ class CHILmesh(CHILmeshPlotMixin):
             self._mesh_layers()
     
     def _ensure_ccw_orientation( self ) -> None:
-        """Ensure counter-clockwise orientation of elements"""
-        # Calculate signed area of each element
+        """Ensure counter-clockwise orientation of every element.
+
+        For mixed-element meshes (4-column connectivity containing both real
+        quads and padded triangles) the flip permutation must be selected per
+        element: a triangle pads its 4th slot with a repeated vertex, and
+        applying the quad permutation ``[0, 3, 2, 1]`` to such a row would
+        scramble it (B4).
+        """
         areas = self.signed_area()
-        
-        # Find elements with clockwise orientation (negative area)
-        cw_elements = np.where( areas < 0 )[0]
-        
-        # Flip orientation of clockwise elements
+        cw_elements = np.where(areas < 0)[0]
+        if cw_elements.size == 0:
+            return
+
+        if self.connectivity_list.shape[1] == 3:
+            self.connectivity_list[cw_elements] = self.connectivity_list[
+                cw_elements
+            ][:, [0, 2, 1]]
+            return
+
+        # 4-column connectivity: classify each CW row before flipping.
+        tri_elems, _ = self._elem_type(cw_elements)
+        tri_set = set(tri_elems.tolist())
         for elem_id in cw_elements:
-            # For triangular elements (3 vertices)
-            if self.connectivity_list.shape[1] == 3:
-                self.connectivity_list[elem_id] = self.connectivity_list[elem_id, [0, 2, 1]]
-            # For quadrilateral elements (4 vertices)
-            elif self.connectivity_list.shape[1] == 4:
-                self.connectivity_list[elem_id] = self.connectivity_list[elem_id, [0, 3, 2, 1]]
+            row = self.connectivity_list[elem_id]
+            if elem_id in tri_set:
+                # Padded triangle: only the first 3 slots carry geometry,
+                # the 4th slot is a repeated pad. Flip in place and re-pad.
+                # Find the slot that holds the pad (any duplicate of another).
+                a, b, c, d = row.tolist()
+                # Identify the three distinct vertices (in row order, ignoring
+                # the duplicated one) and reverse them to flip CCW.
+                seen = []
+                for v in (a, b, c, d):
+                    if v not in seen:
+                        seen.append(v)
+                if len(seen) != 3:
+                    # Fallback: degenerate row, leave as-is.
+                    continue
+                v0, v1, v2 = seen
+                self.connectivity_list[elem_id] = np.array([v0, v2, v1, v0])
+            else:
+                self.connectivity_list[elem_id] = row[[0, 3, 2, 1]]
     
     def signed_area( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
@@ -195,22 +222,26 @@ class CHILmesh(CHILmeshPlotMixin):
             # All triangular elements
             return elem_ids, np.array( [] )
         
-        # Check for triangular elements in a quad/mixed-element mesh
-        tri_mask = np.zeros( len( elem_ids ), dtype=bool )
-        
-        for i, elem_id in enumerate( elem_ids ):
-            # Check for redundant vertices or zero-valued vertices
-            vertices = self.connectivity_list[elem_id]
-            if (vertices[0] == vertices[1] or
-                vertices[1] == vertices[2] or
-                vertices[2] == vertices[3] or
-                vertices[3] == vertices[0] or
-                vertices[3] == 0):
-                tri_mask[i] = True
-        
+        # Detect padded triangles in a 4-column connectivity table by
+        # looking for any repeated vertex within the row. Vertex id ``0`` is a
+        # *valid* vertex in this Python (0-indexed) port — the original code
+        # treated ``vertices[3] == 0`` as a sentinel, which silently demoted
+        # any quad whose 4th vertex happened to be 0 (B3).
+        rows = self.connectivity_list[elem_ids]
+        # A triangle padded into a quad row will have at least one repeated
+        # vertex (typically ``v3 == v0`` or ``v3 == v2``).
+        tri_mask = (
+            (rows[:, 0] == rows[:, 1])
+            | (rows[:, 1] == rows[:, 2])
+            | (rows[:, 2] == rows[:, 3])
+            | (rows[:, 3] == rows[:, 0])
+            | (rows[:, 0] == rows[:, 2])
+            | (rows[:, 1] == rows[:, 3])
+        )
+
         tri_elems = elem_ids[tri_mask]
         quad_elems = elem_ids[~tri_mask]
-        
+
         return tri_elems, quad_elems
     
     def _build_adjacencies( self ) -> None:
@@ -638,7 +669,10 @@ class CHILmesh(CHILmeshPlotMixin):
                 num_nodes = int(line[1])
                 if num_nodes != 3:
                     raise ValueError(f"Only triangular elements supported, found element with {num_nodes} nodes.")
-                node_indices = [int(line[j+2]) - 1 for j in range(num_nodes)]
+                # Some legacy fort.14 generators emit node indices in
+                # float form ("1.000000"). Tolerate both decimal and
+                # integer literals via int(float(...)).
+                node_indices = [int(float(line[j + 2])) - 1 for j in range(num_nodes)]
                 elements[i] = node_indices
         return CHILmesh( connectivity=elements, points=points, grid_name=header )
 
@@ -650,8 +684,15 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             filename: Path to save the file
             grid_name: Optional title for the mesh
+
+        Returns:
+            ``True`` on success.
+
+        Note:
+            Prior to 0.1.1 this method recursed into itself instead of
+            delegating to the module-level ``write_fort14`` writer (B1).
         """
-        return CHILmesh.write_to_fort14(filename, self.points, self.connectivity_list, grid_name)
+        return write_fort14(filename, self.points, self.connectivity_list, grid_name)
 
     def interior_angles(self, elem_ids=None) -> np.ndarray:
         """
@@ -706,20 +747,22 @@ class CHILmesh(CHILmeshPlotMixin):
                 # Quadrilateral angles
                 vertices = self.connectivity_list[elem_id]  # All 4 vertices
                 coords = self.points[vertices, :2]  # Get x,y coordinates
-                
-                # Calculate angles at each vertex
+
+                # Calculate angles at each vertex.  Use the same epsilon
+                # guard as the triangle path so degenerate quads with
+                # zero-length edges produce a real number (typically 0)
+                # rather than NaN, which would slip past elem_quality's
+                # ``<= 359.99 -> zero out`` check (B5).
                 for j in range(4):
-                    v1 = coords[(j+1)%4] - coords[j]
-                    v2 = coords[(j-1)%4] - coords[j]
-                    
-                    # Normalize vectors
-                    v1_norm = v1 / np.linalg.norm(v1)
-                    v2_norm = v2 / np.linalg.norm(v2)
-                    
-                    # Calculate angle in degrees
+                    v1 = coords[(j + 1) % 4] - coords[j]
+                    v2 = coords[(j - 1) % 4] - coords[j]
+
+                    v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
+                    v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
+
                     dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
                     angle = np.arccos(dot_product) * 180 / np.pi
-                    angles[i, j] = angle
+                    angles[i, j] = float(np.real(angle))
         return angles
 
     def elem_quality(self, elem_ids=None, quality_type='skew') -> Tuple[np.ndarray, np.ndarray, dict]:

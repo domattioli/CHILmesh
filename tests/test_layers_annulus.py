@@ -91,8 +91,8 @@ def test_no_duplicate_layer_assignments():
 
 def test_annulus_layers():
     """Annulus domain should produce multiple layers with all elements assigned."""
-    domain_file = os.path.join(os.path.dirname(__file__), '..', 'doc', 'domains', 'fort_14', 'annulus_200pts.fort.14')
-    mesh = CHILmesh.read_from_fort14(domain_file)
+    import chilmesh
+    mesh = chilmesh.examples.annulus()
 
     assert mesh.n_layers >= 2, f"Annulus should have >= 2 layers, got {mesh.n_layers}"
 
@@ -119,8 +119,8 @@ def test_edge2elem_sentinel():
 
 def generate_annulus_visualization():
     """Generate layer visualization for the annulus domain."""
-    domain_file = os.path.join(os.path.dirname(__file__), '..', 'doc', 'domains', 'fort_14', 'annulus_200pts.fort.14')
-    mesh = CHILmesh.read_from_fort14(domain_file)
+    import chilmesh
+    mesh = chilmesh.examples.annulus()
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
