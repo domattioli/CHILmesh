@@ -1,4 +1,5 @@
 from pathlib import Path
+import warnings
 
 from .utils.plot_utils import CHILmeshPlotMixin
 
@@ -114,7 +115,7 @@ class CHILmesh(CHILmeshPlotMixin):
             self._build_adjacencies()
             
             # Identify mesh layers
-            self._mesh_layers()
+            self._skeletonize()
     
     def _ensure_ccw_orientation( self ) -> None:
         """Ensure counter-clockwise orientation of every element.
@@ -507,29 +508,35 @@ class CHILmesh(CHILmeshPlotMixin):
         
         return self.adjacencies["Edge2Elem"][edge_ids]
     
-    def _mesh_layers(self) -> None:
+    def _skeletonize(self) -> None:
         """
-        Discretize the mesh into layers starting from the boundary.
-        This implements the mesh layers approach described in Mattioli's thesis.
+        Skeletonize the mesh by iteratively peeling concentric layers from the boundary inward.
+
+        This is a medial axis extraction algorithm that decomposes the mesh into hierarchical
+        layers, similar to skeletonization in image processing. Each iteration identifies:
+        - Outer elements: Elements adjacent to the current boundary
+        - Inner elements: Neighbors of outer elements (one step deeper)
+        - Outer/inner vertices: Vertex sets for each layer
+        - Boundary edges: The frontier between processed and unprocessed regions
         """
         # Reset layers
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
-        
+
         # Get boundary edges (edges with only one adjacent element)
         edge2elem = self.adjacencies["Edge2Elem"]
         boundary_mask = (edge2elem[:, 1] == -1)
         boundary_edges = np.where(boundary_mask)[0]
-        
+
         # Keep track of which elements have been assigned to a layer
         remaining_elements = set(range(self.n_elems))
-        
+
         # Get element-to-element connectivity using edge2elem
         elem2elem = [[] for _ in range(self.n_elems)]
         for edge_idx, (e1, e2) in enumerate(edge2elem):
             if e1 >= 0 and e2 >= 0:  # Both elements exist (sentinel is -1)
                 elem2elem[e1].append(e2)
                 elem2elem[e2].append(e1)
-        
+
         # Process layers from the boundary inward
         layer_idx = 0
         while remaining_elements and len(boundary_edges) > 0:
@@ -538,7 +545,7 @@ class CHILmesh(CHILmeshPlotMixin):
             outer_vertices = np.array(list(set(edge2vert[boundary_edges].flatten())))
             self.layers["OV"].append(outer_vertices)
             self.layers["bEdgeIDs"].append(boundary_edges)
-            
+
             # Get outer elements (elements adjacent to boundary edges)
             outer_elems = []
             for edge_idx in boundary_edges:
@@ -546,34 +553,34 @@ class CHILmesh(CHILmeshPlotMixin):
                 for elem in elems:
                     if elem >= 0 and elem in remaining_elements:
                         outer_elems.append(elem)
-            
+
             # Convert to numpy array of integers
             outer_elems = np.array(list(set(outer_elems)), dtype=int)
-            
+
             # Skip if no outer elements found
             if len(outer_elems) == 0:
                 break
-                
+
             self.layers["OE"].append(outer_elems)
             for elem in outer_elems:
                 remaining_elements.remove(elem)
-            
+
             # Get inner elements (neighbors of outer elements that haven't been assigned yet)
             inner_elems = []
             for elem in outer_elems:
                 for neighbor in elem2elem[elem]:
                     if neighbor in remaining_elements:
                         inner_elems.append(neighbor)
-            
+
             # Convert to numpy array of integers and remove duplicates
             inner_elems = np.array(list(set(inner_elems)), dtype=int)
-            
+
             # Store inner elements
             self.layers["IE"].append(inner_elems)
             for elem in inner_elems:
                 if elem in remaining_elements:
                     remaining_elements.remove(elem)
-            
+
             # Get inner vertices
             all_vertices = set()
             for elem in np.concatenate((outer_elems, inner_elems)):
@@ -583,10 +590,10 @@ class CHILmesh(CHILmeshPlotMixin):
                     # 0 is valid in this implementation.
                     if v >= 0:
                         all_vertices.add(v)
-            
+
             inner_vertices = np.array(list(all_vertices - set(outer_vertices)), dtype=int)
             self.layers["IV"].append(inner_vertices)
-            
+
             # Get new boundary by finding edges that have one element in the remaining set
             # and one element in the processed set
             boundary_edges = []
@@ -594,19 +601,34 @@ class CHILmesh(CHILmeshPlotMixin):
                 # Skip boundary edges of the original mesh
                 if e2 < 0:
                     continue
-                    
-                # An edge is a boundary if exactly one of its adjacent elements 
+
+                # An edge is a boundary if exactly one of its adjacent elements
                 # is in the remaining set
                 if ((e1 in remaining_elements) != (e2 in remaining_elements)):
                     boundary_edges.append(edge_idx)
-            
+
             boundary_edges = np.array(boundary_edges, dtype=int)
-            
+
             # Move to next layer
             layer_idx += 1
-        
+
         # Set number of layers
         self.n_layers = layer_idx
+
+    def _mesh_layers(self) -> None:
+        """
+        Deprecated: Use _skeletonize() instead.
+
+        This method is retained for backwards compatibility but will be removed in a future version.
+        The mesh layers approach is more accurately described as mesh skeletonization.
+        """
+        warnings.warn(
+            "_mesh_layers() is deprecated and will be removed in a future version. "
+            "Use _skeletonize() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self._skeletonize()
         
         # # Print summary
         # print(f"Created {self.n_layers} mesh layers")
