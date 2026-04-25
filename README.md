@@ -72,6 +72,8 @@ pip install -e .
 - Element quality evaluation (angular skewness) for quads & tris.
 - Novel [layer-based conceptualization for 2D meshes.
   - [MeshLayers.pdf](https://github.com/user-attachments/files/19724245/MeshLayers.pdf)
+  - Breadth-First Search x Image Skleletonization.
+      - Note: "Mesh Layers" as a name for the algorithm is depracated; we will be migrating to using "Skeletonization".
 - `.fort.14` file input/output for ADCIRC models
 - API inspired by MATLAB’s `delaunayTriangulation()`
 
