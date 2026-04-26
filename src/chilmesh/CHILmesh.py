@@ -16,11 +16,35 @@ __all__ = ['CHILmesh', 'write_fort14']
 
 class CHILmesh(CHILmeshPlotMixin):
     """
-    A class for triangular, quadrilateral, or mixed-element meshes in 2D.
-    
-    This Python implementation is based on the MATLAB CHILmesh class from the 
-    Computational Hydrodynamics & Informatics Laboratory (CHIL) at The Ohio State University,
-    focusing on the mesh layers approach described in Mattioli's thesis.
+    A 2D mesh class supporting triangular, quadrilateral, and mixed-element meshes.
+
+    Supports multiple file formats (ADCIRC `.fort.14`, SMS `.2dm`) and integrates
+    with ADMESH-Domains catalog. Provides mesh analysis (layer structure, element
+    quality, interior angles), geometric operations (smoothing), and fast metadata
+    queries for bulk loading.
+
+    Key Features:
+    - Element Types: Triangles, quads, and mixed-element meshes (padded convention)
+    - Fast Init: Optional skeletonization for <2s bulk loading (compute_layers=False)
+    - Metadata: Node count, element count, element type, bounding box (ADMESH-Domains compatible)
+    - Entry Point: CHILmesh.from_admesh_domain() for catalog integration (duck-typed, zero deps)
+    - File I/O: Read ADCIRC `.fort.14` and SMS `.2dm` formats; roundtrip lossless
+    - Analysis: Layers (skeletonization), element quality, interior angles
+
+    Based on the MATLAB CHILmesh class from the Computational Hydrodynamics &
+    Informatics Laboratory (CHIL) at The Ohio State University, focusing on the
+    mesh layers approach described in Mattioli's thesis.
+
+    Examples:
+        Load from ADMESH-Domains catalog:
+            mesh = CHILmesh.from_admesh_domain(record)
+
+        Fast metadata query:
+            metadata = mesh.admesh_metadata()
+            print(f"Nodes: {metadata['node_count']}, Type: {metadata['element_type']}")
+
+        Read SMS format:
+            mesh = CHILmesh.read_from_2dm(Path("mesh.2dm"))
     """
     
     @property
