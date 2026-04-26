@@ -1,7 +1,59 @@
+# Python
 __pycache__/
+*.py[cod]
 *.pyc
+*.pyo
+*.pyd
+*.egg
 *.egg-info/
-.pytest_cache/
-build/
+*.egg-link
 dist/
+build/
+.eggs/
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Testing & coverage
+.pytest_cache/
 .coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+.pyright/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artefacts
+*.so
+*.dylib
+*.dll
+
+# Spec-kit runtime state (tooling state — not project artefacts)
+.specify/memory/
+
+# Local overrides
+*.local
