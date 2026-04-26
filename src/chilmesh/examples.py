@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .CHILmesh import CHILmesh
 
-__all__ = ["annulus", "donut", "block_o", "structured", "fixture_path"]
+__all__ = ["annulus", "donut", "block_o", "structured", "quad_2x2", "fixture_path"]
 
 
 def fixture_path(name: str) -> Path:
@@ -58,3 +58,8 @@ def block_o() -> CHILmesh:
 def structured() -> CHILmesh:
     """Small structured triangular mesh (~660 elements)."""
     return _load("structuredMesh1.14", grid_name="structured")
+
+
+def quad_2x2() -> CHILmesh:
+    """2×2 quad grid (9 nodes, 4 quads). For testing quad/mixed-element support."""
+    return _load("quad_2x2.fort.14", grid_name="quad_2x2")
