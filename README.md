@@ -83,68 +83,106 @@ pip install -e .
 import matplotlib.pyplot as plt
 import numpy as np
 import chilmesh
+import admesh  # Optional: required for rows 3 & 4 (ADMESH integration)
 
 # Load one of the bundled example meshes (no file paths required).
 mesh = chilmesh.examples.annulus()
 # Other built-ins: chilmesh.examples.donut(), .block_o(), .structured()
 
-# Set up 2x3 subplot grid
-fig, axs = plt.subplots(2, 3, figsize=(18, 10))
-axs = axs.flatten()
-fig.suptitle("Original vs Smoothed Mesh Comparison", fontsize=16)
+# Set up 4x3 subplot grid
+fig, axs = plt.subplots(4, 3, figsize=(15, 18))
+fig.suptitle("Original vs FEM-Smoothed vs ADMESH vs ADMESH + Right-Angle Smoother",
+             fontsize=16)
 
-# --- Original Mesh Plots ---
-# 0. Original: Mesh + point/edge/element
-_, ax = mesh.plot(ax=axs[0])
-mesh.plot_point(1, ax=ax)
-mesh.plot_edge(1, ax=ax)
-mesh.plot_elem(1, ax=ax)
+# --- Row 1: Original Mesh ---
+_, ax = mesh.plot(ax=axs[0, 0])
+mesh.plot_point(1, ax=ax); mesh.plot_edge(1, ax=ax); mesh.plot_elem(1, ax=ax)
 ax.set_title("Original: Mesh + Highlighted Entities")
 
-# 1. Original: Layers
-_, ax = mesh.plot_layer(ax=axs[1])
+_, ax = mesh.plot_layer(ax=axs[0, 1])
 ax.set_title("Original: Mesh Layers")
 
-# 2. Original: Quality
-q0, _, stats0 = mesh.elem_quality( )
-print( stats0 )
-_, ax = mesh.plot_quality(ax=axs[2])
-ax.set_title(f"Original: Quality Map (Median: {np.median(q0):.2f}, Std: {np.std(q0):.2f})")
+q0, _, _ = mesh.elem_quality()
+_, ax = mesh.plot_quality(ax=axs[0, 2])
+ax.set_title(f"Original: Quality (Median: {np.median(q0):.2f}, Std: {np.std(q0):.2f})")
 
-# --- Smoothed Mesh Plots ---
-# 3. Smoothed: Mesh + point/edge/element
-mesh_smoothed = mesh.copy()
-mesh_smoothed.smooth_mesh( method='fem', acknowledge_change=True )
-_, ax = mesh_smoothed.plot(ax=axs[3])
-mesh_smoothed.plot_point(1, ax=ax)
-mesh_smoothed.plot_edge(1, ax=ax)
-mesh_smoothed.plot_elem(1, ax=ax)
-ax.set_title("Smoothed: Mesh + Highlighted Entities")
+# --- Row 2: CHILmesh FEM-Smoothed ---
+mesh_fem = mesh.copy()
+mesh_fem.smooth_mesh(method='fem', acknowledge_change=True)
+_, ax = mesh_fem.plot(ax=axs[1, 0])
+mesh_fem.plot_point(1, ax=ax); mesh_fem.plot_edge(1, ax=ax); mesh_fem.plot_elem(1, ax=ax)
+ax.set_title("FEM-Smoothed: Mesh + Highlighted Entities")
 
-# 4. Smoothed: Layers
-_, ax = mesh_smoothed.plot_layer(ax=axs[4])
-ax.set_title("Smoothed: Mesh Layers")
+_, ax = mesh_fem.plot_layer(ax=axs[1, 1])
+ax.set_title("FEM-Smoothed: Mesh Layers")
 
-# 5. Smoothed: Quality
-q, _, stats = mesh_smoothed.elem_quality( )
-print( stats )
-_, ax = mesh_smoothed.plot_quality(ax=axs[5])
-ax.set_title(f"Smoothed: Quality Map (Median: {np.median(q):.2f}, Std: {np.std(q):.2f})")
+q1, _, _ = mesh_fem.elem_quality()
+_, ax = mesh_fem.plot_quality(ax=axs[1, 2])
+ax.set_title(f"FEM-Smoothed: Quality (Median: {np.median(q1):.2f}, Std: {np.std(q1):.2f})")
 
-# Layout tidy
+# --- Row 3: ADMESH algorithm result (no right-angle smoothing) ---
+# Rebuild the annulus through ADMESH's distmesh-based generator
+def annulus_sdf(p):
+    r = np.sqrt(p[:, 0]**2 + p[:, 1]**2)
+    return np.maximum(r - 2.0, 1.0 - r)
+
+pfix = np.array(
+    [[2*np.cos(a), 2*np.sin(a)] for a in np.linspace(0, 2*np.pi, 80, endpoint=False)] +
+    [[1*np.cos(a), 1*np.sin(a)] for a in np.linspace(0, 2*np.pi, 40, endpoint=False)]
+)
+domain = admesh.Domain(annulus_sdf, bbox=(-2.5, -2.5, 2.5, 2.5), pfix=pfix)
+admesh_mesh = admesh.triangulate(domain, h_max=0.15)
+mesh_adm = chilmesh.from_admesh(admesh_mesh)  # adapter: ADMESH -> CHILmesh
+_, ax = mesh_adm.plot(ax=axs[2, 0])
+mesh_adm.plot_point(1, ax=ax); mesh_adm.plot_edge(1, ax=ax); mesh_adm.plot_elem(1, ax=ax)
+ax.set_title("ADMESH: Mesh + Highlighted Entities")
+
+_, ax = mesh_adm.plot_layer(ax=axs[2, 1])
+ax.set_title("ADMESH: Mesh Layers")
+
+q2, _, _ = mesh_adm.elem_quality()
+_, ax = mesh_adm.plot_quality(ax=axs[2, 2])
+ax.set_title(f"ADMESH: Quality (Median: {np.median(q2):.2f}, Std: {np.std(q2):.2f})")
+
+# --- Row 4: ADMESH + new right-angle triangle smoother ---
+# Pushes triangles toward right-isosceles shape (preparation for quad fusion)
+p_right, t_right = admesh.smooth_for_quadrangulation(
+    admesh_mesh.nodes, admesh_mesh.elements,
+    annulus_sdf, n_outer=3, pair_hint=True,
+)
+mesh_right = chilmesh.from_admesh_arrays(p_right, t_right)
+_, ax = mesh_right.plot(ax=axs[3, 0])
+mesh_right.plot_point(1, ax=ax); mesh_right.plot_edge(1, ax=ax); mesh_right.plot_elem(1, ax=ax)
+ax.set_title("ADMESH + Right-Angle Smoother: Mesh + Highlighted Entities")
+
+_, ax = mesh_right.plot_layer(ax=axs[3, 1])
+ax.set_title("ADMESH + Right-Angle Smoother: Mesh Layers")
+
+q3, _, _ = mesh_right.elem_quality()
+_, ax = mesh_right.plot_quality(ax=axs[3, 2])
+ax.set_title(f"ADMESH + Right-Angle Smoother: Quality "
+             f"(Median: {np.median(q3):.2f}, Std: {np.std(q3):.2f})")
+
 plt.tight_layout()
-plt.subplots_adjust(top=0.9)  # leave space for suptitle
+plt.subplots_adjust(top=0.96)
 plt.show()
-#fig.savefig("result.png", dpi=600, bbox_inches='tight')
+# fig.savefig("tests/output/annulus_quickstart.png", dpi=120, bbox_inches='tight')
 ```
-![CHILmesh quickstart: annulus, original vs FEM-smoothed](https://raw.githubusercontent.com/domattioli/CHILmesh/main/tests/output/annulus_quickstart.png)
+![CHILmesh quickstart: annulus across four pipelines](https://raw.githubusercontent.com/domattioli/CHILmesh/main/tests/output/annulus_quickstart.png)
 
-> The figure above is regenerated by `pytest tests/test_readme_quickstart.py`,
-> which loads the bundled annulus, asserts geometric validity at every step
-> (positive signed area, finite interior angles, complete layer cover, fort.14
-> roundtrip), runs the FEM smoother, re-validates, and writes the PNG. If the
-> test passes, the image is current. Re-run it after any change that affects
-> the visualization and commit the updated PNG.
+> **How the figure above was generated:** the bundled annulus is run through
+> four pipelines and each row is plotted with the same three CHILmesh views
+> (mesh + highlighted point/edge/element, BFS layers, quality map). Rows 1–2
+> use only CHILmesh (original mesh and the FEM smoother). Rows 3–4 round-trip
+> the geometry through ADMESH: row 3 is the mesh produced by
+> `admesh.triangulate`, and row 4 applies ADMESH's new right-angle triangle
+> smoother (`admesh.smooth_for_quadrangulation`, an SVD-invariant FEM
+> Jacobian formulation that nudges triangles toward right-isosceles shape in
+> preparation for quad fusion). The resulting arrays are wrapped back into a
+> CHILmesh mesh for plotting and quality evaluation. The PNG is regenerated
+> by `pytest tests/test_readme_quickstart.py`, which asserts geometric
+> validity at every step (positive signed area, finite interior angles,
+> complete layer cover, fort.14 roundtrip) before writing the image.
 
 
 > **Note**: When mesh is mixed-element, connectivity (elem2vert adjacency) follows the format `Node1-Node2-Node3-Node4`, such that `Node4 == Node3` for triangular elements.
