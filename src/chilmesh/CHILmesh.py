@@ -673,8 +673,37 @@ class CHILmesh(CHILmeshPlotMixin):
             "IV": self.layers["IV"][layer_idx],
             "bEdgeIDs": self.layers["bEdgeIDs"][layer_idx]
         }
-    
-    
+
+    def admesh_metadata(self) -> Dict[str, Any]:
+        """
+        Return mesh metadata compatible with ADMESH-Domains schema.
+
+        Returns:
+            Dictionary with keys:
+            - node_count (int): Number of nodes
+            - element_count (int): Number of elements
+            - element_type (str): "Triangular", "Quadrilateral", or "Mixed-Element"
+            - bounding_box (dict): {"min_x", "max_x", "min_y", "max_y"} with float values
+
+        Note:
+            Coordinates are treated as Cartesian (x, y). ADMESH-Domains can map x→lon, y→lat
+            in its own adapter layer if needed.
+            Safe to call even when compute_layers=False.
+        """
+        bbox = {
+            "min_x": float(self.points[:, 0].min()),
+            "max_x": float(self.points[:, 0].max()),
+            "min_y": float(self.points[:, 1].min()),
+            "max_y": float(self.points[:, 1].max()),
+        }
+
+        return {
+            "node_count": self.n_verts,
+            "element_count": self.n_elems,
+            "element_type": self.type,
+            "bounding_box": bbox,
+        }
+
     @staticmethod
     def read_from_fort14(full_file_name: Path, compute_layers: bool = True) -> "CHILmesh":
         """
@@ -744,7 +773,150 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_layers=compute_layers,
         )
 
-    
+    @classmethod
+    def from_admesh_domain(cls, record, compute_layers: bool = True) -> "CHILmesh":
+        """
+        Load a mesh from an ADMESH-Domains catalog record.
+
+        The record is duck-typed: it must have `filename` and optionally `type` attributes.
+        No import of the `admesh-domains` package is required.
+
+        Parameters:
+            record: ADMESH-Domains Mesh record with `filename` and optional `type` attributes
+                - `filename` (str): Path to mesh file on disk
+                - `type` (str, optional): Format hint - "ADCIRC", "SMS_2DM", "ADCIRC_GRD", or other
+                - `kind` (str, optional): Ignored by CHILmesh
+            compute_layers: If False, skip skeletonization for fast init (default: True)
+
+        Returns:
+            A CHILmesh object
+
+        Raises:
+            FileNotFoundError: If the file does not exist (with guidance message)
+            ValueError: If the file format is unsupported
+        """
+        filename = getattr(record, "filename", None)
+        if not filename:
+            raise ValueError("Record must have a 'filename' attribute")
+
+        # Check if file exists
+        filepath = Path(filename)
+        if not filepath.exists():
+            raise FileNotFoundError(
+                f"File not found: {filepath}. "
+                "If using ADMESH-Domains, call mesh_record.load() first."
+            )
+
+        # Determine format and route to appropriate reader
+        mesh_type = getattr(record, "type", None)
+
+        if mesh_type == "SMS_2DM":
+            return cls.read_from_2dm(filepath, compute_layers=compute_layers)
+        else:
+            # Route all other types (ADCIRC, ADCIRC_GRD, None, unknown) to ADCIRC reader
+            if mesh_type and mesh_type not in ("ADCIRC", "ADCIRC_GRD"):
+                warnings.warn(
+                    f"Unrecognised mesh type '{mesh_type}', falling back to ADCIRC reader.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            return cls.read_from_fort14(filepath, compute_layers=compute_layers)
+
+    @staticmethod
+    def read_from_2dm(full_file_name: Path, compute_layers: bool = True) -> "CHILmesh":
+        """
+        Load a mesh from an SMS .2dm file.
+
+        Supports triangular and quadrilateral elements. Mixed-element meshes use
+        the padded-triangle convention in a 4-column array.
+
+        Parameters:
+            full_file_name: Path object pointing to the .2dm file
+            compute_layers: If False, skip skeletonization for fast init (default: True)
+
+        Returns:
+            A CHILmesh object
+        """
+        nodes = {}  # node_id -> [x, y, z]
+        elements = []  # list of (type, vertices)
+
+        with open(full_file_name, 'r') as f:
+            for line in f:
+                line = line.strip()
+
+                # Skip empty lines and comments
+                if not line or line.startswith("#"):
+                    continue
+
+                # Skip header
+                if line.startswith("MESH2D"):
+                    continue
+
+                parts = line.split()
+                if not parts:
+                    continue
+
+                keyword = parts[0]
+
+                # Parse node definition: ND id x y z
+                if keyword == "ND":
+                    node_id = int(parts[1])
+                    x = float(parts[2])
+                    y = float(parts[3])
+                    z = float(parts[4]) if len(parts) > 4 else 0.0
+                    nodes[node_id] = [x, y, z]
+
+                # Parse triangle element: E3T id n1 n2 n3 mat
+                elif keyword == "E3T":
+                    elem_id = int(parts[1])
+                    n1, n2, n3 = int(parts[2]), int(parts[3]), int(parts[4])
+                    elements.append(("E3T", [n1, n2, n3]))
+
+                # Parse quad element: E4Q id n1 n2 n3 n4 mat
+                elif keyword == "E4Q":
+                    elem_id = int(parts[1])
+                    n1, n2, n3, n4 = int(parts[2]), int(parts[3]), int(parts[4]), int(parts[5])
+                    elements.append(("E4Q", [n1, n2, n3, n4]))
+
+        # Convert node dict to ordered array (0-based indexing)
+        if not nodes:
+            raise ValueError("No nodes found in .2dm file")
+
+        node_ids = sorted(nodes.keys())
+        points = np.array([nodes[nid] for nid in node_ids], dtype=float)
+
+        # Create mapping from 1-based file IDs to 0-based array indices
+        id_to_idx = {nid: idx for idx, nid in enumerate(node_ids)}
+
+        # Determine element array width
+        has_quads = any(elem_type == "E4Q" for elem_type, _ in elements)
+        elem_width = 4 if has_quads else 3
+
+        # Build connectivity array
+        connectivity = np.zeros((len(elements), elem_width), dtype=int)
+        for i, (elem_type, vertices) in enumerate(elements):
+            if elem_type == "E3T":
+                # Triangle
+                v1, v2, v3 = vertices
+                if elem_width == 4:
+                    # Mixed mesh: use padding convention [v0, v1, v2, v0]
+                    idx1, idx2, idx3 = id_to_idx[v1], id_to_idx[v2], id_to_idx[v3]
+                    connectivity[i] = [idx1, idx2, idx3, idx1]
+                else:
+                    # All triangles
+                    connectivity[i] = [id_to_idx[v1], id_to_idx[v2], id_to_idx[v3]]
+            else:
+                # Quad
+                v1, v2, v3, v4 = vertices
+                connectivity[i] = [id_to_idx[v1], id_to_idx[v2], id_to_idx[v3], id_to_idx[v4]]
+
+        return CHILmesh(
+            connectivity=connectivity,
+            points=points,
+            grid_name="SMS_2DM",
+            compute_layers=compute_layers,
+        )
+
     def write_to_fort14( self, filename: str, grid_name: Opt[str] = "CHILmesh Grid") -> bool:
         """
         Export the current mesh to ADCIRC .fort.14 format.
