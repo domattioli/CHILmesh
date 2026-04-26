@@ -206,13 +206,17 @@ Note: These repositories are external and should be coordinated with before Phas
 
 ## Lessons Learned (Session 2026-04-26)
 
-- **[2026-04-26] Issue #43 (from_admesh_domain)**: Already fully implemented on `planning-optimize_modernize` branch with comprehensive tests. Spec-kit workflow (specify→clarify→plan→implement) is highly effective even when feature is pre-implemented — serves as verification + documentation.
+**Early Session (Issues #43-49 spec/cleanup):**
+- **Spec-Kit Effectiveness**: Complete spec for #43 (from_admesh_domain) identified it was pre-implemented. Spec served dual purpose: verification + documentation. Worth doing even for "known good" features.
+- **Branch Conflict Resolution**: Session guidance (`claude/peaceful-goldberg-CCD9l`) conflicted with CORE MANDATE (`planning-optimize_modernize`). Always prioritize CORE MANDATE over session-specific guidance.
+- **Refactoring Impact**: Moving planning docs to `docs/planning/` + images to `docs/figures/` dramatically improved repo clarity with 2 commits.
+- **Data Efficiency**: 3 issues + spec + plan consumed ~7% data in 27 min (0.26%/min). High ROI for structural cleanup.
 
-- **[2026-04-26] Issues #48-49 (refactoring)**: Bulk documentation and file organization is low-effort, high-clarity impact. Moving docs to `docs/planning/` and images to `docs/figures/` immediately clarifies project structure. Updated `.specify/feature.json` tracking during spec work.
-
-- **[2026-04-26] Branch guidance conflict**: Session specified `claude/peaceful-goldberg-CCD9l` but CORE MANDATE required `planning-optimize_modernize`. Always prioritize CORE MANDATE. All work should go to explicitly named planning branch per modernization roadmap.
-
-- **[2026-04-26] Data usage efficiency**: Spec + plan + 3 issues (cleanup, moves, validation) consumed ~7% data in ~27 min (0.26%/min). Token budgeting (Small for cleanup, Medium for spec/plan) accurately predicted scope.
+**Late Session (Issues #40-42 audit):**
+- **Silent Wins**: Issues #40 (fort.14 quad/mixed reader-writer), #41 (lazy compute_layers init), #42 (bounding_box + admesh_metadata()) were ALL pre-implemented on `planning-optimize_modernize` with complete test coverage (14+ fort14 roundtrip tests passing). No new work needed.
+- **Planning Branch State**: `planning-optimize_modernize` is in excellent shape — P0/P1 code issues complete, research phase structured in epic #39. Branch is a "golden source" for current state.
+- **ADMESH-Domains Integration**: Full integration stack (readers, writers, metadata, lazy init, entry point) complete and tested. Ready for downstream adoption (MADMESHR, ADMESH-Domains).
+- **Session Wrap Pattern**: When all top-priority issues are resolved, focus shifts to verification + documentation. Spent final minutes auditing completed work rather than inventing new tasks.
 
 ---
 
