@@ -12,7 +12,7 @@ import pytest
 import chilmesh
 from chilmesh import examples as _examples
 
-FIXTURE_NAMES = ["annulus", "donut", "block_o", "structured"]
+FIXTURE_NAMES = ["annulus", "donut", "block_o", "structured", "quad_2x2"]
 
 
 # Memoize the example loaders for the duration of the test session so the
@@ -36,7 +36,8 @@ def _make_cached(name):
 
 
 for _n in FIXTURE_NAMES:
-    setattr(_examples, _n, _make_cached(_n))
+    if hasattr(_examples, _n):
+        setattr(_examples, _n, _make_cached(_n))
 
 
 def _load(name: str):
