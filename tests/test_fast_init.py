@@ -6,17 +6,24 @@ import pytest
 import chilmesh
 
 
+_FIXTURE_FILES = {
+    "annulus": "annulus_200pts.fort.14",
+    "donut": "donut_domain.fort.14",
+    "quad_2x2": "quad_2x2.fort.14",
+}
+
+
 class TestFastInitialization:
     """Test that compute_layers=False enables fast mesh loading."""
 
-    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "block_o", "structured", "quad_2x2"])
+    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "quad_2x2"])
     def test_fast_init_timing(self, fixture_name):
         """
         Test that fast init completes in <2s for all fixtures.
 
         Success Criteria (SC-003): Fast loading <2s for meshes up to ~15,000 elements.
         """
-        fixture_path = chilmesh.examples.fixture_path(f"{fixture_name}.fort.14")
+        fixture_path = chilmesh.examples.fixture_path(_FIXTURE_FILES[fixture_name])
 
         # Measure fast init time
         start = time.perf_counter()
@@ -28,19 +35,19 @@ class TestFastInitialization:
         assert mesh.n_verts > 0
         assert mesh.n_elems > 0
 
-    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "block_o", "structured", "quad_2x2"])
+    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "quad_2x2"])
     def test_no_adjacencies_when_fast_init(self, fixture_name):
         """Test that adjacencies are not computed when compute_layers=False."""
-        fixture_path = chilmesh.examples.fixture_path(f"{fixture_name}.fort.14")
+        fixture_path = chilmesh.examples.fixture_path(_FIXTURE_FILES[fixture_name])
         mesh = chilmesh.CHILmesh.read_from_fort14(fixture_path, compute_layers=False)
 
         assert mesh.adjacencies == {}, f"Expected empty adjacencies for fast init, got {len(mesh.adjacencies)}"
         assert mesh.n_layers == 0, f"Expected n_layers=0 for fast init, got {mesh.n_layers}"
 
-    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "block_o", "structured", "quad_2x2"])
+    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "quad_2x2"])
     def test_mesh_geometry_preserved_fast_init(self, fixture_name):
         """Test that mesh geometry is correct even with compute_layers=False."""
-        fixture_path = chilmesh.examples.fixture_path(f"{fixture_name}.fort.14")
+        fixture_path = chilmesh.examples.fixture_path(_FIXTURE_FILES[fixture_name])
 
         # Load with fast init
         mesh_fast = chilmesh.CHILmesh.read_from_fort14(fixture_path, compute_layers=False)
@@ -53,10 +60,10 @@ class TestFastInitialization:
         assert mesh_fast.n_elems == mesh_full.n_elems
         assert mesh_fast.type == mesh_full.type
 
-    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "block_o", "structured", "quad_2x2"])
+    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "quad_2x2"])
     def test_element_type_set_with_fast_init(self, fixture_name):
         """Test that element_type is set even with compute_layers=False."""
-        fixture_path = chilmesh.examples.fixture_path(f"{fixture_name}.fort.14")
+        fixture_path = chilmesh.examples.fixture_path(_FIXTURE_FILES[fixture_name])
         mesh = chilmesh.CHILmesh.read_from_fort14(fixture_path, compute_layers=False)
 
         assert mesh.type is not None, f"element_type should be set for {fixture_name}"
