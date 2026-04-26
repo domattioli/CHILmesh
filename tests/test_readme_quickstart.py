@@ -2,10 +2,10 @@
 
 Renders the 4x3 grid that lives in ``README.md``:
 
-    Row 1: Original CHILmesh annulus
-    Row 2: CHILmesh FEM smoother
-    Row 3: ADMESH triangulate result (skipped if admesh not installed)
-    Row 4: ADMESH + right-angle smoother (skipped if admesh not installed)
+    Row 1: Original CHILmesh annulus (dispersed interior nodes)
+    Row 2: CHILmesh FEM smoother applied to row 1
+    Row 3: ADMESH given row 1's boundary only (skipped if admesh missing)
+    Row 4: ADMESH + right-angle smoother on row 3 (skipped if admesh missing)
 
 Each row asserts the mesh is geometrically valid before plotting.
 
@@ -83,7 +83,7 @@ def _plot_row(axs_row, mesh, label: str) -> None:
 
 
 def test_readme_annulus_regenerates_and_validates(tmp_path):
-    # 1. Original + FEM-smoothed (CHILmesh-only).
+    # 1. Original (dispersed) + FEM-smoothed (CHILmesh-only).
     mesh = chilmesh.examples.annulus()
     _assert_geometrically_valid(mesh, "annulus (original)")
 
@@ -97,15 +97,13 @@ def test_readme_annulus_regenerates_and_validates(tmp_path):
     reloaded = chilmesh.CHILmesh.read_from_fort14(out14)
     _assert_geometrically_valid(reloaded, "annulus (reloaded)")
 
-    # 2. ADMESH + ADMESH+right-smoother (skipped if admesh not installed).
+    # 2. ADMESH from row-1's boundary only (no interior nodes), then the
+    #    right-angle smoother on top. Skipped if admesh is not installed.
     if HAS_ADMESH:
-        pfix = np.array(
-            [[2 * np.cos(a), 2 * np.sin(a)]
-             for a in np.linspace(0, 2 * np.pi, 80, endpoint=False)] +
-            [[1 * np.cos(a), 1 * np.sin(a)]
-             for a in np.linspace(0, 2 * np.pi, 40, endpoint=False)]
-        )
-        domain = admesh.Domain(_annulus_sdf, bbox=(-2.5, -2.5, 2.5, 2.5), pfix=pfix)
+        # Reuse the original annulus boundary so rows 1 and 3 share a domain.
+        boundary_pts = mesh.nodes[mesh.boundary_node_indices()]
+        domain = admesh.Domain(_annulus_sdf, bbox=(-2.5, -2.5, 2.5, 2.5),
+                               pfix=boundary_pts)
         admesh_mesh = admesh.triangulate(domain, h_max=0.15)
         mesh_adm = chilmesh.from_admesh(admesh_mesh)
         _assert_geometrically_valid(mesh_adm, "annulus (admesh)")
@@ -123,15 +121,16 @@ def test_readme_annulus_regenerates_and_validates(tmp_path):
     n_rows = 4 if HAS_ADMESH else 2
     fig, axs = plt.subplots(n_rows, 3, figsize=(15, 4.5 * n_rows))
     fig.suptitle(
-        "CHILmesh annulus: Original vs FEM-Smoothed"
-        + (" vs ADMESH vs ADMESH + Right-Angle Smoother" if HAS_ADMESH else ""),
+        "CHILmesh annulus: Original (dispersed) vs FEM-Smoothed"
+        + (" vs ADMESH (boundary-only) vs ADMESH + Right-Angle Smoother"
+           if HAS_ADMESH else ""),
         fontsize=16,
     )
 
-    _plot_row(axs[0], mesh, "Original")
+    _plot_row(axs[0], mesh, "Original (dispersed)")
     _plot_row(axs[1], smoothed, "FEM-Smoothed")
     if HAS_ADMESH:
-        _plot_row(axs[2], mesh_adm, "ADMESH")
+        _plot_row(axs[2], mesh_adm, "ADMESH (boundary-only)")
         _plot_row(axs[3], mesh_right, "ADMESH + Right-Angle Smoother")
 
     plt.tight_layout()
