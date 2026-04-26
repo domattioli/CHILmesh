@@ -204,7 +204,17 @@ Note: These repositories are external and should be coordinated with before Phas
 4. **Performance issues**: Profile with cProfile, benchmark before/after
 5. **Unclear requirements**: Ask user for clarification
 
+## Lessons Learned (Session 2026-04-26)
+
+- **[2026-04-26] Issue #43 (from_admesh_domain)**: Already fully implemented on `planning-optimize_modernize` branch with comprehensive tests. Spec-kit workflow (specify→clarify→plan→implement) is highly effective even when feature is pre-implemented — serves as verification + documentation.
+
+- **[2026-04-26] Issues #48-49 (refactoring)**: Bulk documentation and file organization is low-effort, high-clarity impact. Moving docs to `docs/planning/` and images to `docs/figures/` immediately clarifies project structure. Updated `.specify/feature.json` tracking during spec work.
+
+- **[2026-04-26] Branch guidance conflict**: Session specified `claude/peaceful-goldberg-CCD9l` but CORE MANDATE required `planning-optimize_modernize`. Always prioritize CORE MANDATE. All work should go to explicitly named planning branch per modernization roadmap.
+
+- **[2026-04-26] Data usage efficiency**: Spec + plan + 3 issues (cleanup, moves, validation) consumed ~7% data in ~27 min (0.26%/min). Token budgeting (Small for cleanup, Medium for spec/plan) accurately predicted scope.
+
 ---
 
 **Last Updated:** 2026-04-26
-**Document Version:** 1.0
+**Document Version:** 1.1
