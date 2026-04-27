@@ -248,8 +248,8 @@ class MeshAdapterForADMESH:
         """
         angles = self.mesh.interior_angles(elem_ids)
 
-        # Convert to degrees for reporting
-        angles_deg = np.degrees(angles)
+        # Angles are already in degrees (per CHILmesh documentation)
+        angles_deg = angles
 
         min_angle = np.min(angles_deg)
         max_angle = np.max(angles_deg)
