@@ -587,7 +587,65 @@ class CHILmesh(CHILmeshPlotMixin):
             edge_ids = [edge_ids]
         
         return self.adjacencies["Edge2Elem"][edge_ids]
-    
+
+    def get_vertex_edges(self, vert_id: int) -> Set[int]:
+        """
+        Get all edges incident to a vertex.
+
+        Returns a set of edge IDs where the vertex appears as an endpoint.
+        For an isolated vertex (degree 0), returns empty set.
+
+        Parameters:
+            vert_id: Vertex index [0, n_verts)
+
+        Returns:
+            Set of edge IDs incident to this vertex
+
+        Raises:
+            ValueError: If vert_id is out of range
+
+        Complexity:
+            Time: O(1) dict lookup + O(k) to copy set where k=degree
+            Space: O(k) for returned set
+
+        Example:
+            >>> edges = mesh.get_vertex_edges(5)
+            >>> for edge_id in edges:
+            ...     v1, v2 = mesh.edge2vert(edge_id)
+        """
+        if not 0 <= vert_id < self.n_verts:
+            raise ValueError(f"Vertex {vert_id} out of range [0, {self.n_verts})")
+        return self.adjacencies['Vert2Edge'][vert_id].copy()
+
+    def get_vertex_elements(self, vert_id: int) -> Set[int]:
+        """
+        Get all elements incident to a vertex.
+
+        Returns a set of element IDs that contain this vertex.
+        For an isolated vertex (degree 0), returns empty set.
+
+        Parameters:
+            vert_id: Vertex index [0, n_verts)
+
+        Returns:
+            Set of element IDs incident to this vertex
+
+        Raises:
+            ValueError: If vert_id is out of range
+
+        Complexity:
+            Time: O(1) dict lookup + O(k) to copy set where k=degree
+            Space: O(k) for returned set
+
+        Example:
+            >>> elems = mesh.get_vertex_elements(5)
+            >>> for elem_id in elems:
+            ...     verts = mesh.connectivity_list[elem_id]
+        """
+        if not 0 <= vert_id < self.n_verts:
+            raise ValueError(f"Vertex {vert_id} out of range [0, {self.n_verts})")
+        return self.adjacencies['Vert2Elem'][vert_id].copy()
+
     def _skeletonize(self) -> None:
         """
         Skeletonize the mesh by iteratively peeling concentric layers from the boundary inward.
