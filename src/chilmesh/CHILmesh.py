@@ -35,6 +35,30 @@ class CHILmesh(CHILmeshPlotMixin):
     Informatics Laboratory (CHIL) at The Ohio State University, focusing on the
     mesh layers approach described in Mattioli's thesis.
 
+    Adjacency Structures:
+        The mesh maintains multiple representations of topology:
+
+        Core Mesh Representation:
+        - points: ndarray[n_verts, 3] - Vertex coordinates (x, y, z)
+        - connectivity_list: ndarray[n_elems, 3|4] - Element vertex indices
+          * Triangles: [v0, v1, v2, -1]
+          * Quads: [v0, v1, v2, v3]
+          * Mixed: Triangles padded with repeated vertex
+
+        Adjacency Dictionary (self.adjacencies):
+        - Edge2Vert: ndarray[n_edges, 2] - Edge endpoints (canonical form: min, max)
+        - Elem2Edge: ndarray[n_elems, 3|4] - Element edge IDs
+        - Edge2Elem: ndarray[n_edges, 2] - Adjacent elements per edge (boundary: -1)
+        - Vert2Edge: Dict[int, Set[int]] - Vertex incident edges (access via get_vertex_edges())
+        - Vert2Elem: Dict[int, Set[int]] - Vertex incident elements (access via get_vertex_elements())
+        - EdgeMap: Internal hash table for O(1) edge lookup (not part of public API)
+
+        Access Patterns:
+        >>> edges = mesh.get_vertex_edges(v)  # Set[int]
+        >>> elems = mesh.get_vertex_elements(v)  # Set[int]
+        >>> v1, v2 = mesh.edge2vert(edge_id)
+        >>> elem_ids = mesh.edge2elem(edge_id)
+
     Examples:
         Load from ADMESH-Domains catalog:
             mesh = CHILmesh.from_admesh_domain(record)
@@ -45,6 +69,10 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Read SMS format:
             mesh = CHILmesh.read_from_2dm(Path("mesh.2dm"))
+
+        Query vertex neighborhoods:
+            edges = mesh.get_vertex_edges(5)
+            elems = mesh.get_vertex_elements(5)
     """
     
     @property
