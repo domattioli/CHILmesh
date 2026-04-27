@@ -208,17 +208,34 @@ Note: These repositories are external and should be coordinated with before Phas
 
 ## Lessons Learned (WS4)
 
-### Session 2026-04-27: P1-01 EdgeMap Implementation
+### Session 2026-04-27: Phase 1 Completion (EdgeMap & Performance Optimization)
 
-**[2026-04-27] Issue #11 (P1-01): EdgeMap class enables O(1) edge lookup**
-Implemented canonical edge storage (min, max) in hash-based EdgeMap class with full test coverage (23 tests). Key insight: enforcing canonical form at the point of insertion eliminates complex comparison logic downstream. Next session should implement P1-02 (_identify_edges refactoring) to return both edges list and EdgeMap, unblocking P1-03/P1-04 performance optimizations.
+**[2026-04-27] Issues #11–16 (P1-01 through P1-06): Phase 1 Complete**
 
-**Key Pattern Discovered:**
-- Canonical form enforcement in data structure layer prevents order-dependency bugs in consumers
-- Unit tests should cover both add-order permutations (add(0,5) vs add(5,0)) to catch form violations
-- Integration tests on realistic meshes (triangles, quads, shared edges) revealed 180-edge grid case computes correctly
+Completed full Phase 1: Hash Map Edge Lookup optimization. Key achievements:
+
+1. **EdgeMap Class (P1-01):** Hash-based O(1) edge ID lookup with 23 unit tests
+2. **Integration (P1-02):** Refactored _identify_edges to return both edges list and EdgeMap
+3. **Edge Building (P1-03/P1-04):** Optimized _build_elem2edge and _build_edge2elem with O(1) lookups
+4. **Storage (P1-05):** EdgeMap integrated into adjacencies dict
+5. **Validation (P1-06):** 18 performance regression tests covering consistency and backward compatibility
+
+**Critical Bug Fixed:**
+- Edge ordering mismatch between edge2vert array and EdgeMap IDs
+- Root cause: set iteration order is undefined in Python; solution: use EdgeMap.to_list() ordering
+- Manifested as incorrect element-edge mappings in _build_edge2elem, affecting element areas in smoothing
+
+**Key Patterns:**
+- **Canonical form enforcement:** Prevents downstream comparison bugs
+- **Consistent ordering:** When multiple data structures represent the same data, their indices must match
+- **Backward compatibility:** Keep fallback code paths for optional optimizations
+- **Performance measurement:** Test suite runtime improved from 115s → 4.6s due to O(1) lookups
+
+**Ready for Phase 2:**
+- P1 unblocks P2-01/P2-02 (Vert2Edge/Vert2Elem dict migration)
+- All 177 tests pass; regression suite added to prevent future regressions
 
 ---
 
 **Last Updated:** 2026-04-27
-**Document Version:** 1.1
+**Document Version:** 1.2
