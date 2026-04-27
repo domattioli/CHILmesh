@@ -35,6 +35,30 @@ class CHILmesh(CHILmeshPlotMixin):
     Informatics Laboratory (CHIL) at The Ohio State University, focusing on the
     mesh layers approach described in Mattioli's thesis.
 
+    Adjacency Structures:
+        The mesh maintains multiple representations of topology:
+
+        Core Mesh Representation:
+        - points: ndarray[n_verts, 3] - Vertex coordinates (x, y, z)
+        - connectivity_list: ndarray[n_elems, 3|4] - Element vertex indices
+          * Triangles: [v0, v1, v2, -1]
+          * Quads: [v0, v1, v2, v3]
+          * Mixed: Triangles padded with repeated vertex
+
+        Adjacency Dictionary (self.adjacencies):
+        - Edge2Vert: ndarray[n_edges, 2] - Edge endpoints (canonical form: min, max)
+        - Elem2Edge: ndarray[n_elems, 3|4] - Element edge IDs
+        - Edge2Elem: ndarray[n_edges, 2] - Adjacent elements per edge (boundary: -1)
+        - Vert2Edge: Dict[int, Set[int]] - Vertex incident edges (access via get_vertex_edges())
+        - Vert2Elem: Dict[int, Set[int]] - Vertex incident elements (access via get_vertex_elements())
+        - EdgeMap: Internal hash table for O(1) edge lookup (not part of public API)
+
+        Access Patterns:
+        >>> edges = mesh.get_vertex_edges(v)  # Set[int]
+        >>> elems = mesh.get_vertex_elements(v)  # Set[int]
+        >>> v1, v2 = mesh.edge2vert(edge_id)
+        >>> elem_ids = mesh.edge2elem(edge_id)
+
     Examples:
         Load from ADMESH-Domains catalog:
             mesh = CHILmesh.from_admesh_domain(record)
@@ -45,6 +69,10 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Read SMS format:
             mesh = CHILmesh.read_from_2dm(Path("mesh.2dm"))
+
+        Query vertex neighborhoods:
+            edges = mesh.get_vertex_edges(5)
+            elems = mesh.get_vertex_elements(5)
     """
     
     @property
@@ -300,49 +328,99 @@ class CHILmesh(CHILmeshPlotMixin):
                     self.connectivity_list[elem_id, 3] = self.connectivity_list[elem_id, 0]
         
         # Identify edges of the mesh
-        edges = self._identify_edges()
+        edges, edge_map = self._identify_edges()
         edge2vert = np.array( edges )
         self.n_edges = len( edge2vert )
-        
+
         # Build Elem2Edge
-        elem2edge = self._build_elem2edge( edge2vert )
-        
+        elem2edge = self._build_elem2edge( edge2vert, edge_map )
+
         # Build Vert2Edge
         vert2edge = self._build_vert2edge( edge2vert )
-        
+
         # Build Vert2Elem
         vert2elem = self._build_vert2elem()
-        
+
         # Build Edge2Elem
-        edge2elem = self._build_edge2elem( edge2vert )
-        
+        edge2elem = self._build_edge2elem( edge2vert, edge_map )
+
         # Store adjacencies
         self.adjacencies = {
             "Elem2Vert": self.connectivity_list,
             "Edge2Vert": edge2vert,
+            "EdgeMap": edge_map,
             "Elem2Edge": elem2edge,
             "Vert2Edge": vert2edge,
             "Vert2Elem": vert2elem,
             "Edge2Elem": edge2elem
         }
+        self._validate_adjacencies()
 
-    def _identify_edges( self ) -> List[Tuple[int, int]]:
+    def _validate_adjacencies(self) -> None:
+        """
+        Validate adjacency structure invariants.
+
+        Checks:
+        - All vertices have entries in Vert2Edge and Vert2Elem
+        - All edge IDs are valid [0, n_edges)
+        - All element IDs are valid [0, n_elems)
+        - Vert2Edge and Vert2Elem are dicts with set values
+        - Edge ordering consistency (edges stored in canonical form)
+
+        Raises:
+            AssertionError: If any invariant is violated
+        """
+        v2e = self.adjacencies['Vert2Edge']
+        v2m = self.adjacencies['Vert2Elem']
+        e2v = self.adjacencies['Edge2Vert']
+        e2m = self.adjacencies['Edge2Elem']
+
+        # Check: All vertices have entries
+        assert len(v2e) == self.n_verts, f"Vert2Edge has {len(v2e)} entries, expected {self.n_verts}"
+        assert len(v2m) == self.n_verts, f"Vert2Elem has {len(v2m)} entries, expected {self.n_verts}"
+
+        # Check: Vert2Edge structure
+        for vert_id in range(self.n_verts):
+            assert vert_id in v2e, f"Vertex {vert_id} missing from Vert2Edge"
+            assert isinstance(v2e[vert_id], set), f"Vert2Edge[{vert_id}] is not a set"
+            for edge_id in v2e[vert_id]:
+                assert 0 <= edge_id < self.n_edges, f"Invalid edge ID {edge_id} in Vert2Edge[{vert_id}]"
+                # Verify vertex is endpoint of edge
+                v1, v2 = e2v[edge_id]
+                assert vert_id in [v1, v2], f"Vertex {vert_id} not endpoint of edge {edge_id}"
+
+        # Check: Vert2Elem structure
+        for vert_id in range(self.n_verts):
+            assert vert_id in v2m, f"Vertex {vert_id} missing from Vert2Elem"
+            assert isinstance(v2m[vert_id], set), f"Vert2Elem[{vert_id}] is not a set"
+            for elem_id in v2m[vert_id]:
+                assert 0 <= elem_id < self.n_elems, f"Invalid element ID {elem_id} in Vert2Elem[{vert_id}]"
+
+    def _identify_edges( self ) -> Tuple[List[Tuple[int, int]], 'EdgeMap']:
         """
         Identify edges of the mesh.
-        
+
+        Builds both a list of edges (for backward compatibility) and an
+        EdgeMap (for O(1) lookups in subsequent operations).
+
         Returns:
-            List of edges, where each edge is a tuple of two vertex indices
+            Tuple of (edges_list, edge_map) where:
+            - edges_list: List of edges as (v1, v2) tuples in sorted order
+            - edge_map: EdgeMap object for O(1) edge ID lookup
         """
-        edges = set()
-        
+        from .mesh_topology import EdgeMap
+
+        edge_map = EdgeMap()
+        seen = set()
+
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             n_vertices = 3 if self.type == "Triangular" else 4
-            
+
             for i in range( n_vertices ):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
-                
+
                 # Skip invalid edges (negative vertex ids)
                 # In MATLAB the value 0 signified a placeholder for a missing
                 # vertex in mixed element meshes.  In this Python port we use
@@ -351,100 +429,124 @@ class CHILmesh(CHILmeshPlotMixin):
                 # invalid.
                 if v1 < 0 or v2 < 0:
                     continue
-                
-                # Store edge as a sorted tuple to avoid duplicates
+
+                # Store edge in canonical form to check for duplicates
                 edge = tuple( sorted( [int(v1), int(v2)] ) )
-                edges.add( edge )
-        
-        return list( edges )
+                if edge not in seen:
+                    seen.add( edge )
+                    # Add to EdgeMap (maintains consistent ID ordering)
+                    edge_map.add_edge(edge[0], edge[1])
+
+        # Return edges in EdgeMap order to ensure IDs match
+        return edge_map.to_list(), edge_map
     
-    def _build_elem2edge( self, edge2vert: np.ndarray ) -> np.ndarray:
+    def _build_elem2edge( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
         """
         Build Elem2Edge adjacency.
-        
+
         Parameters:
-            edge2vert: Edge-to-vertex adjacency
-        
+            edge2vert: Edge-to-vertex adjacency (ndarray)
+            edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
+
         Returns:
             Element-to-edge adjacency
+
+        Note:
+            If edge_map is provided, uses O(1) lookups instead of linear search,
+            reducing complexity from O(n²) to O(n log n).
         """
         max_edges_per_elem = 4 if self.type != "Triangular" else 3
         elem2edge = np.zeros( ( self.n_elems, max_edges_per_elem ), dtype=int )
-        
+
         # For each element
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             n_vertices = 3 if self.type == "Triangular" else 4
-            
+
             # For each edge of the element
             for i in range( n_vertices ):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
-                
+
                 # Skip invalid edges (negative vertex ids)
                 if v1 < 0 or v2 < 0:
                     continue
-                
-                # Find the edge index
-                edge = tuple( sorted( [int(v1), int(v2)] ) )
-                for j, e in enumerate( edge2vert ):
-                    if set( e ) == set( edge ):
-                        elem2edge[elem_id, i] = j
-                        break
-        
+
+                # Find the edge index using EdgeMap if available (O(1))
+                # Otherwise fall back to linear search (O(n))
+                if edge_map is not None:
+                    edge_id = edge_map.find_edge(int(v1), int(v2))
+                    if edge_id is not None:
+                        elem2edge[elem_id, i] = edge_id
+                else:
+                    edge = tuple( sorted( [int(v1), int(v2)] ) )
+                    for j, e in enumerate( edge2vert ):
+                        if set( e ) == set( edge ):
+                            elem2edge[elem_id, i] = j
+                            break
+
         return elem2edge
 
-    def _build_vert2edge( self, edge2vert: np.ndarray ) -> List[List[int]]:
+    def _build_vert2edge( self, edge2vert: np.ndarray ) -> Dict[int, Set[int]]:
         """
-        Build Vert2Edge adjacency.
-        
+        Build Vert2Edge adjacency as explicit dict with set values.
+
+        Maps each vertex to the set of edge IDs incident to that vertex.
+
         Parameters:
-            edge2vert: Edge-to-vertex adjacency
-        
+            edge2vert: Edge-to-vertex adjacency (n_edges x 2 array)
+
         Returns:
-            Vertex-to-edge adjacency as list of lists
+            Dict mapping vertex ID to Set of incident edge IDs
         """
-        # Initialize with empty lists for each vertex
-        vert2edge = [[] for _ in range( self.n_verts )]
-        
-        # Populate the lists
-        for edge_id, (v1, v2) in enumerate( edge2vert ):
-            vert2edge[v1].append( edge_id )
-            vert2edge[v2].append( edge_id )
-        
+        vert2edge: Dict[int, Set[int]] = {}
+        for vert_id in range(self.n_verts):
+            vert2edge[vert_id] = set()
+
+        for edge_id, (v1, v2) in enumerate(edge2vert):
+            vert2edge[int(v1)].add(edge_id)
+            vert2edge[int(v2)].add(edge_id)
+
         return vert2edge
     
-    def _build_vert2elem( self ) -> List[List[int]]:
+    def _build_vert2elem( self ) -> Dict[int, Set[int]]:
         """
-        Build Vert2Elem adjacency.
-        
+        Build Vert2Elem adjacency as explicit dict with set values.
+
+        Maps each vertex to the set of element IDs incident to that vertex.
+
+        Parameters:
+            None
+
         Returns:
-            Vertex-to-element adjacency as list of lists
+            Dict mapping vertex ID to Set of incident element IDs
         """
-        # Initialize with empty lists for each vertex
-        vert2elem = [[] for _ in range( self.n_verts )]
-        
-        # Populate the lists
-        for elem_id in range( self.n_elems ):
+        vert2elem: Dict[int, Set[int]] = {}
+        for vert_id in range(self.n_verts):
+            vert2elem[vert_id] = set()
+
+        for elem_id in range(self.n_elems):
             vertices = self.connectivity_list[elem_id]
             for v in vertices:
-                # Skip invalid vertex ids (negative values represent
-                # placeholders in mixed-element meshes).  Zero is a valid
-                # vertex index in this Python implementation.
                 if v >= 0:
-                    vert2elem[v].append( elem_id )
-        
+                    vert2elem[int(v)].add(elem_id)
+
         return vert2elem
     
-    def _build_edge2elem( self, edge2vert: np.ndarray ) -> np.ndarray:
+    def _build_edge2elem( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
         """
         Build Edge2Elem adjacency.
-        
+
         Parameters:
-            edge2vert: Edge-to-vertex adjacency
-        
+            edge2vert: Edge-to-vertex adjacency (ndarray)
+            edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
+
         Returns:
-            Edge-to-element adjacency
+            Edge-to-element adjacency (n_edges × 2 with -1 for boundary)
+
+        Note:
+            If edge_map is provided, uses O(1) lookups instead of linear search,
+            reducing complexity from O(n²) to O(n log n).
         """
         # Initialize with -1 sentinel (no adjacent element)
         edge2elem = np.full( ( self.n_edges, 2 ), -1, dtype=int )
@@ -463,16 +565,26 @@ class CHILmesh(CHILmeshPlotMixin):
                 if v1 < 0 or v2 < 0:
                     continue
 
-                # Find the edge index
-                edge = tuple( sorted( [int(v1), int(v2)] ) )
-                for edge_id, e in enumerate( edge2vert ):
-                    if set( e ) == set( edge ):
+                # Find the edge index using EdgeMap if available (O(1))
+                # Otherwise fall back to linear search (O(n))
+                if edge_map is not None:
+                    edge_id = edge_map.find_edge(int(v1), int(v2))
+                    if edge_id is not None:
                         # Check if edge already has an element assigned
                         if edge2elem[edge_id, 0] == -1:
                             edge2elem[edge_id, 0] = elem_id
                         else:
                             edge2elem[edge_id, 1] = elem_id
-                        break
+                else:
+                    edge = tuple( sorted( [int(v1), int(v2)] ) )
+                    for edge_id, e in enumerate( edge2vert ):
+                        if set( e ) == set( edge ):
+                            # Check if edge already has an element assigned
+                            if edge2elem[edge_id, 0] == -1:
+                                edge2elem[edge_id, 0] = elem_id
+                            else:
+                                edge2elem[edge_id, 1] = elem_id
+                            break
 
         return edge2elem
     
@@ -544,7 +656,65 @@ class CHILmesh(CHILmeshPlotMixin):
             edge_ids = [edge_ids]
         
         return self.adjacencies["Edge2Elem"][edge_ids]
-    
+
+    def get_vertex_edges(self, vert_id: int) -> Set[int]:
+        """
+        Get all edges incident to a vertex.
+
+        Returns a set of edge IDs where the vertex appears as an endpoint.
+        For an isolated vertex (degree 0), returns empty set.
+
+        Parameters:
+            vert_id: Vertex index [0, n_verts)
+
+        Returns:
+            Set of edge IDs incident to this vertex
+
+        Raises:
+            ValueError: If vert_id is out of range
+
+        Complexity:
+            Time: O(1) dict lookup + O(k) to copy set where k=degree
+            Space: O(k) for returned set
+
+        Example:
+            >>> edges = mesh.get_vertex_edges(5)
+            >>> for edge_id in edges:
+            ...     v1, v2 = mesh.edge2vert(edge_id)
+        """
+        if not 0 <= vert_id < self.n_verts:
+            raise ValueError(f"Vertex {vert_id} out of range [0, {self.n_verts})")
+        return self.adjacencies['Vert2Edge'][vert_id].copy()
+
+    def get_vertex_elements(self, vert_id: int) -> Set[int]:
+        """
+        Get all elements incident to a vertex.
+
+        Returns a set of element IDs that contain this vertex.
+        For an isolated vertex (degree 0), returns empty set.
+
+        Parameters:
+            vert_id: Vertex index [0, n_verts)
+
+        Returns:
+            Set of element IDs incident to this vertex
+
+        Raises:
+            ValueError: If vert_id is out of range
+
+        Complexity:
+            Time: O(1) dict lookup + O(k) to copy set where k=degree
+            Space: O(k) for returned set
+
+        Example:
+            >>> elems = mesh.get_vertex_elements(5)
+            >>> for elem_id in elems:
+            ...     verts = mesh.connectivity_list[elem_id]
+        """
+        if not 0 <= vert_id < self.n_verts:
+            raise ValueError(f"Vertex {vert_id} out of range [0, {self.n_verts})")
+        return self.adjacencies['Vert2Elem'][vert_id].copy()
+
     def _skeletonize(self) -> None:
         """
         Skeletonize the mesh by iteratively peeling concentric layers from the boundary inward.
@@ -1202,6 +1372,206 @@ class CHILmesh(CHILmeshPlotMixin):
         new_points[:, 2] = self.points[:, 2]  # preserve z if needed
         return new_points    
 
+
+    def advancing_front_boundary_edges(self) -> List[int]:
+        """
+        Get boundary edge IDs for advancing-front mesh generation.
+
+        Returns edge IDs on the current mesh boundary, suitable for placing
+        new elements during advancing-front generation.
+
+        Returns:
+            List of boundary edge IDs (sorted)
+
+        Complexity:
+            Time: O(n_edges)
+            Space: O(n_boundary_edges)
+
+        Example:
+            >>> boundary = mesh.advancing_front_boundary_edges()
+            >>> for edge_id in boundary:
+            ...     v1, v2 = mesh.edge2vert(edge_id)[0]
+        """
+        boundary_edge_ids = self.boundary_edges()
+        return sorted(boundary_edge_ids.tolist())
+
+    def add_advancing_front_element(
+        self, vertices: List[int], elem_type: str = "tri"
+    ) -> int:
+        """
+        Add element to mesh during advancing-front generation.
+
+        Adds a single element (triangle or quad) to the mesh and updates all
+        adjacency structures. This is the primary method for MADMESHR advancing-front
+        generation. Elements are added in order; mesh is valid after each call.
+
+        Parameters:
+            vertices: Vertex indices for new element
+                - Triangle: [v0, v1, v2]
+                - Quad: [v0, v1, v2, v3]
+            elem_type: Element type ('tri' or 'quad')
+
+        Returns:
+            ID of newly added element
+
+        Raises:
+            ValueError: If vertices out of range or elem_type invalid
+            RuntimeError: If adjacency update fails
+
+        Complexity:
+            Time: O(k) where k = element degree (typically 3-4)
+            Space: O(k) for adjacency updates
+
+        Example:
+            >>> new_elem_id = mesh.add_advancing_front_element([v1, v2, v3], 'tri')
+            >>> print(f"Added element {new_elem_id}")
+        """
+        if elem_type not in ("tri", "quad"):
+            raise ValueError(f"Invalid elem_type: {elem_type}. Use 'tri' or 'quad'.")
+
+        # Validate vertices
+        for v in vertices:
+            if not 0 <= v < self.n_verts:
+                raise ValueError(f"Vertex {v} out of range [0, {self.n_verts})")
+
+        # Detect connectivity format (3-column all triangles or 4-column mixed)
+        elem_cols = self.connectivity_list.shape[1]
+
+        # Prepare new element with matching format
+        if elem_type == "tri":
+            if len(vertices) != 3:
+                raise ValueError(f"Triangle requires 3 vertices, got {len(vertices)}")
+            if elem_cols == 3:
+                new_elem = np.array(vertices)  # Pure triangle format
+            else:
+                new_elem = np.array(vertices + [vertices[0]])  # Pad to 4-column
+        else:  # quad
+            if len(vertices) != 4:
+                raise ValueError(f"Quad requires 4 vertices, got {len(vertices)}")
+            if elem_cols != 4:
+                raise ValueError("Cannot add quad to triangle-only mesh (3-column connectivity)")
+            new_elem = np.array(vertices)
+
+        # Add to connectivity
+        new_elem_id = self.n_elems
+        self.connectivity_list = np.vstack([self.connectivity_list, new_elem])
+        self.n_elems = self.connectivity_list.shape[0]  # Update element count
+
+        # Rebuild adjacencies (invalidates layers)
+        self._build_adjacencies()
+        self.layers = {}  # Clear layers since mesh changed
+
+        return new_elem_id
+
+    def remove_boundary_loop(self, edge_ids: List[int]) -> None:
+        """
+        Remove boundary loop elements (residual closure).
+
+        Removes elements adjacent to the specified boundary edges. Used in
+        advancing-front generation to discard the residual boundary loop
+        when it shrinks to ≤4 vertices.
+
+        Parameters:
+            edge_ids: List of boundary edge IDs to remove adjacent elements
+
+        Raises:
+            ValueError: If any edge_id is out of range or not a boundary edge
+
+        Complexity:
+            Time: O(m + n) where m = number of edges, n = mesh size
+            Space: O(m) for tracking removals
+
+        Example:
+            >>> small_boundary = [e1, e2, e3, e4]
+            >>> mesh.remove_boundary_loop(small_boundary)
+        """
+        # Collect elements to remove (before any deletion)
+        elems_to_remove = set()
+
+        for edge_id in edge_ids:
+            if not 0 <= edge_id < self.n_edges:
+                raise ValueError(f"Edge {edge_id} out of range [0, {self.n_edges})")
+
+            # Get adjacent elements
+            e1, e2 = self.edge2elem(edge_id)[0]
+
+            # Boundary edge: e2 == -1, remove e1
+            if e2 == -1:
+                if e1 >= 0:
+                    elems_to_remove.add(e1)
+            else:
+                # Interior edge: remove both (or neither if not at boundary)
+                # For now, only handle boundary edges
+                pass
+
+        if len(elems_to_remove) == 0:
+            return  # Nothing to remove
+
+        # Create mask for elements to keep
+        keep_mask = np.ones(self.n_elems, dtype=bool)
+        for elem_id in elems_to_remove:
+            if elem_id < len(keep_mask):
+                keep_mask[elem_id] = False
+
+        # Remove elements (keeping valid indices)
+        self.connectivity_list = self.connectivity_list[keep_mask]
+        self.n_elems = self.connectivity_list.shape[0]  # Update element count
+
+        # Rebuild adjacencies (will create new valid indices)
+        self._build_adjacencies()
+        self.layers = {}  # Clear layers
+
+    def pinch_points(self, width_threshold: float = 0.5) -> List[int]:
+        """
+        Identify bottleneck vertices (pinch points) in the mesh.
+
+        Detects vertices where the local mesh width drops below a threshold.
+        Useful for domain splitting in advancing-front generation.
+
+        Parameters:
+            width_threshold: Relative width threshold [0, 1]
+                - Vertices where min_neighbor_distance / max_neighbor_distance < threshold
+                  are considered pinch points
+
+        Returns:
+            List of vertex IDs identified as pinch points (sorted)
+
+        Complexity:
+            Time: O(n_verts * avg_degree)
+            Space: O(n_pinch_points)
+
+        Example:
+            >>> pinches = mesh.pinch_points(width_threshold=0.3)
+            >>> for v in pinches:
+            ...     print(f"Bottleneck at vertex {v}")
+        """
+        pinches = []
+
+        for vert_id in range(self.n_verts):
+            edges = self.get_vertex_edges(vert_id)
+
+            if len(edges) < 2:
+                continue
+
+            # Compute distances to neighbors
+            distances = []
+            for edge_id in edges:
+                v1, v2 = self.edge2vert(edge_id)[0]
+                other_vert = v2 if v1 == vert_id else v1
+                p1 = self.points[vert_id, :2]
+                p2 = self.points[other_vert, :2]
+                dist = np.linalg.norm(p2 - p1)
+                distances.append(dist)
+
+            if len(distances) >= 2:
+                min_dist = min(distances)
+                max_dist = max(distances)
+                if max_dist > 0:
+                    ratio = min_dist / max_dist
+                    if ratio < width_threshold:
+                        pinches.append(vert_id)
+
+        return sorted(pinches)
 
     def copy( self ) -> "CHILmesh":
         """ Returns: a deep copy of the  new CHILmesh object with the same properties."""

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chilmesh"
-version = "0.1.1"
+version = "0.2.0"
 description = "Layer-based 2D triangular, quadrilateral and mixed-element mesh library with first-class ADCIRC fort.14 I/O"
 authors = [{name = "Dominik Mattioli"}]
 license = {file = "LICENSE"}
