@@ -418,46 +418,50 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return elem2edge
 
-    def _build_vert2edge( self, edge2vert: np.ndarray ) -> List[List[int]]:
+    def _build_vert2edge( self, edge2vert: np.ndarray ) -> Dict[int, Set[int]]:
         """
-        Build Vert2Edge adjacency.
-        
+        Build Vert2Edge adjacency as explicit dict with set values.
+
+        Maps each vertex to the set of edge IDs incident to that vertex.
+
         Parameters:
-            edge2vert: Edge-to-vertex adjacency
-        
+            edge2vert: Edge-to-vertex adjacency (n_edges x 2 array)
+
         Returns:
-            Vertex-to-edge adjacency as list of lists
+            Dict mapping vertex ID to Set of incident edge IDs
         """
-        # Initialize with empty lists for each vertex
-        vert2edge = [[] for _ in range( self.n_verts )]
-        
-        # Populate the lists
-        for edge_id, (v1, v2) in enumerate( edge2vert ):
-            vert2edge[v1].append( edge_id )
-            vert2edge[v2].append( edge_id )
-        
+        vert2edge: Dict[int, Set[int]] = {}
+        for vert_id in range(self.n_verts):
+            vert2edge[vert_id] = set()
+
+        for edge_id, (v1, v2) in enumerate(edge2vert):
+            vert2edge[int(v1)].add(edge_id)
+            vert2edge[int(v2)].add(edge_id)
+
         return vert2edge
     
-    def _build_vert2elem( self ) -> List[List[int]]:
+    def _build_vert2elem( self ) -> Dict[int, Set[int]]:
         """
-        Build Vert2Elem adjacency.
-        
+        Build Vert2Elem adjacency as explicit dict with set values.
+
+        Maps each vertex to the set of element IDs incident to that vertex.
+
+        Parameters:
+            None
+
         Returns:
-            Vertex-to-element adjacency as list of lists
+            Dict mapping vertex ID to Set of incident element IDs
         """
-        # Initialize with empty lists for each vertex
-        vert2elem = [[] for _ in range( self.n_verts )]
-        
-        # Populate the lists
-        for elem_id in range( self.n_elems ):
+        vert2elem: Dict[int, Set[int]] = {}
+        for vert_id in range(self.n_verts):
+            vert2elem[vert_id] = set()
+
+        for elem_id in range(self.n_elems):
             vertices = self.connectivity_list[elem_id]
             for v in vertices:
-                # Skip invalid vertex ids (negative values represent
-                # placeholders in mixed-element meshes).  Zero is a valid
-                # vertex index in this Python implementation.
                 if v >= 0:
-                    vert2elem[v].append( elem_id )
-        
+                    vert2elem[int(v)].add(elem_id)
+
         return vert2elem
     
     def _build_edge2elem( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
