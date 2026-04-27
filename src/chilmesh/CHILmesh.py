@@ -300,49 +300,58 @@ class CHILmesh(CHILmeshPlotMixin):
                     self.connectivity_list[elem_id, 3] = self.connectivity_list[elem_id, 0]
         
         # Identify edges of the mesh
-        edges = self._identify_edges()
+        edges, edge_map = self._identify_edges()
         edge2vert = np.array( edges )
         self.n_edges = len( edge2vert )
-        
+
         # Build Elem2Edge
-        elem2edge = self._build_elem2edge( edge2vert )
-        
+        elem2edge = self._build_elem2edge( edge2vert, edge_map )
+
         # Build Vert2Edge
         vert2edge = self._build_vert2edge( edge2vert )
-        
+
         # Build Vert2Elem
         vert2elem = self._build_vert2elem()
-        
+
         # Build Edge2Elem
-        edge2elem = self._build_edge2elem( edge2vert )
-        
+        edge2elem = self._build_edge2elem( edge2vert, edge_map )
+
         # Store adjacencies
         self.adjacencies = {
             "Elem2Vert": self.connectivity_list,
             "Edge2Vert": edge2vert,
+            "EdgeMap": edge_map,
             "Elem2Edge": elem2edge,
             "Vert2Edge": vert2edge,
             "Vert2Elem": vert2elem,
             "Edge2Elem": edge2elem
         }
 
-    def _identify_edges( self ) -> List[Tuple[int, int]]:
+    def _identify_edges( self ) -> Tuple[List[Tuple[int, int]], 'EdgeMap']:
         """
         Identify edges of the mesh.
-        
+
+        Builds both a list of edges (for backward compatibility) and an
+        EdgeMap (for O(1) lookups in subsequent operations).
+
         Returns:
-            List of edges, where each edge is a tuple of two vertex indices
+            Tuple of (edges_list, edge_map) where:
+            - edges_list: List of edges as (v1, v2) tuples in sorted order
+            - edge_map: EdgeMap object for O(1) edge ID lookup
         """
-        edges = set()
-        
+        from .mesh_topology import EdgeMap
+
+        edge_map = EdgeMap()
+        seen = set()
+
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             n_vertices = 3 if self.type == "Triangular" else 4
-            
+
             for i in range( n_vertices ):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
-                
+
                 # Skip invalid edges (negative vertex ids)
                 # In MATLAB the value 0 signified a placeholder for a missing
                 # vertex in mixed element meshes.  In this Python port we use
@@ -351,47 +360,62 @@ class CHILmesh(CHILmeshPlotMixin):
                 # invalid.
                 if v1 < 0 or v2 < 0:
                     continue
-                
-                # Store edge as a sorted tuple to avoid duplicates
+
+                # Store edge in canonical form to check for duplicates
                 edge = tuple( sorted( [int(v1), int(v2)] ) )
-                edges.add( edge )
-        
-        return list( edges )
+                if edge not in seen:
+                    seen.add( edge )
+                    # Add to EdgeMap (maintains consistent ID ordering)
+                    edge_map.add_edge(edge[0], edge[1])
+
+        # Return edges in EdgeMap order to ensure IDs match
+        return edge_map.to_list(), edge_map
     
-    def _build_elem2edge( self, edge2vert: np.ndarray ) -> np.ndarray:
+    def _build_elem2edge( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
         """
         Build Elem2Edge adjacency.
-        
+
         Parameters:
-            edge2vert: Edge-to-vertex adjacency
-        
+            edge2vert: Edge-to-vertex adjacency (ndarray)
+            edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
+
         Returns:
             Element-to-edge adjacency
+
+        Note:
+            If edge_map is provided, uses O(1) lookups instead of linear search,
+            reducing complexity from O(n²) to O(n log n).
         """
         max_edges_per_elem = 4 if self.type != "Triangular" else 3
         elem2edge = np.zeros( ( self.n_elems, max_edges_per_elem ), dtype=int )
-        
+
         # For each element
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             n_vertices = 3 if self.type == "Triangular" else 4
-            
+
             # For each edge of the element
             for i in range( n_vertices ):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
-                
+
                 # Skip invalid edges (negative vertex ids)
                 if v1 < 0 or v2 < 0:
                     continue
-                
-                # Find the edge index
-                edge = tuple( sorted( [int(v1), int(v2)] ) )
-                for j, e in enumerate( edge2vert ):
-                    if set( e ) == set( edge ):
-                        elem2edge[elem_id, i] = j
-                        break
-        
+
+                # Find the edge index using EdgeMap if available (O(1))
+                # Otherwise fall back to linear search (O(n))
+                if edge_map is not None:
+                    edge_id = edge_map.find_edge(int(v1), int(v2))
+                    if edge_id is not None:
+                        elem2edge[elem_id, i] = edge_id
+                else:
+                    edge = tuple( sorted( [int(v1), int(v2)] ) )
+                    for j, e in enumerate( edge2vert ):
+                        if set( e ) == set( edge ):
+                            elem2edge[elem_id, i] = j
+                            break
+
         return elem2edge
 
     def _build_vert2edge( self, edge2vert: np.ndarray ) -> List[List[int]]:
@@ -436,15 +460,20 @@ class CHILmesh(CHILmeshPlotMixin):
         
         return vert2elem
     
-    def _build_edge2elem( self, edge2vert: np.ndarray ) -> np.ndarray:
+    def _build_edge2elem( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
         """
         Build Edge2Elem adjacency.
-        
+
         Parameters:
-            edge2vert: Edge-to-vertex adjacency
-        
+            edge2vert: Edge-to-vertex adjacency (ndarray)
+            edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
+
         Returns:
-            Edge-to-element adjacency
+            Edge-to-element adjacency (n_edges × 2 with -1 for boundary)
+
+        Note:
+            If edge_map is provided, uses O(1) lookups instead of linear search,
+            reducing complexity from O(n²) to O(n log n).
         """
         # Initialize with -1 sentinel (no adjacent element)
         edge2elem = np.full( ( self.n_edges, 2 ), -1, dtype=int )
@@ -463,16 +492,26 @@ class CHILmesh(CHILmeshPlotMixin):
                 if v1 < 0 or v2 < 0:
                     continue
 
-                # Find the edge index
-                edge = tuple( sorted( [int(v1), int(v2)] ) )
-                for edge_id, e in enumerate( edge2vert ):
-                    if set( e ) == set( edge ):
+                # Find the edge index using EdgeMap if available (O(1))
+                # Otherwise fall back to linear search (O(n))
+                if edge_map is not None:
+                    edge_id = edge_map.find_edge(int(v1), int(v2))
+                    if edge_id is not None:
                         # Check if edge already has an element assigned
                         if edge2elem[edge_id, 0] == -1:
                             edge2elem[edge_id, 0] = elem_id
                         else:
                             edge2elem[edge_id, 1] = elem_id
-                        break
+                else:
+                    edge = tuple( sorted( [int(v1), int(v2)] ) )
+                    for edge_id, e in enumerate( edge2vert ):
+                        if set( e ) == set( edge ):
+                            # Check if edge already has an element assigned
+                            if edge2elem[edge_id, 0] == -1:
+                                edge2elem[edge_id, 0] = elem_id
+                            else:
+                                edge2elem[edge_id, 1] = elem_id
+                            break
 
         return edge2elem
     

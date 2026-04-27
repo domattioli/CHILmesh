@@ -57,4 +57,3 @@ Thumbs.db
 
 # Local overrides
 *.local
-tests/output/
