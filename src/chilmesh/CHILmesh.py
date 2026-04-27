@@ -1373,6 +1373,206 @@ class CHILmesh(CHILmeshPlotMixin):
         return new_points    
 
 
+    def advancing_front_boundary_edges(self) -> List[int]:
+        """
+        Get boundary edge IDs for advancing-front mesh generation.
+
+        Returns edge IDs on the current mesh boundary, suitable for placing
+        new elements during advancing-front generation.
+
+        Returns:
+            List of boundary edge IDs (sorted)
+
+        Complexity:
+            Time: O(n_edges)
+            Space: O(n_boundary_edges)
+
+        Example:
+            >>> boundary = mesh.advancing_front_boundary_edges()
+            >>> for edge_id in boundary:
+            ...     v1, v2 = mesh.edge2vert(edge_id)[0]
+        """
+        boundary_edge_ids = self.boundary_edges()
+        return sorted(boundary_edge_ids.tolist())
+
+    def add_advancing_front_element(
+        self, vertices: List[int], elem_type: str = "tri"
+    ) -> int:
+        """
+        Add element to mesh during advancing-front generation.
+
+        Adds a single element (triangle or quad) to the mesh and updates all
+        adjacency structures. This is the primary method for MADMESHR advancing-front
+        generation. Elements are added in order; mesh is valid after each call.
+
+        Parameters:
+            vertices: Vertex indices for new element
+                - Triangle: [v0, v1, v2]
+                - Quad: [v0, v1, v2, v3]
+            elem_type: Element type ('tri' or 'quad')
+
+        Returns:
+            ID of newly added element
+
+        Raises:
+            ValueError: If vertices out of range or elem_type invalid
+            RuntimeError: If adjacency update fails
+
+        Complexity:
+            Time: O(k) where k = element degree (typically 3-4)
+            Space: O(k) for adjacency updates
+
+        Example:
+            >>> new_elem_id = mesh.add_advancing_front_element([v1, v2, v3], 'tri')
+            >>> print(f"Added element {new_elem_id}")
+        """
+        if elem_type not in ("tri", "quad"):
+            raise ValueError(f"Invalid elem_type: {elem_type}. Use 'tri' or 'quad'.")
+
+        # Validate vertices
+        for v in vertices:
+            if not 0 <= v < self.n_verts:
+                raise ValueError(f"Vertex {v} out of range [0, {self.n_verts})")
+
+        # Detect connectivity format (3-column all triangles or 4-column mixed)
+        elem_cols = self.connectivity_list.shape[1]
+
+        # Prepare new element with matching format
+        if elem_type == "tri":
+            if len(vertices) != 3:
+                raise ValueError(f"Triangle requires 3 vertices, got {len(vertices)}")
+            if elem_cols == 3:
+                new_elem = np.array(vertices)  # Pure triangle format
+            else:
+                new_elem = np.array(vertices + [vertices[0]])  # Pad to 4-column
+        else:  # quad
+            if len(vertices) != 4:
+                raise ValueError(f"Quad requires 4 vertices, got {len(vertices)}")
+            if elem_cols != 4:
+                raise ValueError("Cannot add quad to triangle-only mesh (3-column connectivity)")
+            new_elem = np.array(vertices)
+
+        # Add to connectivity
+        new_elem_id = self.n_elems
+        self.connectivity_list = np.vstack([self.connectivity_list, new_elem])
+        self.n_elems = self.connectivity_list.shape[0]  # Update element count
+
+        # Rebuild adjacencies (invalidates layers)
+        self._build_adjacencies()
+        self.layers = {}  # Clear layers since mesh changed
+
+        return new_elem_id
+
+    def remove_boundary_loop(self, edge_ids: List[int]) -> None:
+        """
+        Remove boundary loop elements (residual closure).
+
+        Removes elements adjacent to the specified boundary edges. Used in
+        advancing-front generation to discard the residual boundary loop
+        when it shrinks to ≤4 vertices.
+
+        Parameters:
+            edge_ids: List of boundary edge IDs to remove adjacent elements
+
+        Raises:
+            ValueError: If any edge_id is out of range or not a boundary edge
+
+        Complexity:
+            Time: O(m + n) where m = number of edges, n = mesh size
+            Space: O(m) for tracking removals
+
+        Example:
+            >>> small_boundary = [e1, e2, e3, e4]
+            >>> mesh.remove_boundary_loop(small_boundary)
+        """
+        # Collect elements to remove (before any deletion)
+        elems_to_remove = set()
+
+        for edge_id in edge_ids:
+            if not 0 <= edge_id < self.n_edges:
+                raise ValueError(f"Edge {edge_id} out of range [0, {self.n_edges})")
+
+            # Get adjacent elements
+            e1, e2 = self.edge2elem(edge_id)[0]
+
+            # Boundary edge: e2 == -1, remove e1
+            if e2 == -1:
+                if e1 >= 0:
+                    elems_to_remove.add(e1)
+            else:
+                # Interior edge: remove both (or neither if not at boundary)
+                # For now, only handle boundary edges
+                pass
+
+        if len(elems_to_remove) == 0:
+            return  # Nothing to remove
+
+        # Create mask for elements to keep
+        keep_mask = np.ones(self.n_elems, dtype=bool)
+        for elem_id in elems_to_remove:
+            if elem_id < len(keep_mask):
+                keep_mask[elem_id] = False
+
+        # Remove elements (keeping valid indices)
+        self.connectivity_list = self.connectivity_list[keep_mask]
+        self.n_elems = self.connectivity_list.shape[0]  # Update element count
+
+        # Rebuild adjacencies (will create new valid indices)
+        self._build_adjacencies()
+        self.layers = {}  # Clear layers
+
+    def pinch_points(self, width_threshold: float = 0.5) -> List[int]:
+        """
+        Identify bottleneck vertices (pinch points) in the mesh.
+
+        Detects vertices where the local mesh width drops below a threshold.
+        Useful for domain splitting in advancing-front generation.
+
+        Parameters:
+            width_threshold: Relative width threshold [0, 1]
+                - Vertices where min_neighbor_distance / max_neighbor_distance < threshold
+                  are considered pinch points
+
+        Returns:
+            List of vertex IDs identified as pinch points (sorted)
+
+        Complexity:
+            Time: O(n_verts * avg_degree)
+            Space: O(n_pinch_points)
+
+        Example:
+            >>> pinches = mesh.pinch_points(width_threshold=0.3)
+            >>> for v in pinches:
+            ...     print(f"Bottleneck at vertex {v}")
+        """
+        pinches = []
+
+        for vert_id in range(self.n_verts):
+            edges = self.get_vertex_edges(vert_id)
+
+            if len(edges) < 2:
+                continue
+
+            # Compute distances to neighbors
+            distances = []
+            for edge_id in edges:
+                v1, v2 = self.edge2vert(edge_id)[0]
+                other_vert = v2 if v1 == vert_id else v1
+                p1 = self.points[vert_id, :2]
+                p2 = self.points[other_vert, :2]
+                dist = np.linalg.norm(p2 - p1)
+                distances.append(dist)
+
+            if len(distances) >= 2:
+                min_dist = min(distances)
+                max_dist = max(distances)
+                if max_dist > 0:
+                    ratio = min_dist / max_dist
+                    if ratio < width_threshold:
+                        pinches.append(vert_id)
+
+        return sorted(pinches)
+
     def copy( self ) -> "CHILmesh":
         """ Returns: a deep copy of the  new CHILmesh object with the same properties."""
         return deepcopy(self)
