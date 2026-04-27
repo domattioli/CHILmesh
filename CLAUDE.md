@@ -1,5 +1,7 @@
 # CHILmesh Development Guide for Claude Code
 
+⚠️ **CRITICAL: Always work on `planning-optimize_modernize` branch. Do not create random-named feature branches (e.g., `claude/youthful-goldberg-AulX3`). See Branch Policy below.**
+
 This document provides context and guidelines for AI-assisted development on CHILmesh.
 
 ## Project Overview
@@ -206,5 +208,58 @@ Note: These repositories are external and should be coordinated with before Phas
 
 ---
 
-**Last Updated:** 2026-04-26
-**Document Version:** 1.0
+## Branch Policy
+
+**ALL Claude Code sessions must work ONLY on the `planning-optimize_modernize` branch.**
+
+### Rules
+- ✅ DO: Commit all work to `planning-optimize_modernize`
+- ✅ DO: Push to `git push origin planning-optimize_modernize`
+- ❌ DON'T: Create random-named branches (e.g., `claude/youthful-goldberg-AulX3`)
+- ❌ DON'T: Push to feature branches like `main` or `develop` without explicit permission
+
+### Why
+- Single authoritative branch for all AI-assisted work
+- Prevents branch proliferation and confusion
+- Enables clear history of modernization efforts
+- Allows easy rebasing and integration with main
+
+### Exception
+- Only push to `main` when explicitly directed by user
+- Document any deviations in Lessons Learned
+
+---
+
+## Lessons Learned (WS4)
+
+### Session 2026-04-27: Phase 1 Completion (EdgeMap & Performance Optimization)
+
+**[2026-04-27] Issues #11–16 (P1-01 through P1-06): Phase 1 Complete**
+
+Completed full Phase 1: Hash Map Edge Lookup optimization. Key achievements:
+
+1. **EdgeMap Class (P1-01):** Hash-based O(1) edge ID lookup with 23 unit tests
+2. **Integration (P1-02):** Refactored _identify_edges to return both edges list and EdgeMap
+3. **Edge Building (P1-03/P1-04):** Optimized _build_elem2edge and _build_edge2elem with O(1) lookups
+4. **Storage (P1-05):** EdgeMap integrated into adjacencies dict
+5. **Validation (P1-06):** 18 performance regression tests covering consistency and backward compatibility
+
+**Critical Bug Fixed:**
+- Edge ordering mismatch between edge2vert array and EdgeMap IDs
+- Root cause: set iteration order is undefined in Python; solution: use EdgeMap.to_list() ordering
+- Manifested as incorrect element-edge mappings in _build_edge2elem, affecting element areas in smoothing
+
+**Key Patterns:**
+- **Canonical form enforcement:** Prevents downstream comparison bugs
+- **Consistent ordering:** When multiple data structures represent the same data, their indices must match
+- **Backward compatibility:** Keep fallback code paths for optional optimizations
+- **Performance measurement:** Test suite runtime improved from 115s → 4.6s due to O(1) lookups
+
+**Ready for Phase 2:**
+- P1 unblocks P2-01/P2-02 (Vert2Edge/Vert2Elem dict migration)
+- All 177 tests pass; regression suite added to prevent future regressions
+
+---
+
+**Last Updated:** 2026-04-27
+**Document Version:** 1.2
