@@ -300,49 +300,58 @@ class CHILmesh(CHILmeshPlotMixin):
                     self.connectivity_list[elem_id, 3] = self.connectivity_list[elem_id, 0]
         
         # Identify edges of the mesh
-        edges = self._identify_edges()
+        edges, edge_map = self._identify_edges()
         edge2vert = np.array( edges )
         self.n_edges = len( edge2vert )
-        
+
         # Build Elem2Edge
         elem2edge = self._build_elem2edge( edge2vert )
-        
+
         # Build Vert2Edge
         vert2edge = self._build_vert2edge( edge2vert )
-        
+
         # Build Vert2Elem
         vert2elem = self._build_vert2elem()
-        
+
         # Build Edge2Elem
         edge2elem = self._build_edge2elem( edge2vert )
-        
+
         # Store adjacencies
         self.adjacencies = {
             "Elem2Vert": self.connectivity_list,
             "Edge2Vert": edge2vert,
+            "EdgeMap": edge_map,
             "Elem2Edge": elem2edge,
             "Vert2Edge": vert2edge,
             "Vert2Elem": vert2elem,
             "Edge2Elem": edge2elem
         }
 
-    def _identify_edges( self ) -> List[Tuple[int, int]]:
+    def _identify_edges( self ) -> Tuple[List[Tuple[int, int]], 'EdgeMap']:
         """
         Identify edges of the mesh.
-        
+
+        Builds both a list of edges (for backward compatibility) and an
+        EdgeMap (for O(1) lookups in subsequent operations).
+
         Returns:
-            List of edges, where each edge is a tuple of two vertex indices
+            Tuple of (edges_list, edge_map) where:
+            - edges_list: List of edges as (v1, v2) tuples in sorted order
+            - edge_map: EdgeMap object for O(1) edge ID lookup
         """
+        from .mesh_topology import EdgeMap
+
+        edge_map = EdgeMap()
         edges = set()
-        
+
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             n_vertices = 3 if self.type == "Triangular" else 4
-            
+
             for i in range( n_vertices ):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
-                
+
                 # Skip invalid edges (negative vertex ids)
                 # In MATLAB the value 0 signified a placeholder for a missing
                 # vertex in mixed element meshes.  In this Python port we use
@@ -351,12 +360,15 @@ class CHILmesh(CHILmeshPlotMixin):
                 # invalid.
                 if v1 < 0 or v2 < 0:
                     continue
-                
-                # Store edge as a sorted tuple to avoid duplicates
+
+                # Add to EdgeMap (stores in canonical form automatically)
+                edge_map.add_edge(int(v1), int(v2))
+
+                # Also collect in set for backward compatibility
                 edge = tuple( sorted( [int(v1), int(v2)] ) )
                 edges.add( edge )
-        
-        return list( edges )
+
+        return list( edges ), edge_map
     
     def _build_elem2edge( self, edge2vert: np.ndarray ) -> np.ndarray:
         """
