@@ -1,5 +1,7 @@
 # CHILmesh Development Guide for Claude Code
 
+⚠️ **CRITICAL: Always work on `planning-optimize_modernize` branch. Do not create random-named feature branches (e.g., `claude/youthful-goldberg-AulX3`). See Branch Policy below.**
+
 This document provides context and guidelines for AI-assisted development on CHILmesh.
 
 ## Project Overview
@@ -203,6 +205,28 @@ Note: These repositories are external and should be coordinated with before Phas
 3. **Test failures**: Check conftest.py and test parametrization
 4. **Performance issues**: Profile with cProfile, benchmark before/after
 5. **Unclear requirements**: Ask user for clarification
+
+---
+
+## Branch Policy
+
+**ALL Claude Code sessions must work ONLY on the `planning-optimize_modernize` branch.**
+
+### Rules
+- ✅ DO: Commit all work to `planning-optimize_modernize`
+- ✅ DO: Push to `git push origin planning-optimize_modernize`
+- ❌ DON'T: Create random-named branches (e.g., `claude/youthful-goldberg-AulX3`)
+- ❌ DON'T: Push to feature branches like `main` or `develop` without explicit permission
+
+### Why
+- Single authoritative branch for all AI-assisted work
+- Prevents branch proliferation and confusion
+- Enables clear history of modernization efforts
+- Allows easy rebasing and integration with main
+
+### Exception
+- Only push to `main` when explicitly directed by user
+- Document any deviations in Lessons Learned
 
 ---
 
