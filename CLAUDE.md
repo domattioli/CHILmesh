@@ -206,5 +206,19 @@ Note: These repositories are external and should be coordinated with before Phas
 
 ---
 
-**Last Updated:** 2026-04-26
-**Document Version:** 1.0
+## Lessons Learned (WS4)
+
+### Session 2026-04-27: P1-01 EdgeMap Implementation
+
+**[2026-04-27] Issue #11 (P1-01): EdgeMap class enables O(1) edge lookup**
+Implemented canonical edge storage (min, max) in hash-based EdgeMap class with full test coverage (23 tests). Key insight: enforcing canonical form at the point of insertion eliminates complex comparison logic downstream. Next session should implement P1-02 (_identify_edges refactoring) to return both edges list and EdgeMap, unblocking P1-03/P1-04 performance optimizations.
+
+**Key Pattern Discovered:**
+- Canonical form enforcement in data structure layer prevents order-dependency bugs in consumers
+- Unit tests should cover both add-order permutations (add(0,5) vs add(5,0)) to catch form violations
+- Integration tests on realistic meshes (triangles, quads, shared edges) revealed 180-edge grid case computes correctly
+
+---
+
+**Last Updated:** 2026-04-27
+**Document Version:** 1.1
