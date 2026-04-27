@@ -77,7 +77,7 @@ A mesh researcher has a mixed mesh (both triangles and quads) and needs FEM smoo
 
 - **FR-005**: System MUST construct FEM stiffness matrices appropriate to each element type:
   - Triangles: Use existing Zhou & Shimada formulation (D matrix and T rotation matrix)
-  - Quads: Apply appropriate quad stiffness formulation (e.g., bilinear isoparametric or Balendran quad extension)
+  - Quads: Extend Zhou & Shimada approach via analogy (derive quad-specific D and T matrices following same energy-minimization principle)
 
 - **FR-006**: System MUST apply boundary conditions correctly for all element types (fixed boundary nodes with kinf stiffness)
 
@@ -106,11 +106,17 @@ A mesh researcher has a mixed mesh (both triangles and quads) and needs FEM smoo
 
 - **SC-005**: Interior node displacements are measurable and consistent with FEM energy minimization principle
 
+## Clarifications
+
+### Session 2026-04-27
+
+- Q: Should quad elements use bilinear isoparametric formulation or simpler Zhou & Shimada extension? → A: Extend Zhou & Shimada triangle approach to quads via analogy (simpler, consistent, easier validation)
+
 ## Assumptions
 
 - The existing triangle stiffness formulation (Zhou & Shimada via Balendran 2006) remains correct and unchanged
 
-- Quad stiffness matrices can be derived via analogy to triangle formulation or standard FEM bilinear isoparametric element theory
+- Quad stiffness matrices are derived via analogy to the triangle formulation (extending D and T matrices to quad geometry), maintaining energy-minimization principle and direct solver approach
 
 - Boundary condition enforcement (kinf constraint) applies consistently across all element types
 
