@@ -13,12 +13,6 @@
   <a href="https://pypi.org/project/chilmesh/">
     <img src="https://img.shields.io/pypi/v/chilmesh?logo=python&logoColor=white&label=PyPI" alt="PyPI version">
   </a>
-  <a href="https://pypi.org/project/chilmesh/">
-    <img src="https://img.shields.io/pypi/pyversions/chilmesh?logo=python&logoColor=white" alt="Python 3.10+">
-  </a>
-  <a href="https://github.com/domattioli/CHILmesh/releases">
-    <img src="https://img.shields.io/github/v/release/domattioli/CHILmesh?logo=github&logoColor=white" alt="Latest release">
-  </a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?logo=github&logoColor=white&label=tests" alt="Tests">
   </a>
