@@ -34,14 +34,8 @@
   <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf">
     <img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis">
   </a>
-  <a href="https://scholar.google.com/citations?view_op=view_citation&hl=en&user=IBFSkOcAAAAJ&citation_for_view=IBFSkOcAAAAJ:u5HHmVD_uO8C">
-    <img src="https://img.shields.io/badge/Scholar-Profile-4285F4?logo=google-scholar&logoColor=white" alt="Google Scholar">
-  </a>
   <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh">
     <img src="https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg" alt="MathWorks File Exchange">
-  </a>
-  <a href="https://github.com/domattioli/CHILmesh/blob/d63b7d221842cbb00bdb057b201519ac5e49febc/LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT">
   </a>
 </p>
 <p align="center">
@@ -95,7 +89,7 @@ pip install -e .
   - Breadth-First Search x Image Skleletonization.
       - Note: "Mesh Layers" as a name for the algorithm is depracated; we will be migrating to using "Skeletonization".
 - `.fort.14` file input/output for ADCIRC models
-- API inspired by MATLAB’s `delaunayTriangulation()`
+- API inspired by MATLAB's `delaunayTriangulation()`
 
 ## Performance (v0.2.0)
 
