@@ -50,6 +50,7 @@
 - [Releases](#releases)
 - [Installation](#installation)
 - [Key Features](#key-features)
+- [Performance](#performance-v020)
 - [Example Usage](#example-usage)
 - [See also](#see-also--downstream-projects)
 - [BibTeX](#bibtex)
