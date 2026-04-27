@@ -230,6 +230,81 @@ Note: These repositories are external and should be coordinated with before Phas
 
 ---
 
+## Skills
+
+### Skill: github-release
+
+**Description:** Creates GitHub release with comprehensive release notes. Auto-detects version, extracts notes from CHANGELOG, searches for existing GitHub credentials. Zero prompts.
+
+**Trigger:**
+```bash
+/github-release
+/github-release --version 0.3.0
+/github-release --repo /path/to/project
+```
+
+**Prerequisites (One-time):**
+GitHub authentication via any of:
+- `gh auth login` (creates ~/.config/gh/hosts.yml or ~/.gh/hosts.yml)
+- `export GITHUB_TOKEN="ghp_..."` in shell profile
+- Git credentials from `git credential-osxkeychain` or `git credential-manager`
+- `~/.netrc` with github.com credentials
+
+**How It Works:**
+- Searches for existing GitHub credentials (non-interactive)
+- Auto-detects version from pyproject.toml
+- Auto-detects repo from git remote origin
+- Extracts release notes from CHANGELOG.md
+- Creates release with gh CLI
+- Returns GitHub release URL
+- NO prompts, NO interactive input
+
+---
+
+### Skill: pypi-publish
+
+**Description:** Publishes distribution packages to PyPI. Auto-detects package name and version from pyproject.toml. Zero prompts, works with any Python project.
+
+**Trigger:**
+```bash
+/pypi-publish
+/pypi-publish --version 1.2.3
+/pypi-publish --repo /path/to/project
+```
+
+**Prerequisites (One-time):**
+Create PyPI credentials:
+```bash
+# 1. Get token from https://pypi.org/manage/account/token/
+# 2. Create ~/.pypirc:
+cat > ~/.pypirc << 'EOF'
+[distutils]
+index-servers = pypi
+
+[pypi]
+repository = https://upload.pypi.org/legacy/
+username = __token__
+password = pypi-YOUR_TOKEN_HERE
+EOF
+chmod 600 ~/.pypirc
+```
+
+Or set environment variable:
+```bash
+export PYPI_TOKEN="pypi-..."
+```
+
+**How It Works:**
+- Searches for existing PyPI credentials (non-interactive)
+- Auto-detects package name and version from pyproject.toml
+- Builds dist packages if missing
+- Uploads to PyPI with automatic retries
+- Verifies package on PyPI
+- Returns PyPI package URL
+- NO prompts, NO interactive input
+
+---
+
 ## Lessons Learned (WS4)
 
 ### Session 2026-04-27: Phase 1 Completion (EdgeMap & Performance Optimization)
