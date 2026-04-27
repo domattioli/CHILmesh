@@ -305,7 +305,7 @@ class CHILmesh(CHILmeshPlotMixin):
         self.n_edges = len( edge2vert )
 
         # Build Elem2Edge
-        elem2edge = self._build_elem2edge( edge2vert )
+        elem2edge = self._build_elem2edge( edge2vert, edge_map )
 
         # Build Vert2Edge
         vert2edge = self._build_vert2edge( edge2vert )
@@ -370,40 +370,51 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return list( edges ), edge_map
     
-    def _build_elem2edge( self, edge2vert: np.ndarray ) -> np.ndarray:
+    def _build_elem2edge( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
         """
         Build Elem2Edge adjacency.
-        
+
         Parameters:
-            edge2vert: Edge-to-vertex adjacency
-        
+            edge2vert: Edge-to-vertex adjacency (ndarray)
+            edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
+
         Returns:
             Element-to-edge adjacency
+
+        Note:
+            If edge_map is provided, uses O(1) lookups instead of linear search,
+            reducing complexity from O(n²) to O(n log n).
         """
         max_edges_per_elem = 4 if self.type != "Triangular" else 3
         elem2edge = np.zeros( ( self.n_elems, max_edges_per_elem ), dtype=int )
-        
+
         # For each element
         for elem_id in range( self.n_elems ):
             vertices = self.connectivity_list[elem_id]
             n_vertices = 3 if self.type == "Triangular" else 4
-            
+
             # For each edge of the element
             for i in range( n_vertices ):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
-                
+
                 # Skip invalid edges (negative vertex ids)
                 if v1 < 0 or v2 < 0:
                     continue
-                
-                # Find the edge index
-                edge = tuple( sorted( [int(v1), int(v2)] ) )
-                for j, e in enumerate( edge2vert ):
-                    if set( e ) == set( edge ):
-                        elem2edge[elem_id, i] = j
-                        break
-        
+
+                # Find the edge index using EdgeMap if available (O(1))
+                # Otherwise fall back to linear search (O(n))
+                if edge_map is not None:
+                    edge_id = edge_map.find_edge(int(v1), int(v2))
+                    if edge_id is not None:
+                        elem2edge[elem_id, i] = edge_id
+                else:
+                    edge = tuple( sorted( [int(v1), int(v2)] ) )
+                    for j, e in enumerate( edge2vert ):
+                        if set( e ) == set( edge ):
+                            elem2edge[elem_id, i] = j
+                            break
+
         return elem2edge
 
     def _build_vert2edge( self, edge2vert: np.ndarray ) -> List[List[int]]:
