@@ -204,21 +204,38 @@ Note: These repositories are external and should be coordinated with before Phas
 4. **Performance issues**: Profile with cProfile, benchmark before/after
 5. **Unclear requirements**: Ask user for clarification
 
-## Lessons Learned (Session 2026-04-26)
+---
 
-**Early Session (Issues #43-49 spec/cleanup):**
-- **Spec-Kit Effectiveness**: Complete spec for #43 (from_admesh_domain) identified it was pre-implemented. Spec served dual purpose: verification + documentation. Worth doing even for "known good" features.
-- **Branch Conflict Resolution**: Session guidance (`claude/peaceful-goldberg-CCD9l`) conflicted with CORE MANDATE (`planning-optimize_modernize`). Always prioritize CORE MANDATE over session-specific guidance.
-- **Refactoring Impact**: Moving planning docs to `docs/planning/` + images to `docs/figures/` dramatically improved repo clarity with 2 commits.
-- **Data Efficiency**: 3 issues + spec + plan consumed ~7% data in 27 min (0.26%/min). High ROI for structural cleanup.
+## Lessons Learned (WS4)
 
-**Late Session (Issues #40-42 audit):**
-- **Silent Wins**: Issues #40 (fort.14 quad/mixed reader-writer), #41 (lazy compute_layers init), #42 (bounding_box + admesh_metadata()) were ALL pre-implemented on `planning-optimize_modernize` with complete test coverage (14+ fort14 roundtrip tests passing). No new work needed.
-- **Planning Branch State**: `planning-optimize_modernize` is in excellent shape — P0/P1 code issues complete, research phase structured in epic #39. Branch is a "golden source" for current state.
-- **ADMESH-Domains Integration**: Full integration stack (readers, writers, metadata, lazy init, entry point) complete and tested. Ready for downstream adoption (MADMESHR, ADMESH-Domains).
-- **Session Wrap Pattern**: When all top-priority issues are resolved, focus shifts to verification + documentation. Spent final minutes auditing completed work rather than inventing new tasks.
+### Session 2026-04-27: Phase 1 Completion (EdgeMap & Performance Optimization)
+
+**[2026-04-27] Issues #11–16 (P1-01 through P1-06): Phase 1 Complete**
+
+Completed full Phase 1: Hash Map Edge Lookup optimization. Key achievements:
+
+1. **EdgeMap Class (P1-01):** Hash-based O(1) edge ID lookup with 23 unit tests
+2. **Integration (P1-02):** Refactored _identify_edges to return both edges list and EdgeMap
+3. **Edge Building (P1-03/P1-04):** Optimized _build_elem2edge and _build_edge2elem with O(1) lookups
+4. **Storage (P1-05):** EdgeMap integrated into adjacencies dict
+5. **Validation (P1-06):** 18 performance regression tests covering consistency and backward compatibility
+
+**Critical Bug Fixed:**
+- Edge ordering mismatch between edge2vert array and EdgeMap IDs
+- Root cause: set iteration order is undefined in Python; solution: use EdgeMap.to_list() ordering
+- Manifested as incorrect element-edge mappings in _build_edge2elem, affecting element areas in smoothing
+
+**Key Patterns:**
+- **Canonical form enforcement:** Prevents downstream comparison bugs
+- **Consistent ordering:** When multiple data structures represent the same data, their indices must match
+- **Backward compatibility:** Keep fallback code paths for optional optimizations
+- **Performance measurement:** Test suite runtime improved from 115s → 4.6s due to O(1) lookups
+
+**Ready for Phase 2:**
+- P1 unblocks P2-01/P2-02 (Vert2Edge/Vert2Elem dict migration)
+- All 177 tests pass; regression suite added to prevent future regressions
 
 ---
 
-**Last Updated:** 2026-04-26
-**Document Version:** 1.1
+**Last Updated:** 2026-04-27
+**Document Version:** 1.2
