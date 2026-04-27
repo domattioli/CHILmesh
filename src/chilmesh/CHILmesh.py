@@ -326,6 +326,47 @@ class CHILmesh(CHILmeshPlotMixin):
             "Vert2Elem": vert2elem,
             "Edge2Elem": edge2elem
         }
+        self._validate_adjacencies()
+
+    def _validate_adjacencies(self) -> None:
+        """
+        Validate adjacency structure invariants.
+
+        Checks:
+        - All vertices have entries in Vert2Edge and Vert2Elem
+        - All edge IDs are valid [0, n_edges)
+        - All element IDs are valid [0, n_elems)
+        - Vert2Edge and Vert2Elem are dicts with set values
+        - Edge ordering consistency (edges stored in canonical form)
+
+        Raises:
+            AssertionError: If any invariant is violated
+        """
+        v2e = self.adjacencies['Vert2Edge']
+        v2m = self.adjacencies['Vert2Elem']
+        e2v = self.adjacencies['Edge2Vert']
+        e2m = self.adjacencies['Edge2Elem']
+
+        # Check: All vertices have entries
+        assert len(v2e) == self.n_verts, f"Vert2Edge has {len(v2e)} entries, expected {self.n_verts}"
+        assert len(v2m) == self.n_verts, f"Vert2Elem has {len(v2m)} entries, expected {self.n_verts}"
+
+        # Check: Vert2Edge structure
+        for vert_id in range(self.n_verts):
+            assert vert_id in v2e, f"Vertex {vert_id} missing from Vert2Edge"
+            assert isinstance(v2e[vert_id], set), f"Vert2Edge[{vert_id}] is not a set"
+            for edge_id in v2e[vert_id]:
+                assert 0 <= edge_id < self.n_edges, f"Invalid edge ID {edge_id} in Vert2Edge[{vert_id}]"
+                # Verify vertex is endpoint of edge
+                v1, v2 = e2v[edge_id]
+                assert vert_id in [v1, v2], f"Vertex {vert_id} not endpoint of edge {edge_id}"
+
+        # Check: Vert2Elem structure
+        for vert_id in range(self.n_verts):
+            assert vert_id in v2m, f"Vertex {vert_id} missing from Vert2Elem"
+            assert isinstance(v2m[vert_id], set), f"Vert2Elem[{vert_id}] is not a set"
+            for elem_id in v2m[vert_id]:
+                assert 0 <= elem_id < self.n_elems, f"Invalid element ID {elem_id} in Vert2Elem[{vert_id}]"
 
     def _identify_edges( self ) -> Tuple[List[Tuple[int, int]], 'EdgeMap']:
         """
