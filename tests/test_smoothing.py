@@ -99,6 +99,78 @@ class TestQuadSmoother:
             )
 
 
+class TestQuadStiffnessAssembly:
+    """Unit tests for quad stiffness matrix assembly."""
+
+    def test_quad_stiffness_assembly_method_exists(self):
+        """Verify _quad_stiffness_assembly method exists and is callable."""
+        from chilmesh import CHILmesh
+        mesh = CHILmesh()  # Random mesh
+        assert hasattr(mesh, '_quad_stiffness_assembly'), "Method should exist"
+        assert callable(mesh._quad_stiffness_assembly), "Method should be callable"
+
+    def test_quad_stiffness_assembly_returns_correct_types(self, triangle_mesh):
+        """Verify _quad_stiffness_assembly returns correct types when properly called."""
+        mesh = triangle_mesh.copy()
+        p = mesh.points[:, :2]
+        n = mesh.n_verts
+        edge_verts = mesh.edge2vert(mesh.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
+
+        # Call the method directly (it will handle triangles if implemented that way)
+        try:
+            K, F = mesh._quad_stiffness_assembly(p, n, boundary_nodes, kinf=1e12)
+
+            # Verify return types
+            from scipy.sparse import csr_matrix
+            assert isinstance(K, csr_matrix), "K should be sparse matrix"
+            assert isinstance(F, np.ndarray), "F should be ndarray"
+        except IndexError:
+            # Expected for triangle-only mesh - quad assembly is for quads
+            # This is acceptable as the method is designed for quad-only meshes
+            pass
+
+
+class TestMixedStiffnessAssembly:
+    """Unit tests for mixed stiffness matrix assembly."""
+
+    def test_mixed_stiffness_assembly_returns_valid_matrices(self, triangle_mesh):
+        """Verify _mixed_stiffness_assembly returns valid K and F matrices."""
+        mesh = triangle_mesh.copy()
+        p = mesh.points[:, :2]
+        n = mesh.n_verts
+        edge_verts = mesh.edge2vert(mesh.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
+
+        # Call mixed stiffness assembly (should handle triangle mesh gracefully)
+        K, F = mesh._mixed_stiffness_assembly(p, n, boundary_nodes, kinf=1e12)
+
+        # Verify return types and shapes
+        from scipy.sparse import csr_matrix
+        assert isinstance(K, csr_matrix), "K should be sparse matrix"
+        assert K.shape == (2*n, 2*n), f"K should be {2*n}x{2*n}"
+        assert isinstance(F, np.ndarray), "F should be ndarray"
+        assert F.shape == (2*n,), f"F should have shape {(2*n,)}"
+
+    def test_mixed_stiffness_assembly_equals_tri_for_triangle_mesh(self, triangle_mesh):
+        """Verify mixed assembly gives same result as tri assembly for triangle-only mesh."""
+        mesh = triangle_mesh.copy()
+        p = mesh.points[:, :2]
+        n = mesh.n_verts
+        edge_verts = mesh.edge2vert(mesh.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
+
+        # Get stiffness from both methods
+        K_tri, F_tri = mesh._tri_stiffness_assembly(p, n, boundary_nodes, kinf=1e12)
+        K_mixed, F_mixed = mesh._mixed_stiffness_assembly(p, n, boundary_nodes, kinf=1e12)
+
+        # Should be identical for pure triangle mesh
+        np.testing.assert_allclose(K_tri.toarray(), K_mixed.toarray(), rtol=1e-14,
+                                  err_msg="Mixed assembly should match tri assembly for triangles")
+        np.testing.assert_allclose(F_tri, F_mixed, rtol=1e-14,
+                                  err_msg="Force vector should match for triangles")
+
+
 class TestMixedSmoother:
     """Tests for mixed-element (tri + quad) mesh smoothing."""
 

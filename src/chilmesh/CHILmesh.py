@@ -1492,7 +1492,8 @@ class CHILmesh(CHILmeshPlotMixin):
 
         for elem in elems:
             # Detect element type: last column == first column means padded triangle
-            is_triangle = (elem[3] == elem[0])
+            # For 3-column connectivity, always treat as triangle
+            is_triangle = (elems.shape[1] < 4) or (elems.shape[1] >= 4 and elem[3] == elem[0])
 
             if is_triangle:
                 # Triangle: use only first 3 vertices
