@@ -2,7 +2,7 @@
 
 **Feature Branch**: `005-admesh-warm-start-truss` (spec lives on `planning-optimize_modernize` per CHILmesh single-branch policy)
 **Created**: 2026-05-02
-**Status**: Draft
+**Status**: Clarified (ready for `/speckit-plan`)
 **Input**: User description: "feed the initial triangulation and boundary into the admesh routine so that we can run the admesh optimization/solver/whatever on that data (the truss algorithm) to achieve an optimal mesh for the underlying size function and domain without ruining the original outer and inner boundaries" + follow-up: "this functionality should be extensible. i should be able to convert any given triangulation via admesh"
 
 ## Context (informational)
@@ -29,18 +29,30 @@ As a researcher studying mesh-quality improvement, I have a poor-quality but top
 
 ---
 
-### User Story 2 - Visible Side-by-Side Comparison in README (Priority: P2)
+### User Story 2 - Restructured 4-Row README Visualization (Priority: P2)
 
-As a reader of the project README, I want to see a fifth row (or a separate figure) demonstrating the warm-start truss optimization on row 1's mesh, alongside the existing four rows (raw / FEM-smoothed / fresh-ADMESH / right-isoceles), so I can visually compare the warm-start approach to the alternatives at a glance.
+As a reader of the project README, I want the existing 4-row visualization to be **restructured** so that the warm-start truss optimizer sits in the center of the narrative — Row 2 — and the two existing post-processors (FEM smoother, right-isoceles smoother) are applied **to the warm-start result** rather than to the raw mesh or to a fresh ADMESH triangulation. This makes the warm-start the foundation of the pipeline rather than an afterthought.
 
-**Why this priority**: Documents the new capability and makes the comparison concrete for users. Lower priority than the underlying capability, but high value for adoption.
+**Why this priority**: The user explicitly directed the new row layout. The fresh-ADMESH-from-bbox row (current row 3) is dropped because warm-start with row 1's existing boundary is now the "real" ADMESH integration. Lower priority than the underlying capability, but the visual story is what readers see first.
 
-**Independent Test**: Generate the new visualization, open the PNG, and confirm a row labeled "Warm-Start ADMESH Truss" exists with three columns (mesh / layers / quality) and that the boundary in column 1 of that row visually matches the boundary of the row 1 raw mesh.
+**New row layout** (replacing the existing 4-row pipeline):
+
+| Row | Mesh | Source |
+|-----|------|--------|
+| 1 | Raw annulus (as-is) | `chilmesh.examples.annulus()` — unchanged from current |
+| 2 | **Warm-start truss applied to Row 1** | This spec's `optimize_with_admesh_truss(row1_mesh, annulus_sdf, size_fn)` |
+| 3 | FEM smoother applied to **Row 2** | `mesh_row2.smooth_mesh(method='fem', ...)` |
+| 4 | Right-isoceles smoother applied to **Row 2** | `admesh.quad_prep.smooth_for_quadrangulation(mesh_row2.points, mesh_row2.connectivity_list, ...)` |
+
+Note: rows 3 and 4 both branch off row 2 (they are alternative downstream smoothers, not sequential — row 4 is NOT row 3 + right-iso).
+
+**Independent Test**: Render the new 4-row PNG and verify (a) row 2's boundary points are bit-exact equal to row 1's boundary points, (b) rows 3 and 4 are both downstream of row 2 (verified via assertion that their input was row 2's mesh, not row 1 and not a fresh ADMESH triangulation), (c) the existing fail-loud assertions (V1–V7 from spec 004) are updated to match the new pipeline.
 
 **Acceptance Scenarios**:
 
-1. **Given** the existing 4-row visualization script, **When** the warm-start variant is added, **Then** the resulting figure cleanly shows the new row with the same column conventions as the existing rows (left = wireframe, center = parula layers, right = cool quality).
-2. **Given** the new row's mesh, **When** rendered alongside row 1, **Then** the boundary contours are visually indistinguishable (because they are bit-exact equal under the hood).
+1. **Given** the new 4-row generator script, **When** it runs, **Then** rows 2, 3, and 4 all share row 1's boundary geometry bit-exactly (boundary preservation propagates through the chain).
+2. **Given** the rendered PNG, **When** displayed at GitHub README viewport width, **Then** the warm-start improvement (row 1 → row 2) is visually obvious and the FEM vs right-iso branch (row 3 vs row 4) shows distinct downstream effects.
+3. **Given** the previous 4-row pipeline script (`generate_4row_admesh.py`), **When** restructured, **Then** the script either replaces the old one in place OR is renamed (e.g., `generate_4row_warmstart.py`) and the README is updated to point at the new script — design choice deferred to plan phase.
 
 ---
 
@@ -95,14 +107,16 @@ The CHILmesh form MUST be a thin convenience wrapper around the raw-arrays form.
 - **FR-008**: The function MUST return a CHILmesh whose `points` array contains every input boundary point at the same index AND coordinate as the input. Bit-exact equality on the boundary subset is REQUIRED.
 - **FR-009**: The function MUST forward optional truss-solver parameters (max iterations, displacement tolerance, retriangulation cadence, force-scaling factor) to ADMESH's underlying `distmesh2d` call with documented defaults that match how row 3 of the existing 4-row visualization invokes ADMESH.
 - **FR-010**: The function MUST NOT modify the input CHILmesh in place. The output is always a fresh instance.
-- **FR-011**: The function MUST surface a `RuntimeWarning` (not raise) if the truss loop hits the max-iteration cap without converging, and still return the best-so-far mesh.
-- **FR-012**: A demo script (extending or sibling to `generate_4row_admesh.py`) MUST render the warm-start result alongside the existing four rows so users can visually compare. Whether this is an additional row in the existing PNG or a separate PNG is a design choice deferred to the plan phase.
+- **FR-011**: The function MUST surface a `RuntimeWarning` (not raise) if the truss loop hits the max-iteration cap without converging, and still return the best-so-far mesh. **Additionally, if the post-loop median quality is *strictly lower* than the input median quality (a regression), the function MUST return the *input* mesh unchanged and emit a `RuntimeWarning` stating "warm-start truss did not improve quality (input median=X, output median=Y); returning input." This is the non-degradation guarantee — no caller ever gets a worse mesh from this function.** [Resolved Q4=b: graceful degradation, not raise.]
+- **FR-012**: The existing `generate_4row_admesh.py` script MUST be restructured to the new layout (US2 table): Row 1 = raw, Row 2 = warm-start applied to Row 1, Row 3 = FEM applied to Row 2, Row 4 = right-isoceles applied to Row 2. The fresh-ADMESH-from-bbox row of the current pipeline is dropped. The script's filename MAY be renamed to reflect the new pipeline (e.g., `generate_4row_warmstart.py`); the README MUST be updated to point at whatever the new authoritative script is. **The output PNG path remains `tests/output/annulus_quickstart.png` so README image links don't break.** [Resolved Q2=d: restructure existing rows around warm-start.]
 - **FR-013**: The demo script MUST enforce fail-loud assertions before saving any output:
-  - **V_BND**: Output boundary points are bit-exact equal to input boundary points.
-  - **V_QI**: Output median quality is strictly greater than input median quality (this is a *demo* assertion, not a function-level guarantee — see SC-002 wording).
-  - **V_CONN**: Output connectivity defines a valid triangulation (every triangle has positive area, no duplicate vertex indices).
+  - **V_BND**: Row 2's boundary points are bit-exact equal to Row 1's boundary points (warm-start preservation).
+  - **V_BND_PROP**: Rows 3 and 4 boundary points are bit-exact equal to Row 2's boundary points (preservation propagates through downstream smoothers — to the extent each smoother claims to preserve boundary; if a smoother does not preserve boundary by design, this assertion is relaxed to "boundary unchanged within smoother's documented tolerance").
+  - **V_QI**: Row 2 median quality is strictly greater than Row 1 median quality (warm-start actually helps in this demo; if the warm-start regresses on the annulus, the script fails — separate from the function-level non-degradation guarantee in FR-011, which silently returns input on regression).
+  - **V_CONN**: All four rows define valid triangulations (every triangle has positive area, no duplicate vertex indices).
+  - **V_CHAIN**: Row 3's input was Row 2's `(points, triangles)` (verified by reference identity or by computing input hash). Row 4's input was Row 2's `(points, triangles)`. Neither rows 3 nor 4 secretly used Row 1.
 - **FR-014**: The function and demo script MUST be importable / runnable without ADMESH installed system-wide; the existing project convention of `sys.path.insert(0, str(Path(__file__).parent / "ADMESH"))` (or equivalent) is acceptable. If ADMESH cannot be imported, the function MUST raise a clear `ImportError` naming the missing dependency.
-- **FR-015**: The integration MUST work with the live ADMESH source tree (the cloned `/tmp/ADMESH` from `https://github.com/domattioli/ADMESH.git`); if upstream ADMESH has the broken `MeshOutput` import (current `main` HEAD), the spec author and the implementer MUST coordinate on whether to upstream a fix or pin to a known-good commit.
+- **FR-015**: The integration MUST pin the ADMESH dependency to a **specific known-good commit SHA** (not `main`) and document that SHA at the top of the adapter file. The plan phase MUST identify a commit whose `admesh/distmesh.py` and `admesh/routine.py` import each other cleanly (i.e., before the `MeshOutput` regression). The pinned SHA is recorded in a single source-of-truth location (e.g., a constant in the adapter module or a `requirements.txt`-style file) and referenced everywhere else. Upgrading the pin in the future is a single-place change, not a sweep. [Resolved Q1=a: pin, do not upstream-fix or vendor.]
 - **FR-016**: The function MUST be **input-source-agnostic**. It MUST work on:
   - Any of the four bundled CHILmesh fixtures (`annulus`, `donut`, `block_o`, `structured`).
   - A CHILmesh loaded via `read_from_fort14()`.
@@ -125,14 +139,14 @@ The CHILmesh form MUST be a thin convenience wrapper around the raw-arrays form.
 
 ### Measurable Outcomes
 
-- **SC-001**: On the bundled annulus fixture (`chilmesh.examples.annulus()`) with a constant size function, the warm-start optimizer produces a mesh whose median element quality is at least **0.55** (compared to the input's ≈ 0.49 — a ≥12% relative improvement). This is the demo benchmark; the function-level requirement is non-degradation (FR-013 V_QI).
+- **SC-001**: On the bundled annulus fixture (`chilmesh.examples.annulus()`) with a constant size function, the warm-start optimizer produces a mesh whose median element quality is at least **0.60** (compared to the input's ≈ 0.49 — a ≥22% relative improvement). This is the demo benchmark; the function-level requirement is non-degradation (FR-011 graceful-degradation guarantee). [Resolved Q5=b: 0.60 target, clearly better than the ad-hoc distmesh prototype's 0.5617.]
 - **SC-002**: On the same fixture, **100 %** of input boundary points appear in the output at bit-exact equal `(x, y)` coordinates (np.array_equal == True). This is the boundary-preservation guarantee.
 - **SC-003**: The warm-start optimizer completes on a 580-element mesh (annulus) in under **30 seconds** of wall time on a developer laptop without ADMESH-side parallelization.
 - **SC-004**: The demo visualization renders without invoking any of `_initial_distribution`, the rejection-sampling code path, or any ADMESH internals that generate fresh points — verified via assertion or instrumentation, not vibes.
 - **SC-005**: All four bundled CHILmesh fixtures (annulus, donut, block_o, structured) can be passed to the warm-start optimizer without crashing. Quality may not strictly improve on every fixture (some are already excellent), but the function MUST NOT regress median quality below input on any fixture.
 - **SC-006**: The README (or a sibling docs page) clearly explains when to use warm-start vs `admesh.triangulate()`-from-scratch, in plain language, with one or two sentences of guidance.
 - **SC-007 (extensibility)**: The test suite MUST include at least three input-source variations (bundled fixture, fort.14-loaded mesh, raw numpy arrays from a non-CHILmesh source) and verify all three produce valid optimized output with bit-exact boundary preservation. If any of these three input forms fails, the feature is not done.
-- **SC-008 (extensibility)**: The test suite MUST include at least two distinct domains (annulus + one other, e.g., a square or an L-shape) to verify the function is genuinely domain-agnostic, not just hard-coded to annulus parameters.
+- **SC-008 (extensibility)**: The test suite MUST include at least two distinct domains: **annulus + donut** (the CHILmesh `donut` fixture, since it's already in the test corpus, has a non-trivial geometry distinct from annulus, and exercises the same SDF→pfix→truss pipeline). [Resolved Q3=d: donut as second domain.] The test for the donut MUST verify (a) bit-exact boundary preservation, (b) no quality regression, (c) the donut SDF is supplied by the test (not hard-coded inside the library) — this is the proof that the library is domain-agnostic.
 
 ## Cross-Repo Tracking Policy
 
