@@ -35,6 +35,20 @@ class CHILmesh(CHILmeshPlotMixin):
     Informatics Laboratory (CHIL) at The Ohio State University, focusing on the
     mesh layers approach described in Mattioli's thesis.
 
+    Layer Structure (Skeletonization):
+        After initialization, the mesh is decomposed into concentric layers via skeletonization.
+        Access layers via the ``layers`` property (or ``Layers`` for backwards compatibility):
+
+        - mesh.layers['OE'][i]: Array of **element indices** in the outer boundary of layer i
+        - mesh.layers['IE'][i]: Array of **element indices** one step deeper than layer i's boundary
+        - mesh.layers['OV'][i]: Array of **vertex indices** on the outer boundary of layer i
+        - mesh.layers['IV'][i]: Array of **vertex indices** interior to layer i
+        - mesh.layers['bEdgeIDs'][i]: Array of **edge indices** that form the boundary between layer i and i+1
+
+        Layer 0 is the outermost boundary; layers progress inward toward the mesh interior.
+        Use mesh.elements_in_layer(i) for a convenience method that returns all element indices
+        (union of OE[i] and IE[i]) for a layer.
+
     Adjacency Structures:
         The mesh maintains multiple representations of topology:
 
@@ -89,12 +103,38 @@ class CHILmesh(CHILmeshPlotMixin):
     def Layers(self):
         """
         Backwards compatibility property to access layers with uppercase name.
-        
+
         Returns:
             The layers dictionary
         """
         return self.layers
-    
+
+    def elements_in_layer(self, layer_idx: int) -> np.ndarray:
+        """
+        Get all element indices for a given skeletonization layer.
+
+        This is a convenience method that returns the union of outer and inner
+        elements for the specified layer.
+
+        Parameters:
+            layer_idx: Zero-based layer index (0 = outermost)
+
+        Returns:
+            Array of element indices (sorted) belonging to this layer
+
+        Raises:
+            IndexError: If layer_idx is outside [0, n_layers)
+
+        Example:
+            >>> mesh = chilmesh.examples.annulus()
+            >>> elements = mesh.elements_in_layer(0)  # All elements in outermost layer
+        """
+        if layer_idx < 0 or layer_idx >= self.n_layers:
+            raise IndexError(f"Layer index {layer_idx} out of range [0, {self.n_layers})")
+        outer = self.layers["OE"][layer_idx]
+        inner = self.layers["IE"][layer_idx]
+        return np.sort(np.concatenate([outer, inner]).astype(int))
+
     def change_points(self, new_points, acknowledge_change=False):
         """
         Change the mesh's (x,y,z) locations of its points.
@@ -113,10 +153,19 @@ class CHILmesh(CHILmeshPlotMixin):
         Initialize a CHILmesh object.
 
         Parameters:
-            connectivity: Element connectivity list
-            points: Vertex coordinates
+            connectivity: Element connectivity list (n_elems × 3 for triangles, n_elems × 4 for quads/mixed)
+            points: Vertex coordinates (n_verts × 3, with z=0 for 2D meshes)
             grid_name: Name of the mesh
             compute_layers: If False, skip skeletonization for fast init (default: True)
+
+        Attributes set during initialization:
+            layers (dict): Skeletonization result with keys:
+                - 'OE': List of arrays (outer elements per layer, **element indices**)
+                - 'IE': List of arrays (inner elements per layer, **element indices**)
+                - 'OV': List of arrays (outer vertices per layer, **vertex indices**)
+                - 'IV': List of arrays (inner vertices per layer, **vertex indices**)
+                - 'bEdgeIDs': List of arrays (boundary edges per layer, **edge indices**)
+            n_layers (int): Number of skeletonization layers
         """
         # Public properties
         self.grid_name = grid_name
