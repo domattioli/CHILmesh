@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy.spatial import Delaunay
 from typing import List, Tuple, Optional as Opt, Dict, Set, Union, Any
-from scipy.sparse import lil_matrix
+from scipy.sparse import lil_matrix, csr_matrix
 from scipy.sparse.linalg import spsolve
 from copy import deepcopy
 
@@ -1316,33 +1316,56 @@ class CHILmesh(CHILmeshPlotMixin):
         raise NotImplementedError("Angle-based smoothing not implemented yet.")
         return self.points
     
-    def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
+    def _detect_element_type(self) -> str:
         """
-        Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
-        Based on the triangle stiffness formulation in Balendran (2006).
+        Detect mesh element types from connectivity_list.
+
+        Returns:
+            'triangle': All triangles (3-column connectivity)
+            'quad': All quads (4-column connectivity)
+            'mixed': Both triangles and quads (4-column connectivity with padded tri)
+        """
+        if self.connectivity_list.shape[1] == 3:
+            return 'triangle'
+        elif self.connectivity_list.shape[1] == 4:
+            # Check if all last column entries are valid (non-padding)
+            last_col = self.connectivity_list[:, 3]
+            first_col = self.connectivity_list[:, 0]
+            # Padded triangles have last column == first column
+            has_quads = np.any(last_col != first_col)
+            has_triangles = np.any(last_col == first_col)
+            if has_quads and has_triangles:
+                return 'mixed'
+            elif has_quads:
+                return 'quad'
+            else:
+                return 'triangle'
+        else:
+            raise ValueError(f"Unexpected connectivity shape: {self.connectivity_list.shape}")
+
+    def _tri_stiffness_assembly(
+        self,
+        p: np.ndarray,
+        n: int,
+        boundary_nodes: np.ndarray,
+        kinf: float
+    ) -> Tuple[csr_matrix, np.ndarray]:
+        """
+        Assemble stiffness matrix for triangle-only meshes.
+        Based on Zhou & Shimada (2000) angle-based approach via Balendran (2006).
 
         Parameters:
-            kinf: Large stiffness value for fixed boundary vertices
+            p: Point coordinates (n_verts, 2)
+            n: Number of vertices
+            boundary_nodes: Array of boundary node indices
+            kinf: Boundary stiffness value
 
-        Reference:
-            Zhou, M., & Shimada, K. (2000). 
-            "An angle-based approach to two-dimensional mesh smoothing". 
-            In *Proceedings of the 9th International Meshing Roundtable*, 373–384. 
-            Sandia National Laboratories.
-            https://api.semanticscholar.org/CorpusID:34335417
+        Returns:
+            K: Global stiffness matrix (2n, 2n)
+            F: Force vector (2n,)
         """
-        import numpy as np
-        from scipy.sparse import csr_matrix
-        from scipy.sparse.linalg import spsolve
+        t = self.connectivity_list[:, :3]  # Triangle connectivity
 
-        p = self.points[:, :2]  # Only use x, y
-        t = self.connectivity_list[:, :3]  # Assume triangles only
-
-        # Identify boundary nodes
-        edge_verts = self.edge2vert(self.boundary_edges())
-        boundary_nodes = np.unique(edge_verts.flatten())
-
-        n = self.n_verts
         D = 2.0 * np.eye(2)
         T = np.array([[-1, -np.sqrt(3)], [np.sqrt(3), -1]])
 
@@ -1365,6 +1388,191 @@ class CHILmesh(CHILmeshPlotMixin):
             F[2*v:2*v+2] = kinf * p[v]
             K[2*v, 2*v] = kinf
             K[2*v+1, 2*v+1] = kinf
+
+        return K, F
+
+    def _quad_stiffness_assembly(
+        self,
+        p: np.ndarray,
+        n: int,
+        boundary_nodes: np.ndarray,
+        kinf: float
+    ) -> Tuple[csr_matrix, np.ndarray]:
+        """
+        Assemble stiffness matrix for quad-only meshes.
+        Extended from Zhou & Shimada (2000) analogy.
+
+        For quads, extend triangle stiffness matrices:
+        - D_quad: Scaled diagonal block (4/3 scaling for 4 vertices vs 3)
+        - T_quad: Off-diagonal block for adjacent vertices
+
+        Mathematical basis: Zhou & Shimada uses energy-minimization principle.
+        For a quad with 4 vertices, local stiffness follows cyclic pattern:
+        Diagonal: D_quad
+        Adjacent (cyclic): T_quad and T_quad.T
+
+        Parameters:
+            p: Point coordinates (n_verts, 2)
+            n: Number of vertices
+            boundary_nodes: Array of boundary node indices
+            kinf: Boundary stiffness value
+
+        Returns:
+            K: Global stiffness matrix (2n, 2n)
+            F: Force vector (2n,)
+        """
+        quads = self.connectivity_list  # Quad connectivity
+
+        # Extend triangle formulation by analogy (4 vertices vs 3)
+        D_quad = (4.0 / 3.0) * 2.0 * np.eye(2)  # Scale D by 4/3
+        # T_quad maintains similar structure to triangle T matrix
+        T_quad = np.array([[-1, -np.sqrt(3)], [np.sqrt(3), -1]])
+
+        rows, cols, data = [], [], []
+        for quad in quads:
+            for i in range(4):
+                for j in range(4):
+                    if i == j:
+                        block = D_quad
+                    elif j == (i + 1) % 4:
+                        block = T_quad
+                    elif i == (j + 1) % 4:
+                        block = T_quad.T
+                    else:
+                        # Opposite vertices: weaker coupling
+                        block = 0.5 * T_quad
+
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*quad[i]+di)
+                            cols.append(2*quad[j]+dj)
+                            data.append(block[di, dj])
+
+        K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
+        F = np.zeros(2*n)
+
+        # Apply boundary constraints
+        for v in boundary_nodes:
+            F[2*v:2*v+2] = kinf * p[v]
+            K[2*v, 2*v] = kinf
+            K[2*v+1, 2*v+1] = kinf
+
+        return K, F
+
+    def _mixed_stiffness_assembly(
+        self,
+        p: np.ndarray,
+        n: int,
+        boundary_nodes: np.ndarray,
+        kinf: float
+    ) -> Tuple[csr_matrix, np.ndarray]:
+        """
+        Assemble stiffness matrix for mixed-element meshes.
+        Apply element-type-specific stiffness to each element.
+
+        Parameters:
+            p: Point coordinates (n_verts, 2)
+            n: Number of vertices
+            boundary_nodes: Array of boundary node indices
+            kinf: Boundary stiffness value
+
+        Returns:
+            K: Global stiffness matrix (2n, 2n)
+            F: Force vector (2n,)
+        """
+        elems = self.connectivity_list
+
+        D_tri = 2.0 * np.eye(2)
+        T_tri = np.array([[-1, -np.sqrt(3)], [np.sqrt(3), -1]])
+
+        D_quad = (4.0 / 3.0) * 2.0 * np.eye(2)
+        T_quad = T_tri  # Same shape matrix
+
+        rows, cols, data = [], [], []
+
+        for elem in elems:
+            # Detect element type: last column == first column means padded triangle
+            is_triangle = (elem[3] == elem[0])
+
+            if is_triangle:
+                # Triangle: use only first 3 vertices
+                vertices = elem[:3]
+                D, T = D_tri, T_tri
+                n_local = 3
+            else:
+                # Quad: use all 4 vertices
+                vertices = elem
+                D, T = D_quad, T_quad
+                n_local = 4
+
+            for i in range(n_local):
+                for j in range(n_local):
+                    if is_triangle:
+                        block = D if i == j else T if j == (i+1)%3 else T.T
+                    else:
+                        if i == j:
+                            block = D
+                        elif j == (i + 1) % 4:
+                            block = T
+                        elif i == (j + 1) % 4:
+                            block = T.T
+                        else:
+                            block = 0.5 * T
+
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*vertices[i]+di)
+                            cols.append(2*vertices[j]+dj)
+                            data.append(block[di, dj])
+
+        K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
+        F = np.zeros(2*n)
+
+        # Apply boundary constraints
+        for v in boundary_nodes:
+            F[2*v:2*v+2] = kinf * p[v]
+            K[2*v, 2*v] = kinf
+            K[2*v+1, 2*v+1] = kinf
+
+        return K, F
+
+    def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
+        """
+        Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
+        Supports triangle, quad, and mixed-element meshes.
+        Based on the Zhou & Shimada (2000) angle-based formulation.
+
+        Parameters:
+            kinf: Large stiffness value for fixed boundary vertices
+
+        Reference:
+            Zhou, M., & Shimada, K. (2000).
+            "An angle-based approach to two-dimensional mesh smoothing".
+            In *Proceedings of the 9th International Meshing Roundtable*, 373–384.
+            Sandia National Laboratories.
+            https://api.semanticscholar.org/CorpusID:34335417
+        """
+        from scipy.sparse import csr_matrix
+        from scipy.sparse.linalg import spsolve
+
+        p = self.points[:, :2]  # Only use x, y
+        n = self.n_verts
+
+        # Identify boundary nodes
+        edge_verts = self.edge2vert(self.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
+
+        # Dispatch to element-type-specific assembly
+        elem_type = self._detect_element_type()
+
+        if elem_type == 'triangle':
+            K, F = self._tri_stiffness_assembly(p, n, boundary_nodes, kinf)
+        elif elem_type == 'quad':
+            K, F = self._quad_stiffness_assembly(p, n, boundary_nodes, kinf)
+        elif elem_type == 'mixed':
+            K, F = self._mixed_stiffness_assembly(p, n, boundary_nodes, kinf)
+        else:
+            raise ValueError(f"Unexpected element type: {elem_type}")
 
         c = spsolve(K, F)
         new_points = np.zeros_like(self.points)
