@@ -134,6 +134,20 @@ The CHILmesh form MUST be a thin convenience wrapper around the raw-arrays form.
 - **SC-007 (extensibility)**: The test suite MUST include at least three input-source variations (bundled fixture, fort.14-loaded mesh, raw numpy arrays from a non-CHILmesh source) and verify all three produce valid optimized output with bit-exact boundary preservation. If any of these three input forms fails, the feature is not done.
 - **SC-008 (extensibility)**: The test suite MUST include at least two distinct domains (annulus + one other, e.g., a square or an L-shape) to verify the function is genuinely domain-agnostic, not just hard-coded to annulus parameters.
 
+## Cross-Repo Tracking Policy
+
+**Any extensibility hook, public-API addition, or upstream fix that belongs inside ADMESH itself MUST be filed as a new issue on `https://github.com/domattioli/ADMESH/issues` rather than implemented as a private workaround in CHILmesh.** The CHILmesh-side adapter is allowed to be a thin shim only; anything that asks ADMESH to behave differently goes upstream.
+
+Candidate ADMESH issues identified during specify (to be filed by the user — Claude's MCP scope is restricted to `domattioli/chilmesh` and cannot file on the ADMESH repo):
+
+- **ADMESH-A**: Broken import — `MeshOutput` is imported by `admesh/routine.py` but not defined in `admesh/distmesh.py` on `main` HEAD. Fix: define and export `MeshOutput` (or remove the import). This blocks any external caller of `admesh.triangulate()`.
+- **ADMESH-B**: Public warm-start entry point — `admesh.triangulate()` currently always runs `_initial_distribution` to generate fresh points. Proposal: add an optional `initial_points: ndarray | None` argument (or a sibling function `triangulate_from_points(...)`) that bypasses rejection sampling and uses the caller's points as the initial truss state.
+- **ADMESH-C**: Public `pfix` documentation — `Domain(..., pfix=...)` is used here as the boundary-pinning mechanism. Confirm that `pfix` points are guaranteed bit-exact preserved by the truss loop (no floating-point drift), and document this contract.
+- **ADMESH-D**: Distmesh re-triangulation cadence — document the current behavior (Delaunay re-triangulation every iteration) and expose the cadence as a tunable. Some warm-start callers may want to skip re-triangulation for the first N iters to keep the input topology longer.
+- **ADMESH-E**: Convergence diagnostics — surface the per-iteration max-displacement and quality-stat history as a return value from `distmesh2d`, so callers can produce convergence plots and decide whether the loop converged sensibly.
+
+The CHILmesh adapter MUST work around any of the above that aren't fixed upstream by the time of implementation, but each workaround MUST link to its tracking issue and be marked as TEMP in the code.
+
 ## Assumptions
 
 - ADMESH source code is reachable at `https://github.com/domattioli/ADMESH.git` and the implementation team can clone a known-good commit if `main` is broken.
