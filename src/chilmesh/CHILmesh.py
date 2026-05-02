@@ -1364,19 +1364,149 @@ class CHILmesh(CHILmeshPlotMixin):
         # For now, just return the original points
         raise NotImplementedError("Angle-based smoothing not implemented yet.")
         return self.points
-    
+
+    def _detect_element_types(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Detect element types from connectivity_list.
+
+        Returns:
+            (tris, quads): Arrays of triangle and quad element indices.
+            - tris: Indices where elements have 3 vertices
+            - quads: Indices where elements have 4 vertices
+        """
+        n_cols = self.connectivity_list.shape[1]
+
+        if n_cols == 3:
+            # Pure triangle mesh
+            all_indices = np.arange(self.connectivity_list.shape[0])
+            return all_indices, np.array([], dtype=int)
+        elif n_cols == 4:
+            # Mixed or pure quad mesh; check per-element
+            tris = []
+            quads = []
+            for i, elem in enumerate(self.connectivity_list):
+                # Triangle: 4th vertex is -1 or padding
+                if elem[3] < 0 or (i < len(self.connectivity_list) and elem[3] >= self.n_verts):
+                    tris.append(i)
+                else:
+                    quads.append(i)
+            return np.array(tris, dtype=int), np.array(quads, dtype=int)
+        else:
+            raise ValueError(f"Unexpected connectivity_list shape: {self.connectivity_list.shape}")
+
+    def _tri_stiffness_assembly(self, tri_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
+        """
+        Assemble stiffness matrix contributions from triangle elements.
+
+        Parameters:
+            tri_indices: Array of triangle element indices
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            (rows, cols, data): CSR matrix format lists for assembly
+        """
+        import numpy as np
+
+        t = self.connectivity_list[tri_indices, :3]
+
+        D = 2.0 * np.eye(2)
+        T = np.array([[-1.0, -np.sqrt(3)], [np.sqrt(3), -1.0]])
+
+        rows, cols, data = [], [], []
+        for elem_idx, tri in enumerate(t):
+            for i in range(3):
+                for j in range(3):
+                    block = D if i == j else T if j == (i+1)%3 else T.T
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*tri[i] + di)
+                            cols.append(2*tri[j] + dj)
+                            data.append(block[di, dj])
+
+        return rows, cols, data
+
+    def _quad_stiffness_assembly(self, quad_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
+        """
+        Assemble stiffness matrix contributions from quad elements.
+        Uses Zhou & Shimada analogy: quad-specific matrices D_quad, T_quad.
+
+        Parameters:
+            quad_indices: Array of quad element indices
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            (rows, cols, data): CSR matrix format lists for assembly
+        """
+        import numpy as np
+
+        q = self.connectivity_list[quad_indices, :4]
+
+        D_quad = 2.5 * np.eye(2)
+        T_quad = np.array([[-1.25, -1.25], [1.25, -1.25]])
+
+        rows, cols, data = [], [], []
+        for elem_idx, quad in enumerate(q):
+            for i in range(4):
+                for j in range(4):
+                    block = D_quad if i == j else T_quad if j == (i+1)%4 else T_quad.T
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*quad[i] + di)
+                            cols.append(2*quad[j] + dj)
+                            data.append(block[di, dj])
+
+        return rows, cols, data
+
+    def _mixed_stiffness_assembly(self, tri_indices: np.ndarray, quad_indices: np.ndarray,
+                                   p: np.ndarray, n: int) -> tuple:
+        """
+        Assemble stiffness matrix for mixed element mesh.
+        Combines triangle and quad contributions into single stiffness matrix.
+
+        Parameters:
+            tri_indices: Array of triangle element indices
+            quad_indices: Array of quad element indices
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            (rows, cols, data): CSR matrix format lists for assembly
+        """
+        rows, cols, data = [], [], []
+
+        # Add triangle contributions
+        if len(tri_indices) > 0:
+            tri_rows, tri_cols, tri_data = self._tri_stiffness_assembly(tri_indices, p, n)
+            rows.extend(tri_rows)
+            cols.extend(tri_cols)
+            data.extend(tri_data)
+
+        # Add quad contributions
+        if len(quad_indices) > 0:
+            quad_rows, quad_cols, quad_data = self._quad_stiffness_assembly(quad_indices, p, n)
+            rows.extend(quad_rows)
+            cols.extend(quad_cols)
+            data.extend(quad_data)
+
+        return rows, cols, data
+
     def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
         """
         Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
-        Based on the triangle stiffness formulation in Balendran (2006).
+        Supports triangle, quad, and mixed-element meshes.
+
+        Based on the Zhou & Shimada formulation (triangles) extended to quads
+        via analogy (maintaining energy-minimization principle).
 
         Parameters:
             kinf: Large stiffness value for fixed boundary vertices
 
         Reference:
-            Zhou, M., & Shimada, K. (2000). 
-            "An angle-based approach to two-dimensional mesh smoothing". 
-            In *Proceedings of the 9th International Meshing Roundtable*, 373–384. 
+            Zhou, M., & Shimada, K. (2000).
+            "An angle-based approach to two-dimensional mesh smoothing".
+            In *Proceedings of the 9th International Meshing Roundtable*, 373–384.
             Sandia National Laboratories.
             https://api.semanticscholar.org/CorpusID:34335417
         """
@@ -1385,31 +1515,29 @@ class CHILmesh(CHILmeshPlotMixin):
         from scipy.sparse.linalg import spsolve
 
         p = self.points[:, :2]  # Only use x, y
-        t = self.connectivity_list[:, :3]  # Assume triangles only
-
-        # Identify boundary nodes
-        edge_verts = self.edge2vert(self.boundary_edges())
-        boundary_nodes = np.unique(edge_verts.flatten())
-
         n = self.n_verts
-        D = 2.0 * np.eye(2)
-        T = np.array([[-1, -np.sqrt(3)], [np.sqrt(3), -1]])
 
-        rows, cols, data = [], [], []
-        for tri in t:
-            for i in range(3):
-                for j in range(3):
-                    block = D if i == j else T if j == (i+1)%3 else T.T
-                    for di in range(2):
-                        for dj in range(2):
-                            rows.append(2*tri[i]+di)
-                            cols.append(2*tri[j]+dj)
-                            data.append(block[di, dj])
+        # Detect element types
+        tri_indices, quad_indices = self._detect_element_types()
+
+        # Assemble stiffness matrix based on element composition
+        if len(quad_indices) == 0:
+            # Pure triangle mesh
+            rows, cols, data = self._tri_stiffness_assembly(tri_indices, p, n)
+        elif len(tri_indices) == 0:
+            # Pure quad mesh
+            rows, cols, data = self._quad_stiffness_assembly(quad_indices, p, n)
+        else:
+            # Mixed-element mesh
+            rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
 
         K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
         F = np.zeros(2*n)
 
-        # Apply boundary constraints
+        # Identify boundary nodes and apply constraints
+        edge_verts = self.edge2vert(self.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
+
         for v in boundary_nodes:
             F[2*v:2*v+2] = kinf * p[v]
             K[2*v, 2*v] = kinf
