@@ -2,7 +2,7 @@
 
 <!-- maintained-by: maintain-claude-md skill -->
 
-⚠️ **CRITICAL: Always work on `planning-optimize_modernize` branch. Do not create random-named feature branches (e.g., `claude/youthful-goldberg-AulX3`). See Branch Policy below.**
+⚠️ **CRITICAL (note for claude): Do not create random-named feature branches (e.g., `claude/youthful-goldberg-AulX3`). See Branch Policy below.**
 
 This document provides context and guidelines for AI-assisted development on CHILmesh.
 
