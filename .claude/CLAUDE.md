@@ -83,9 +83,10 @@ Edge2Elem: ndarray[n_edges, 2]        # Edge adjacent elements (-1 if boundary)
 
 ### Before Starting Work
 1. Read `PLANNING_DATA_STRUCTURE_MODERNIZATION.md` for context
-2. Check the GitHub issue for task details
-3. Run `pytest -v` locally to verify baseline
-4. Review related code sections (adjacency building, skeletonization)
+2. All pertinent skills should be pulled from https://github.com/domattioli/DomI and gitignored for this repo. 
+3. Check the GitHub issue for task details
+4. Run `pytest -v` locally to verify baseline
+5. Review related code sections (adjacency building, skeletonization)
 
 ### During Development
 1. Create focused commits (one logical change per commit)
