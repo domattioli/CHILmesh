@@ -1,6 +1,7 @@
 # plot_utils.py
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import matplotlib.cm as cm
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from abc import abstractproperty
@@ -287,7 +288,7 @@ class CHILmeshPlotMixin:
 
         ax.set_aspect('equal')
 
-        cmap_obj = cm.get_cmap(cmap, self.n_layers)
+        cmap_obj = matplotlib.colormaps[cmap].resampled(self.n_layers)
         norm = BoundaryNorm(boundaries=np.arange(self.n_layers + 1), ncolors=self.n_layers)
 
         for layer_idx in layers:
@@ -348,7 +349,7 @@ class CHILmeshPlotMixin:
         # Bin and color by quality
         bins = np.linspace(0, 1, 21)
         norm = plt.Normalize(vmin=0, vmax=1)
-        colors = cm.get_cmap(cmap + "_r")(norm(bins[:-1]))
+        colors = matplotlib.colormaps[cmap + "_r"](norm(bins[:-1]))
         for i in range(len(bins) - 1):
             bin_ids = elem_ids[(q >= bins[i]) & (q < bins[i + 1])]
             if len(bin_ids):
