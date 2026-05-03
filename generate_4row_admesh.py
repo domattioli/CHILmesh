@@ -284,6 +284,7 @@ def main():
     # Row 4: Right-Isoceles Smoother (on Row 2 copy, sibling of Row 3)
     # ========================================================================
     print("\n[Row 4] Applying right-isoceles smoother to Row 2...")
+    row4_is_fallback = False
     try:
         from admesh.quad_prep import smooth_for_quadrangulation
 
@@ -312,9 +313,11 @@ def main():
 
     except Exception as e:
         print(f"  Note: right-isoceles smoother unavailable ({e})")
+        print("  Falling back to Row 3 (FEM) for visualization — labels will indicate this")
         row4 = row3  # Fallback: use Row 3 for Row 4
         row4_quality = row3_quality
         row4_boundary_indices = row3_boundary_indices
+        row4_is_fallback = True
 
     # ========================================================================
     # V_CHAIN: Verify Row 3 and Row 4 inputs were Row 2
@@ -366,11 +369,14 @@ def main():
     cool_r_cmap = plt.cm.cool_r
     norm_quality = mcolors.Normalize(vmin=0, vmax=1)
 
+    row4_label = "Row 2 + Right-Isoceles Smoother"
+    if 'row4_is_fallback' in dir() or locals().get('row4_is_fallback', False):
+        row4_label += "\n[unavailable — showing Row 3]"
     row_labels = [
         "Raw Delaunay",
         "+ ADMESH Truss (warm-start)",
         "Row 2 + FEM Smoother",
-        "Row 2 + Right-Isoceles Smoother"
+        row4_label
     ]
     col_labels = ["Mesh", "Layers", "Quality"]
     rows = [row1, row2, row3, row4]
@@ -397,18 +403,22 @@ def main():
             ax.set_title(f"{row_label}\n{col_labels[0]} ({quality_str})", fontsize=9)
             ax.axis('off')
 
-            # Column 1: Layers (with faint edges for structure)
+            # Column 1: Layers (with visible edges for structure)
             ax = axes[i, 1]
             layer_colors = get_layer_colors(row, parula_cmap)
             for tri, color_val in zip(triangles, layer_colors):
                 ax.fill(points[tri, 0], points[tri, 1],
                         color=parula_cmap(color_val), edgecolor='black',
-                        linewidth=0.15, alpha=1.0)
+                        linewidth=0.35, alpha=1.0)
             ax.set_aspect('equal')
             ax.set_title(f"{row_label}\n{col_labels[1]} ({quality_str})", fontsize=9)
             ax.axis('off')
+            sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
+            sm1.set_array([])
+            cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.85)
+            cbar1.set_label("Layer", fontsize=8)
 
-            # Column 2: Quality (with faint edges for structure)
+            # Column 2: Quality (with visible edges for structure)
             ax = axes[i, 2]
             if quality is None or np.isnan(quality).all():
                 ax.triplot(points[:, 0], points[:, 1], triangles, color='gray', linewidth=0.3)
@@ -418,41 +428,20 @@ def main():
                 for tri, q in zip(triangles, quality_clean):
                     ax.fill(points[tri, 0], points[tri, 1],
                             color=cool_r_cmap(norm_quality(q)), edgecolor='black',
-                            linewidth=0.15, alpha=1.0)
+                            linewidth=0.35, alpha=1.0)
                 ax.set_title(f"{row_label}\n{col_labels[2]} ({quality_str})", fontsize=9)
             ax.set_aspect('equal')
             ax.axis('off')
+            sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
+            sm2.set_array([])
+            cbar2 = plt.colorbar(sm2, ax=ax, orientation='vertical', pad=0.02, shrink=0.85)
+            cbar2.set_label("Quality", fontsize=8)
         except Exception as e:
             print(f"WARNING: Error rendering row {i}: {e}")
             import traceback
             traceback.print_exc()
 
-    # Adjust layout to leave room for full-height colorbars on right of cols 1 & 2
-    plt.subplots_adjust(left=0.04, right=0.90, top=0.94, bottom=0.03, hspace=0.25, wspace=0.15)
-
-    # Full-height colorbar for column 1 (Layers)
-    pos_top_c1 = axes[0, 1].get_position()
-    pos_bot_c1 = axes[3, 1].get_position()
-    cbar1_ax = fig.add_axes([
-        pos_top_c1.x1 + 0.005, pos_bot_c1.y0,
-        0.008, pos_top_c1.y1 - pos_bot_c1.y0
-    ])
-    sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
-    sm1.set_array([])
-    cbar1 = fig.colorbar(sm1, cax=cbar1_ax)
-    cbar1.set_label("Layer", fontsize=10)
-
-    # Full-height colorbar for column 2 (Quality)
-    pos_top_c2 = axes[0, 2].get_position()
-    pos_bot_c2 = axes[3, 2].get_position()
-    cbar2_ax = fig.add_axes([
-        pos_top_c2.x1 + 0.005, pos_bot_c2.y0,
-        0.008, pos_top_c2.y1 - pos_bot_c2.y0
-    ])
-    sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
-    sm2.set_array([])
-    cbar2 = fig.colorbar(sm2, cax=cbar2_ax)
-    cbar2.set_label("Quality", fontsize=10)
+    plt.subplots_adjust(left=0.04, right=0.96, top=0.94, bottom=0.03, hspace=0.30, wspace=0.30)
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(OUTPUT_PATH, dpi=DPI)
     print(f"✓ Saved to {OUTPUT_PATH}")
