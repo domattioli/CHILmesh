@@ -47,6 +47,22 @@ from chilmesh import (
 ANNULUS_SDF = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
                                     0.3 - np.linalg.norm(p, axis=1))
 
+# Element-size grading for the warm-start truss.
+# Edge length grows from H_MIN at the boundary to H_MAX at the annulus midline
+# (half-width ≈ 0.35). Without grading the truss equilibrates to roughly the
+# input mean spacing everywhere — visibly uniform once you leave the boundary.
+H_MIN = 0.05    # target edge length at the boundary
+H_MAX = 0.18    # target edge length at the annulus midline
+GRADING_HALF_WIDTH = 0.35  # distance from boundary to midline of annulus
+
+
+def annulus_size_fn(p):
+    """Linear grading: h(p) = H_MIN at boundary → H_MAX at midline."""
+    dist_from_bnd = np.abs(ANNULUS_SDF(p))
+    t = np.minimum(dist_from_bnd / GRADING_HALF_WIDTH, 1.0)
+    return H_MIN + (H_MAX - H_MIN) * t
+
+
 OUTPUT_PATH = Path(__file__).parent / "tests" / "output" / "annulus_quickstart.png"
 FIGSIZE = (15, 18)
 DPI = 100
@@ -157,7 +173,10 @@ def main():
         # deltat=0.02 + Fscale=0.5 is the sweet spot for warm-start polishing
         # (vs ADMESH's deltat=0.2 + Fscale=1.2 defaults which target cold-start).
         row2_candidate = optimize_with_admesh_truss(
-            row1, ANNULUS_SDF, size_fn=None, seed=0,
+            row1, ANNULUS_SDF,
+            size_fn=annulus_size_fn,    # Graded: H_MIN @ boundary → H_MAX @ midline
+            h0=H_MIN,                   # Convergence reference uses smallest target
+            seed=0,
             niter=500,           # Full iteration budget
             deltat=0.02,         # Small steps for polishing
             Fscale=0.5,          # Gentle pressure for warm-start
