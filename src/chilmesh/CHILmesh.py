@@ -800,6 +800,12 @@ class CHILmesh(CHILmeshPlotMixin):
         edge2vert_work = self.adjacencies["Edge2Vert"].copy()
         edge2elem_work = self.adjacencies["Edge2Elem"].copy()
 
+        # Track vertices from the last 2 iterations to maintain the invariant.
+        # The invariant requires vertices from layer k to not appear in layer k+2.
+        # We maintain: layer_verts[iL-2] (to filter in iteration iL) and layer_verts[iL-1]
+        layer_verts_prev_prev = set()  # Vertices from layer iL-2 (to filter in iteration iL)
+        layer_verts_prev = set()       # Vertices from layer iL-1 (to become layer_verts_prev_prev next)
+
         # MATLAB: while any(Edge2ElemIDs(:) > 0)   — we use -1 sentinel, so >= 0 means "active".
         iL = 0
         while np.any(edge2elem_work >= 0):
@@ -827,8 +833,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
             # ---- Step 3: OE[iL] = active elements adjacent to those boundary edges
             # MATLAB: CM.Layers.OE{iL} = ElemIDs(ismember(ElemIDs, Edge2ElemIDs(iLbEdgeIDs,:)));
+            # LAYER SEPARATION FIX: Exclude elements that contain OV vertices from
+            # at least 2 iterations ago (to maintain the invariant that vertices in
+            # layer k don't appear in layer k+2)
             oe_raw = edge2elem_work[iLbEdgeIDs].ravel()
-            oe = np.unique(oe_raw[oe_raw >= 0]).astype(int)
+            oe_candidates = np.unique(oe_raw[oe_raw >= 0]).astype(int)
+
+            # Filter to exclude elements containing vertices from 2 iterations ago
+            # This maintains the invariant: vertices in layer k don't appear in layer k+2
+            oe_filtered = []
+            for elem in oe_candidates:
+                elem_verts = self.connectivity_list[elem]
+                elem_verts = elem_verts[elem_verts >= 0]  # Filter out -1 padding
+                if not np.any(np.isin(elem_verts, layer_verts_prev_prev)):
+                    oe_filtered.append(elem)
+            oe = np.array(oe_filtered, dtype=int) if oe_filtered else np.empty(0, dtype=int)
             self.layers["OE"].append(oe)
 
             # ---- Step 4: flag OE elements as consumed in edge2elem_work ---------
@@ -845,9 +864,20 @@ class CHILmesh(CHILmeshPlotMixin):
 
             # ---- Step 6: IE[iL] = active elements adjacent to those edges -------
             # MATLAB: CM.Layers.IE{iL} = ElemIDs(ismember(ElemIDs, Edge2ElemIDs(iLbEdgeIDs,:)));
+            # LAYER SEPARATION FIX: Exclude elements that contain OV vertices marked
+            # 2+ iterations ago to maintain the invariant.
             if len(ov_edge_indices) > 0:
                 ie_raw = edge2elem_work[ov_edge_indices].ravel()
-                ie = np.unique(ie_raw[ie_raw >= 0]).astype(int)
+                ie_candidates = np.unique(ie_raw[ie_raw >= 0]).astype(int)
+
+                # Filter to exclude elements containing vertices from 2 iterations ago
+                ie_filtered = []
+                for elem in ie_candidates:
+                    elem_verts = self.connectivity_list[elem]
+                    elem_verts = elem_verts[elem_verts >= 0]  # Filter out -1 padding
+                    if not np.any(np.isin(elem_verts, layer_verts_prev_prev)):
+                        ie_filtered.append(elem)
+                ie = np.array(ie_filtered, dtype=int) if ie_filtered else np.empty(0, dtype=int)
             else:
                 ie = np.empty(0, dtype=int)
             self.layers["IE"].append(ie)
@@ -872,6 +902,22 @@ class CHILmesh(CHILmeshPlotMixin):
             else:
                 iv = np.empty(0, dtype=int)
             self.layers["IV"].append(iv)
+
+            # ---- LAYER SEPARATION INVARIANT FIX: Slide the window of marked vertices ----
+            # Update the sliding window: vertices from THIS iteration (iL) become
+            # layer_verts_prev, and layer_verts_prev becomes layer_verts_prev_prev
+            # for the next iteration (iL+1).
+            if len(oe) > 0 or len(ie) > 0:
+                layer_elems = np.concatenate((oe, ie)) if len(oe) > 0 and len(ie) > 0 else (oe if len(oe) > 0 else ie)
+                current_layer_verts = self.connectivity_list[layer_elems].ravel()
+                current_layer_verts = current_layer_verts[current_layer_verts >= 0]  # Filter out -1 padding
+                # Slide the window: prev becomes prev_prev, current becomes prev
+                layer_verts_prev_prev = layer_verts_prev
+                layer_verts_prev = set(current_layer_verts)
+            else:
+                # No elements in this layer, just slide the window
+                layer_verts_prev_prev = layer_verts_prev
+                layer_verts_prev = set()
 
             iL += 1
 
