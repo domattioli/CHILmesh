@@ -206,12 +206,18 @@ def distmesh2d_warmstart(
         interior_sdf = fd(p_new[interior_idx])
         exterior = interior_sdf > 0
         if np.any(exterior):
-            # Simple projection: move slightly along negative gradient
-            delta = 1e-3
-            eps_array = np.full_like(p_new[interior_idx], delta)
-            grad_fd = (fd(p_new[interior_idx] + eps_array[:, None]) -
-                       fd(p_new[interior_idx] - eps_array[:, None])) / (2 * delta)
-            p_new[interior_idx[exterior]] -= 0.5 * interior_sdf[exterior, np.newaxis] * grad_fd[exterior]
+            # Robust projection: move exterior points back toward previous position
+            # which was known to be inside the domain
+            exterior_global_idx = interior_idx[exterior]
+            alpha_step = 0.5
+            for _ in range(10):  # Max 10 bisection steps
+                p_test = p[exterior_global_idx] + (1 - alpha_step) * (p_new[exterior_global_idx] - p[exterior_global_idx])
+                sdf_test = fd(p_test)
+                still_exterior = sdf_test > 0
+                if not np.any(still_exterior):
+                    break
+                alpha_step *= 0.5
+            p_new[exterior_global_idx] = p[exterior_global_idx] + alpha_step * (p_new[exterior_global_idx] - p[exterior_global_idx])
 
         # Check convergence on interior movement (line ~210)
         interior_movement = np.linalg.norm(p_new[nfix:] - p[nfix:], axis=1)
