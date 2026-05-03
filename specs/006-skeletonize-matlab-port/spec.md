@@ -90,13 +90,26 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
 - **SC-001**: Layer separation invariant holds with **0 violations** across all four built-in fixtures (annulus, donut, structured, block_o), measured by a regression test that enumerates all (k, m) layer pairs with |k-m| ≥ 2 and asserts disjoint vertex sets.
 - **SC-002**: All 288 currently-passing tests continue to pass (or, if a test asserted a buggy layer count, it is updated to match the MATLAB-correct count and the update is documented in the commit message with a justification).
 - **SC-003**: The annulus visualization (`tests/output/annulus_quickstart.png`, column 2 of all 4 rows) shows visually-coherent concentric layer rings.
-- **SC-004**: For the annulus mesh, the new Python implementation produces a layer count within ±0 of the MATLAB `meshLayers` function output.
+- **SC-004**: For meshes where MATLAB reference output is known, the new Python implementation produces a layer count within ±0 of the MATLAB `meshLayers` function output. **Known reference values** (provided by the project maintainer from external MATLAB runs):
+  - Italy domain: **15 layers**
+  - Lake Erie domain: **17 layers**
+  - The annulus, donut, and structured fixtures should also match MATLAB output, though the exact reference layer counts are not yet captured.
 - **SC-005**: Implementation completes skeletonization in less than 5× the runtime of the previous implementation on the block_o fixture (~5,200 elements). Correctness > performance.
 - **SC-006**: A new regression test `tests/test_layer_separation_invariant.py` is added that programmatically verifies SC-001 across all fixtures.
+
+## Clarifications
+
+### Q1: How to validate MATLAB equivalence without MATLAB locally? (resolved 2026-05-03)
+
+**Decision**: Hybrid C + B approach.
+- Use the MATLAB source code as a literal translation reference; include MATLAB code as comments alongside the Python port for line-by-line traceability.
+- Verify correctness primarily via the layer separation invariant (SC-001), which is mathematically stronger than count-matching.
+- Cross-check against externally-provided ground-truth layer counts for real-world domains (Italy: 15 layers, Lake Erie: 17 layers) when those mesh files become available.
 
 ## Assumptions
 
 - The MATLAB reference at `domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m`, function `meshLayers`, is the canonical correct algorithm. The Python port should match its behavior bit-for-bit (modulo indexing).
+- The Italy and Lake Erie meshes are large hydrodynamic domains used as benchmark cases in MADMESHR/ADMESH-Domains; they are not bundled with CHILmesh but reference layer counts (15 and 17 respectively) come from external MATLAB runs.
 - The "open ocean boundary" branching mentioned in the MATLAB code (commented out) is out of scope; all boundary edges are treated uniformly.
 - The `_skeletonize()` method is called once per mesh load (not in a hot path). Memory overhead of mutating copies of `Edge2Vert`/`Edge2Elem` is acceptable.
 - Mesh fixtures (annulus, donut, structured, block_o) are representative of all real-world inputs that need to work correctly.
