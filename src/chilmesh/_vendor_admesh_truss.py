@@ -108,4 +108,118 @@ def distmesh2d_warmstart(
        h. p = p_new
     3. Return (p_final, t_final)
     """
-    raise NotImplementedError("T015-T018 implementation pending")
+    # Warm-start preamble: stack boundary and interior points
+    p = np.vstack([pfix_boundary, interior_initial])
+    nfix = len(pfix_boundary)
+
+    # Setup
+    rng = np.random.RandomState(seed)
+    geps = geps_factor * h0
+    pold = np.full_like(p, np.inf)
+    t = np.empty((0, 3), dtype=np.int64)
+    bars = np.empty((0, 2), dtype=np.int64)
+
+    # Main truss loop (inner loop from distmesh2d, lines 140-220)
+    for iteration in range(niter):
+        # Re-triangulate if displacement threshold exceeded (line ~145)
+        max_disp = np.linalg.norm(p - pold, axis=1).max()
+        if max_disp / h0 > ttol:
+            pold = p.copy()
+
+            # Delaunay triangulation (line ~150)
+            tri = Delaunay(p)
+            t_all = tri.simplices
+
+            # Filter triangles by centroid SDF (line ~155)
+            centroids = p[t_all].mean(axis=1)
+            sdf_vals = fd(centroids)
+            t = t_all[sdf_vals < -geps]
+
+            # Extract unique edges (line ~160)
+            if len(t) > 0:
+                edges_list = []
+                edges_list.append(t[:, [0, 1]])
+                edges_list.append(t[:, [1, 2]])
+                edges_list.append(t[:, [2, 0]])
+                edges_all = np.vstack(edges_list)
+
+                edges_sorted = np.sort(edges_all, axis=1)
+                bars = np.unique(edges_sorted, axis=0)
+            else:
+                bars = np.empty((0, 2), dtype=np.int64)
+
+        # Compute edge lengths and bar lengths (line ~165)
+        if len(bars) > 0:
+            p_edges = p[bars]
+            Lbar = np.linalg.norm(p_edges[:, 1] - p_edges[:, 0], axis=1)
+
+            # Desired bar lengths from size function (line ~170)
+            bar_mids = 0.5 * (p_edges[:, 0] + p_edges[:, 1])
+            if fh is None:
+                L0 = np.full_like(Lbar, h0)
+            else:
+                L0 = fh(bar_mids)
+
+            # Bar forces (line ~175)
+            Fbar = (L0 - Lbar) / np.maximum(Lbar, 1e-10)  # Avoid division by zero
+
+            # Force vectors
+            dL = p_edges[:, 1] - p_edges[:, 0]
+            dL_norm = np.maximum(np.linalg.norm(dL, axis=1, keepdims=True), 1e-10)
+            F = (Fbar[:, np.newaxis] * dL / dL_norm)  # Force magnitude and direction
+
+            # Accumulate forces per node (line ~180)
+            Ftot = np.zeros_like(p)
+            for i, bar in enumerate(bars):
+                Ftot[bar[0]] -= F[i]
+                Ftot[bar[1]] += F[i]
+        else:
+            Ftot = np.zeros_like(p)
+
+        # Add internal pressure (line ~185)
+        if len(t) > 0:
+            centroids = p[t].mean(axis=1)
+            Ftot_pressure = np.zeros_like(p)
+            for tri in t:
+                # Compute normal direction for internal pressure
+                p0, p1, p2 = p[tri[0]], p[tri[1]], p[tri[2]]
+                edge1 = p1 - p0
+                edge2 = p2 - p0
+                normal = np.array([-edge2[1], edge2[0]])  # 2D normal
+                normal_norm = np.linalg.norm(normal)
+                if normal_norm > 1e-10:
+                    normal = normal / normal_norm
+                    force = Fscale * normal / 3.0
+                    Ftot_pressure[tri[0]] += force
+                    Ftot_pressure[tri[1]] += force
+                    Ftot_pressure[tri[2]] += force
+            Ftot += Ftot_pressure
+
+        # Zero forces at fixed points (line ~190)
+        Ftot[:nfix] = 0.0
+
+        # Update positions with Euler step (line ~195)
+        p_new = p + deltat * Ftot
+
+        # Project interior points back onto SDF boundary if needed (line ~200)
+        interior_idx = np.arange(nfix, len(p))
+        interior_sdf = fd(p_new[interior_idx])
+        exterior = interior_sdf > 0
+        if np.any(exterior):
+            # Simple projection: move slightly along negative gradient
+            delta = 1e-3
+            eps_array = np.full_like(p_new[interior_idx], delta)
+            grad_fd = (fd(p_new[interior_idx] + eps_array[:, None]) -
+                       fd(p_new[interior_idx] - eps_array[:, None])) / (2 * delta)
+            p_new[interior_idx[exterior]] -= 0.5 * interior_sdf[exterior, np.newaxis] * grad_fd[exterior]
+
+        # Check convergence on interior movement (line ~210)
+        interior_movement = np.linalg.norm(p_new[nfix:] - p[nfix:], axis=1)
+        max_interior_move = interior_movement.max() if len(interior_movement) > 0 else 0.0
+
+        p = p_new
+
+        if max_interior_move / h0 < dptol:
+            break
+
+    return p, t
