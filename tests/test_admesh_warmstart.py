@@ -65,10 +65,10 @@ def annulus_sdf():
 
 @pytest.fixture
 def donut_sdf():
-    """Signed distance function for donut (outer R=1, inner r=0.4)."""
+    """Signed distance function for donut (outer R=1, inner r=0.3)."""
     def sdf(p):
         r = np.linalg.norm(p, axis=1)
-        return np.maximum(r - 1.0, 0.4 - r)
+        return np.maximum(r - 1.0, 0.3 - r)
     return sdf
 
 

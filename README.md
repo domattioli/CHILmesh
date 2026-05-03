@@ -41,18 +41,18 @@ mesh.plot_quality()
 plt.show()
 ```
 
-### Visual Comparison: Four Pipelines
+### Visual Comparison: Warm-Start Truss Optimization Pipeline
 
-See how different mesh generation and smoothing approaches compare on the same domain:
+See how a raw Delaunay triangulation is progressively refined through three smoothers, all sharing the same boundary and element count (580 triangles):
 
-![CHILmesh quickstart: random Delaunay, FEM smoother, ADMESH size-graded, right-isoceles smoother](tests/output/annulus_quickstart.png)
+![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother → right-isoceles smoother](tests/output/annulus_quickstart.png)
 
-**Row 1:** Random Delaunay triangulation (raw, unsmoothed)
-**Row 2:** Row 1 + CHILmesh FEM smoother (quality improvement via relaxation)
-**Row 3:** Fresh ADMESH triangulation with both-boundary size gradation (small near rings, large in middle)
-**Row 4:** Row 3 + ADMESH right-isoceles smoother (preparation for tri-to-quad fusion)
+**Row 1 — Raw Delaunay:** Unsmoothed input mesh from `chilmesh.examples.annulus()` (median quality ≈ 0.71).
+**Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop, started from Row 1's points (boundary pinned bit-exactly via `pfix`). The vendored loop tracks the best-quality state across iterations and early-stops if median quality drops more than 10% from peak. Median quality jumps to ≈ 0.94.
+**Row 3 — Row 2 + FEM Smoother:** CHILmesh's FEM relaxation applied to Row 2 (sibling of Row 4, both branch from Row 2).
+**Row 4 — Row 2 + Right-Isoceles Smoother:** ADMESH's `quad_prep.smooth_for_quadrangulation` (preparation for tri-to-quad fusion). Falls back to Row 3 if `admesh.quad_prep` is not installed; the row label indicates fallback status.
 
-Columns: **left** = mesh wireframe · **center** = skeletonization layers (parula) · **right** = element quality (cool)
+Columns: **left** = mesh wireframe · **center** = skeletonization layers (viridis) · **right** = per-element quality (cool, 4√3·area / Σedge²).
 
 #### How to regenerate this figure
 
@@ -60,7 +60,7 @@ Columns: **left** = mesh wireframe · **center** = skeletonization layers (parul
 python generate_4row_admesh.py
 ```
 
-The script lives at the repo root and writes `tests/output/annulus_quickstart.png`. It enforces seven fail-loud assertions (V1–V7) before saving — see [`specs/004-fix-readme-viz/`](specs/004-fix-readme-viz/) for the full design contract, or [`specs/004-fix-readme-viz/quickstart.md`](specs/004-fix-readme-viz/quickstart.md) for the verification checklist.
+The script lives at the repo root and writes `tests/output/annulus_quickstart.png`. It enforces fail-loud assertions for boundary preservation (V_BND), degeneracy (V_DEGENERACY), sibling chain (V_CHAIN), and positive-area connectivity (V_CONN) before saving. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter API and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full design contract.
 
 ---
 
@@ -117,6 +117,15 @@ mesh = chilmesh.CHILmesh.read_from_2dm('mesh.2dm')
 
 # Smooth mesh
 mesh.smooth_mesh(method='fem', acknowledge_change=True)
+
+# Warm-start an existing triangulation through ADMESH's distmesh truss loop.
+# Boundary points are pinned bit-exactly; interior is relaxed to equilibrium.
+import numpy as np
+sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
+                            0.3 - np.linalg.norm(p, axis=1))
+mesh = chilmesh.optimize_with_admesh_truss(
+    mesh, sdf, niter=500, deltat=0.02, Fscale=0.5
+)
 
 # Analyze
 quality, angles, stats = mesh.elem_quality()
