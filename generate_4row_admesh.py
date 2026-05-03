@@ -143,9 +143,14 @@ def main():
     # Row 2: Warm-Start Truss (from Row 1)
     # ========================================================================
     print("\n[Row 2] Running warm-start truss optimizer on Row 1...")
+    print("  (Using conservative parameters: deltat=0.05, Fscale=0.8, dptol=1e-2)")
     try:
         row2 = optimize_with_admesh_truss(
-            row1, ANNULUS_SDF, size_fn=None, seed=0, niter=500,
+            row1, ANNULUS_SDF, size_fn=None, seed=0,
+            niter=200,           # Stop earlier (was 500)
+            deltat=0.05,         # 4x smaller steps (was 0.2) - more conservative movement
+            Fscale=0.8,          # Less aggressive pressure (was 1.2)
+            dptol=1e-2,          # 10x larger threshold (was 1e-3) - exit sooner
             enforce_non_degradation=False
         )
         row2_boundary_indices = get_boundary_indices(row2)
