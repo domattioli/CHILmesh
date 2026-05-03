@@ -286,11 +286,25 @@ def main():
     print("\n[Row 4] Applying right-isoceles smoother to Row 2...")
     row4_is_fallback = False
     try:
-        from admesh.quad_prep import smooth_for_quadrangulation
+        # The admesh2D pip install registers admesh, but the editable install
+        # pointer can go stale (e.g. if the source tree moved). Fall back to
+        # /tmp/ADMESH which is where it lives in dev environments.
+        try:
+            from admesh.quad_prep import smooth_for_quadrangulation
+        except ImportError:
+            for candidate in ("/tmp/ADMESH", str(Path.home() / "ADMESH")):
+                if Path(candidate).is_dir():
+                    sys.path.insert(0, candidate)
+                    break
+            from admesh.quad_prep import smooth_for_quadrangulation
 
+        # smooth_for_quadrangulation expects h as a callable, not a float
+        h_fn = lambda p: np.full(len(p), 0.1)
         row4_points, row4_triangles = smooth_for_quadrangulation(
-            row2.points[:, :2], row2.connectivity_list, ANNULUS_SDF.fd
-            if hasattr(ANNULUS_SDF, 'fd') else ANNULUS_SDF, h=0.1
+            row2.points[:, :2].astype(np.float64),
+            row2.connectivity_list.astype(np.int64),
+            ANNULUS_SDF,
+            h=h_fn,
         )
         # Wrap in CHILmesh
         from chilmesh import CHILmesh
@@ -370,7 +384,7 @@ def main():
     norm_quality = mcolors.Normalize(vmin=0, vmax=1)
 
     row4_label = "Row 2 + Right-Isoceles Smoother"
-    if 'row4_is_fallback' in dir() or locals().get('row4_is_fallback', False):
+    if row4_is_fallback:
         row4_label += "\n[unavailable — showing Row 3]"
     row_labels = [
         "Raw Delaunay",
