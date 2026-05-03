@@ -29,6 +29,28 @@ from scipy.spatial import Delaunay
 from typing import Callable, Optional, Tuple
 
 
+def _quality_metric(p: np.ndarray, t: np.ndarray) -> np.ndarray:
+    """Per-element quality: 4√3 * area / sum(edge_len²). Inverted = 0."""
+    if len(t) == 0:
+        return np.array([])
+    p0 = p[t[:, 0]]
+    p1 = p[t[:, 1]]
+    p2 = p[t[:, 2]]
+    e0_sq = np.sum((p1 - p0) ** 2, axis=1)
+    e1_sq = np.sum((p2 - p1) ** 2, axis=1)
+    e2_sq = np.sum((p0 - p2) ** 2, axis=1)
+    signed_area = 0.5 * (
+        (p1[:, 0] - p0[:, 0]) * (p2[:, 1] - p0[:, 1])
+        - (p2[:, 0] - p0[:, 0]) * (p1[:, 1] - p0[:, 1])
+    )
+    e_sum_sq = e0_sq + e1_sq + e2_sq
+    return np.where(
+        signed_area > 0,
+        4.0 * np.sqrt(3.0) * signed_area / np.maximum(e_sum_sq, 1e-12),
+        0.0,
+    )
+
+
 def distmesh2d_warmstart(
     pfix_boundary: np.ndarray,
     interior_initial: np.ndarray,
@@ -44,6 +66,9 @@ def distmesh2d_warmstart(
     geps_factor: float = 1e-3,
     niter: int = 500,
     seed: int = 0,
+    quality_check_interval: int = 5,
+    quality_drop_threshold: float = 0.10,
+    track_best_quality: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Warm-start variant of ADMESH's distmesh2d truss loop.
@@ -119,6 +144,12 @@ def distmesh2d_warmstart(
     t = np.empty((0, 3), dtype=np.int64)
     bars = np.empty((0, 2), dtype=np.int64)
 
+    # Best-quality tracking (early-stop on degeneracy guard)
+    best_p = p.copy()
+    best_t = t.copy()
+    best_quality = -np.inf  # Will be set on first quality check
+    initial_quality = -np.inf
+
     # Main truss loop (inner loop from distmesh2d, lines 140-220)
     for iteration in range(niter):
         # Re-triangulate if displacement threshold exceeded (line ~145)
@@ -147,6 +178,25 @@ def distmesh2d_warmstart(
                 bars = np.unique(edges_sorted, axis=0)
             else:
                 bars = np.empty((0, 2), dtype=np.int64)
+
+        # Quality tracking + degeneracy guard (BEFORE forces / position update)
+        # On iteration 0, this captures the input state as initial_quality / best.
+        if track_best_quality and len(t) > 0 and (iteration % quality_check_interval == 0):
+            q_now = float(np.median(_quality_metric(p, t)))
+            if initial_quality == -np.inf:
+                initial_quality = q_now
+                best_quality = q_now
+                best_p = p.copy()
+                best_t = t.copy()
+            elif q_now > best_quality:
+                best_quality = q_now
+                best_p = p.copy()
+                best_t = t.copy()
+            else:
+                drop_from_peak = (best_quality - q_now) / max(best_quality, 1e-6)
+                drop_from_initial = (initial_quality - q_now) / max(initial_quality, 1e-6)
+                if drop_from_peak > quality_drop_threshold or drop_from_initial > quality_drop_threshold:
+                    break
 
         # Compute edge lengths and bar lengths (line ~165)
         if len(bars) > 0:
@@ -226,6 +276,21 @@ def distmesh2d_warmstart(
         p = p_new
 
         if max_interior_move / h0 < dptol:
+            # Final quality update at converged state (next iteration won't run)
+            if track_best_quality and len(t) > 0:
+                # Re-triangulate post-update so t matches p
+                tri = Delaunay(p)
+                t_final_all = tri.simplices
+                centroids = p[t_final_all].mean(axis=1)
+                t_final = t_final_all[fd(centroids) < -geps]
+                if len(t_final) > 0:
+                    q_now = float(np.median(_quality_metric(p, t_final)))
+                    if q_now >= best_quality:
+                        best_quality = q_now
+                        best_p = p.copy()
+                        best_t = t_final.copy()
             break
 
+    if track_best_quality and best_quality > -np.inf:
+        return best_p, best_t
     return p, t

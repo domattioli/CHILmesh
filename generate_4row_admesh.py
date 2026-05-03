@@ -151,12 +151,17 @@ def main():
     print("  Checking if warm-start preserves element quality...")
 
     try:
+        # Warm-start polishing parameters. The vendored loop tracks the best-
+        # quality state across all iterations and early-stops if median quality
+        # drops > 10% from peak (or initial), so we can let it run to completion.
+        # deltat=0.02 + Fscale=0.5 is the sweet spot for warm-start polishing
+        # (vs ADMESH's deltat=0.2 + Fscale=1.2 defaults which target cold-start).
         row2_candidate = optimize_with_admesh_truss(
             row1, ANNULUS_SDF, size_fn=None, seed=0,
-            niter=50,            # Minimal iterations
-            deltat=0.01,         # Very small steps
-            Fscale=0.5,          # Minimal pressure
-            dptol=0.05,          # Exit very early
+            niter=500,           # Full iteration budget
+            deltat=0.02,         # Small steps for polishing
+            Fscale=0.5,          # Gentle pressure for warm-start
+            dptol=1e-3,          # Run to convergence
             enforce_non_degradation=False
         )
 
@@ -279,12 +284,27 @@ def main():
     # Row 4: Right-Isoceles Smoother (on Row 2 copy, sibling of Row 3)
     # ========================================================================
     print("\n[Row 4] Applying right-isoceles smoother to Row 2...")
+    row4_is_fallback = False
     try:
-        from admesh.quad_prep import smooth_for_quadrangulation
+        # The admesh2D pip install registers admesh, but the editable install
+        # pointer can go stale (e.g. if the source tree moved). Fall back to
+        # /tmp/ADMESH which is where it lives in dev environments.
+        try:
+            from admesh.quad_prep import smooth_for_quadrangulation
+        except ImportError:
+            for candidate in ("/tmp/ADMESH", str(Path.home() / "ADMESH")):
+                if Path(candidate).is_dir():
+                    sys.path.insert(0, candidate)
+                    break
+            from admesh.quad_prep import smooth_for_quadrangulation
 
+        # smooth_for_quadrangulation expects h as a callable, not a float
+        h_fn = lambda p: np.full(len(p), 0.1)
         row4_points, row4_triangles = smooth_for_quadrangulation(
-            row2.points[:, :2], row2.connectivity_list, ANNULUS_SDF.fd
-            if hasattr(ANNULUS_SDF, 'fd') else ANNULUS_SDF, h=0.1
+            row2.points[:, :2].astype(np.float64),
+            row2.connectivity_list.astype(np.int64),
+            ANNULUS_SDF,
+            h=h_fn,
         )
         # Wrap in CHILmesh
         from chilmesh import CHILmesh
@@ -307,9 +327,11 @@ def main():
 
     except Exception as e:
         print(f"  Note: right-isoceles smoother unavailable ({e})")
+        print("  Falling back to Row 3 (FEM) for visualization — labels will indicate this")
         row4 = row3  # Fallback: use Row 3 for Row 4
         row4_quality = row3_quality
         row4_boundary_indices = row3_boundary_indices
+        row4_is_fallback = True
 
     # ========================================================================
     # V_CHAIN: Verify Row 3 and Row 4 inputs were Row 2
@@ -361,11 +383,14 @@ def main():
     cool_r_cmap = plt.cm.cool_r
     norm_quality = mcolors.Normalize(vmin=0, vmax=1)
 
+    row4_label = "Row 2 + Right-Isoceles Smoother"
+    if row4_is_fallback:
+        row4_label += "\n[unavailable — showing Row 3]"
     row_labels = [
         "Raw Delaunay",
         "+ ADMESH Truss (warm-start)",
         "Row 2 + FEM Smoother",
-        "Row 2 + Right-Isoceles Smoother"
+        row4_label
     ]
     col_labels = ["Mesh", "Layers", "Quality"]
     rows = [row1, row2, row3, row4]
@@ -376,53 +401,61 @@ def main():
             points = row.points[:, :2]
             triangles = row.connectivity_list
 
+            # Compute quality stats for this row (skip NaN)
+            if quality is not None and not np.isnan(quality).all():
+                q_clean = quality[~np.isnan(quality)] if np.any(np.isnan(quality)) else quality
+                q_mean = np.mean(q_clean)
+                q_median = np.median(q_clean)
+                quality_str = f"mean={q_mean:.3f}, med={q_median:.3f}"
+            else:
+                quality_str = "quality=N/A"
+
             # Column 0: Mesh (wireframe only)
             ax = axes[i, 0]
             ax.triplot(points[:, 0], points[:, 1], triangles, color='black', linewidth=0.5)
             ax.set_aspect('equal')
-            ax.set_title(f"{row_label}\n{col_labels[0]}", fontsize=10)
+            ax.set_title(f"{row_label}\n{col_labels[0]} ({quality_str})", fontsize=9)
             ax.axis('off')
 
-            # Column 1: Layers
+            # Column 1: Layers (with visible edges for structure)
             ax = axes[i, 1]
             layer_colors = get_layer_colors(row, parula_cmap)
             for tri, color_val in zip(triangles, layer_colors):
-                ax.fill(points[tri, 0], points[tri, 1], color=parula_cmap(color_val), edgecolor='none')
+                ax.fill(points[tri, 0], points[tri, 1],
+                        color=parula_cmap(color_val), edgecolor='black',
+                        linewidth=0.35, alpha=1.0)
             ax.set_aspect('equal')
-            ax.set_title(f"{row_label}\n{col_labels[1]}", fontsize=10)
+            ax.set_title(f"{row_label}\n{col_labels[1]} ({quality_str})", fontsize=9)
             ax.axis('off')
-            if i == 0:
-                sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
-                sm1.set_array([])
-                cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
-                cbar1.set_label("Layer", fontsize=8)
+            sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
+            sm1.set_array([])
+            cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.85)
+            cbar1.set_label("Layer", fontsize=8)
 
-            # Column 2: Quality
+            # Column 2: Quality (with visible edges for structure)
             ax = axes[i, 2]
-            # Handle NaN quality values (e.g., from FEM solver singular matrix)
             if quality is None or np.isnan(quality).all():
-                # If all quality values are NaN, just show gray mesh
                 ax.triplot(points[:, 0], points[:, 1], triangles, color='gray', linewidth=0.3)
-                ax.set_title(f"{row_label}\n{col_labels[2]} (error)", fontsize=10)
+                ax.set_title(f"{row_label}\n{col_labels[2]} (error)", fontsize=9)
             else:
-                # Replace NaN with 0 (poor quality) for visualization
                 quality_clean = np.nan_to_num(quality, nan=0.0)
                 for tri, q in zip(triangles, quality_clean):
-                    ax.fill(points[tri, 0], points[tri, 1], color=cool_r_cmap(norm_quality(q)), edgecolor='none')
-                ax.set_title(f"{row_label}\n{col_labels[2]}", fontsize=10)
+                    ax.fill(points[tri, 0], points[tri, 1],
+                            color=cool_r_cmap(norm_quality(q)), edgecolor='black',
+                            linewidth=0.35, alpha=1.0)
+                ax.set_title(f"{row_label}\n{col_labels[2]} ({quality_str})", fontsize=9)
             ax.set_aspect('equal')
             ax.axis('off')
-            if i == 0:
-                sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
-                sm2.set_array([])
-                cbar2 = plt.colorbar(sm2, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
-                cbar2.set_label("Quality", fontsize=8)
+            sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
+            sm2.set_array([])
+            cbar2 = plt.colorbar(sm2, ax=ax, orientation='vertical', pad=0.02, shrink=0.85)
+            cbar2.set_label("Quality", fontsize=8)
         except Exception as e:
             print(f"WARNING: Error rendering row {i}: {e}")
             import traceback
             traceback.print_exc()
 
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05, hspace=0.3, wspace=0.3)
+    plt.subplots_adjust(left=0.04, right=0.96, top=0.94, bottom=0.03, hspace=0.30, wspace=0.30)
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(OUTPUT_PATH, dpi=DPI)
     print(f"✓ Saved to {OUTPUT_PATH}")
