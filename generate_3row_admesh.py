@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 """
-Generate 4-row visualization: ADMESH Warm-Start Truss Optimization Pipeline
+Generate 3-row visualization: ADMESH Warm-Start Truss Optimization Pipeline
 
-This script demonstrates the warm-start truss optimizer with two downstream
-smoothing strategies (FEM and right-isoceles), replacing the previous spec-004
-pipeline where rows were sequential. Now rows 3 and 4 are siblings branching
-off row 2.
+This script demonstrates the warm-start truss optimizer followed by an FEM
+smoother. The right-isoceles smoother (formerly Row 4) is held back from
+public demos until its preparation-for-quadrangulation behavior is finalized.
 
-New layout (per spec 005 Q2=d):
+Layout:
 - Row 1: Raw annulus from chilmesh.examples.annulus()
 - Row 2: Warm-start truss applied to Row 1
-- Row 3: FEM smoother applied to Row 2 (sibling of Row 4)
-- Row 4: Right-isoceles smoother applied to Row 2 (sibling of Row 3)
+- Row 3: FEM smoother applied to Row 2
 
-Output: tests/output/annulus_quickstart.png (same path as spec 004 for README compatibility)
+Output: tests/output/annulus_quickstart.png (same path so README image links don't break)
 
 Verification (fail-loud assertions):
 - V_BND: Row 2 boundary == Row 1 boundary (bit-exact)
-- V_BND_PROP: Row 3 and Row 4 boundaries == Row 2 boundary (within tolerance)
+- V_BND_PROP: Row 3 boundary == Row 2 boundary (within tolerance)
 - V_QI: Row 2 quality > Row 1 quality (warm-start improves)
 - V_CONN: All rows have positive triangle areas
-- V_CHAIN: Row 3 and Row 4 inputs were Row 2 (not Row 1 or fresh ADMESH)
+- V_CHAIN: Row 3 input was Row 2 (not Row 1 or fresh ADMESH)
 - V_TRUSS_INVOKED: distmesh2d_warmstart was called exactly once
 """
 
@@ -64,7 +62,7 @@ def annulus_size_fn(p):
 
 
 OUTPUT_PATH = Path(__file__).parent / "tests" / "output" / "annulus_quickstart.png"
-FIGSIZE = (15, 18)
+FIGSIZE = (15, 14)
 DPI = 100
 
 # Module-level flag for V_TRUSS_INVOKED verification (set by _vendor_admesh_truss)
@@ -300,70 +298,17 @@ def main():
     print(f"  ✓ V_BND_PROP: boundary tolerance {max_boundary_delta:.2e}")
 
     # ========================================================================
-    # Row 4: Right-Isoceles Smoother (on Row 2 copy, sibling of Row 3)
+    # V_CHAIN: Verify Row 3 input was Row 2
     # ========================================================================
-    print("\n[Row 4] Applying right-isoceles smoother to Row 2...")
-    row4_is_fallback = False
-    try:
-        # The admesh2D pip install registers admesh, but the editable install
-        # pointer can go stale (e.g. if the source tree moved). Fall back to
-        # /tmp/ADMESH which is where it lives in dev environments.
-        try:
-            from admesh.quad_prep import smooth_for_quadrangulation
-        except ImportError:
-            for candidate in ("/tmp/ADMESH", str(Path.home() / "ADMESH")):
-                if Path(candidate).is_dir():
-                    sys.path.insert(0, candidate)
-                    break
-            from admesh.quad_prep import smooth_for_quadrangulation
-
-        # smooth_for_quadrangulation expects h as a callable, not a float
-        h_fn = lambda p: np.full(len(p), 0.1)
-        row4_points, row4_triangles = smooth_for_quadrangulation(
-            row2.points[:, :2].astype(np.float64),
-            row2.connectivity_list.astype(np.int64),
-            ANNULUS_SDF,
-            h=h_fn,
-        )
-        # Wrap in CHILmesh
-        from chilmesh import CHILmesh
-        row4 = CHILmesh(
-            connectivity=row4_triangles,
-            points=np.column_stack([row4_points, np.zeros(len(row4_points))])
-        )
-        row4_quality = compute_elem_quality(row4.points, row4.connectivity_list)
-        row4_boundary_indices = get_boundary_indices(row4)
-        print(f"  Median quality: {np.median(row4_quality):.4f}")
-
-        row4_boundary = row4.points[row4_boundary_indices, :2]
-        max_boundary_delta_r4 = np.max(np.abs(row4_boundary - row2_boundary))
-        if max_boundary_delta_r4 > 1e-6:
-            warnings.warn(
-                f"V_BND_PROP: Row 4 boundary drift from Row 2: {max_boundary_delta_r4:.2e}",
-                RuntimeWarning
-            )
-        print(f"  ✓ V_BND_PROP: boundary tolerance {max_boundary_delta_r4:.2e}")
-
-    except Exception as e:
-        print(f"  Note: right-isoceles smoother unavailable ({e})")
-        print("  Falling back to Row 3 (FEM) for visualization — labels will indicate this")
-        row4 = row3  # Fallback: use Row 3 for Row 4
-        row4_quality = row3_quality
-        row4_boundary_indices = row3_boundary_indices
-        row4_is_fallback = True
-
-    # ========================================================================
-    # V_CHAIN: Verify Row 3 and Row 4 inputs were Row 2
-    # ========================================================================
-    print("\n[Validation] Checking V_CHAIN (rows 3-4 branch from row 2)...")
-    # This is implicitly true by construction (we passed row2 to both smoothers)
-    print("  ✓ V_CHAIN passed: rows 3-4 are siblings of row 2")
+    print("\n[Validation] Checking V_CHAIN (row 3 branches from row 2)...")
+    # This is implicitly true by construction (we passed row2 to the FEM smoother)
+    print("  ✓ V_CHAIN passed: row 3 is a child of row 2")
 
     # ========================================================================
     # V_CONN: Check all rows have valid connectivity
     # ========================================================================
     print("\n[Validation] Checking V_CONN (valid triangulations)...")
-    for i, row in enumerate([row1, row2, row3, row4], 1):
+    for i, row in enumerate([row1, row2, row3], 1):
         p0 = row.points[row.connectivity_list[:, 0], :2]
         p1 = row.points[row.connectivity_list[:, 1], :2]
         p2 = row.points[row.connectivity_list[:, 2], :2]
@@ -377,11 +322,10 @@ def main():
     # Element Count Verification
     # ========================================================================
     print("\n[Element Counts]")
-    counts = [len(row1.connectivity_list), len(row2.connectivity_list), len(row3.connectivity_list), len(row4.connectivity_list)]
+    counts = [len(row1.connectivity_list), len(row2.connectivity_list), len(row3.connectivity_list)]
     print(f"  Row 1: {counts[0]:3d} elements")
     print(f"  Row 2: {counts[1]:3d} elements")
     print(f"  Row 3: {counts[2]:3d} elements")
-    print(f"  Row 4: {counts[3]:3d} elements")
     if len(set(counts)) == 1:
         print(f"  ✓ All rows have {counts[0]} elements")
     else:
@@ -391,9 +335,9 @@ def main():
     # ========================================================================
     # Rendering
     # ========================================================================
-    print("\n[Rendering] Creating 4×3 subplot grid...")
+    print("\n[Rendering] Creating 3×3 subplot grid...")
 
-    fig, axes = plt.subplots(4, 3, figsize=FIGSIZE, dpi=DPI)
+    fig, axes = plt.subplots(3, 3, figsize=FIGSIZE, dpi=DPI)
     fig.suptitle("CHILmesh × ADMESH: Warm-Start Truss Optimization Pipeline", fontsize=16)
 
     # Colormaps
@@ -402,18 +346,14 @@ def main():
     cool_r_cmap = plt.cm.cool_r
     norm_quality = mcolors.Normalize(vmin=0, vmax=1)
 
-    row4_label = "Row 2 + Right-Isoceles Smoother"
-    if row4_is_fallback:
-        row4_label += "\n[unavailable — showing Row 3]"
     row_labels = [
         "Raw Delaunay",
         "+ ADMESH Truss (warm-start)",
         "Row 2 + FEM Smoother",
-        row4_label
     ]
     col_labels = ["Mesh", "Layers", "Quality"]
-    rows = [row1, row2, row3, row4]
-    qualities = [row1_quality, row2_quality, row3_quality, row4_quality]
+    rows = [row1, row2, row3]
+    qualities = [row1_quality, row2_quality, row3_quality]
 
     for i, (row, quality, row_label) in enumerate(zip(rows, qualities, row_labels)):
         try:
