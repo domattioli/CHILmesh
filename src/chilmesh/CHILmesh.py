@@ -766,110 +766,99 @@ class CHILmesh(CHILmeshPlotMixin):
 
     def _skeletonize(self) -> None:
         """
-        Skeletonize the mesh by iteratively peeling concentric layers from the boundary inward.
+        Skeletonize the mesh via BFS distance from the boundary.
 
-        This is a medial axis extraction algorithm that decomposes the mesh into hierarchical
-        layers, similar to skeletonization in image processing. Each iteration identifies:
-        - Outer elements: Elements adjacent to the current boundary
-        - Inner elements: Neighbors of outer elements (one step deeper)
-        - Outer/inner vertices: Vertex sets for each layer
-        - Boundary edges: The frontier between processed and unprocessed regions
+        Each vertex gets a distance d = BFS hops from the nearest boundary vertex along
+        mesh edges. Each element is assigned to layer floor(min_vertex_distance / 2):
+        - OE[k] = elements whose minimum vertex distance is 2k.
+        - IE[k] = elements whose minimum vertex distance is 2k+1.
+        - OV[k] = vertices at distance 2k (outer ring of layer k).
+        - IV[k] = vertices at distance 2k+1 (inner ring of layer k).
+
+        Layer separation invariant (matches MATLAB QuADMESH+):
+        a vertex appearing in any element of layer k cannot appear in an element
+        of layer k+2 or beyond. This holds because each element spans at most one
+        vertex-distance level, so its layer is well-defined and shared vertices
+        between elements lie on consecutive layers only.
         """
+        from collections import deque
+
         # Reset layers
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
 
-        # Get boundary edges (edges with only one adjacent element)
         edge2elem = self.adjacencies["Edge2Elem"]
-        boundary_mask = (edge2elem[:, 1] == -1)
-        boundary_edges = np.where(boundary_mask)[0]
+        edge2vert = self.adjacencies["Edge2Vert"]
+        n_verts = len(self.points)
 
-        # Keep track of which elements have been assigned to a layer
-        remaining_elements = set(range(self.n_elems))
+        # Identify boundary edges (one-sided in edge2elem) and boundary vertices
+        boundary_edges_all = np.where(edge2elem[:, 1] == -1)[0]
+        boundary_verts_set = set(int(v) for v in edge2vert[boundary_edges_all].flatten())
 
-        # Get element-to-element connectivity using edge2elem
-        elem2elem = [[] for _ in range(self.n_elems)]
-        for edge_idx, (e1, e2) in enumerate(edge2elem):
-            if e1 >= 0 and e2 >= 0:  # Both elements exist (sentinel is -1)
-                elem2elem[e1].append(e2)
-                elem2elem[e2].append(e1)
+        # Build vertex adjacency from mesh edges
+        vert_adj = [set() for _ in range(n_verts)]
+        for v1, v2 in edge2vert:
+            v1i, v2i = int(v1), int(v2)
+            vert_adj[v1i].add(v2i)
+            vert_adj[v2i].add(v1i)
 
-        # Process layers from the boundary inward
-        layer_idx = 0
-        while remaining_elements and len(boundary_edges) > 0:
-            # Get boundary vertices
-            edge2vert = self.adjacencies["Edge2Vert"]
-            outer_vertices = np.array(list(set(edge2vert[boundary_edges].flatten())))
-            self.layers["OV"].append(outer_vertices)
-            self.layers["bEdgeIDs"].append(boundary_edges)
+        # Multi-source BFS from all boundary vertices
+        vertex_dist = np.full(n_verts, -1, dtype=int)
+        queue = deque()
+        for v in boundary_verts_set:
+            vertex_dist[v] = 0
+            queue.append(v)
+        while queue:
+            v = queue.popleft()
+            d_next = vertex_dist[v] + 1
+            for u in vert_adj[v]:
+                if vertex_dist[u] == -1:
+                    vertex_dist[u] = d_next
+                    queue.append(u)
 
-            # Get outer elements (elements adjacent to boundary edges)
-            outer_elems = []
-            for edge_idx in boundary_edges:
-                elems = edge2elem[edge_idx]
-                for elem in elems:
-                    if elem >= 0 and elem in remaining_elements:
-                        outer_elems.append(elem)
+        # Element min-distance: smallest vertex distance among the element's vertices
+        elem_min_dist = np.empty(self.n_elems, dtype=int)
+        for e in range(self.n_elems):
+            min_d = 10 ** 9
+            for v in self.connectivity_list[e]:
+                vi = int(v)
+                if vi >= 0 and 0 <= vertex_dist[vi] < min_d:
+                    min_d = vertex_dist[vi]
+            elem_min_dist[e] = min_d if min_d < 10 ** 9 else 0
 
-            # Convert to numpy array of integers
-            outer_elems = np.array(list(set(outer_elems)), dtype=int)
+        max_min_dist = int(elem_min_dist.max()) if self.n_elems > 0 else 0
+        n_layers = (max_min_dist // 2) + 1
 
-            # Skip if no outer elements found
-            if len(outer_elems) == 0:
-                break
+        # Build per-layer OE, IE, OV, IV, bEdgeIDs
+        for k in range(n_layers):
+            d_outer = 2 * k
+            d_inner = 2 * k + 1
 
-            self.layers["OE"].append(outer_elems)
-            for elem in outer_elems:
-                remaining_elements.remove(elem)
+            OE_k = np.where(elem_min_dist == d_outer)[0].astype(int)
+            IE_k = np.where(elem_min_dist == d_inner)[0].astype(int)
+            OV_k = np.where(vertex_dist == d_outer)[0].astype(int)
+            IV_k = np.where(vertex_dist == d_inner)[0].astype(int)
 
-            # Get inner elements (neighbors of outer elements that haven't been assigned yet)
-            inner_elems = []
-            for elem in outer_elems:
-                for neighbor in elem2elem[elem]:
-                    if neighbor in remaining_elements:
-                        inner_elems.append(neighbor)
+            # bEdgeIDs[k]: edges separating layer k from layer k-1.
+            # k=0 → original mesh boundary edges.
+            # k>0 → edges whose endpoints sit at distances 2k-1 and 2k.
+            if k == 0:
+                bEdge_k = boundary_edges_all
+            else:
+                mask = []
+                for edge_idx in range(len(edge2vert)):
+                    v1, v2 = int(edge2vert[edge_idx, 0]), int(edge2vert[edge_idx, 1])
+                    d1, d2 = vertex_dist[v1], vertex_dist[v2]
+                    if {d1, d2} == {d_outer, d_outer - 1}:
+                        mask.append(edge_idx)
+                bEdge_k = np.array(mask, dtype=int)
 
-            # Convert to numpy array of integers and remove duplicates
-            inner_elems = np.array(list(set(inner_elems)), dtype=int)
+            self.layers["OE"].append(OE_k)
+            self.layers["IE"].append(IE_k)
+            self.layers["OV"].append(OV_k)
+            self.layers["IV"].append(IV_k)
+            self.layers["bEdgeIDs"].append(bEdge_k)
 
-            # Store inner elements
-            self.layers["IE"].append(inner_elems)
-            for elem in inner_elems:
-                if elem in remaining_elements:
-                    remaining_elements.remove(elem)
-
-            # Get inner vertices
-            all_vertices = set()
-            for elem in np.concatenate((outer_elems, inner_elems)):
-                vertices = self.connectivity_list[elem]
-                for v in vertices:
-                    # Ignore negative placeholders (if any).  Vertex index
-                    # 0 is valid in this implementation.
-                    if v >= 0:
-                        all_vertices.add(v)
-
-            inner_vertices = np.array(list(all_vertices - set(outer_vertices)), dtype=int)
-            self.layers["IV"].append(inner_vertices)
-
-            # Get new boundary by finding edges that have one element in the remaining set
-            # and one element in the processed set
-            boundary_edges = []
-            for edge_idx, (e1, e2) in enumerate(edge2elem):
-                # Skip boundary edges of the original mesh
-                if e2 < 0:
-                    continue
-
-                # An edge is a boundary if exactly one of its adjacent elements
-                # is in the remaining set
-                if ((e1 in remaining_elements) != (e2 in remaining_elements)):
-                    boundary_edges.append(edge_idx)
-
-            boundary_edges = np.array(boundary_edges, dtype=int)
-
-            # Move to next layer
-            layer_idx += 1
-
-        # Set number of layers
-        self.n_layers = layer_idx
+        self.n_layers = n_layers
 
     def _mesh_layers(self) -> None:
         """
