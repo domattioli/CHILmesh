@@ -126,6 +126,10 @@ def main():
     print("ADMESH Warm-Start Truss Optimization Pipeline")
     print("=" * 70)
 
+    # Helper function for checking poor element count
+    def count_poor_elements(quality):
+        return np.sum(quality < 0.25)
+
     # ========================================================================
     # Row 1: Raw Delaunay
     # ========================================================================
@@ -142,17 +146,45 @@ def main():
     # ========================================================================
     # Row 2: Warm-Start Truss (from Row 1)
     # ========================================================================
-    print("\n[Row 2] Running warm-start truss optimizer on Row 1...")
-    print("  (Using conservative parameters: deltat=0.05, Fscale=0.8, dptol=1e-2)")
+    print("\n[Row 2] Attempting warm-start truss optimizer on Row 1...")
+    print("  NOTE: ADMESH distmesh2d is designed for fresh generation, not optimization")
+    print("  Checking if warm-start preserves element quality...")
+
     try:
-        row2 = optimize_with_admesh_truss(
+        row2_candidate = optimize_with_admesh_truss(
             row1, ANNULUS_SDF, size_fn=None, seed=0,
-            niter=200,           # Stop earlier (was 500)
-            deltat=0.05,         # 4x smaller steps (was 0.2) - more conservative movement
-            Fscale=0.8,          # Less aggressive pressure (was 1.2)
-            dptol=1e-2,          # 10x larger threshold (was 1e-3) - exit sooner
+            niter=50,            # Minimal iterations
+            deltat=0.01,         # Very small steps
+            Fscale=0.5,          # Minimal pressure
+            dptol=0.05,          # Exit very early
             enforce_non_degradation=False
         )
+
+        # Check if quality distribution is acceptable
+        row2_quality_candidate = compute_elem_quality(row2_candidate.points, row2_candidate.connectivity_list)
+        row1_quality_check = compute_elem_quality(row1.points, row1.connectivity_list)
+
+        poor_before = count_poor_elements(row1_quality_check)
+        poor_after = count_poor_elements(row2_quality_candidate)
+        poor_increase = poor_after - poor_before
+
+        if poor_increase > 10:
+            print(f"  ✗ Warm-start creates too many poor elements: {poor_before} → {poor_after} (+{poor_increase})")
+            print("  Skipping warm-start, using Row 1 as Row 2")
+            row2 = row1
+            row2_quality = row1_quality_check
+            row2_boundary_indices = row1_boundary_indices
+        else:
+            row2 = row2_candidate
+            row2_quality = row2_quality_candidate
+            row2_boundary_indices = get_boundary_indices(row2)
+            print(f"  ✓ Warm-start acceptable: poor elements {poor_before} → {poor_after} (+{poor_increase})")
+    except Exception as e:
+        print(f"  ✗ Warm-start failed: {e}")
+        print("  Using Row 1 as Row 2")
+        row2 = row1
+        row2_quality = compute_elem_quality(row1.points, row1.connectivity_list)
+        row2_boundary_indices = row1_boundary_indices
         row2_boundary_indices = get_boundary_indices(row2)
         row2_quality = compute_elem_quality(row2.points, row2.connectivity_list)
         print(f"  Elements: {len(row2.connectivity_list)}")
