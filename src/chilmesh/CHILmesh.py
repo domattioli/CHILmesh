@@ -854,6 +854,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 elem_verts = elem_verts[elem_verts >= 0]  # Filter out -1 padding
                 if not np.any(np.isin(elem_verts, layer_verts_prev_prev)):
                     oe_filtered.append(elem)
+
             oe = np.array(oe_filtered, dtype=int) if oe_filtered else np.empty(0, dtype=int)
             self.layers["OE"].append(oe)
 
@@ -884,6 +885,7 @@ class CHILmesh(CHILmeshPlotMixin):
                     elem_verts = elem_verts[elem_verts >= 0]  # Filter out -1 padding
                     if not np.any(np.isin(elem_verts, layer_verts_prev_prev)):
                         ie_filtered.append(elem)
+
                 ie = np.array(ie_filtered, dtype=int) if ie_filtered else np.empty(0, dtype=int)
             else:
                 ie = np.empty(0, dtype=int)
