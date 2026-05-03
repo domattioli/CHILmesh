@@ -151,12 +151,17 @@ def main():
     print("  Checking if warm-start preserves element quality...")
 
     try:
+        # Warm-start polishing parameters. The vendored loop tracks the best-
+        # quality state across all iterations and early-stops if median quality
+        # drops > 10% from peak (or initial), so we can let it run to completion.
+        # deltat=0.02 + Fscale=0.5 is the sweet spot for warm-start polishing
+        # (vs ADMESH's deltat=0.2 + Fscale=1.2 defaults which target cold-start).
         row2_candidate = optimize_with_admesh_truss(
             row1, ANNULUS_SDF, size_fn=None, seed=0,
-            niter=50,            # Minimal iterations
-            deltat=0.01,         # Very small steps
-            Fscale=0.5,          # Minimal pressure
-            dptol=0.05,          # Exit very early
+            niter=500,           # Full iteration budget
+            deltat=0.02,         # Small steps for polishing
+            Fscale=0.5,          # Gentle pressure for warm-start
+            dptol=1e-3,          # Run to convergence
             enforce_non_degradation=False
         )
 
