@@ -106,6 +106,10 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
 - Verify correctness primarily via the layer separation invariant (SC-001), which is mathematically stronger than count-matching.
 - Cross-check against externally-provided ground-truth layer counts for real-world domains (Italy: 15 layers, Lake Erie: 17 layers) when those mesh files become available.
 
+### Q2: How to handle test failures from layer count changes? (resolved 2026-05-03)
+
+**Decision**: Option A — Update broken tests to MATLAB-correct values; document each change in the commit message; add a `test_matlab_layer_counts` regression test pinning the new expected values per fixture (annulus, donut, structured, block_o).
+
 ## Assumptions
 
 - The MATLAB reference at `domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m`, function `meshLayers`, is the canonical correct algorithm. The Python port should match its behavior bit-for-bit (modulo indexing).
