@@ -28,7 +28,7 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
 
 ### TDD Phase: Write Tests First
 
-- [ ] T003 [P] [US1] Create `tests/test_layer_separation.py` with a parametrized test `test_layer_separation_invariant` over fixtures (annulus, donut, structured, block_o). For each mesh, enumerate all (k, m) layer pairs with |k-m| ≥ 2 and assert that `set(vertices in OE[k] ∪ IE[k]) ∩ set(vertices in OE[m] ∪ IE[m])` is empty. Mark the test `@pytest.mark.xfail(reason="Issue #74: pre-fix")` initially; will be removed after T005.
+- [ ] T003 [P] [US1] Create `tests/test_skeletonization_invariant.py` with a parametrized test `test_layer_separation_invariant` over fixtures (annulus, donut, structured, block_o). For each mesh, enumerate all (k, m) layer pairs with |k-m| ≥ 2 and assert that `set(vertices in OE[k] ∪ IE[k]) ∩ set(vertices in OE[m] ∪ IE[m])` is empty. Mark the test `@pytest.mark.xfail(reason="Issue #74: pre-fix")` initially; will be removed after T005.
 
 ### Implementation Phase
 
@@ -49,7 +49,7 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
       - Compute `IV = setdiff(unique_filtered(connectivity_list[OE ∪ IE]), OV)` (filter -1 padding)
       - Append IV; increment `iL`
    5. After loop: `self.n_layers = iL`
-- [ ] T006 [US1] Remove the `@pytest.mark.xfail` from `tests/test_layer_separation.py::test_layer_separation_invariant` and verify it now passes for all 4 fixtures.
+- [ ] T006 [US1] Remove the `@pytest.mark.xfail` from `tests/test_skeletonization_invariant.py::test_layer_separation_invariant` and verify it now passes for all 4 fixtures.
 
 ## Phase 4: User Story 2 — Backward Compatibility (P1)
 
@@ -59,7 +59,9 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
 
 - [ ] T007 [US2] Run `python -m pytest tests/ --tb=line` and capture all failures. Categorize each failure as: (a) genuine regression to fix, (b) test asserting a buggy layer count to update per Q2 Option A, or (c) pre-existing failure unrelated to skeletonization (e.g., `_detect_element_type`).
 - [ ] T008 [US2] For each test in category (b) — typically `tests/test_layers_annulus.py::test_structured_grid_layers` and possibly `test_annulus_layers` — update the assertion to the new MATLAB-correct value. Add a comment explaining the change references issue #74.
-- [ ] T009 [P] [US2] Create `tests/test_matlab_layer_counts.py` with a parametrized test `test_layer_count_matches_matlab_reference` that pins the new per-fixture layer counts. Initial values are captured from running `mesh.n_layers` after T005. Mark the test as the source of truth for layer counts going forward.
+- [ ] T009 [P] [US2] Create `tests/test_skeletonization_matlab_parity.py` with a parametrized test `test_layer_count_matches_matlab_reference` that pins the new per-fixture layer counts. Initial values are captured from running `mesh.n_layers` after T005. Mark the test as the source of truth for layer counts going forward.
+
+- [ ] T009b [P] [US2] Create `tests/test_skeletonization_admesh_domains_benchmark.py` — an opt-in MATLAB-parity benchmark over the ADMESH-Domains catalog (Italy=15, Lake Erie=17, Delaware Bay=17, Wetting-Drying=15, WNAT≈39). Skipped by default; runs when `CHILMESH_RUN_DOMAINS_BENCHMARK=1` and `admesh-domains` package is installed.
 - [ ] T010 [US2] Run `python -m pytest tests/ -v` and verify all previously passing tests still pass (or are documented as updated per category-b).
 
 ## Phase 5: User Story 3 — Visualization (P2)
