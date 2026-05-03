@@ -35,6 +35,20 @@ class CHILmesh(CHILmeshPlotMixin):
     Informatics Laboratory (CHIL) at The Ohio State University, focusing on the
     mesh layers approach described in Mattioli's thesis.
 
+    Layer Structure (Skeletonization):
+        After initialization, the mesh is decomposed into concentric layers via skeletonization.
+        Access layers via the ``layers`` property (or ``Layers`` for backwards compatibility):
+
+        - mesh.layers['OE'][i]: Array of **element indices** in the outer boundary of layer i
+        - mesh.layers['IE'][i]: Array of **element indices** one step deeper than layer i's boundary
+        - mesh.layers['OV'][i]: Array of **vertex indices** on the outer boundary of layer i
+        - mesh.layers['IV'][i]: Array of **vertex indices** interior to layer i
+        - mesh.layers['bEdgeIDs'][i]: Array of **edge indices** that form the boundary between layer i and i+1
+
+        Layer 0 is the outermost boundary; layers progress inward toward the mesh interior.
+        Use mesh.elements_in_layer(i) for a convenience method that returns all element indices
+        (union of OE[i] and IE[i]) for a layer.
+
     Adjacency Structures:
         The mesh maintains multiple representations of topology:
 
@@ -89,12 +103,38 @@ class CHILmesh(CHILmeshPlotMixin):
     def Layers(self):
         """
         Backwards compatibility property to access layers with uppercase name.
-        
+
         Returns:
             The layers dictionary
         """
         return self.layers
-    
+
+    def elements_in_layer(self, layer_idx: int) -> np.ndarray:
+        """
+        Get all element indices for a given skeletonization layer.
+
+        This is a convenience method that returns the union of outer and inner
+        elements for the specified layer.
+
+        Parameters:
+            layer_idx: Zero-based layer index (0 = outermost)
+
+        Returns:
+            Array of element indices (sorted) belonging to this layer
+
+        Raises:
+            IndexError: If layer_idx is outside [0, n_layers)
+
+        Example:
+            >>> mesh = chilmesh.examples.annulus()
+            >>> elements = mesh.elements_in_layer(0)  # All elements in outermost layer
+        """
+        if layer_idx < 0 or layer_idx >= self.n_layers:
+            raise IndexError(f"Layer index {layer_idx} out of range [0, {self.n_layers})")
+        outer = self.layers["OE"][layer_idx]
+        inner = self.layers["IE"][layer_idx]
+        return np.sort(np.concatenate([outer, inner]).astype(int))
+
     def change_points(self, new_points, acknowledge_change=False):
         """
         Change the mesh's (x,y,z) locations of its points.
@@ -113,10 +153,19 @@ class CHILmesh(CHILmeshPlotMixin):
         Initialize a CHILmesh object.
 
         Parameters:
-            connectivity: Element connectivity list
-            points: Vertex coordinates
+            connectivity: Element connectivity list (n_elems × 3 for triangles, n_elems × 4 for quads/mixed)
+            points: Vertex coordinates (n_verts × 3, with z=0 for 2D meshes)
             grid_name: Name of the mesh
             compute_layers: If False, skip skeletonization for fast init (default: True)
+
+        Attributes set during initialization:
+            layers (dict): Skeletonization result with keys:
+                - 'OE': List of arrays (outer elements per layer, **element indices**)
+                - 'IE': List of arrays (inner elements per layer, **element indices**)
+                - 'OV': List of arrays (outer vertices per layer, **vertex indices**)
+                - 'IV': List of arrays (inner vertices per layer, **vertex indices**)
+                - 'bEdgeIDs': List of arrays (boundary edges per layer, **edge indices**)
+            n_layers (int): Number of skeletonization layers
         """
         # Public properties
         self.grid_name = grid_name
@@ -1315,10 +1364,141 @@ class CHILmesh(CHILmeshPlotMixin):
         # For now, just return the original points
         raise NotImplementedError("Angle-based smoothing not implemented yet.")
         return self.points
-    
-    def _detect_element_type(self) -> str:
+
+    def _detect_element_types(self) -> tuple[np.ndarray, np.ndarray]:
         """
-        Detect mesh element types from connectivity_list.
+        Detect element types from connectivity_list.
+
+        Returns:
+            (tris, quads): Arrays of triangle and quad element indices.
+            - tris: Indices where elements have 3 vertices
+            - quads: Indices where elements have 4 vertices
+        """
+        n_cols = self.connectivity_list.shape[1]
+
+        if n_cols == 3:
+            # Pure triangle mesh
+            all_indices = np.arange(self.connectivity_list.shape[0])
+            return all_indices, np.array([], dtype=int)
+        elif n_cols == 4:
+            # Mixed or pure quad mesh; check per-element
+            tris = []
+            quads = []
+            for i, elem in enumerate(self.connectivity_list):
+                # Triangle: 4th vertex is -1 or padding
+                if elem[3] < 0 or (i < len(self.connectivity_list) and elem[3] >= self.n_verts):
+                    tris.append(i)
+                else:
+                    quads.append(i)
+            return np.array(tris, dtype=int), np.array(quads, dtype=int)
+        else:
+            raise ValueError(f"Unexpected connectivity_list shape: {self.connectivity_list.shape}")
+
+    def _tri_stiffness_assembly(self, tri_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
+        """
+        Assemble stiffness matrix contributions from triangle elements.
+
+        Parameters:
+            tri_indices: Array of triangle element indices
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            (rows, cols, data): CSR matrix format lists for assembly
+        """
+        import numpy as np
+
+        t = self.connectivity_list[tri_indices, :3]
+
+        D = 2.0 * np.eye(2)
+        T = np.array([[-1.0, -np.sqrt(3)], [np.sqrt(3), -1.0]])
+
+        rows, cols, data = [], [], []
+        for elem_idx, tri in enumerate(t):
+            for i in range(3):
+                for j in range(3):
+                    block = D if i == j else T if j == (i+1)%3 else T.T
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*tri[i] + di)
+                            cols.append(2*tri[j] + dj)
+                            data.append(block[di, dj])
+
+        return rows, cols, data
+
+    def _quad_stiffness_assembly(self, quad_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
+        """
+        Assemble stiffness matrix contributions from quad elements.
+        Uses Zhou & Shimada analogy: quad-specific matrices D_quad, T_quad.
+
+        Parameters:
+            quad_indices: Array of quad element indices
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            (rows, cols, data): CSR matrix format lists for assembly
+        """
+        import numpy as np
+
+        q = self.connectivity_list[quad_indices, :4]
+
+        D_quad = 2.5 * np.eye(2)
+        T_quad = np.array([[-1.25, -1.25], [1.25, -1.25]])
+
+        rows, cols, data = [], [], []
+        for elem_idx, quad in enumerate(q):
+            for i in range(4):
+                for j in range(4):
+                    block = D_quad if i == j else T_quad if j == (i+1)%4 else T_quad.T
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*quad[i] + di)
+                            cols.append(2*quad[j] + dj)
+                            data.append(block[di, dj])
+
+        return rows, cols, data
+
+    def _mixed_stiffness_assembly(self, tri_indices: np.ndarray, quad_indices: np.ndarray,
+                                   p: np.ndarray, n: int) -> tuple:
+        """
+        Assemble stiffness matrix for mixed element mesh.
+        Combines triangle and quad contributions into single stiffness matrix.
+
+        Parameters:
+            tri_indices: Array of triangle element indices
+            quad_indices: Array of quad element indices
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            (rows, cols, data): CSR matrix format lists for assembly
+        """
+        rows, cols, data = [], [], []
+
+        # Add triangle contributions
+        if len(tri_indices) > 0:
+            tri_rows, tri_cols, tri_data = self._tri_stiffness_assembly(tri_indices, p, n)
+            rows.extend(tri_rows)
+            cols.extend(tri_cols)
+            data.extend(tri_data)
+
+        # Add quad contributions
+        if len(quad_indices) > 0:
+            quad_rows, quad_cols, quad_data = self._quad_stiffness_assembly(quad_indices, p, n)
+            rows.extend(quad_rows)
+            cols.extend(quad_cols)
+            data.extend(quad_data)
+
+        return rows, cols, data
+
+    def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
+        """
+        Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
+        Supports triangle, quad, and mixed-element meshes.
+
+        Based on the Zhou & Shimada formulation (triangles) extended to quads
+        via analogy (maintaining energy-minimization principle).
 
         Returns:
             'triangle': All triangles (3-column connectivity)
@@ -1343,47 +1523,40 @@ class CHILmesh(CHILmeshPlotMixin):
         else:
             raise ValueError(f"Unexpected connectivity shape: {self.connectivity_list.shape}")
 
-    def _tri_stiffness_assembly(
-        self,
-        p: np.ndarray,
-        n: int,
-        boundary_nodes: np.ndarray,
-        kinf: float
-    ) -> Tuple[csr_matrix, np.ndarray]:
+        Reference:
+            Zhou, M., & Shimada, K. (2000).
+            "An angle-based approach to two-dimensional mesh smoothing".
+            In *Proceedings of the 9th International Meshing Roundtable*, 373–384.
+            Sandia National Laboratories.
+            https://api.semanticscholar.org/CorpusID:34335417
         """
         Assemble stiffness matrix for triangle-only meshes.
         Based on Zhou & Shimada (2000) angle-based approach via Balendran (2006).
 
-        Parameters:
-            p: Point coordinates (n_verts, 2)
-            n: Number of vertices
-            boundary_nodes: Array of boundary node indices
-            kinf: Boundary stiffness value
+        p = self.points[:, :2]  # Only use x, y
+        n = self.n_verts
 
-        Returns:
-            K: Global stiffness matrix (2n, 2n)
-            F: Force vector (2n,)
-        """
-        t = self.connectivity_list[:, :3]  # Triangle connectivity
+        # Detect element types
+        tri_indices, quad_indices = self._detect_element_types()
 
-        D = 2.0 * np.eye(2)
-        T = np.array([[-1, -np.sqrt(3)], [np.sqrt(3), -1]])
-
-        rows, cols, data = [], [], []
-        for tri in t:
-            for i in range(3):
-                for j in range(3):
-                    block = D if i == j else T if j == (i+1)%3 else T.T
-                    for di in range(2):
-                        for dj in range(2):
-                            rows.append(2*tri[i]+di)
-                            cols.append(2*tri[j]+dj)
-                            data.append(block[di, dj])
+        # Assemble stiffness matrix based on element composition
+        if len(quad_indices) == 0:
+            # Pure triangle mesh
+            rows, cols, data = self._tri_stiffness_assembly(tri_indices, p, n)
+        elif len(tri_indices) == 0:
+            # Pure quad mesh
+            rows, cols, data = self._quad_stiffness_assembly(quad_indices, p, n)
+        else:
+            # Mixed-element mesh
+            rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
 
         K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
         F = np.zeros(2*n)
 
-        # Apply boundary constraints
+        # Identify boundary nodes and apply constraints
+        edge_verts = self.edge2vert(self.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
+
         for v in boundary_nodes:
             F[2*v:2*v+2] = kinf * p[v]
             K[2*v, 2*v] = kinf
