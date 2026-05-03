@@ -45,7 +45,7 @@ plt.show()
 
 See how a raw Delaunay triangulation is progressively refined through three smoothers, all sharing the same boundary and element count (580 triangles):
 
-![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother → right-isoceles smoother](tests/output/annulus_quickstart.png)
+![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother → right-isoceles smoother](tests/output/annulus_quickstart.png?v=2)
 
 **Row 1 — Raw Delaunay:** Unsmoothed input mesh from `chilmesh.examples.annulus()` (median quality ≈ 0.71).
 **Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop, started from Row 1's points (boundary pinned bit-exactly via `pfix`). The vendored loop tracks the best-quality state across iterations and early-stops if median quality drops more than 10% from peak. Median quality jumps to ≈ 0.94.
