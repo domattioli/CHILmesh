@@ -4,10 +4,19 @@ from .CHILmesh import CHILmesh, write_fort14
 from .mesh_topology import EdgeMap
 from . import examples
 from . import bridge
+from .admesh_warmstart import optimize_with_admesh_truss, optimize_with_admesh_truss_arrays
 
 try:
     __version__ = metadata.version("chilmesh")
 except metadata.PackageNotFoundError:  # pragma: no cover - package not installed
     __version__ = "0.0.0"
 
-__all__ = ["CHILmesh", "write_fort14", "EdgeMap", "examples", "bridge"]
+__all__ = [
+    "CHILmesh",
+    "write_fort14",
+    "EdgeMap",
+    "examples",
+    "bridge",
+    "optimize_with_admesh_truss",
+    "optimize_with_admesh_truss_arrays",
+]
