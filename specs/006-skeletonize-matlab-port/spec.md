@@ -110,6 +110,10 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
 
 **Decision**: Option A — Update broken tests to MATLAB-correct values; document each change in the commit message; add a `test_matlab_layer_counts` regression test pinning the new expected values per fixture (annulus, donut, structured, block_o).
 
+### Q3: How to handle mixed-element meshes (triangles + quads with `-1` padding)? (resolved 2026-05-03)
+
+**Decision**: Option A — Filter `-1` padding entries during vertex reads (`v >= 0` check) in OV/IV computation and connectivity enumeration. The MATLAB algorithm logic is otherwise unchanged. This preserves mixed-mesh support and matches existing CHILmesh conventions elsewhere in the codebase.
+
 ## Assumptions
 
 - The MATLAB reference at `domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m`, function `meshLayers`, is the canonical correct algorithm. The Python port should match its behavior bit-for-bit (modulo indexing).
