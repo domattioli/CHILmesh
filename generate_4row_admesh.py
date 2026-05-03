@@ -376,53 +376,78 @@ def main():
             points = row.points[:, :2]
             triangles = row.connectivity_list
 
+            # Compute quality stats for this row (skip NaN)
+            if quality is not None and not np.isnan(quality).all():
+                q_clean = quality[~np.isnan(quality)] if np.any(np.isnan(quality)) else quality
+                q_mean = np.mean(q_clean)
+                q_median = np.median(q_clean)
+                quality_str = f"mean={q_mean:.3f}, med={q_median:.3f}"
+            else:
+                quality_str = "quality=N/A"
+
             # Column 0: Mesh (wireframe only)
             ax = axes[i, 0]
             ax.triplot(points[:, 0], points[:, 1], triangles, color='black', linewidth=0.5)
             ax.set_aspect('equal')
-            ax.set_title(f"{row_label}\n{col_labels[0]}", fontsize=10)
+            ax.set_title(f"{row_label}\n{col_labels[0]} ({quality_str})", fontsize=9)
             ax.axis('off')
 
-            # Column 1: Layers
+            # Column 1: Layers (with faint edges for structure)
             ax = axes[i, 1]
             layer_colors = get_layer_colors(row, parula_cmap)
             for tri, color_val in zip(triangles, layer_colors):
-                ax.fill(points[tri, 0], points[tri, 1], color=parula_cmap(color_val), edgecolor='none')
+                ax.fill(points[tri, 0], points[tri, 1],
+                        color=parula_cmap(color_val), edgecolor='black',
+                        linewidth=0.15, alpha=1.0)
             ax.set_aspect('equal')
-            ax.set_title(f"{row_label}\n{col_labels[1]}", fontsize=10)
+            ax.set_title(f"{row_label}\n{col_labels[1]} ({quality_str})", fontsize=9)
             ax.axis('off')
-            if i == 0:
-                sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
-                sm1.set_array([])
-                cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
-                cbar1.set_label("Layer", fontsize=8)
 
-            # Column 2: Quality
+            # Column 2: Quality (with faint edges for structure)
             ax = axes[i, 2]
-            # Handle NaN quality values (e.g., from FEM solver singular matrix)
             if quality is None or np.isnan(quality).all():
-                # If all quality values are NaN, just show gray mesh
                 ax.triplot(points[:, 0], points[:, 1], triangles, color='gray', linewidth=0.3)
-                ax.set_title(f"{row_label}\n{col_labels[2]} (error)", fontsize=10)
+                ax.set_title(f"{row_label}\n{col_labels[2]} (error)", fontsize=9)
             else:
-                # Replace NaN with 0 (poor quality) for visualization
                 quality_clean = np.nan_to_num(quality, nan=0.0)
                 for tri, q in zip(triangles, quality_clean):
-                    ax.fill(points[tri, 0], points[tri, 1], color=cool_r_cmap(norm_quality(q)), edgecolor='none')
-                ax.set_title(f"{row_label}\n{col_labels[2]}", fontsize=10)
+                    ax.fill(points[tri, 0], points[tri, 1],
+                            color=cool_r_cmap(norm_quality(q)), edgecolor='black',
+                            linewidth=0.15, alpha=1.0)
+                ax.set_title(f"{row_label}\n{col_labels[2]} ({quality_str})", fontsize=9)
             ax.set_aspect('equal')
             ax.axis('off')
-            if i == 0:
-                sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
-                sm2.set_array([])
-                cbar2 = plt.colorbar(sm2, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
-                cbar2.set_label("Quality", fontsize=8)
         except Exception as e:
             print(f"WARNING: Error rendering row {i}: {e}")
             import traceback
             traceback.print_exc()
 
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05, hspace=0.3, wspace=0.3)
+    # Adjust layout to leave room for full-height colorbars on right of cols 1 & 2
+    plt.subplots_adjust(left=0.04, right=0.90, top=0.94, bottom=0.03, hspace=0.25, wspace=0.15)
+
+    # Full-height colorbar for column 1 (Layers)
+    pos_top_c1 = axes[0, 1].get_position()
+    pos_bot_c1 = axes[3, 1].get_position()
+    cbar1_ax = fig.add_axes([
+        pos_top_c1.x1 + 0.005, pos_bot_c1.y0,
+        0.008, pos_top_c1.y1 - pos_bot_c1.y0
+    ])
+    sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
+    sm1.set_array([])
+    cbar1 = fig.colorbar(sm1, cax=cbar1_ax)
+    cbar1.set_label("Layer", fontsize=10)
+
+    # Full-height colorbar for column 2 (Quality)
+    pos_top_c2 = axes[0, 2].get_position()
+    pos_bot_c2 = axes[3, 2].get_position()
+    cbar2_ax = fig.add_axes([
+        pos_top_c2.x1 + 0.005, pos_bot_c2.y0,
+        0.008, pos_top_c2.y1 - pos_bot_c2.y0
+    ])
+    sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
+    sm2.set_array([])
+    cbar2 = fig.colorbar(sm2, cax=cbar2_ax)
+    cbar2.set_label("Quality", fontsize=10)
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(OUTPUT_PATH, dpi=DPI)
     print(f"✓ Saved to {OUTPUT_PATH}")
