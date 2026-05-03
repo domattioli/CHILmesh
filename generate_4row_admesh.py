@@ -69,27 +69,35 @@ def get_boundary_indices(mesh):
 def compute_elem_quality(points, triangles):
     """
     Compute element quality metric (0 = bad, 1 = excellent).
-    Uses area / circumradius^2 as a simple quality measure.
+    Uses area-normalized aspect ratio: higher is better.
+    Catches inverted elements and extreme distortion.
     """
     p0 = points[triangles[:, 0], :2]
     p1 = points[triangles[:, 1], :2]
     p2 = points[triangles[:, 2], :2]
 
-    # Area
-    areas = 0.5 * np.abs((p1[:, 0] - p0[:, 0]) * (p2[:, 1] - p0[:, 1]) -
+    # Signed area (catches inverted elements)
+    signed_areas = 0.5 * ((p1[:, 0] - p0[:, 0]) * (p2[:, 1] - p0[:, 1]) -
                           (p2[:, 0] - p0[:, 0]) * (p1[:, 1] - p0[:, 1]))
+    areas = np.abs(signed_areas)
 
     # Edge lengths
     e0 = np.linalg.norm(p1 - p0, axis=1)
     e1 = np.linalg.norm(p2 - p1, axis=1)
     e2 = np.linalg.norm(p0 - p2, axis=1)
 
-    # Circumradius
-    s = (e0 + e1 + e2) / 2
-    circum = (e0 * e1 * e2) / (4 * (areas + 1e-10))
+    # Aspect ratio: area-normalized (equilateral = 1, degenerate = 0)
+    # Q = 4 * sqrt(3) * area / (e0² + e1² + e2²)
+    edge_sum_sq = e0**2 + e1**2 + e2**2
+    quality = (4 * np.sqrt(3) * areas) / (edge_sum_sq + 1e-10)
 
-    quality = areas / (circum ** 2 + 1e-10)
-    return quality / (quality.max() + 1e-10)  # Normalize to [0, 1]
+    # Penalize inverted elements heavily
+    inverted = signed_areas < 0
+    quality[inverted] = 0.0
+
+    # Normalize
+    max_quality = np.max(quality) if len(quality) > 0 and np.max(quality) > 0 else 1.0
+    return quality / max_quality  # Normalize to [0, 1]
 
 
 def get_layer_colors(mesh, colormap):
@@ -154,10 +162,34 @@ def main():
             raise RuntimeError("V_BND failed: original boundary points were moved")
         print("  ✓ V_BND passed: original boundary points preserved (new boundary may have extra vertices)")
 
-        # V_QI: Quality improvement (or at least non-degradation)
+        # V_DEGENERACY: Check for catastrophic mesh degradation
         median_quality_change = np.median(row2_quality) - np.median(row1_quality)
-        print(f"  Quality change: {median_quality_change:+.4f}")
-        print("  ✓ V_QI passed: quality improved")
+        triangle_reduction = (len(row1.connectivity_list) - len(row2.connectivity_list)) / len(row1.connectivity_list)
+        min_quality = np.min(row2_quality)
+        inverted_count = np.sum(row2_quality == 0)
+
+        if triangle_reduction > 0.5:
+            raise RuntimeError(
+                f"V_DEGENERACY failed: warm-start removed {triangle_reduction*100:.1f}% of triangles "
+                f"({len(row1.connectivity_list)} → {len(row2.connectivity_list)})"
+            )
+        if np.median(row2_quality) < 0.25:
+            raise RuntimeError(
+                f"V_DEGENERACY failed: median element quality too low: {np.median(row2_quality):.4f} (threshold: 0.25)"
+            )
+        if median_quality_change < -0.2:
+            raise RuntimeError(
+                f"V_DEGENERACY failed: quality degradation severe: {median_quality_change:+.4f}"
+            )
+        if inverted_count > len(row2_quality) * 0.1:
+            raise RuntimeError(
+                f"V_DEGENERACY failed: {inverted_count} inverted elements ({inverted_count/len(row2_quality)*100:.1f}%)"
+            )
+
+        print(f"  Quality: min={min_quality:.4f}, median={np.median(row2_quality):.4f}, change={median_quality_change:+.4f}")
+        print(f"  Triangle reduction: {triangle_reduction*100:.1f}% ({len(row1.connectivity_list)} → {len(row2.connectivity_list)})")
+        print(f"  Inverted elements: {inverted_count}")
+        print("  ✓ V_DEGENERACY passed: mesh structure preserved")
 
     except ImportError as e:
         print(f"  ✗ ADMESH not installed: {e}")
