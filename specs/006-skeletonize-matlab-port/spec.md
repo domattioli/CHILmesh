@@ -93,6 +93,9 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
 - **SC-004**: For meshes where MATLAB reference output is known, the new Python implementation produces a layer count within ±0 of the MATLAB `meshLayers` function output. **Known reference values** (provided by the project maintainer from external MATLAB runs):
   - Italy domain: **15 layers**
   - Lake Erie domain: **17 layers**
+  - Delaware Bay domain: **17 layers**
+  - WNAT (Western North Atlantic): **~39 layers** (source variant unconfirmed; one of WNAT_Hagen / WNAT_Onur / WNAT_Test / WNAT_NC_inundation_v6c)
+  - Wetting-and-drying test mesh: **15 layers**
   - The annulus, donut, and structured fixtures should also match MATLAB output, though the exact reference layer counts are not yet captured.
 - **SC-005**: Implementation completes skeletonization in less than 5× the runtime of the previous implementation on the block_o fixture (~5,200 elements). Correctness > performance.
 - **SC-006**: A new regression test `tests/test_layer_separation_invariant.py` is added that programmatically verifies SC-001 across all fixtures.
