@@ -808,7 +808,14 @@ class CHILmesh(CHILmeshPlotMixin):
 
         # MATLAB: while any(Edge2ElemIDs(:) > 0)   — we use -1 sentinel, so >= 0 means "active".
         iL = 0
+        current_layer_verts = set()  # Vertices from the current iteration (to become prev next)
         while np.any(edge2elem_work >= 0):
+            # Update sliding window at START of iteration (before filtering)
+            # This ensures layer_verts_prev_prev contains vertices from layer iL-2
+            layer_verts_prev_prev = layer_verts_prev
+            layer_verts_prev = current_layer_verts
+            current_layer_verts = set()  # Reset for this iteration
+
             # ---- Step 1: identify boundary edges of layer iL --------------------
             # MATLAB:
             #   if iL == 1: iLbEdgeIDs = CM.boundaryEdges;
@@ -903,21 +910,14 @@ class CHILmesh(CHILmeshPlotMixin):
                 iv = np.empty(0, dtype=int)
             self.layers["IV"].append(iv)
 
-            # ---- LAYER SEPARATION INVARIANT FIX: Slide the window of marked vertices ----
-            # Update the sliding window: vertices from THIS iteration (iL) become
-            # layer_verts_prev, and layer_verts_prev becomes layer_verts_prev_prev
-            # for the next iteration (iL+1).
+            # ---- LAYER SEPARATION INVARIANT FIX: Save vertices for next iteration ----
+            # Save all vertices from this layer (OE ∪ IE) to become layer_verts_prev
+            # in the next iteration, which will then become layer_verts_prev_prev in iL+2.
             if len(oe) > 0 or len(ie) > 0:
                 layer_elems = np.concatenate((oe, ie)) if len(oe) > 0 and len(ie) > 0 else (oe if len(oe) > 0 else ie)
-                current_layer_verts = self.connectivity_list[layer_elems].ravel()
-                current_layer_verts = current_layer_verts[current_layer_verts >= 0]  # Filter out -1 padding
-                # Slide the window: prev becomes prev_prev, current becomes prev
-                layer_verts_prev_prev = layer_verts_prev
-                layer_verts_prev = set(current_layer_verts)
-            else:
-                # No elements in this layer, just slide the window
-                layer_verts_prev_prev = layer_verts_prev
-                layer_verts_prev = set()
+                layer_verts_for_next = self.connectivity_list[layer_elems].ravel()
+                layer_verts_for_next = layer_verts_for_next[layer_verts_for_next >= 0]
+                current_layer_verts = set(layer_verts_for_next)
 
             iL += 1
 
