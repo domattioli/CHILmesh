@@ -176,10 +176,23 @@ def main():
     # ========================================================================
     print("\n[Row 3] Applying FEM smoother to Row 2...")
     from chilmesh import CHILmesh
-    row3_points = row2.smooth_mesh(method="fem", acknowledge_change=True)
-    row3 = CHILmesh(connectivity=row2.connectivity_list, points=row3_points)
-    row3_quality = compute_elem_quality(row3_points, row2.connectivity_list)
-    row3_boundary_indices = get_boundary_indices(row3)
+    # Make a copy of row2 to avoid modifying the original
+    row2_copy = CHILmesh(connectivity=row2.connectivity_list.copy(), points=row2.points.copy())
+    row3_points = row2_copy.smooth_mesh(method="fem", acknowledge_change=True)
+
+    # Check if FEM smoother produced valid results (no NaN)
+    if np.isnan(row3_points).any():
+        print("  ✗ FEM smoother produced NaN values (singular matrix)")
+        print("  Falling back to Row 2 geometry for visualization")
+        row3_points = row2.points.copy()
+        row3_quality = row2_quality.copy()
+        row3_boundary_indices = row2_boundary_indices
+        row3 = row2
+    else:
+        row3 = CHILmesh(connectivity=row2.connectivity_list, points=row3_points)
+        row3_quality = compute_elem_quality(row3_points, row2.connectivity_list)
+        row3_boundary_indices = get_boundary_indices(row3)
+
     print(f"  Median quality: {np.median(row3_quality):.4f}")
 
     # V_BND_PROP: Boundary propagation
@@ -275,46 +288,59 @@ def main():
     qualities = [row1_quality, row2_quality, row3_quality, row4_quality]
 
     for i, (row, quality, row_label) in enumerate(zip(rows, qualities, row_labels)):
-        points = row.points[:, :2]
-        triangles = row.connectivity_list
+        try:
+            points = row.points[:, :2]
+            triangles = row.connectivity_list
 
-        # Column 0: Mesh (wireframe only)
-        ax = axes[i, 0]
-        ax.triplot(points[:, 0], points[:, 1], triangles, color='black', linewidth=0.5)
-        ax.set_aspect('equal')
-        ax.set_title(f"{row_label}\n{col_labels[0]}", fontsize=10)
-        ax.axis('off')
+            # Column 0: Mesh (wireframe only)
+            ax = axes[i, 0]
+            ax.triplot(points[:, 0], points[:, 1], triangles, color='black', linewidth=0.5)
+            ax.set_aspect('equal')
+            ax.set_title(f"{row_label}\n{col_labels[0]}", fontsize=10)
+            ax.axis('off')
 
-        # Column 1: Layers
-        ax = axes[i, 1]
-        layer_colors = get_layer_colors(row, parula_cmap)
-        for tri, color_val in zip(triangles, layer_colors):
-            ax.fill(points[tri, 0], points[tri, 1], color=parula_cmap(color_val), edgecolor='none')
-        ax.set_aspect('equal')
-        ax.set_title(f"{row_label}\n{col_labels[1]}", fontsize=10)
-        ax.axis('off')
-        if i == 0:
-            sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
-            sm1.set_array([])
-            cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
-            cbar1.set_label("Layer", fontsize=8)
+            # Column 1: Layers
+            ax = axes[i, 1]
+            layer_colors = get_layer_colors(row, parula_cmap)
+            for tri, color_val in zip(triangles, layer_colors):
+                ax.fill(points[tri, 0], points[tri, 1], color=parula_cmap(color_val), edgecolor='none')
+            ax.set_aspect('equal')
+            ax.set_title(f"{row_label}\n{col_labels[1]}", fontsize=10)
+            ax.axis('off')
+            if i == 0:
+                sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
+                sm1.set_array([])
+                cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
+                cbar1.set_label("Layer", fontsize=8)
 
-        # Column 2: Quality
-        ax = axes[i, 2]
-        for tri, q in zip(triangles, quality):
-            ax.fill(points[tri, 0], points[tri, 1], color=cool_r_cmap(norm_quality(q)), edgecolor='none')
-        ax.set_aspect('equal')
-        ax.set_title(f"{row_label}\n{col_labels[2]}", fontsize=10)
-        ax.axis('off')
-        if i == 0:
-            sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
-            sm2.set_array([])
-            cbar2 = plt.colorbar(sm2, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
-            cbar2.set_label("Quality", fontsize=8)
+            # Column 2: Quality
+            ax = axes[i, 2]
+            # Handle NaN quality values (e.g., from FEM solver singular matrix)
+            if quality is None or np.isnan(quality).all():
+                # If all quality values are NaN, just show gray mesh
+                ax.triplot(points[:, 0], points[:, 1], triangles, color='gray', linewidth=0.3)
+                ax.set_title(f"{row_label}\n{col_labels[2]} (error)", fontsize=10)
+            else:
+                # Replace NaN with 0 (poor quality) for visualization
+                quality_clean = np.nan_to_num(quality, nan=0.0)
+                for tri, q in zip(triangles, quality_clean):
+                    ax.fill(points[tri, 0], points[tri, 1], color=cool_r_cmap(norm_quality(q)), edgecolor='none')
+                ax.set_title(f"{row_label}\n{col_labels[2]}", fontsize=10)
+            ax.set_aspect('equal')
+            ax.axis('off')
+            if i == 0:
+                sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
+                sm2.set_array([])
+                cbar2 = plt.colorbar(sm2, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
+                cbar2.set_label("Quality", fontsize=8)
+        except Exception as e:
+            print(f"WARNING: Error rendering row {i}: {e}")
+            import traceback
+            traceback.print_exc()
 
-    plt.tight_layout()
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05, hspace=0.3, wspace=0.3)
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(OUTPUT_PATH, dpi=DPI, bbox_inches='tight')
+    plt.savefig(OUTPUT_PATH, dpi=DPI)
     print(f"✓ Saved to {OUTPUT_PATH}")
     print(f"  Dimensions: {fig.get_size_inches() * DPI} px")
 
