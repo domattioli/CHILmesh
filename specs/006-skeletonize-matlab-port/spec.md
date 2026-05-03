@@ -98,7 +98,7 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
   - Wetting-and-drying test mesh: **15 layers**
   - The annulus, donut, and structured fixtures should also match MATLAB output, though the exact reference layer counts are not yet captured.
 - **SC-005**: Implementation completes skeletonization in less than 5× the runtime of the previous implementation on the block_o fixture (~5,200 elements). Correctness > performance.
-- **SC-006**: A new regression test `tests/test_skeletonization_invariant.py` is added that programmatically verifies SC-001 across all fixtures. Additionally, `tests/test_skeletonization_admesh_domains_benchmark.py` documents and (when opted in) verifies MATLAB layer-count parity for catalog meshes (Italy=15, Lake Erie=17, Delaware Bay=17, Wetting-Drying=15, WNAT≈39).
+- **SC-006**: A new regression test `tests/test_skeletonization_invariant.py` is added that programmatically verifies SC-001 across all fixtures. Additionally, `tests/test_skeletonization_matlab_parity_external.py` documents and (when opted in) verifies MATLAB layer-count parity for catalog meshes (Italy=15, Lake Erie=17, Delaware Bay=17, Wetting-Drying=15, WNAT≈39).
 
 ## Clarifications
 

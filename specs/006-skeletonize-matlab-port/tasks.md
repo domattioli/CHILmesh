@@ -61,7 +61,7 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
 - [ ] T008 [US2] For each test in category (b) — typically `tests/test_layers_annulus.py::test_structured_grid_layers` and possibly `test_annulus_layers` — update the assertion to the new MATLAB-correct value. Add a comment explaining the change references issue #74.
 - [ ] T009 [P] [US2] Create `tests/test_skeletonization_matlab_parity.py` with a parametrized test `test_layer_count_matches_matlab_reference` that pins the new per-fixture layer counts. Initial values are captured from running `mesh.n_layers` after T005. Mark the test as the source of truth for layer counts going forward.
 
-- [ ] T009b [P] [US2] Create `tests/test_skeletonization_admesh_domains_benchmark.py` — an opt-in MATLAB-parity benchmark over the ADMESH-Domains catalog (Italy=15, Lake Erie=17, Delaware Bay=17, Wetting-Drying=15, WNAT≈39). Skipped by default; runs when `CHILMESH_RUN_DOMAINS_BENCHMARK=1` and `admesh-domains` package is installed.
+- [ ] T009b [P] [US2] Create `tests/test_skeletonization_matlab_parity_external.py` — an opt-in MATLAB-parity test over the external ADMESH-Domains catalog (Italy=15, Lake Erie=17, Delaware Bay=17, Wetting-Drying=15, WNAT≈39). Skipped by default; runs when `CHILMESH_RUN_EXTERNAL_PARITY=1` and `admesh-domains` package is installed.
 - [ ] T010 [US2] Run `python -m pytest tests/ -v` and verify all previously passing tests still pass (or are documented as updated per category-b).
 
 ## Phase 5: User Story 3 — Visualization (P2)

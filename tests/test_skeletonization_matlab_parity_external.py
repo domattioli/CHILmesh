@@ -1,35 +1,34 @@
-"""Benchmark: MATLAB-parity validation for skeletonization against ADMESH-Domains meshes.
+"""MATLAB-parity tests for skeletonization on external (ADMESH-Domains) meshes.
 
-The Python ``_skeletonize()`` method (see ``src/chilmesh/CHILmesh.py``) is a port of
-the original MATLAB ``meshLayers`` function from the QuADMesh+ codebase
+This is a sibling of ``tests/test_skeletonization_matlab_parity.py`` that pins
+expected layer counts for meshes from the external ADMESH-Domains catalog,
+rather than the bundled fixtures.
+
+Why a separate file? Bundled-fixture parity is a fast, always-on guardrail
+(every CI push runs it). External-mesh parity requires installing the
+``admesh-domains`` package and downloading mesh files, so it is opt-in. Keeping
+the two concerns in separate files lets the fast tests stay cheap while still
+documenting the broader correctness expectation for the maintainer.
+
+The Python ``_skeletonize()`` method (see ``src/chilmesh/CHILmesh.py``) is a
+faithful port of the original MATLAB ``meshLayers`` function from QuADMesh+
 (``domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m``).
+For each mesh below, the Python port must produce the same ``n_layers`` value
+as the MATLAB reference.
 
-Faithfulness of the port is established by two complementary checks:
-
-1. **Algorithmic correctness** (``test_skeletonization_invariant.py``): the medial-axis
-   layer separation invariant — vertices in layer ``k`` cannot appear in elements of
-   layer ``k+2`` or beyond — must hold across all bundled fixtures. This is verified
-   in CI on every push.
-
-2. **Numerical parity with MATLAB** (this file): for real-world hydrodynamic domains
-   from the ADMESH-Domains catalog, the Python implementation must produce the same
-   ``n_layers`` value as the original MATLAB ``meshLayers`` function. These
-   reference values were captured by the project maintainer from external MATLAB
-   runs and are documented below.
-
-This module is **skipped by default** because the meshes are not bundled with
-CHILmesh — they live in the external ``ADMESH-Domains`` catalog. To run the
-benchmark, install the catalog and set the ``CHILMESH_RUN_DOMAINS_BENCHMARK``
-environment variable:
+Reference values were captured by the project maintainer from external MATLAB
+runs and are documented in ``MATLAB_REFERENCE_LAYER_COUNTS`` below. To run
+these tests locally:
 
 .. code-block:: bash
 
    pip install admesh-domains
-   CHILMESH_RUN_DOMAINS_BENCHMARK=1 python -m pytest tests/test_skeletonization_admesh_domains_benchmark.py -v
+   CHILMESH_RUN_EXTERNAL_PARITY=1 python -m pytest \\
+       tests/test_skeletonization_matlab_parity_external.py -v
 
 Contributing additional reference data
 --------------------------------------
-If you have a MATLAB QuADMesh+ install and a mesh that is not yet listed below,
+If you have a MATLAB QuADMesh+ install and a mesh that is not yet listed,
 run::
 
     addpath('00_CHILMesh_Class');
@@ -101,14 +100,14 @@ def _load_mesh(catalog_id: str):
     return CHILmesh.from_admesh_domain(record, compute_layers=True)
 
 
-_RUN_BENCHMARK = bool(os.environ.get("CHILMESH_RUN_DOMAINS_BENCHMARK"))
-_SKIP_REASON_BENCHMARK = (
-    "Set CHILMESH_RUN_DOMAINS_BENCHMARK=1 to run the ADMESH-Domains MATLAB-parity "
-    "benchmark. Requires `pip install admesh-domains` and network access to fetch meshes."
+_RUN_EXTERNAL = bool(os.environ.get("CHILMESH_RUN_EXTERNAL_PARITY"))
+_SKIP_REASON_EXTERNAL = (
+    "Set CHILMESH_RUN_EXTERNAL_PARITY=1 to run the external MATLAB-parity tests "
+    "against the ADMESH-Domains catalog. Requires `pip install admesh-domains`."
 )
 
 
-@pytest.mark.skipif(not _RUN_BENCHMARK, reason=_SKIP_REASON_BENCHMARK)
+@pytest.mark.skipif(not _RUN_EXTERNAL, reason=_SKIP_REASON_EXTERNAL)
 @pytest.mark.skipif(
     not _admesh_domains_available(),
     reason="admesh-domains package not installed; `pip install admesh-domains`",
@@ -117,7 +116,7 @@ _SKIP_REASON_BENCHMARK = (
     "catalog_id,expected",
     [(cid, exp) for cid, exp in MATLAB_REFERENCE_LAYER_COUNTS.items() if exp is not None],
 )
-def test_layer_count_matches_matlab(catalog_id: str, expected) -> None:
+def test_layer_count_matches_matlab_reference(catalog_id: str, expected) -> None:
     """For each ADMESH-Domains mesh with a known MATLAB ``n_layers``,
     the Python port must produce the same value (or fall in the documented range).
     """
@@ -136,7 +135,7 @@ def test_layer_count_matches_matlab(catalog_id: str, expected) -> None:
         )
 
 
-@pytest.mark.skipif(not _RUN_BENCHMARK, reason=_SKIP_REASON_BENCHMARK)
+@pytest.mark.skipif(not _RUN_EXTERNAL, reason=_SKIP_REASON_EXTERNAL)
 @pytest.mark.skipif(
     not _admesh_domains_available(),
     reason="admesh-domains package not installed; `pip install admesh-domains`",
@@ -144,7 +143,7 @@ def test_layer_count_matches_matlab(catalog_id: str, expected) -> None:
 def test_uncovered_meshes_have_fixme() -> None:
     """Meta-test: every ADMESH-Domains entry without a captured MATLAB count
     must remain in the table with ``None`` so it is visible as a FIXME during
-    benchmark review.
+    review.
     """
     uncovered = [k for k, v in MATLAB_REFERENCE_LAYER_COUNTS.items() if v is None]
     if uncovered:
