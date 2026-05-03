@@ -333,6 +333,21 @@ def main():
         print(f"  ✓ Row {i}: all triangles have positive area")
 
     # ========================================================================
+    # Element Count Verification
+    # ========================================================================
+    print("\n[Element Counts]")
+    counts = [len(row1.connectivity_list), len(row2.connectivity_list), len(row3.connectivity_list), len(row4.connectivity_list)]
+    print(f"  Row 1: {counts[0]:3d} elements")
+    print(f"  Row 2: {counts[1]:3d} elements")
+    print(f"  Row 3: {counts[2]:3d} elements")
+    print(f"  Row 4: {counts[3]:3d} elements")
+    if len(set(counts)) == 1:
+        print(f"  ✓ All rows have {counts[0]} elements")
+    else:
+        print(f"  ✗ WARNING: Element counts differ!")
+        print(f"    Unique values: {set(counts)}")
+
+    # ========================================================================
     # Rendering
     # ========================================================================
     print("\n[Rendering] Creating 4×3 subplot grid...")
