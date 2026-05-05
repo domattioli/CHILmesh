@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] — TBD (Bug Fix Release)
+
+### 🐛 Fixed
+
+#### Skeletonization Layer Separation Invariant (#74)
+- Fixed layer separation invariant violations in `_skeletonize()` method
+- Replaced iterative-peel algorithm with MATLAB-equivalent BFS distance-based skeletonization
+- Layer counts now match original MATLAB `meshLayers` function output
+- Layer assignment is now correct: no elements from layer k share vertices with elements from layer m where |k-m| ≥ 2
+- Comprehensive regression tests added: `test_skeletonization_invariant.py`, `test_skeletonization_matlab_parity.py`
+- **Impact**: Layer counts may change for existing meshes (this is correct behavior; previous counts were wrong)
+- **Backward Compatibility**: API remains unchanged; layer data structure format unchanged
+
+### ✨ Added
+
+#### Enhanced Test Coverage
+- `test_skeletonization_invariant.py`: Layer separation invariant validation across all fixtures
+- `test_skeletonization_matlab_parity.py`: MATLAB reference layer count validation
+- `test_skeletonization_matlab_parity_external.py`: External ADMESH-Domains catalog parity validation
+- `test_smoothing.py`: Comprehensive FEM smoother tests for triangles, quads, and mixed-element meshes
+
 ## [0.2.0] — 2026-04-27 (Modernization Release)
 
 This is a major performance and architecture modernization release. **All existing APIs remain backward compatible** (no code changes needed) while internal data structures are redesigned for 150x+ performance improvement on large meshes.
