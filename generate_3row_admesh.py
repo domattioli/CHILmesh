@@ -114,6 +114,83 @@ def compute_elem_quality(points, triangles):
     return quality / max_quality  # Normalize to [0, 1]
 
 
+def pick_tracked_items(mesh, target_xy=(0.6, 0.0)):
+    """
+    Pick 1 interior vertex, 1 interior edge, 1 interior element from `mesh`,
+    each closest to `target_xy`. Returns dict with positions for spatial
+    matching in downstream rows (which may have different indexing after
+    re-meshing).
+    """
+    pts = mesh.points[:, :2]
+    bnd = set(get_boundary_indices(mesh).tolist())
+
+    interior_v = [v for v in range(len(pts)) if v not in bnd]
+    if not interior_v:
+        interior_v = list(range(len(pts)))
+    iv = np.asarray(interior_v)
+    vid = iv[np.argmin(np.linalg.norm(pts[iv] - np.asarray(target_xy), axis=1))]
+
+    e2v = mesh.adjacencies["Edge2Vert"]
+    edge_mid = 0.5 * (pts[e2v[:, 0]] + pts[e2v[:, 1]])
+    interior_edges = [i for i, (a, b) in enumerate(e2v)
+                      if a not in bnd and b not in bnd]
+    if not interior_edges:
+        interior_edges = list(range(len(e2v)))
+    ie = np.asarray(interior_edges)
+    eid = ie[np.argmin(np.linalg.norm(edge_mid[ie] - np.asarray(target_xy), axis=1))]
+
+    cl = mesh.connectivity_list
+    centroids = np.mean(pts[cl], axis=1)
+    interior_elems = [i for i in range(len(cl))
+                      if not any(v in bnd for v in cl[i])]
+    if not interior_elems:
+        interior_elems = list(range(len(cl)))
+    ielm = np.asarray(interior_elems)
+    fid = ielm[np.argmin(np.linalg.norm(centroids[ielm] - np.asarray(target_xy), axis=1))]
+
+    return {
+        "vert_xy": pts[vid].copy(),
+        "edge_endpoints": (pts[e2v[eid, 0]].copy(), pts[e2v[eid, 1]].copy()),
+        "elem_centroid": centroids[fid].copy(),
+        "vert_id": int(vid),
+        "edge_id": int(eid),
+        "elem_id": int(fid),
+    }
+
+
+def find_corresponding(mesh, tracked):
+    """Map tracked items from row1 to nearest in `mesh` by spatial proximity."""
+    pts = mesh.points[:, :2]
+    e2v = mesh.adjacencies["Edge2Vert"]
+    edge_mid = 0.5 * (pts[e2v[:, 0]] + pts[e2v[:, 1]])
+    cl = mesh.connectivity_list
+    centroids = np.mean(pts[cl], axis=1)
+
+    vid = int(np.argmin(np.linalg.norm(pts - tracked["vert_xy"], axis=1)))
+    target_emid = 0.5 * (tracked["edge_endpoints"][0] + tracked["edge_endpoints"][1])
+    eid = int(np.argmin(np.linalg.norm(edge_mid - target_emid, axis=1)))
+    fid = int(np.argmin(np.linalg.norm(centroids - tracked["elem_centroid"], axis=1)))
+
+    return {
+        "vert_xy": pts[vid],
+        "edge_pts": (pts[e2v[eid, 0]], pts[e2v[eid, 1]]),
+        "elem_pts": pts[cl[fid]],
+    }
+
+
+def overlay_tracked(ax, items):
+    """Draw tracked vertex (red dot), edge (orange line), elem (magenta outline)."""
+    ep = items["elem_pts"]
+    poly = plt.Polygon(ep, closed=True, fill=False, edgecolor="magenta",
+                       linewidth=2.2, zorder=10)
+    ax.add_patch(poly)
+    a, b = items["edge_pts"]
+    ax.plot([a[0], b[0]], [a[1], b[1]], color="orange", linewidth=2.5, zorder=11)
+    v = items["vert_xy"]
+    ax.scatter([v[0]], [v[1]], s=70, c="red", edgecolors="white",
+               linewidths=1.0, zorder=12)
+
+
 def get_layer_colors(mesh, colormap):
     """Get per-element colors based on layer membership."""
     elem_colors = np.zeros(len(mesh.connectivity_list))
@@ -355,6 +432,11 @@ def main():
     rows = [row1, row2, row3]
     qualities = [row1_quality, row2_quality, row3_quality]
 
+    tracked = pick_tracked_items(row1, target_xy=(0.6, 0.0))
+    print(f"\n[Tracking] vert#{tracked['vert_id']} @ {tracked['vert_xy']}, "
+          f"edge#{tracked['edge_id']}, elem#{tracked['elem_id']}")
+    row_items = [find_corresponding(r, tracked) for r in rows]
+
     for i, (row, quality, row_label) in enumerate(zip(rows, qualities, row_labels)):
         try:
             points = row.points[:, :2]
@@ -374,6 +456,7 @@ def main():
             ax.triplot(points[:, 0], points[:, 1], triangles, color='black', linewidth=0.5)
             ax.set_aspect('equal')
             ax.set_title(f"{row_label}\n{col_labels[0]} ({quality_str})", fontsize=9)
+            overlay_tracked(ax, row_items[i])
             ax.axis('off')
 
             # Column 1: Layers (with visible edges for structure)
@@ -385,6 +468,7 @@ def main():
                         linewidth=0.35, alpha=1.0)
             ax.set_aspect('equal')
             ax.set_title(f"{row_label}\n{col_labels[1]} ({quality_str})", fontsize=9)
+            overlay_tracked(ax, row_items[i])
             ax.axis('off')
             sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
             sm1.set_array([])
@@ -404,6 +488,7 @@ def main():
                             linewidth=0.35, alpha=1.0)
                 ax.set_title(f"{row_label}\n{col_labels[2]} ({quality_str})", fontsize=9)
             ax.set_aspect('equal')
+            overlay_tracked(ax, row_items[i])
             ax.axis('off')
             sm2 = cm.ScalarMappable(cmap=cool_r_cmap, norm=norm_quality)
             sm2.set_array([])
