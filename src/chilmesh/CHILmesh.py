@@ -768,162 +768,85 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         Skeletonize the mesh by iteratively peeling concentric layers inward.
 
-        Faithful Python port of the MATLAB QuADMesh+ ``meshLayers`` function from
-        ``domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m``.
-        See spec ``006-skeletonize-matlab-port`` for the full design rationale.
+        Faithful Python port of the MATLAB ``meshLayers`` function.  Each
+        iteration of layer ``iL`` produces:
 
-        Each iteration of the layer ``iL`` produces:
-
-        - ``OV[iL]``: the outer ring of vertices that bound the layer's outer side.
+        - ``OV[iL]``: outer ring of vertices bounding the layer's outer side.
         - ``OE[iL]``: elements adjacent to the boundary edges of ``OV[iL]``.
-        - ``IE[iL]``: elements still in play that are adjacent to ANY edge whose
-          ``Edge2Vert`` entry references a vertex in ``OV[iL]`` — this is the broader
-          MATLAB definition that includes elements sharing only a vertex with ``OE``.
-        - ``IV[iL]``: vertices of (``OE`` ∪ ``IE``) connectivity that are not in ``OV[iL]``.
-        - ``bEdgeIDs[iL]``: the boundary edges that defined this layer's outer frontier.
+        - ``IE[iL]``: active elements adjacent to ANY edge whose
+          ``Edge2Vert`` entry references a vertex in ``OV[iL]``.
+        - ``IV[iL]``: vertices of (``OE`` ∪ ``IE``) not in ``OV[iL]``.
+        - ``bEdgeIDs[iL]``: boundary edges defining this layer's outer frontier.
 
-        The algorithm guarantees the layer separation invariant: a vertex appearing in
-        an element of layer ``k`` cannot appear in an element of layer ``k+2`` or beyond.
+        The vertex-adjacency definition of IE (broader than element-adjacency)
+        guarantees the layer separation invariant: vertices from layer k cannot
+        appear in any element of layer k+2 or beyond.
 
-        Indexing notes (Python translation of the MATLAB source):
-        - Layer index is 0-indexed in Python (``iL = 0, 1, 2, ...``); MATLAB uses 1-indexed.
-        - ``Edge2Elem`` uses ``-1`` as the "no neighbor" sentinel (MATLAB uses ``0``).
-        - Working copies of ``Edge2Vert`` and ``Edge2Elem`` are mutated to mark consumed
-          vertices/elements as ``-1``.
-        - Padding entries ``-1`` in ``connectivity_list`` (mixed-element meshes) are
-          excluded from vertex enumeration.
+        Indexing: layers are 0-indexed; ``-1`` is the sentinel for consumed
+        vertices/elements in the working copies of Edge2Vert/Edge2Elem.
         """
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
 
-        # Working copies that get mutated as layers are consumed.
-        # MATLAB:  Edge2VertIDs = CM.edge2Vert;  Edge2ElemIDs = CM.edge2Elem;
         edge2vert_work = self.adjacencies["Edge2Vert"].copy()
         edge2elem_work = self.adjacencies["Edge2Elem"].copy()
 
-        # Track vertices from the last 2 iterations to maintain the invariant.
-        # The invariant requires vertices from layer k to not appear in layer k+2.
-        # We maintain: layer_verts[iL-2] (to filter in iteration iL) and layer_verts[iL-1]
-        layer_verts_prev_prev = set()  # Vertices from layer iL-2 (to filter in iteration iL)
-        layer_verts_prev = set()       # Vertices from layer iL-1 (to become layer_verts_prev_prev next)
-
-        # MATLAB: while any(Edge2ElemIDs(:) > 0)   — we use -1 sentinel, so >= 0 means "active".
         iL = 0
-        current_layer_verts = set()  # Vertices from the current iteration (to become prev next)
         while np.any(edge2elem_work >= 0):
-            # Update sliding window at START of iteration (before filtering)
-            # This ensures layer_verts_prev_prev contains vertices from layer iL-2
-            layer_verts_prev_prev = layer_verts_prev
-            layer_verts_prev = current_layer_verts
-            current_layer_verts = set()  # Reset for this iteration
-
-            # ---- Step 1: identify boundary edges of layer iL --------------------
-            # MATLAB:
-            #   if iL == 1: iLbEdgeIDs = CM.boundaryEdges;
-            #   else:       iLbEdgeIDs = sum(Edge2ElemIDs > 0, 2) == 1;
+            # Step 1: boundary edges
             if iL == 0:
                 iLbEdgeIDs = np.where(self.adjacencies["Edge2Elem"][:, 1] == -1)[0]
             else:
-                # Edges with exactly one remaining active element neighbor.
-                active_neighbor_count = np.sum(edge2elem_work >= 0, axis=1)
-                iLbEdgeIDs = np.where(active_neighbor_count == 1)[0]
+                active_count = np.sum(edge2elem_work >= 0, axis=1)
+                iLbEdgeIDs = np.where(active_count == 1)[0]
 
             if len(iLbEdgeIDs) == 0:
                 break
 
-            # ---- Step 2: OV[iL] = unique vertices on those boundary edges -------
-            # MATLAB: CM.Layers.OV{iL} = unique(Edge2VertIDs(iLbEdgeIDs,:));
+            # Step 2: OV = unique vertices on boundary edges (from working copy)
             ov_raw = edge2vert_work[iLbEdgeIDs].ravel()
             ov = np.unique(ov_raw[ov_raw >= 0]).astype(int)
-
             self.layers["OV"].append(ov)
             self.layers["bEdgeIDs"].append(iLbEdgeIDs)
 
-            # ---- Step 3: OE[iL] = active elements adjacent to those boundary edges
-            # MATLAB: CM.Layers.OE{iL} = ElemIDs(ismember(ElemIDs, Edge2ElemIDs(iLbEdgeIDs,:)));
-            # LAYER SEPARATION FIX: Exclude elements that contain OV vertices from
-            # at least 2 iterations ago (to maintain the invariant that vertices in
-            # layer k don't appear in layer k+2)
+            # Step 3: OE = active elements adjacent to those boundary edges
             oe_raw = edge2elem_work[iLbEdgeIDs].ravel()
-            oe_candidates = np.unique(oe_raw[oe_raw >= 0]).astype(int)
-
-            # Filter to exclude elements containing vertices from 2 iterations ago
-            # This maintains the invariant: vertices in layer k don't appear in layer k+2
-            oe_filtered = []
-            for elem in oe_candidates:
-                elem_verts = self.connectivity_list[elem]
-                elem_verts = elem_verts[elem_verts >= 0]  # Filter out -1 padding
-                if not np.any(np.isin(elem_verts, layer_verts_prev_prev)):
-                    oe_filtered.append(elem)
-
-            oe = np.array(oe_filtered, dtype=int) if oe_filtered else np.empty(0, dtype=int)
+            oe = np.unique(oe_raw[oe_raw >= 0]).astype(int)
             self.layers["OE"].append(oe)
 
-            # ---- Step 4: flag OE elements as consumed in edge2elem_work ---------
-            # MATLAB: Edge2ElemIDs(ismember(Edge2ElemIDs, CM.Layers.OE{end})) = 0;
+            # Step 4: consume OE from edge2elem_work
             if len(oe) > 0:
                 edge2elem_work[np.isin(edge2elem_work, oe)] = -1
 
-            # ---- Step 5: find all edges that touch ANY OV[iL] vertex ------------
-            # MATLAB: iLbEdgeIDs = sum(ismember(Edge2VertIDs, CM.Layers.OV{end}), 2) > 0;
-            # CRITICAL: This is the broader edge-vertex adjacency that the previous
-            # Python implementation missed. It captures elements sharing only a vertex.
+            # Step 5: find edges touching ANY OV vertex (broader than just boundary edges)
             ov_edge_mask = np.any(np.isin(edge2vert_work, ov), axis=1)
             ov_edge_indices = np.where(ov_edge_mask)[0]
 
-            # ---- Step 6: IE[iL] = active elements adjacent to those edges -------
-            # MATLAB: CM.Layers.IE{iL} = ElemIDs(ismember(ElemIDs, Edge2ElemIDs(iLbEdgeIDs,:)));
-            # LAYER SEPARATION FIX: Exclude elements that contain OV vertices marked
-            # 2+ iterations ago to maintain the invariant.
+            # Step 6: IE = active elements adjacent to those edges
             if len(ov_edge_indices) > 0:
                 ie_raw = edge2elem_work[ov_edge_indices].ravel()
-                ie_candidates = np.unique(ie_raw[ie_raw >= 0]).astype(int)
-
-                # Filter to exclude elements containing vertices from 2 iterations ago
-                ie_filtered = []
-                for elem in ie_candidates:
-                    elem_verts = self.connectivity_list[elem]
-                    elem_verts = elem_verts[elem_verts >= 0]  # Filter out -1 padding
-                    if not np.any(np.isin(elem_verts, layer_verts_prev_prev)):
-                        ie_filtered.append(elem)
-
-                ie = np.array(ie_filtered, dtype=int) if ie_filtered else np.empty(0, dtype=int)
+                ie = np.unique(ie_raw[ie_raw >= 0]).astype(int)
             else:
                 ie = np.empty(0, dtype=int)
             self.layers["IE"].append(ie)
 
-            # ---- Step 7: flag OV vertices and IE elements as consumed -----------
-            # MATLAB:
-            #   Edge2VertIDs(ismember(Edge2VertIDs, CM.Layers.OV{end})) = 0;
-            #   Edge2ElemIDs(ismember(Edge2ElemIDs, CM.Layers.IE{end})) = 0;
+            # Step 7: consume OV vertices and IE elements
             if len(ov) > 0:
                 edge2vert_work[np.isin(edge2vert_work, ov)] = -1
             if len(ie) > 0:
                 edge2elem_work[np.isin(edge2elem_work, ie)] = -1
 
-            # ---- Step 8: IV[iL] = vertices of (OE ∪ IE) connectivity, minus OV --
-            # MATLAB: CM.Layers.IV{iL} = setdiff(CM.ConnectivityList([OE; IE], :), OV);
+            # Step 8: IV = vertices of (OE ∪ IE) connectivity, minus OV
             if len(oe) > 0 or len(ie) > 0:
                 layer_elems = np.concatenate((oe, ie))
-                layer_verts = self.connectivity_list[layer_elems].ravel()
-                # Filter out -1 padding (mixed-element meshes) per Q3 decision.
-                layer_verts = layer_verts[layer_verts >= 0]
-                iv = np.setdiff1d(np.unique(layer_verts), ov).astype(int)
+                lv = self.connectivity_list[layer_elems].ravel()
+                lv = lv[lv >= 0]
+                iv = np.setdiff1d(np.unique(lv), ov).astype(int)
             else:
                 iv = np.empty(0, dtype=int)
             self.layers["IV"].append(iv)
 
-            # ---- LAYER SEPARATION INVARIANT FIX: Save vertices for next iteration ----
-            # Save all vertices from this layer (OE ∪ IE) to become layer_verts_prev
-            # in the next iteration, which will then become layer_verts_prev_prev in iL+2.
-            if len(oe) > 0 or len(ie) > 0:
-                layer_elems = np.concatenate((oe, ie)) if len(oe) > 0 and len(ie) > 0 else (oe if len(oe) > 0 else ie)
-                layer_verts_for_next = self.connectivity_list[layer_elems].ravel()
-                layer_verts_for_next = layer_verts_for_next[layer_verts_for_next >= 0]
-                current_layer_verts = set(layer_verts_for_next)
-
             iL += 1
 
-        # MATLAB: CM.nLayers = iL - 1;   (Python uses 0-indexed layers, so n_layers = iL.)
         self.n_layers = iL
 
     def _mesh_layers(self) -> None:
