@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### 🔧 Fixed
+
+- **Issue #74**: Skeletonization layer separation invariant violated. Replaced iterative-peel algorithm with MATLAB-equivalent implementation that correctly computes inner elements via broader edge-vertex adjacency. This restores the medial-axis property: vertices in layer k now never appear in elements of layer k+2 or beyond. Layer counts may change for existing meshes (e.g., donut: 4→3, structured: 6→5, block_o: 10→9); these changes reflect the mathematically correct MATLAB algorithm. See spec `006-skeletonize-matlab-port` for full details.
+
 ## [0.2.0] — 2026-04-27 (Modernization Release)
 
 This is a major performance and architecture modernization release. **All existing APIs remain backward compatible** (no code changes needed) while internal data structures are redesigned for 150x+ performance improvement on large meshes.
