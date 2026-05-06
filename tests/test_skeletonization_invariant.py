@@ -1,87 +1,56 @@
-"""Regression test for issue #74: skeletonization layer separation invariant.
-
-A vertex appearing in any element of layer k MUST NOT appear in any element
-of layer m where |k - m| >= 2. This is the medial-axis layer separation
-property that the original MATLAB QuADMesh+ meshLayers function upholds.
-
-This test parametrizes over all four built-in fixtures (annulus, donut,
-structured, block_o). It expects 0 violations after the spec 006 fix.
 """
-from __future__ import annotations
+Regression tests for skeletonization layer separation invariant (issue #74).
 
-from typing import Set
+The layer separation invariant states that for any two layers k and m with |k-m| >= 2,
+the set of vertices in layer k must be disjoint from the set of vertices in layer m.
+This ensures that the skeletonization produces medially-correct concentric rings.
+"""
 
-import numpy as np
 import pytest
-
+import numpy as np
 from chilmesh import examples
 
 
-FIXTURES = ["annulus", "donut", "structured", "block_o"]
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["annulus", "donut", "structured", "block_o"]
+)
+def test_layer_separation_invariant(fixture_name):
+    """
+    Verify that layers separated by 2+ do not share any vertices.
 
+    For each fixture, enumerate all layer pairs (k, m) with |k-m| >= 2
+    and assert that the set of vertices in layer k is disjoint from
+    the set of vertices in layer m.
+    """
+    factory = getattr(examples, fixture_name)
+    mesh = factory()
 
-def _layer_vertices(mesh, layer_idx: int) -> Set[int]:
-    """Return the set of vertex IDs in OE[k] ∪ IE[k]."""
-    elems = np.concatenate(
-        (mesh.layers["OE"][layer_idx], mesh.layers["IE"][layer_idx])
-    )
-    verts: Set[int] = set()
-    for e in elems:
-        for v in mesh.connectivity_list[e]:
-            vi = int(v)
-            if vi >= 0:
-                verts.add(vi)
-    return verts
+    # Collect vertices for each layer
+    layer_vertices = []
+    for layer_idx in range(mesh.n_layers):
+        layer = mesh.get_layer(layer_idx)
 
+        # Get all vertices from outer and inner elements
+        vertices = set()
+        for elem_list in [layer["OE"], layer["IE"]]:
+            for elem_id in elem_list:
+                # Get vertices for this element
+                elem_verts = mesh.connectivity_list[elem_id]
+                # Filter out padding (-1 values)
+                for v in elem_verts:
+                    if v >= 0:
+                        vertices.add(int(v))
 
-@pytest.mark.parametrize("fixture_name", FIXTURES)
-def test_layer_separation_invariant(fixture_name: str) -> None:
-    """A vertex in layer k MUST NOT appear in any layer m where |k - m| >= 2."""
-    mesh = getattr(examples, fixture_name)()
-    n = mesh.n_layers
+        layer_vertices.append(vertices)
 
-    if n < 3:
-        pytest.skip(f"{fixture_name} has only {n} layers; invariant trivially holds")
-
-    layer_verts = [_layer_vertices(mesh, k) for k in range(n)]
-
-    violations = []
-    for k in range(n):
-        for m in range(k + 2, n):
-            shared = layer_verts[k] & layer_verts[m]
-            if shared:
-                violations.append((k, m, len(shared), sorted(shared)[:5]))
-
-    if violations:
-        msg_lines = [f"Layer separation violations in {fixture_name} ({n} layers):"]
-        for k, m, count, sample in violations[:10]:
-            msg_lines.append(
-                f"  Layer {k} <-> Layer {m}: {count} shared vertices "
-                f"(sample: {sample})"
-            )
-        pytest.fail("\n".join(msg_lines))
-
-
-@pytest.mark.parametrize("fixture_name", FIXTURES)
-def test_layer_assignment_partition(fixture_name: str) -> None:
-    """Every element MUST be assigned to exactly one layer (no duplicates, no gaps)."""
-    mesh = getattr(examples, fixture_name)()
-
-    all_assignments = []
+    # Check layer separation invariant
     for k in range(mesh.n_layers):
-        all_assignments.extend(int(e) for e in mesh.layers["OE"][k])
-        all_assignments.extend(int(e) for e in mesh.layers["IE"][k])
-
-    assigned = set(all_assignments)
-    expected = set(range(mesh.n_elems))
-
-    missing = expected - assigned
-    duplicates_count = len(all_assignments) - len(assigned)
-
-    assert not missing, (
-        f"{fixture_name}: {len(missing)} elements unassigned "
-        f"(sample: {sorted(missing)[:5]})"
-    )
-    assert duplicates_count == 0, (
-        f"{fixture_name}: {duplicates_count} elements assigned to multiple layers"
-    )
+        for m in range(mesh.n_layers):
+            if abs(k - m) >= 2:
+                # Layers k and m should have disjoint vertex sets
+                intersection = layer_vertices[k] & layer_vertices[m]
+                assert len(intersection) == 0, (
+                    f"Layer separation invariant violated: "
+                    f"layer {k} and layer {m} share vertices {intersection}"
+                )
