@@ -863,11 +863,6 @@ class CHILmesh(CHILmeshPlotMixin):
             stacklevel=2
         )
         self._skeletonize()
-        
-        # # Print summary
-        # print(f"Created {self.n_layers} mesh layers")
-        # for i in range(self.n_layers):
-        #     print(f"  Layer {i}: {len(self.layers['OE'][i])} outer elements, {len(self.layers['IE'][i])} inner elements")
 
     def get_layer( self, layer_idx: int ) -> Dict[str, np.ndarray]:
         """
@@ -1194,8 +1189,6 @@ class CHILmesh(CHILmeshPlotMixin):
                     v2 = coords[(j-1)%3] - coords[j]
                     
                     # Normalize vectors safely to avoid runtime warnings of NaN
-                    # v1_norm = v1 / np.linalg.norm(v1)
-                    # v2_norm = v2 / np.linalg.norm(v2)
                     v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
                     v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
                     
@@ -1337,9 +1330,6 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             angle_limit: Maximum allowable angle deviation in degrees
         """
-        # Placeholder for angle-based smoothing logic
-        # This would involve checking angles and adjusting points accordingly
-        # For now, just return the original points
         raise NotImplementedError("Angle-based smoothing not implemented yet.")
         return self.points
 
@@ -1349,8 +1339,8 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Returns:
             (tris, quads): Arrays of triangle and quad element indices.
-            - tris: Indices where elements have 3 vertices
-            - quads: Indices where elements have 4 vertices
+            - tris: Indices where elements have 3 unique vertices (padded or 3-column)
+            - quads: Indices where elements have 4 distinct vertices
         """
         n_cols = self.connectivity_list.shape[1]
 
@@ -1359,16 +1349,20 @@ class CHILmesh(CHILmeshPlotMixin):
             all_indices = np.arange(self.connectivity_list.shape[0])
             return all_indices, np.array([], dtype=int)
         elif n_cols == 4:
-            # Mixed or pure quad mesh; check per-element
-            tris = []
-            quads = []
-            for i, elem in enumerate(self.connectivity_list):
-                # Triangle: 4th vertex is -1 or padding
-                if elem[3] < 0 or (i < len(self.connectivity_list) and elem[3] >= self.n_verts):
-                    tris.append(i)
-                else:
-                    quads.append(i)
-            return np.array(tris, dtype=int), np.array(quads, dtype=int)
+            # Mixed or pure quad mesh; detect padded triangles by repeated vertex.
+            # Padded convention is [v0, v1, v2, v0], so rows[:, 3] == rows[:, 0]
+            # for triangles. Use same vectorised logic as _elem_type() for consistency.
+            rows = self.connectivity_list
+            tri_mask = (
+                (rows[:, 0] == rows[:, 1])
+                | (rows[:, 1] == rows[:, 2])
+                | (rows[:, 2] == rows[:, 3])
+                | (rows[:, 3] == rows[:, 0])
+                | (rows[:, 0] == rows[:, 2])
+                | (rows[:, 1] == rows[:, 3])
+            )
+            all_indices = np.arange(len(rows))
+            return all_indices[tri_mask], all_indices[~tri_mask]
         else:
             raise ValueError(f"Unexpected connectivity_list shape: {self.connectivity_list.shape}")
 
