@@ -11,7 +11,7 @@ Layout:
 - Row 2: Warm-start truss applied to Row 1
 - Row 3: FEM smoother applied to Row 2
 
-Output: tests/output/annulus_quickstart.png (same path so README image links don't break)
+Output: output/annulus_quickstart.png
 
 Verification (fail-loud assertions):
 - V_BND: Row 2 boundary == Row 1 boundary (bit-exact)
@@ -61,7 +61,7 @@ def annulus_size_fn(p):
     return H_MIN + (H_MAX - H_MIN) * t
 
 
-OUTPUT_PATH = Path(__file__).parent.parent / "tests" / "output" / "annulus_quickstart.png"
+OUTPUT_PATH = Path(__file__).parent.parent / "output" / "annulus_quickstart.png"
 FIGSIZE = (15, 14)
 DPI = 100
 

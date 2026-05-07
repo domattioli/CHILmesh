@@ -47,7 +47,7 @@ plt.show()
 
 See how a raw Delaunay triangulation is progressively refined through warm-start truss equilibration and FEM smoothing — all three rows share the same boundary and element count (580 triangles):
 
-![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](tests/output/annulus_quickstart.png?v=3)
+![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](output/annulus_quickstart.png?v=4)
 
 **Row 1 — Raw Delaunay:** Unsmoothed input mesh from `chilmesh.examples.annulus()` (median quality ≈ 0.71).
 **Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop, started from Row 1's points (boundary pinned bit-exactly via `pfix`). The vendored loop tracks the best-quality state across iterations and early-stops if median quality drops more than 10% from peak. Median quality jumps to ≈ 0.94.
@@ -61,7 +61,7 @@ Columns: **left** = mesh wireframe · **center** = skeletonization layers (virid
 python generate_3row_admesh.py
 ```
 
-The script lives at the repo root and writes `tests/output/annulus_quickstart.png`. It enforces fail-loud assertions for boundary preservation (V_BND), degeneracy (V_DEGENERACY), sibling chain (V_CHAIN), and positive-area connectivity (V_CONN) before saving. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter API and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full design contract.
+The script lives in `scripts/` and writes `output/annulus_quickstart.png`. It enforces fail-loud assertions for boundary preservation (V_BND), degeneracy (V_DEGENERACY), sibling chain (V_CHAIN), and positive-area connectivity (V_CONN) before saving. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter API and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full design contract.
 
 ---
 
