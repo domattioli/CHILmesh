@@ -60,3 +60,16 @@ Thumbs.db
 
 # Skeleton skills installed locally for spec workflow (managed externally)
 .claude/skills/
+
+# Generated output artefacts (figures, debug PNGs, .npy dumps)
+# annulus_quickstart.png is tracked because README.md references it.
+tests/output/
+output/*.npy
+output/*_debug*.png
+output/*_debug*.npy
+output/simple_render.png
+output/test_rendering.png
+output/annulus_layer2_boundary.*
+output/annulus_layers.png
+output/annulus_smoothed_retri.png
+output/layer2_debug.png
