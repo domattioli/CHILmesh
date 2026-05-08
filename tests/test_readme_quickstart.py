@@ -9,8 +9,11 @@ Renders the 3-row pipeline that lives in ``README.md``:
 All three rows use chilmesh's own optimizer — no external admesh package
 required. Each row asserts geometric validity before plotting.
 
-If the test passes, the freshly-generated PNG at ``output/annulus_quickstart.png``
-is the canonical README image.
+The test writes its figure to ``tests/output/annulus_quickstart.png`` to
+verify rendering. The **canonical** README image at
+``output/annulus_quickstart.png`` is produced by
+``scripts/generate_3row_admesh.py`` (graded sizing, Fscale=0.5, niter=500).
+Do not let this test overwrite that path.
 """
 from __future__ import annotations
 
@@ -27,7 +30,7 @@ import chilmesh
 from chilmesh import optimize_with_admesh_truss
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = REPO_ROOT / "output"
+OUTPUT_DIR = REPO_ROOT / "tests" / "output"
 OUTPUT_PNG = OUTPUT_DIR / "annulus_quickstart.png"
 
 _ANNULUS_SDF = lambda p: np.maximum(

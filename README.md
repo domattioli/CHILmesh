@@ -47,11 +47,11 @@ plt.show()
 
 See how a raw Delaunay triangulation is progressively refined through warm-start truss equilibration and FEM smoothing — all three rows share the same boundary and element count (580 triangles):
 
-![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](output/annulus_quickstart.png?v=4)
+![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](output/annulus_quickstart.png?v=5)
 
 **Row 1 — Raw Delaunay:** Unsmoothed input mesh from `chilmesh.examples.annulus()` (median quality ≈ 0.71).
-**Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop, started from Row 1's points (boundary pinned bit-exactly via `pfix`). The vendored loop tracks the best-quality state across iterations and early-stops if median quality drops more than 10% from peak. Median quality jumps to ≈ 0.94.
-**Row 3 — Row 2 + FEM Smoother:** CHILmesh's FEM relaxation applied to Row 2.
+**Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop, started from Row 1's points (boundary pinned bit-exactly via `pfix`) with graded sizing `H_MIN=0.05` near boundary → `H_MAX=0.18` interior. The truss loop reaches a **quality plateau** (median ≈ 0.92, std < 0.005) within ~10 iterations and runs to `niter=500` while interior points jiggle inside that plateau — the strict `dptol=1e-3` position threshold is *not* reached, but `track_best_quality=True` ensures the returned state is the best-quality snapshot encountered, not the iteration-500 endpoint. The loop also early-stops if median quality drops more than 10% from peak.
+**Row 3 — Row 2 + FEM Smoother:** CHILmesh's FEM relaxation applied to *that exact* Row 2 mesh (same `connectivity_list`, same `points`); polishes median quality to ≈ 0.93. Boundary preservation verified by `V_BND_PROP` (max delta ≈ 6e-12).
 
 Columns: **left** = mesh wireframe · **center** = skeletonization layers (viridis) · **right** = per-element quality (cool, 4√3·area / Σedge²).
 
