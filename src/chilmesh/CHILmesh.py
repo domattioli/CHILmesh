@@ -288,31 +288,55 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         if elem_ids is None:
             elem_ids = np.arange( self.n_elems )
-        
         if np.isscalar( elem_ids ):
-            elem_ids = [elem_ids]
-        
-        areas = np.zeros( len( elem_ids ) )
-        
-        # Determine element types
-        tri_elems, quad_elems = self._elem_type( elem_ids )
-        
-        # Calculate areas for triangular elements
-        for i, elem_id in enumerate( elem_ids ):
-            if elem_id in tri_elems:
-                vertices = self.connectivity_list[elem_id][:3]  # First 3 vertices for triangles
-                x = self.points[vertices, 0]
-                y = self.points[vertices, 1]
-                # Shoelace formula for triangle
-                areas[i] = 0.5 * ((x[0]*(y[1]-y[2]) + x[1]*(y[2]-y[0]) + x[2]*(y[0]-y[1])))
-            elif elem_id in quad_elems:
-                vertices = self.connectivity_list[elem_id]
-                x = self.points[vertices, 0]
-                y = self.points[vertices, 1]
-                # Shoelace formula for quadrilateral
-                areas[i] = 0.5 * ((x[0]*(y[1]-y[3]) + x[1]*(y[2]-y[0]) + 
-                                  x[2]*(y[3]-y[1]) + x[3]*(y[0]-y[2])))
-        
+            elem_ids = np.array( [elem_ids] )
+        elem_ids = np.asarray(elem_ids)
+
+        if self.connectivity_list.shape[1] == 3:
+            # Pure triangular mesh — single vectorised path
+            verts = self.connectivity_list[elem_ids]          # (n, 3)
+            xy = self.points[verts, :2]                       # (n, 3, 2)
+            x, y = xy[:, :, 0], xy[:, :, 1]
+            return 0.5 * (
+                x[:, 0] * (y[:, 1] - y[:, 2])
+                + x[:, 1] * (y[:, 2] - y[:, 0])
+                + x[:, 2] * (y[:, 0] - y[:, 1])
+            )
+
+        # 4-column connectivity: separate padded triangles from quads
+        rows = self.connectivity_list[elem_ids]               # (n, 4)
+        tri_mask = (
+            (rows[:, 0] == rows[:, 1])
+            | (rows[:, 1] == rows[:, 2])
+            | (rows[:, 2] == rows[:, 3])
+            | (rows[:, 3] == rows[:, 0])
+            | (rows[:, 0] == rows[:, 2])
+            | (rows[:, 1] == rows[:, 3])
+        )
+        areas = np.zeros(len(elem_ids))
+
+        if tri_mask.any():
+            verts = rows[tri_mask, :3]
+            xy = self.points[verts, :2]
+            x, y = xy[:, :, 0], xy[:, :, 1]
+            areas[tri_mask] = 0.5 * (
+                x[:, 0] * (y[:, 1] - y[:, 2])
+                + x[:, 1] * (y[:, 2] - y[:, 0])
+                + x[:, 2] * (y[:, 0] - y[:, 1])
+            )
+
+        quad_mask = ~tri_mask
+        if quad_mask.any():
+            verts = rows[quad_mask]
+            xy = self.points[verts, :2]
+            x, y = xy[:, :, 0], xy[:, :, 1]
+            areas[quad_mask] = 0.5 * (
+                x[:, 0] * (y[:, 1] - y[:, 3])
+                + x[:, 1] * (y[:, 2] - y[:, 0])
+                + x[:, 2] * (y[:, 3] - y[:, 1])
+                + x[:, 3] * (y[:, 0] - y[:, 2])
+            )
+
         return areas
     
     def _elem_type( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None 
@@ -648,6 +672,16 @@ class CHILmesh(CHILmeshPlotMixin):
         edge2elem = self.adjacencies["Edge2Elem"]
         boundary_mask = (edge2elem[:, 1] == -1)  # Second element is sentinel
         return np.where( boundary_mask )[0]
+
+    def boundary_node_indices( self ) -> np.ndarray:
+        """
+        Return the indices of all boundary vertices.
+
+        Returns:
+            Sorted array of vertex indices that lie on at least one boundary edge.
+        """
+        edge_verts = self.edge2vert(self.boundary_edges())
+        return np.unique(edge_verts.flatten())
     
     def edge2vert( self, edge_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
@@ -1159,64 +1193,64 @@ class CHILmesh(CHILmeshPlotMixin):
                 If None, all elements are evaluated.
         
         Returns:
-            Array of interior angles for each element
+            Array of interior angles (degrees) with shape (n_elems, 3) for
+            triangular meshes or (n_elems, 4) for quad/mixed meshes.
         """
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
-        
         if np.isscalar(elem_ids):
-            elem_ids = [elem_ids]
-        
-        # Determine element types
-        tri_elems, quad_elems = self._elem_type(elem_ids)
-        
-        # Maximum number of angles per element
-        max_angles = 4 if len(quad_elems) > 0 else 3
-        
-        # Initialize angles array
-        angles = np.zeros((len(elem_ids), max_angles))
-        
-        # Calculate angles for each element
-        for i, elem_id in enumerate(elem_ids):
-            if elem_id in tri_elems:
-                # Triangle angles
-                vertices = self.connectivity_list[elem_id][:3]  # First 3 vertices for triangles
-                coords = self.points[vertices, :2]  # Get x,y coordinates
-                
-                # Calculate angles at each vertex
-                for j in range(3):
-                    v1 = coords[(j+1)%3] - coords[j]
-                    v2 = coords[(j-1)%3] - coords[j]
-                    
-                    # Normalize vectors safely to avoid runtime warnings of NaN
-                    v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
-                    v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
-                    
-                    # Calculate angle in degrees
-                    dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
-                    angle = np.arccos(dot_product) * 180 / np.pi
-                    angles[i, j] = angle
-                    
-            elif elem_id in quad_elems:
-                # Quadrilateral angles
-                vertices = self.connectivity_list[elem_id]  # All 4 vertices
-                coords = self.points[vertices, :2]  # Get x,y coordinates
+            elem_ids = np.array([elem_ids])
+        elem_ids = np.asarray(elem_ids)
 
-                # Calculate angles at each vertex.  Use the same epsilon
-                # guard as the triangle path so degenerate quads with
-                # zero-length edges produce a real number (typically 0)
-                # rather than NaN, which would slip past elem_quality's
-                # ``<= 359.99 -> zero out`` check (B5).
-                for j in range(4):
-                    v1 = coords[(j + 1) % 4] - coords[j]
-                    v2 = coords[(j - 1) % 4] - coords[j]
+        if self.connectivity_list.shape[1] == 3:
+            # Pure triangular mesh — vectorised over all elements,
+            # inner loop only over 3 vertices (constant).
+            verts = self.connectivity_list[elem_ids]   # (n, 3)
+            xy = self.points[verts, :2]                # (n, 3, 2)
+            angles = np.zeros((len(elem_ids), 3))
+            for j in range(3):
+                v1 = xy[:, (j + 1) % 3, :] - xy[:, j, :]  # (n, 2)
+                v2 = xy[:, (j - 1) % 3, :] - xy[:, j, :]  # (n, 2)
+                n1 = np.linalg.norm(v1, axis=1, keepdims=True) + 1e-12
+                n2 = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-12
+                dot = np.clip(((v1 / n1) * (v2 / n2)).sum(axis=1), -1.0, 1.0)
+                angles[:, j] = np.degrees(np.arccos(dot))
+            return angles
 
-                    v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
-                    v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
+        # 4-column connectivity
+        rows = self.connectivity_list[elem_ids]        # (n, 4)
+        tri_mask = (
+            (rows[:, 0] == rows[:, 1])
+            | (rows[:, 1] == rows[:, 2])
+            | (rows[:, 2] == rows[:, 3])
+            | (rows[:, 3] == rows[:, 0])
+            | (rows[:, 0] == rows[:, 2])
+            | (rows[:, 1] == rows[:, 3])
+        )
+        quad_mask = ~tri_mask
+        n_angle_cols = 4 if quad_mask.any() else 3
+        angles = np.zeros((len(elem_ids), n_angle_cols))
 
-                    dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
-                    angle = np.arccos(dot_product) * 180 / np.pi
-                    angles[i, j] = float(np.real(angle))
+        if tri_mask.any():
+            xy = self.points[rows[tri_mask, :3], :2]   # (n_tri, 3, 2)
+            for j in range(3):
+                v1 = xy[:, (j + 1) % 3, :] - xy[:, j, :]
+                v2 = xy[:, (j - 1) % 3, :] - xy[:, j, :]
+                n1 = np.linalg.norm(v1, axis=1, keepdims=True) + 1e-12
+                n2 = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-12
+                dot = np.clip(((v1 / n1) * (v2 / n2)).sum(axis=1), -1.0, 1.0)
+                angles[tri_mask, j] = np.degrees(np.arccos(dot))
+
+        if quad_mask.any():
+            xy = self.points[rows[quad_mask], :2]      # (n_quad, 4, 2)
+            for j in range(4):
+                v1 = xy[:, (j + 1) % 4, :] - xy[:, j, :]
+                v2 = xy[:, (j - 1) % 4, :] - xy[:, j, :]
+                n1 = np.linalg.norm(v1, axis=1, keepdims=True) + 1e-12
+                n2 = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-12
+                dot = np.clip(((v1 / n1) * (v2 / n2)).sum(axis=1), -1.0, 1.0)
+                angles[quad_mask, j] = np.degrees(np.arccos(dot))
+
         return angles
 
     def elem_quality(self, elem_ids=None, quality_type='skew') -> Tuple[np.ndarray, np.ndarray, dict]:
@@ -1230,72 +1264,67 @@ class CHILmesh(CHILmeshPlotMixin):
                 'skew', 'skewness', 'angular skewness': Measures deviation from ideal angles
         
         Returns:
-            Tuple of (Quality, Angles) where:
+            Tuple of (Quality, Angles, stats) where:
             - Quality: Array of quality measurements for each element
             - Angles: Array of interior angles for each element
+            - stats: Dict with mean, median, min, max, std
         """
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
-        
         if np.isscalar(elem_ids):
-            elem_ids = [elem_ids]
-        
-        # Determine element types
-        tri_elems, quad_elems = self._elem_type(elem_ids)
-        
+            elem_ids = np.array([elem_ids])
+        elem_ids = np.asarray(elem_ids)
+
+        # Compute boolean masks without O(n²) membership checks
+        if self.connectivity_list.shape[1] == 3:
+            tri_mask = np.ones(len(elem_ids), dtype=bool)
+            quad_mask = np.zeros(len(elem_ids), dtype=bool)
+        else:
+            rows = self.connectivity_list[elem_ids]
+            tri_mask = (
+                (rows[:, 0] == rows[:, 1])
+                | (rows[:, 1] == rows[:, 2])
+                | (rows[:, 2] == rows[:, 3])
+                | (rows[:, 3] == rows[:, 0])
+                | (rows[:, 0] == rows[:, 2])
+                | (rows[:, 1] == rows[:, 3])
+            )
+            quad_mask = ~tri_mask
+
         # Calculate interior angles
         angles = self.interior_angles(elem_ids)
         
         # Initialize quality array
         quality = np.zeros(len(elem_ids))
         
-        # Compute quality based on the selected metric
         if quality_type in ['skew', 'skewness', 'angular skewness']:
-            # Process triangular elements
-            tri_mask = np.array([elem_id in tri_elems for elem_id in elem_ids])
-            if np.any(tri_mask):
-                # Get angles for triangular elements
+            if tri_mask.any():
                 tri_angles = angles[tri_mask, :3]
-                
-                # Calculate max and min angles
                 tri_max = np.max(tri_angles, axis=1)
                 tri_min = np.min(tri_angles, axis=1)
-                
-                # Equiangular skew for triangles (ideal angle = 60°)
                 quality[tri_mask] = 1 - np.maximum(
                     (tri_max - 60) / (180 - 60),
                     (60 - tri_min) / 60
                 )
-            
-            # Process quadrilateral elements
-            quad_mask = np.array([elem_id in quad_elems for elem_id in elem_ids])
-            if np.any(quad_mask):
-                # Get angles for quadrilateral elements
+
+            if quad_mask.any():
                 quad_angles = angles[quad_mask, :]
-                
-                # Calculate max and min angles
                 quad_max = np.max(quad_angles, axis=1)
                 quad_min = np.min(quad_angles, axis=1)
-                
-                # Equiangular skew for quads (ideal angle = 90°)
                 quality[quad_mask] = 1 - np.maximum(
                     (quad_max - 90) / (180 - 90),
                     (90 - quad_min) / 90
                 )
-            
-            # Handle poor angle calculations (concave elements, etc.)
-            # For triangles, sum of angles should be close to 180°
+
+            # Zero out elements with degenerate angle sums
             tri_sum_mask = tri_mask & (np.sum(angles[:, :3], axis=1) <= 179.99)
             quality[tri_sum_mask] = 0
-            
-            # For quads, sum of angles should be close to 360°
             quad_sum_mask = quad_mask & (np.sum(angles, axis=1) <= 359.99)
             quality[quad_sum_mask] = 0
         
         else:
             raise ValueError(f"Unknown quality type: {quality_type}")
         
-        # Calculate statistics for the computed quality
         stats = {
             'mean': float(np.mean(quality)),
             'median': float(np.median(quality)),
