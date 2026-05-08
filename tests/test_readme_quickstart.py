@@ -1,145 +1,120 @@
 """End-to-end regeneration of the README quickstart figure.
 
-Renders the 4x3 grid that lives in ``README.md``:
+Renders the 3-row pipeline that lives in ``README.md``:
 
-    Row 1: Original CHILmesh annulus (dispersed interior nodes)
-    Row 2: CHILmesh FEM smoother applied to row 1
-    Row 3: ADMESH given row 1's boundary only (skipped if admesh missing)
-    Row 4: ADMESH + right-angle smoother on row 3 (skipped if admesh missing)
+    Row 1: Raw annulus from chilmesh.examples.annulus()
+    Row 2: ADMESH warm-start truss applied to row 1
+    Row 3: FEM smoother applied to row 2
 
-Each row asserts the mesh is geometrically valid before plotting.
+All three rows use chilmesh's own optimizer — no external admesh package
+required. Each row asserts geometric validity before plotting.
 
-If the test passes, the freshly-generated PNG at
-``tests/output/annulus_quickstart.png`` is the canonical README image.
-Re-run ``pytest tests/test_readme_quickstart.py`` after any change that
-might affect the visualization and commit the updated PNG.
+If the test passes, the freshly-generated PNG at ``output/annulus_quickstart.png``
+is the canonical README image.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
 import matplotlib
-
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import warnings
 
 import chilmesh
-
-try:
-    import admesh
-    HAS_ADMESH = True
-except ImportError:
-    HAS_ADMESH = False
+from chilmesh import optimize_with_admesh_truss
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = REPO_ROOT / "output"
 OUTPUT_PNG = OUTPUT_DIR / "annulus_quickstart.png"
 
+_ANNULUS_SDF = lambda p: np.maximum(
+    np.linalg.norm(p, axis=1) - 1.0,
+    0.3 - np.linalg.norm(p, axis=1),
+)
 
-def _assert_geometrically_valid(mesh, label: str) -> None:
+
+def _assert_valid(mesh, label: str) -> None:
     areas = mesh.signed_area()
-    assert (areas > 0).all(), f"{label}: {(areas <= 0).sum()} elements with non-positive area"
-
+    assert (areas > 0).all(), f"{label}: {(areas <= 0).sum()} non-positive-area elements"
     conn = mesh.connectivity_list
-    assert (conn >= 0).all() and (conn < mesh.n_verts).all(), f"{label}: index out of range"
+    assert (conn >= 0).all() and (conn < mesh.n_verts).all(), f"{label}: index OOB"
     if mesh.type == "Triangular":
         for row in conn[:, :3]:
-            assert len(set(row.tolist())) == 3, f"{label}: degenerate triangle row {row}"
-
-    angles = mesh.interior_angles()
-    assert not np.isnan(angles).any(), f"{label}: NaN in interior angles"
-
+            assert len(set(row.tolist())) == 3, f"{label}: degenerate row {row}"
+    assert not np.isnan(mesh.interior_angles()).any(), f"{label}: NaN angles"
     seen = set()
     for oe in mesh.layers["OE"]:
         seen.update(int(e) for e in oe)
     for ie in mesh.layers["IE"]:
         seen.update(int(e) for e in ie)
-    assert seen == set(range(mesh.n_elems)), (
-        f"{label}: layer cover misses {len(set(range(mesh.n_elems)) - seen)} elements"
-    )
-
-
-def _annulus_sdf(p: np.ndarray) -> np.ndarray:
-    r = np.sqrt(p[:, 0] ** 2 + p[:, 1] ** 2)
-    return np.maximum(r - 2.0, 1.0 - r)
+    assert seen == set(range(mesh.n_elems)), f"{label}: layer cover incomplete"
 
 
 def _plot_row(axs_row, mesh, label: str) -> None:
-    """Render the three CHILmesh views for a single row of the figure."""
+    """Render three CHILmesh views for one figure row."""
     _, ax = mesh.plot(ax=axs_row[0])
     mesh.plot_point(1, ax=ax)
     mesh.plot_edge(1, ax=ax)
     mesh.plot_elem(1, ax=ax)
-    ax.set_title(f"{label}: mesh + highlighted entities")
+    ax.set_title(f"{label}\nmesh + highlights")
 
     _, ax = mesh.plot_layer(ax=axs_row[1])
-    ax.set_title(f"{label}: {mesh.n_layers} mesh layers")
+    ax.set_title(f"{label}\n{mesh.n_layers} layers")
 
     q, _, _ = mesh.elem_quality()
     _, ax = mesh.plot_quality(ax=axs_row[2])
-    ax.set_title(f"{label}: quality (median {np.median(q):.2f}, std {np.std(q):.2f})")
+    ax.set_title(f"{label}\nquality med={np.median(q):.2f} σ={np.std(q):.2f}")
 
 
 def test_readme_annulus_regenerates_and_validates(tmp_path):
-    # 1. Original (dispersed) + FEM-smoothed (CHILmesh-only).
+    # Row 1 — raw annulus
     mesh = chilmesh.examples.annulus()
-    _assert_geometrically_valid(mesh, "annulus (original)")
+    _assert_valid(mesh, "annulus (raw)")
 
-    smoothed = mesh.copy()
-    smoothed.smooth_mesh(method="fem", acknowledge_change=True)
-    _assert_geometrically_valid(smoothed, "annulus (FEM-smoothed)")
-
-    # Roundtrip-write the smoothed mesh and confirm it reloads.
-    out14 = tmp_path / "annulus_smoothed.fort.14"
-    assert smoothed.write_to_fort14(str(out14), grid_name="annulus_smoothed") is True
-    reloaded = chilmesh.CHILmesh.read_from_fort14(out14)
-    _assert_geometrically_valid(reloaded, "annulus (reloaded)")
-
-    # 2. ADMESH from row-1's boundary only (no interior nodes), then the
-    #    right-angle smoother on top. Skipped if admesh is not installed.
-    if HAS_ADMESH:
-        # Reuse the original annulus boundary so rows 1 and 3 share a domain.
-        boundary_pts = mesh.nodes[mesh.boundary_node_indices()]
-        domain = admesh.Domain(_annulus_sdf, bbox=(-2.5, -2.5, 2.5, 2.5),
-                               pfix=boundary_pts)
-        admesh_mesh = admesh.triangulate(domain, h_max=0.15)
-        mesh_adm = chilmesh.from_admesh(admesh_mesh)
-        _assert_geometrically_valid(mesh_adm, "annulus (admesh)")
-
-        p_right, t_right = admesh.smooth_for_quadrangulation(
-            admesh_mesh.nodes, admesh_mesh.elements,
-            _annulus_sdf, n_outer=3, pair_hint=True,
+    # Row 2 — warm-start truss (chilmesh-internal, no external admesh needed)
+    # deltat=0.02 + track_best_quality=False: small steps to convergence, no
+    # premature exit from the degeneracy guard (outer enforce_non_degradation
+    # handles quality check after the fact).
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        truss = optimize_with_admesh_truss(
+            mesh, _ANNULUS_SDF, enforce_non_degradation=False,
+            deltat=0.02, track_best_quality=False,
         )
-        mesh_right = chilmesh.from_admesh_arrays(p_right, t_right)
-        _assert_geometrically_valid(mesh_right, "annulus (admesh+right)")
-    else:
-        mesh_adm = mesh_right = None
+    _assert_valid(truss, "annulus (truss)")
 
-    # 3. Render the 4x3 README quickstart figure.
-    n_rows = 4 if HAS_ADMESH else 2
-    fig, axs = plt.subplots(n_rows, 3, figsize=(15, 4.5 * n_rows))
+    # Row 3 — FEM smoother on top of truss result
+    smoothed = truss.copy()
+    smoothed.smooth_mesh(method="fem", acknowledge_change=True)
+    _assert_valid(smoothed, "annulus (FEM)")
+
+    # Roundtrip fort.14 check
+    out14 = tmp_path / "annulus_smoothed.fort.14"
+    assert smoothed.write_to_fort14(str(out14), grid_name="annulus_smoothed")
+    reloaded = chilmesh.CHILmesh.read_from_fort14(out14)
+    _assert_valid(reloaded, "annulus (reloaded)")
+
+    # 3-row figure
+    fig, axs = plt.subplots(3, 3, figsize=(15, 13.5))
     fig.suptitle(
-        "CHILmesh annulus: Original (dispersed) vs FEM-Smoothed"
-        + (" vs ADMESH (boundary-only) vs ADMESH + Right-Angle Smoother"
-           if HAS_ADMESH else ""),
-        fontsize=16,
+        "CHILmesh annulus: Raw Delaunay → Warm-Start Truss → FEM Smoother",
+        fontsize=14,
     )
 
-    _plot_row(axs[0], mesh, "Original (dispersed)")
-    _plot_row(axs[1], smoothed, "FEM-Smoothed")
-    if HAS_ADMESH:
-        _plot_row(axs[2], mesh_adm, "ADMESH (boundary-only)")
-        _plot_row(axs[3], mesh_right, "ADMESH + Right-Angle Smoother")
+    _plot_row(axs[0], mesh,     "Row 1 — Raw Delaunay")
+    _plot_row(axs[1], truss,    "Row 2 — + Truss (warm-start)")
+    _plot_row(axs[2], smoothed, "Row 3 — + FEM Smoother")
 
     plt.tight_layout()
-    plt.subplots_adjust(top=0.96)
+    plt.subplots_adjust(top=0.95)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUTPUT_PNG, dpi=120, bbox_inches="tight")
     plt.close(fig)
 
     assert OUTPUT_PNG.exists() and OUTPUT_PNG.stat().st_size > 5_000, (
-        f"figure not written or implausibly small: {OUTPUT_PNG}"
+        f"figure not written or too small: {OUTPUT_PNG}"
     )
