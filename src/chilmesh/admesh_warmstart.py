@@ -321,6 +321,8 @@ def optimize_with_admesh_truss_arrays(
     geps_factor: float = 1e-3,
     niter: int = 500,
     seed: int = 0,
+    track_best_quality: bool = True,
+    quality_drop_threshold: float = 0.10,
     sdf_tolerance: float = 1e-6,
     enforce_non_degradation: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -405,7 +407,9 @@ def optimize_with_admesh_truss_arrays(
             boundary_xy, interior_xy,
             sdf, size_fn, h0, bbox,
             dptol=dptol, ttol=ttol, Fscale=Fscale, deltat=deltat,
-            geps_factor=geps_factor, niter=niter, seed=seed
+            geps_factor=geps_factor, niter=niter, seed=seed,
+            track_best_quality=track_best_quality,
+            quality_drop_threshold=quality_drop_threshold,
         )
     except ImportError as e:
         raise ImportError(
