@@ -303,6 +303,47 @@ Only push to other branches when:
 
 ---
 
+## DomI Sync Contract
+
+CHILmesh is a **downstream consumer** of `domattioli/DomI` for skills, manifest, and policy. The contract is downstream-pulled — DomI never edits this repo directly.
+
+### What the contract enforces
+
+On **every session start**, `scripts/instructions_on_start.sh` runs the `sync-from-domi` skill's `check_pin.sh` to compare this repo's `.domi-pin` against `domattioli/DomI@main`:
+
+| State | Exit code | Behavior |
+|-------|-----------|----------|
+| Synced | 0 | Continue silently |
+| Behind (drift) | 1 | **HARD STOP** — refuse all write work until `sync from DomI` is invoked |
+| Unpinned | 2 | Warn, allow first-time setup |
+| Forked (manifest hash mismatch) | 3 | **HARD STOP** — operator must resolve manually |
+| `gh` unavailable | 4 | Warn, continue (do not block on infra failures) |
+
+Set `DOMI_BLOCK_ON_DRIFT=0` only for read-only sessions where you explicitly accept stale upstream state.
+
+### Required artifacts in this repo
+
+- **`.domi-pin`** — pinned upstream commit SHA + MANIFEST.md sha256. Never edit by hand. Regenerate via `bash ~/.claude/plugins/cache/DomI/sync-from-domi/<ver>/skills/sync-from-domi/scripts/update_pin.sh`.
+- **`scripts/instructions_on_start.sh`** — startup health check. The DomI drift hook must sit immediately after `set -euo pipefail` and before any other audit checks.
+
+### When drift is detected
+
+1. The startup hook prints the HARD STOP banner and exits non-zero.
+2. Read any open `chore: sync DomI@<sha>` issue on this repo (opened by DomI's `notify-downstream.yml`).
+3. Invoke the `sync-from-domi` skill — it pulls changed artifacts, refreshes `.domi-pin`, comments the new pin SHA on the issue, and closes it.
+4. Commit the refreshed `.domi-pin` and resume work.
+
+### Contract plugins (installed at user scope, not vendored)
+
+```bash
+claude plugin marketplace add domattioli/DomI
+claude plugin install sync-from-domi@DomI       # required
+claude plugin install introspect@DomI           # required (end-of-session retrospective)
+claude plugin install request-from-domi@DomI    # opt-in (file/vote on skill requests)
+```
+
+---
+
 ## Skills
 
 ### Skill: github-release
