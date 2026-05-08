@@ -80,6 +80,7 @@ class CHILmeshPlotMixin:
         lc = LineCollection(segments, colors=color, linewidths=linewidth,
                             linestyles=linestyle)
         ax.add_collection(lc)
+        ax.autoscale_view()  # add_collection doesn't auto-update limits
 
         return fig, ax
 
@@ -190,7 +191,7 @@ class CHILmeshPlotMixin:
             fig, ax = plt.subplots(figsize=(10, 8))
         else:
             fig = ax.figure
-        ax.set_aspect('equal')
+        self.axis_chilmesh(ax=ax)  # sets equal aspect + mesh-fitted limits
 
         cmap_obj = matplotlib.colormaps[cmap].resampled(self.n_layers)
         norm = BoundaryNorm(boundaries=np.arange(self.n_layers + 1),
@@ -290,6 +291,7 @@ class CHILmeshPlotMixin:
                             linewidths=linewidth, linestyles=linestyle,
                             alpha=alpha)
         ax.add_collection(pc)
+        ax.autoscale_view()  # add_collection doesn't auto-update limits
 
     def _ensure_array(self, maybe_scalar):
         return np.array([maybe_scalar]) if np.isscalar(maybe_scalar) else maybe_scalar
