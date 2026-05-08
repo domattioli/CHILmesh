@@ -3,63 +3,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.cm as cm
-from matplotlib.colors import ListedColormap, BoundaryNorm
-from abc import abstractproperty
-from typing import Optional, List, Union, Tuple, Any, Dict
+from matplotlib.collections import LineCollection, PolyCollection
+from matplotlib.colors import BoundaryNorm, Normalize
+from typing import Optional, Tuple
+
 
 class CHILmeshPlotMixin:
-    """
-    A mixin class that provides plotting functionality for CHILmesh objects.
-    """
+    """Mixin providing fast, vectorized plotting for CHILmesh objects."""
+
     @property
-    def grid_name( self ) -> str:
-        """
-        Return the name of the grid.
-        """
-        return getattr( self, '_grid_name', 'CHILmesh' )
-    
-    def axis_chilmesh( self, ax: Optional[plt.Axes] = None ) -> plt.Axes:
-        """
-        Set up the axes for plotting the mesh.
-        
-        Parameters:
-            ax: Matplotlib axes to set up. If None, the current axes are used.
-        
-        Returns:
-            The configured axes
-        """
+    def grid_name(self) -> str:
+        return getattr(self, '_grid_name', 'CHILmesh')
+
+    def axis_chilmesh(self, ax: Optional[plt.Axes] = None) -> plt.Axes:
+        """Configure axes with equal aspect and mesh-fitted limits."""
         if ax is None:
             ax = plt.gca()
-        
-        ax.set_aspect( 'equal' )
-        ax.set_facecolor( 'white' )
-        ax.tick_params( labelsize=12, width=1.5 )
-        
+        ax.set_aspect('equal')
+        ax.set_facecolor('white')
+        ax.tick_params(labelsize=12, width=1.5)
         x = self.points[:, 0]
         y = self.points[:, 1]
-        offset = 0.01 * max( x.max() - x.min(), y.max() - y.min() )
-        
-        ax.set_xlim( [x.min() - offset, x.max() + offset] )
-        ax.set_ylim( [y.min() - offset, y.max() + offset] )
-        
+        pad = 0.01 * max(x.max() - x.min(), y.max() - y.min())
+        ax.set_xlim([x.min() - pad, x.max() + pad])
+        ax.set_ylim([y.min() - pad, y.max() + pad])
         return ax
 
-
     def plot(self, elem_ids=None, elem_color='none', edge_color='k',
-            linewidth=1.0, linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
+             linewidth=1.0, linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
         """
         Plot the mesh.
 
-        Parameters:
-            elem_ids: IDs of elements to plot. If None, all elements are plotted.
-            elem_color: Color of elements (set to 'none' for edge-only).
-            edge_color: Color of element or edge outlines.
-            linewidth: Line width.
-            linestyle: Line style.
-            ax: Optional matplotlib axis. Creates a new one if not provided.
-
-        Returns:
-            (fig, ax): matplotlib Figure and Axes
+        When elem_color is 'none', only edges are drawn (fast LineCollection path).
+        Otherwise elements are filled using PolyCollection.
         """
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
@@ -71,42 +47,23 @@ class CHILmeshPlotMixin:
         else:
             fig = ax.figure
 
-        ax.set_aspect('equal')
-        ax.set_facecolor('white')
-        ax.tick_params(labelsize=12, width=1.5)
-
-        x = self.points[:, 0]
-        y = self.points[:, 1]
-        offset = 0.01 * max(x.max() - x.min(), y.max() - y.min())
-        ax.set_xlim([x.min() - offset, x.max() + offset])
-        ax.set_ylim([y.min() - offset, y.max() + offset])
+        self.axis_chilmesh(ax=ax)
 
         if elem_color == 'none':
             edges = self.elem2edge(elem_ids).flatten()
             edges = edges[edges >= 0]
-            self.plot_edge(edges, color=edge_color, linewidth=linewidth, linestyle=linestyle, ax=ax)
+            self.plot_edge(edges, color=edge_color, linewidth=linewidth,
+                           linestyle=linestyle, ax=ax)
         else:
-            tri_elems, quad_elems = self._elem_type(elem_ids)
-
-            for elem_id in tri_elems:
-                vertices = self.connectivity_list[elem_id]
-                if self.type != "Triangular":
-                    vertices = vertices[:3]
-                coords = self.points[vertices, :2]
-                tri = plt.Polygon(coords, facecolor=elem_color, edgecolor=edge_color,
-                                linewidth=linewidth, linestyle=linestyle)
-                ax.add_patch(tri)
-
-            for elem_id in quad_elems:
-                vertices = self.connectivity_list[elem_id]
-                coords = self.points[vertices, :2]
-                quad = plt.Polygon(coords, facecolor=elem_color, edgecolor=edge_color,
-                                linewidth=linewidth, linestyle=linestyle)
-                ax.add_patch(quad)
+            self._plot_polys(elem_ids, facecolor=elem_color,
+                             edgecolor=edge_color, linewidth=linewidth,
+                             linestyle=linestyle, ax=ax)
 
         return fig, ax
 
-    def plot_edge(self, edge_ids=None, color='g', linewidth=2.5, linestyle='-', ax=None):
+    def plot_edge(self, edge_ids=None, color='g', linewidth=2.5,
+                  linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot edges using a single vectorized LineCollection call."""
         if edge_ids is None:
             edge_ids = np.arange(self.n_edges)
 
@@ -114,19 +71,22 @@ class CHILmeshPlotMixin:
             ax = self.axis_chilmesh()
         fig = ax.figure
 
-
         v = self.edge2vert(edge_ids)
         p1 = self.points[v[:, 0], :2]
         p2 = self.points[v[:, 1], :2]
 
-        for (x1, y1), (x2, y2) in zip(p1, p2):
-            ax.plot([x1, x2], [y1, y2], color=color, linewidth=linewidth, linestyle=linestyle)
+        # One call instead of n_edges calls — critical for large meshes
+        segments = np.stack([p1, p2], axis=1)  # (n_edges, 2, 2)
+        lc = LineCollection(segments, colors=color, linewidths=linewidth,
+                            linestyles=linestyle)
+        ax.add_collection(lc)
 
         return fig, ax
 
-    def plot_elem(self, elem_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
-        """Plot specified elements of the mesh."""
-
+    def plot_elem(self, elem_ids=None, color='b', edge_color='k',
+                  linewidth=1.0, linestyle='-',
+                  ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot elements filled with a single color using PolyCollection."""
         elem_ids = self._ensure_array(elem_ids)
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
@@ -136,148 +96,93 @@ class CHILmeshPlotMixin:
         else:
             fig = ax.figure
 
-        tri_elems, quad_elems = self._elem_type(elem_ids)
-
-        for elem_id in tri_elems:
-            vertices = self.connectivity_list[elem_id]
-            if self.type != "Triangular":
-                vertices = vertices[:3]
-            coords = self.points[vertices, :2]
-            tri = plt.Polygon(coords, facecolor=color, edgecolor=edge_color, linewidth=linewidth, linestyle=linestyle)
-            ax.add_patch(tri)
-
-        for elem_id in quad_elems:
-            vertices = self.connectivity_list[elem_id]
-            coords = self.points[vertices, :2]
-            quad = plt.Polygon(coords, facecolor=color, edgecolor=edge_color, linewidth=linewidth, linestyle=linestyle)
-            ax.add_patch(quad)
-
+        self._plot_polys(elem_ids, facecolor=color, edgecolor=edge_color,
+                         linewidth=linewidth, linestyle=linestyle, ax=ax)
         return fig, ax
-    
-    def plot_face(self, face_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None) -> Tuple[plt.Figure, plt.Axes]:
-        """
-        Plot faces of the mesh (alias for plot_elem).
-        
-        Parameters:
-            face_ids: IDs of faces to plot. If None, all faces are plotted.
-            color: Color of faces.
-            edge_color: Color of edges.
-            linewidth: Width of edge lines.
-            linestyle: Style of edge lines.
-            ax: Optional matplotlib axis to plot on.
-            
-        Returns:
-            A tuple containing the figure and axis objects.
-        """
-        return self.plot_elem(elem_ids=face_ids, color=color, edge_color=edge_color, 
-                             linewidth=linewidth, linestyle=linestyle, ax=ax)
 
-    def plot_point( self, ids: Optional[np.ndarray] = None, point_type: str = 'vertex',
-                   color: str = 'r', marker: str = 'o', size: float = 5, ax: plt.Axes=None, **kwargs ) -> Tuple[plt.Figure, plt.Axes]:
-        """
-        Plot points of the mesh.
-        
-        Parameters:
-            ids: IDs of points to plot. If None, all points of the specified type are plotted.
-            point_type: Type of points to plot ('vertex', 'edge', or 'element').
-            color: Color of points.
-            marker: Marker style.
-            size: Marker size.
-        """
-        # ax = self.axis_chilmesh()
-        if ax is None:
-            fig, ax = self.plot()  # fallback
-        else:
-            fig = ax.figure
-        
-        if point_type.lower() in {'vertex', 'vert'}:
-            if ids is None:
-                ids = np.arange( self.n_verts )
-            x, y = self.points[ids, 0], self.points[ids, 1]
-            
-        elif point_type.lower() in {'edge', 'midpoint'}:
-            if ids is None:
-                ids = np.arange( self.n_edges )
-            
-            # Get vertices for each edge
-            edges = self.edge2vert( ids )
-            
-            # Calculate midpoints
-            x = np.mean( self.points[edges, 0], axis=1 )
-            y = np.mean( self.points[edges, 1], axis=1 )
-            
-        elif point_type.lower() in {'element', 'centroid'}:
-            if ids is None:
-                ids = np.arange( self.n_elems )
-            
-            # Calculate centroids
-            centroids = np.zeros( ( len( ids ), 2 ) )
-            for i, elem_id in enumerate( ids ):
-                vertices = self.connectivity_list[elem_id]
-                vertices = vertices[vertices >= 0]  # Ignore negative placeholders
-                centroids[i, 0] = np.mean( self.points[vertices, 0] )
-                centroids[i, 1] = np.mean( self.points[vertices, 1] )
-            
-            x, y = centroids[:, 0], centroids[:, 1]
-            
-        else:
-            raise ValueError( f"Unknown point type: {point_type}" )
-        
-        ax.plot( x, y, linestyle='none', marker=marker, color=color, markersize=size, **kwargs )
-        return fig, ax
-    
-    def plot_label(self, ids: Optional[np.ndarray] = None, label: str = 'all', ax: Optional[plt.Axes] = None) -> Tuple[plt.Figure, plt.Axes]:
-        """
-        Label mesh entities.
+    def plot_face(self, face_ids=None, color='b', edge_color='k',
+                  linewidth=1.0, linestyle='-',
+                  ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot faces (alias for plot_elem)."""
+        return self.plot_elem(elem_ids=face_ids, color=color,
+                              edge_color=edge_color, linewidth=linewidth,
+                              linestyle=linestyle, ax=ax)
 
-        Parameters:
-            ids: IDs of entities to label. If None, all entities of the specified type are labeled.
-            label: Type of entities to label ('vertex', 'edge', 'element', or 'all').
-            ax: Optional matplotlib axis to plot on.
-        """
+    def plot_point(self, ids: Optional[np.ndarray] = None,
+                   point_type: str = 'vertex', color: str = 'r',
+                   marker: str = 'o', size: float = 5,
+                   ax: plt.Axes = None, **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot mesh entities as scatter points (vertices, edge midpoints, or centroids)."""
         if ax is None:
             fig, ax = self.plot()
         else:
             fig = ax.figure
 
-        if ids is None:
-            ids = np.arange(self.n_elems)
+        if point_type.lower() in {'vertex', 'vert'}:
+            if ids is None:
+                ids = np.arange(self.n_verts)
+            x, y = self.points[ids, 0], self.points[ids, 1]
+
+        elif point_type.lower() in {'edge', 'midpoint'}:
+            if ids is None:
+                ids = np.arange(self.n_edges)
+            edges = self.edge2vert(ids)
+            x = np.mean(self.points[edges, 0], axis=1)
+            y = np.mean(self.points[edges, 1], axis=1)
+
+        elif point_type.lower() in {'element', 'centroid'}:
+            if ids is None:
+                ids = np.arange(self.n_elems)
+            centroids = np.zeros((len(ids), 2))
+            for i, elem_id in enumerate(ids):
+                verts = self.connectivity_list[elem_id]
+                verts = verts[verts >= 0]
+                centroids[i] = np.mean(self.points[verts, :2], axis=0)
+            x, y = centroids[:, 0], centroids[:, 1]
+
+        else:
+            raise ValueError(f"Unknown point_type: {point_type!r}")
+
+        ax.plot(x, y, linestyle='none', marker=marker, color=color,
+                markersize=size, **kwargs)
+        return fig, ax
+
+    def plot_label(self, ids: Optional[np.ndarray] = None, label: str = 'all',
+                   ax: Optional[plt.Axes] = None) -> Tuple[plt.Figure, plt.Axes]:
+        """Annotate mesh entities with their IDs."""
+        if ax is None:
+            fig, ax = self.plot()
+        else:
+            fig = ax.figure
 
         if label in {'vertex', 'point', 'all'}:
-            for i in ids:
-                x, y = self.points[i, 0], self.points[i, 1]
-                ax.text(x, y, f'V{i}', color='red', ha='center')
+            vert_ids = ids if ids is not None else np.arange(self.n_verts)
+            for i in vert_ids:
+                ax.text(self.points[i, 0], self.points[i, 1], f'V{i}',
+                        color='red', ha='center', fontsize=7)
 
         if label in {'edge', 'all'}:
-            for i in ids:
-                if i < self.n_edges:
-                    edges = self.edge2vert([i])
-                    x = np.mean(self.points[edges, 0])
-                    y = np.mean(self.points[edges, 1])
-                    ax.text(x, y, f'E{i}', color='green', ha='center')
+            edge_ids = ids if ids is not None else np.arange(self.n_edges)
+            for i in edge_ids:
+                ev = self.edge2vert([i])
+                x = np.mean(self.points[ev, 0])
+                y = np.mean(self.points[ev, 1])
+                ax.text(x, y, f'E{i}', color='green', ha='center', fontsize=7)
 
         if label in {'element', 'centroid', 'all'}:
-            for i in ids:
-                if i < self.n_elems:
-                    vertices = self.connectivity_list[i]
-                    vertices = vertices[vertices >= 0]
-                    x = np.mean(self.points[vertices, 0])
-                    y = np.mean(self.points[vertices, 1])
-                    ax.text(x, y, f'E{i}', color='blue', ha='center')
-        return fig, ax
-    
-    def plot_layer(self, layers=None, cmap='viridis', ax=None) -> Tuple[plt.Figure, plt.Axes]:
-        """
-        Plot the specified mesh layers with different colors.
+            elem_ids = ids if ids is not None else np.arange(self.n_elems)
+            for i in elem_ids:
+                verts = self.connectivity_list[i]
+                verts = verts[verts >= 0]
+                x = np.mean(self.points[verts, 0])
+                y = np.mean(self.points[verts, 1])
+                ax.text(x, y, f'El{i}', color='blue', ha='center', fontsize=7)
 
-        Parameters:
-            layers: Indices of layers to plot. If None, all layers are plotted.
-            cmap: Colormap to use for the layers.
-            ax: Optional matplotlib axis to plot on.
-        
-        Returns:
-            (fig, ax): Matplotlib Figure and Axes
-        """
+        return fig, ax
+
+    def plot_layer(self, layers=None, cmap='viridis',
+                   ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot skeletonization layers as filled elements colored by layer index."""
         if layers is None:
             layers = range(self.n_layers)
 
@@ -285,52 +190,37 @@ class CHILmeshPlotMixin:
             fig, ax = plt.subplots(figsize=(10, 8))
         else:
             fig = ax.figure
-
         ax.set_aspect('equal')
 
         cmap_obj = matplotlib.colormaps[cmap].resampled(self.n_layers)
-        norm = BoundaryNorm(boundaries=np.arange(self.n_layers + 1), ncolors=self.n_layers)
+        norm = BoundaryNorm(boundaries=np.arange(self.n_layers + 1),
+                            ncolors=self.n_layers)
 
         for layer_idx in layers:
             if layer_idx >= len(self.layers["OE"]) or layer_idx >= len(self.layers["IE"]):
                 continue
-
-            outer_elems = self.layers["OE"][layer_idx]
-            inner_elems = self.layers["IE"][layer_idx]
-            elem_ids = np.concatenate((outer_elems, inner_elems)).astype(int)
-
+            elem_ids = np.concatenate(
+                (self.layers["OE"][layer_idx], self.layers["IE"][layer_idx])
+            ).astype(int)
             color = cmap_obj(norm(layer_idx))
-
-            for elem_id in elem_ids:
-                if elem_id < 0 or elem_id >= len(self.connectivity_list):
-                    continue
-                vertices = self.connectivity_list[elem_id]
-                valid_indices = [v for v in vertices if v >= 0 and v < len(self.points)]
-                if len(valid_indices) >= 3:
-                    polygon = self.points[valid_indices, :2]
-                    ax.fill(polygon[:, 0], polygon[:, 1], color=color, edgecolor='k',
-                            linewidth=0.5, alpha=0.7)
+            self._plot_polys(elem_ids, facecolor=color, edgecolor='k',
+                             linewidth=0.5, alpha=0.7, ax=ax)
 
         sm = cm.ScalarMappable(norm=norm, cmap=cmap_obj)
         sm.set_array([])
         plt.colorbar(sm, ax=ax, label='Layer',
-                    ticks=np.arange(0, self.n_layers) + 0.5,
-                    format='%d')
-
+                     ticks=np.arange(0, self.n_layers) + 0.5,
+                     format='%d')
         ax.set_title(f"Mesh Layers ({self.n_layers} total)")
         return fig, ax
 
-    def plot_quality(self, elem_ids=None, cmap='cool', ax=None) -> Tuple[plt.Figure, plt.Axes]:
+    def plot_quality(self, elem_ids=None, cmap='cool',
+                     ax=None) -> Tuple[plt.Figure, plt.Axes]:
         """
-        Plot element quality as a contour map.
+        Plot element quality as a filled contour map.
 
-        Parameters:
-            elem_ids: IDs of elements to plot. If None, all elements are plotted.
-            cmap: Colormap to use.
-            ax: Optional matplotlib axis to plot on.
-
-        Returns:
-            (fig, ax): Matplotlib Figure and Axes
+        Uses a single PolyCollection per colormap bin, so rendering scales
+        with O(n_bins) matplotlib calls instead of O(n_elements).
         """
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
@@ -341,26 +231,65 @@ class CHILmeshPlotMixin:
             fig, ax = plt.subplots(figsize=(10, 8))
         else:
             fig = ax.figure
-        self.axis_chilmesh(ax=ax)  # ensures consistent scaling and view
+        self.axis_chilmesh(ax=ax)
 
-        # Compute element quality (returns q, angles, stats)
         q, _, _ = self.elem_quality(elem_ids=elem_ids)
 
-        # Bin and color by quality
         bins = np.linspace(0, 1, 21)
-        norm = plt.Normalize(vmin=0, vmax=1)
+        norm = Normalize(vmin=0, vmax=1)
         colors = matplotlib.colormaps[cmap + "_r"](norm(bins[:-1]))
-        for i in range(len(bins) - 1):
-            bin_ids = elem_ids[(q >= bins[i]) & (q < bins[i + 1])]
-            if len(bin_ids):
-                self.plot_elem(bin_ids, color=colors[i], edge_color='k', linewidth=0.5, ax=ax)
 
-        sm = cm.ScalarMappable(norm=norm, cmap=cmap + "_r")
+        for i, bin_lo in enumerate(bins[:-1]):
+            bin_hi = bins[i + 1]
+            mask = (q >= bin_lo) & (q < bin_hi)
+            if not np.any(mask):
+                continue
+            self._plot_polys(elem_ids[mask], facecolor=colors[i],
+                             edgecolor='k', linewidth=0.5, ax=ax)
+
+        sm = cm.ScalarMappable(norm=norm,
+                               cmap=matplotlib.colormaps[cmap + "_r"])
         sm.set_array([])
         plt.colorbar(sm, ax=ax, label='Element Quality')
         ax.set_title("Element Quality")
         return fig, ax
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _plot_polys(self, elem_ids: np.ndarray, facecolor, edgecolor='k',
+                    linewidth=1.0, linestyle='-', alpha=1.0,
+                    ax: plt.Axes = None) -> None:
+        """
+        Render elements as filled polygons via a single PolyCollection.
+
+        Handles mixed tri/quad meshes by collecting each element's vertex
+        coords as a variable-length polygon (PolyCollection supports this).
+        """
+        if len(elem_ids) == 0:
+            return
+
+        tri_ids, quad_ids = self._elem_type(elem_ids)
+        polys = []
+
+        for eid in tri_ids:
+            verts = self.connectivity_list[eid]
+            if self.type != "Triangular":
+                verts = verts[:3]
+            polys.append(self.points[verts, :2])
+
+        for eid in quad_ids:
+            verts = self.connectivity_list[eid, :4]
+            polys.append(self.points[verts, :2])
+
+        if not polys:
+            return
+
+        pc = PolyCollection(polys, facecolors=facecolor, edgecolors=edgecolor,
+                            linewidths=linewidth, linestyles=linestyle,
+                            alpha=alpha)
+        ax.add_collection(pc)
 
     def _ensure_array(self, maybe_scalar):
         return np.array([maybe_scalar]) if np.isscalar(maybe_scalar) else maybe_scalar

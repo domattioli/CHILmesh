@@ -34,7 +34,7 @@ except ImportError:
     HAS_ADMESH = False
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = REPO_ROOT / "tests" / "output"
+OUTPUT_DIR = REPO_ROOT / "output"
 OUTPUT_PNG = OUTPUT_DIR / "annulus_quickstart.png"
 
 

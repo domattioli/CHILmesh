@@ -11,7 +11,7 @@ Layout:
 - Row 2: Warm-start truss applied to Row 1
 - Row 3: FEM smoother applied to Row 2
 
-Output: tests/output/annulus_quickstart.png (same path so README image links don't break)
+Output: output/annulus_quickstart.png
 
 Verification (fail-loud assertions):
 - V_BND: Row 2 boundary == Row 1 boundary (bit-exact)
@@ -31,7 +31,7 @@ import sys
 import warnings
 
 # Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from chilmesh import (
     optimize_with_admesh_truss,
@@ -61,7 +61,7 @@ def annulus_size_fn(p):
     return H_MIN + (H_MAX - H_MIN) * t
 
 
-OUTPUT_PATH = Path(__file__).parent / "tests" / "output" / "annulus_quickstart.png"
+OUTPUT_PATH = Path(__file__).parent.parent / "output" / "annulus_quickstart.png"
 FIGSIZE = (15, 14)
 DPI = 100
 
@@ -242,20 +242,15 @@ def main():
     print("  Checking if warm-start preserves element quality...")
 
     try:
-        # Warm-start polishing parameters. The vendored loop tracks the best-
-        # quality state across all iterations and early-stops if median quality
-        # drops > 10% from peak (or initial), so we can let it run to completion.
-        # deltat=0.02 + Fscale=0.5 is the sweet spot for warm-start polishing
-        # (vs ADMESH's deltat=0.2 + Fscale=1.2 defaults which target cold-start).
         row2_candidate = optimize_with_admesh_truss(
             row1, ANNULUS_SDF,
-            size_fn=annulus_size_fn,    # Graded: H_MIN @ boundary → H_MAX @ midline
-            h0=H_MIN,                   # Convergence reference uses smallest target
+            size_fn=annulus_size_fn,
+            h0=H_MIN,
             seed=0,
-            niter=500,           # Full iteration budget
-            deltat=0.02,         # Small steps for polishing
-            Fscale=0.5,          # Gentle pressure for warm-start
-            dptol=1e-3,          # Run to convergence
+            niter=500,
+            deltat=0.02,
+            Fscale=0.5,
+            dptol=1e-3,
             enforce_non_degradation=False
         )
 
@@ -290,13 +285,12 @@ def main():
         print(f"  Vertices: {len(row2.points)}")
         print(f"  Median quality: {np.median(row2_quality):.4f}")
 
-        # V_BND: Boundary preservation (check that original boundary points are unchanged)
-        # Note: New boundary vertices may appear if triangles are filtered, but original boundary points stay fixed
+        # V_BND: Boundary preservation
         row1_bnd_points = row1.points[row1_boundary_indices, :2]
-        row2_original_bnd = row2.points[row1_boundary_indices, :2]  # Same indices
+        row2_original_bnd = row2.points[row1_boundary_indices, :2]
         if not np.allclose(row2_original_bnd, row1_bnd_points, atol=1e-10):
             raise RuntimeError("V_BND failed: original boundary points were moved")
-        print("  ✓ V_BND passed: original boundary points preserved (new boundary may have extra vertices)")
+        print("  ✓ V_BND passed: original boundary points preserved")
 
         # V_DEGENERACY: Check for catastrophic mesh degradation
         median_quality_change = np.median(row2_quality) - np.median(row1_quality)
@@ -344,11 +338,9 @@ def main():
     # ========================================================================
     print("\n[Row 3] Applying FEM smoother to Row 2...")
     from chilmesh import CHILmesh
-    # Make a copy of row2 to avoid modifying the original
     row2_copy = CHILmesh(connectivity=row2.connectivity_list.copy(), points=row2.points.copy())
     row3_points = row2_copy.smooth_mesh(method="fem", acknowledge_change=True)
 
-    # Check if FEM smoother produced valid results (no NaN)
     if np.isnan(row3_points).any():
         print("  ✗ FEM smoother produced NaN values (singular matrix)")
         print("  Falling back to Row 2 geometry for visualization")
@@ -378,7 +370,6 @@ def main():
     # V_CHAIN: Verify Row 3 input was Row 2
     # ========================================================================
     print("\n[Validation] Checking V_CHAIN (row 3 branches from row 2)...")
-    # This is implicitly true by construction (we passed row2 to the FEM smoother)
     print("  ✓ V_CHAIN passed: row 3 is a child of row 2")
 
     # ========================================================================
@@ -417,8 +408,6 @@ def main():
     fig, axes = plt.subplots(3, 3, figsize=FIGSIZE, dpi=DPI)
     fig.suptitle("CHILmesh × ADMESH: Warm-Start Truss Optimization Pipeline", fontsize=16)
 
-    # Colormaps
-    # Use viridis instead of parula (which may not be available in all matplotlib versions)
     parula_cmap = plt.cm.viridis
     cool_r_cmap = plt.cm.cool_r
     norm_quality = mcolors.Normalize(vmin=0, vmax=1)
@@ -442,7 +431,6 @@ def main():
             points = row.points[:, :2]
             triangles = row.connectivity_list
 
-            # Compute quality stats for this row (skip NaN)
             if quality is not None and not np.isnan(quality).all():
                 q_clean = quality[~np.isnan(quality)] if np.any(np.isnan(quality)) else quality
                 q_mean = np.mean(q_clean)
@@ -459,7 +447,7 @@ def main():
             overlay_tracked(ax, row_items[i])
             ax.axis('off')
 
-            # Column 1: Layers (with visible edges for structure)
+            # Column 1: Layers
             ax = axes[i, 1]
             layer_colors = get_layer_colors(row, parula_cmap)
             for tri, color_val in zip(triangles, layer_colors):
@@ -475,7 +463,7 @@ def main():
             cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.85)
             cbar1.set_label("Layer", fontsize=8)
 
-            # Column 2: Quality (with visible edges for structure)
+            # Column 2: Quality
             ax = axes[i, 2]
             if quality is None or np.isnan(quality).all():
                 ax.triplot(points[:, 0], points[:, 1], triangles, color='gray', linewidth=0.3)
@@ -514,5 +502,4 @@ def main():
 
 if __name__ == "__main__":
     output_path = main()
-    # Return path for programmatic use
     print(f"\nOutput image: {output_path}")
