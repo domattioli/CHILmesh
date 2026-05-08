@@ -83,7 +83,7 @@ Edge2Elem: ndarray[n_edges, 2]        # Edge adjacent elements (-1 if boundary)
 
 ### Before Starting Work
 1. Read `PLANNING_DATA_STRUCTURE_MODERNIZATION.md` for context
-2. All pertinent skills should be pulled from https://github.com/domattioli/DomI and gitignored for this repo. 
+2. Skills are pulled from `domattioli/DomI` per the [DomI Sync Contract](#domi-sync-contract). The startup hook (`scripts/instructions_on_start.sh`) hard-stops on drift; run `/sync-from-domi` to unblock.
 3. Check the GitHub issue for task details
 4. Run `pytest -v` locally to verify baseline
 5. Review related code sections (adjacency building, skeletonization)
@@ -342,9 +342,21 @@ claude plugin install introspect@DomI           # required (end-of-session retro
 claude plugin install request-from-domi@DomI    # opt-in (file/vote on skill requests)
 ```
 
+### Routine session instructions
+
+Every scheduled Claude Code routine targeting CHILmesh uses **this exact session prompt** (paste into the routine config as the session instruction line):
+
+```
+Read https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md then .planning/constitution.md → .planning/project_plan.md → .claude/CLAUDE.md.
+```
+
+Read order is precedence order: DomI universal defaults are loaded first, then CHILmesh-specific rules layer on top. CHILmesh's `.planning/constitution.md` and `.claude/CLAUDE.md` override DomI defaults wherever they conflict.
+
 ---
 
 ## Skills
+
+> **Source of truth:** `github-release` and `pypi-publish` are pulled from `domattioli/DomI` via the `sync-from-domi` skill (see [DomI Sync Contract](#domi-sync-contract)). **Do not maintain local copies** — they live upstream and are kept current via session-start drift checks. The notes below describe surface (triggers, prerequisites) for convenience only; canonical SKILL.md files live in DomI.
 
 ### Skill: github-release
 

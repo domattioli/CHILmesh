@@ -415,6 +415,21 @@ Changes can be reverted if:
 
 ---
 
+## External Upstream: DomI
+
+`domattioli/DomI` manages foundational skills and policy used by this repo.
+`.domi-pin` is committed; session start auto-checks drift via
+`scripts/instructions_on_start.sh`. Hard stop on drift; `/sync-from-domi`
+unblocks.
+
+CHILmesh-specific rules (branch policy, API stability) take precedence over
+DomI universal defaults where they conflict. This precedence flows from the
+session-start read order: `.planning/constitution.md` is read before
+`.claude/CLAUDE.md`, and both override DomI universal defaults pulled from
+`https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md`.
+
+---
+
 ## Appendix A: Principles in Action
 
 ### Example 1: Fixing Bug in Skeletonization
