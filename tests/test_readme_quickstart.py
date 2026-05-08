@@ -75,12 +75,14 @@ def test_readme_annulus_regenerates_and_validates(tmp_path):
     _assert_valid(mesh, "annulus (raw)")
 
     # Row 2 — warm-start truss (chilmesh-internal, no external admesh needed)
-    # Fscale=1.05/deltat=0.05: conservative step avoids early quality-drop exit
+    # deltat=0.02 + track_best_quality=False: small steps to convergence, no
+    # premature exit from the degeneracy guard (outer enforce_non_degradation
+    # handles quality check after the fact).
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         truss = optimize_with_admesh_truss(
             mesh, _ANNULUS_SDF, enforce_non_degradation=False,
-            Fscale=1.05, deltat=0.05, niter=300,
+            deltat=0.02, track_best_quality=False,
         )
     _assert_valid(truss, "annulus (truss)")
 
