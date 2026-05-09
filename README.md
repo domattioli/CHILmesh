@@ -100,7 +100,7 @@ pip install -e .
 | Quality analysis | 4,800s | 6.6s | **727×** |
 | **Total workflow** | 13,400s | 14.3s | **937×** |
 
-See [BENCHMARK.md](BENCHMARK.md) for detailed methodology.
+See [docs/BENCHMARK.md](docs/BENCHMARK.md) for detailed methodology.
 
 ---
 
@@ -122,9 +122,11 @@ quality, angles, stats = mesh.elem_quality()
 interior_angles = mesh.interior_angles()
 
 # Visualize
-mesh.plot()              # wireframe
-mesh.plot_quality()      # per-element quality
-mesh.plot_layer()        # skeletonization layers
+mesh.plot()                    # wireframe
+mesh.plot_quality()            # per-element quality colormap
+mesh.plot_layer()              # skeletonization layers
+mesh.plot_boundary()           # boundary edges highlighted
+mesh.plot_interior_edges()     # interior edges only
 
 # Skeletonization output
 layers = mesh.layers     # {'OE', 'IE', 'OV', 'IV'} per layer
