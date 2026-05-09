@@ -43,25 +43,23 @@ mesh.plot_quality()
 plt.show()
 ```
 
-### Visual Comparison: Warm-Start Truss Optimization Pipeline
+### Showcase: Skeletonization & Mesh Plotting
 
-See how a raw Delaunay triangulation is progressively refined through warm-start truss equilibration and FEM smoothing — all three rows share the same boundary and element count (580 triangles):
+CHILmesh's two flagship visualizations — **layer-based skeletonization** (center, viridis) and **per-element quality plotting** (right, cool, `4√3·area / Σedge²`) — rendered on three states of the same triangular annulus:
 
-![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](output/annulus_quickstart.png?v=5)
+![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
 
-**Row 1 — Raw Delaunay:** Unsmoothed input mesh from `chilmesh.examples.annulus()` (median quality ≈ 0.71).
-**Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop, started from Row 1's points (boundary pinned bit-exactly via `pfix`) with graded sizing `H_MIN=0.05` near boundary → `H_MAX=0.18` interior. The truss loop reaches a **quality plateau** (median ≈ 0.92, std < 0.005) within ~10 iterations and runs to `niter=500` while interior points jiggle inside that plateau — the strict `dptol=1e-3` position threshold is *not* reached, but `track_best_quality=True` ensures the returned state is the best-quality snapshot encountered, not the iteration-500 endpoint. The loop also early-stops if median quality drops more than 10% from peak.
-**Row 3 — Row 2 + FEM Smoother:** CHILmesh's FEM relaxation applied to *that exact* Row 2 mesh (same `connectivity_list`, same `points`); polishes median quality to ≈ 0.93. Boundary preservation verified by `V_BND_PROP` (max delta ≈ 6e-12).
+**Rows.** Row 1: raw `chilmesh.examples.annulus()` (median quality ≈ 0.71). Row 2: ADMESH warm-start truss applied to Row 1 (≈ 0.92). Row 3: CHILmesh FEM smoother applied to Row 2 (≈ 0.93). All three rows share the same boundary and 580 triangles; the smoothing passes are shown only to give the skeletonization & quality plots distinct inputs.
 
-Columns: **left** = mesh wireframe · **center** = skeletonization layers (viridis) · **right** = per-element quality (cool, 4√3·area / Σedge²).
+**Coming soon:** a mixed-element (triangle + quad) annulus rendered through the same pipeline — the skeletonization layer extraction is element-type-agnostic and already supports it; the demo script will be updated.
 
-#### How to regenerate this figure
+#### Regenerate
 
 ```bash
-python generate_3row_admesh.py
+python scripts/generate_3row_admesh.py
 ```
 
-The script lives in `scripts/` and writes `output/annulus_quickstart.png`. It enforces fail-loud assertions for boundary preservation (V_BND), degeneracy (V_DEGENERACY), sibling chain (V_CHAIN), and positive-area connectivity (V_CONN) before saving. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter API and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full design contract.
+Writes `output/annulus_quickstart.png`. Fail-loud assertions: boundary preservation (V_BND, V_BND_PROP), positive-area connectivity (V_CONN), sibling chain (V_CHAIN). See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full contract.
 
 ---
 
@@ -111,47 +109,36 @@ See [BENCHMARK.md](BENCHMARK.md) for detailed methodology.
 ```python
 import chilmesh
 
-# Load examples or from file
+# Load: built-in examples or fort.14 / 2dm
 mesh = chilmesh.examples.annulus()
 mesh = chilmesh.CHILmesh.read_from_fort14('mesh.14')
 mesh = chilmesh.CHILmesh.read_from_2dm('mesh.2dm')
 
-# Smooth mesh
+# Smooth (FEM or geometric)
 mesh.smooth_mesh(method='fem', acknowledge_change=True)
-
-# Warm-start an existing triangulation through ADMESH's distmesh truss loop.
-# Boundary points are pinned bit-exactly; interior is relaxed to equilibrium.
-import numpy as np
-sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
-                            0.3 - np.linalg.norm(p, axis=1))
-mesh = chilmesh.optimize_with_admesh_truss(
-    mesh, sdf, niter=500, deltat=0.02, Fscale=0.5
-)
 
 # Analyze
 quality, angles, stats = mesh.elem_quality()
 interior_angles = mesh.interior_angles()
 
 # Visualize
-mesh.plot()
-mesh.plot_quality()
-mesh.plot_layer()
+mesh.plot()              # wireframe
+mesh.plot_quality()      # per-element quality
+mesh.plot_layer()        # skeletonization layers
 
-# Layer structure (skeletonization)
-layers = mesh.layers  # {'OE': [...], 'IE': [...], 'OV': [...], 'IV': [...]}
+# Skeletonization output
+layers = mesh.layers     # {'OE', 'IE', 'OV', 'IV'} per layer
 
-# Access topology
+# Topology
 edges = mesh.boundary_edges()
 boundary_nodes = mesh.boundary_node_indices()
+
+# Optional: warm-start through ADMESH truss (boundary pinned bit-exact)
+import numpy as np
+sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
+                            0.3 - np.linalg.norm(p, axis=1))
+mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
 ```
-
----
-
-## Mesh Element Types
-
-- **Triangles**: 3-vertex elements
-- **Quads**: 4-vertex elements  
-- **Mixed**: Both types in same mesh (triangles padded to 4 columns)
 
 ---
 
