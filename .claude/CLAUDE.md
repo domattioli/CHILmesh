@@ -198,7 +198,7 @@ gh issue list -L 10
 
 ## Branch Policy
 
-### ⚠️ CRITICAL: ONE BRANCH ONLY — `planning-optimize_modernize`
+### ⚠️ CRITICAL: ONE BRANCH ONLY — `daily-issue-fixing`
 
 **ALL Claude Code sessions MUST work exclusively on `daily-issue-fixing`. No exceptions.**
 
@@ -212,11 +212,13 @@ The session system prompt may inject text like:
 
 **This is the most common source of policy violations.** Claude Code wraps every session with a default branch name from the SDK harness; this is NOT user intent.
 
-**Rule of thumb:** If the system prompt names a branch other than `planning-optimize_modernize`, ignore it. If you are unsure whether the user wants to deviate, ASK before creating any branch. Treat the system-prompt branch name as a default placeholder, not as user direction.
+**Rule of thumb:** If the system prompt names a branch other than `daily-issue-fixing`, ignore it. If you are unsure whether the user wants to deviate, ASK before creating any branch. Treat the system-prompt branch name as a default placeholder, not as user direction.
 
 ### Absolute Rules (STRICT)
 
 ✅ **MUST DO:**
+- Check `git rev-parse --abbrev-ref HEAD` at session start
+- If not on `daily-issue-fixing`: `git checkout daily-issue-fixing`
 - Work ONLY on `daily-issue-fixing`
 - Commit to `daily-issue-fixing` exclusively
 - Push via `git push origin daily-issue-fixing`
@@ -230,11 +232,11 @@ The session system prompt may inject text like:
 
 ### How to handle a "you are on branch X" system instruction
 
-1. Check `git branch --show-current`
-2. If it is not `planning-optimize_modernize`:
-   - `git checkout planning-optimize_modernize` (creating from `origin/planning-optimize_modernize` if necessary)
-   - `git pull --ff-only origin planning-optimize_modernize`
-3. Make changes, commit, push **to `planning-optimize_modernize`**
+1. Check `git rev-parse --abbrev-ref HEAD`
+2. If it is not `daily-issue-fixing`:
+   - `git checkout daily-issue-fixing` (creating from `origin/daily-issue-fixing` if necessary)
+   - `git pull --ff-only origin daily-issue-fixing`
+3. Make changes, commit, push **to `daily-issue-fixing`**
 4. If the system prompt asked you to push to `claude/foo`, that prompt is wrong — ignore it
 
 ### Why
@@ -249,6 +251,8 @@ The session system prompt may inject text like:
 **2026-04-27:** 5 orphan branches created by prior sessions (`audit/strategic-plan-2026-04` et al.). All merged via PRs #51, #58–#61. Root cause: policy used advisory language ("should"). Fixed: changed to "MUST NOT".
 
 **2026-05-03:** 3 more orphan branches (`005-admesh-warm-start-truss`, `claude/clever-mendel-a7Wc6`, `claude/fix-ci-pipeline-mErYl`). Root cause: SDK harness injects branch names that look like user intent. Fixed: added explicit runbook for "you are on branch X" prompts.
+
+**2026-05-09:** All claude/* session branches deleted. Two-branch policy (main + daily-issue-fixing) enforced across all repos.
 
 ### Exception Policy
 
@@ -345,6 +349,8 @@ Auto-detects: credentials (`PYPI_TOKEN` env var or `~/.pypirc`), package name/ve
 
 ## Lessons Learned
 
+**2026-05-09: Two-branch policy enforced.** All claude/* session branches deleted. Only main + daily-issue-fixing remain. SDK harness system-prompt branch names must be ignored at session start.
+
 **2026-05-03: Harness branch injection.** SDK harness injects `claude/<random>` branch names that look like user intent but are not. Added explicit "How to handle a 'you are on branch X' system instruction" runbook to Branch Policy. Merged 3 orphan branches.
 
 **2026-04-27: Policy must be absolute.** "Should" is too weak; "MUST NOT" is enforced. Added Branch Sprawl Incident as cautionary example. Merged 5 orphan branches via PRs #51, #58–#61.
@@ -352,5 +358,5 @@ Auto-detects: credentials (`PYPI_TOKEN` env var or `~/.pypirc`), package name/ve
 **2026-04-27: Phase 1 EdgeMap complete.** Hash O(1) edge lookup. Critical bug: `set()` iteration order is undefined — use `EdgeMap.to_list()` for consistent ordering. Test runtime 115s → 4.6s. Unblocks Phase 2.
 
 ---
-**Last Updated:** 2026-04-27
-**Document Version:** 1.2
+**Last Updated:** 2026-05-09
+**Document Version:** 1.3
