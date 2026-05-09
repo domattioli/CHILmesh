@@ -84,6 +84,19 @@ class CHILmeshPlotMixin:
 
         return fig, ax
 
+    def plot_boundary(self, color='r', linewidth=2.5, linestyle='-',
+                      ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot mesh exterior (boundary) edges highlighted."""
+        return self.plot_edge(self.boundary_edges(), color=color,
+                              linewidth=linewidth, linestyle=linestyle, ax=ax)
+
+    def plot_interior_edges(self, color='b', linewidth=1.0, linestyle='-',
+                            ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot interior (shared by two elements) edges."""
+        interior = np.setdiff1d(np.arange(self.n_edges), self.boundary_edges())
+        return self.plot_edge(interior, color=color, linewidth=linewidth,
+                              linestyle=linestyle, ax=ax)
+
     def plot_elem(self, elem_ids=None, color='b', edge_color='k',
                   linewidth=1.0, linestyle='-',
                   ax=None) -> Tuple[plt.Figure, plt.Axes]:
