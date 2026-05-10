@@ -19,7 +19,7 @@
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
-> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB QuADMesh+ codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — see `00_CHILMesh_Class/@CHILmesh/CHILmesh.m` for the canonical algorithms (e.g., `meshLayers` skeletonization).
+> **MATLAB users**: Python successor to the original QuADMesh+ codebase. Still in development; API may evolve. Original MATLAB code (no longer maintained) at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — `00_CHILMesh_Class/@CHILmesh/CHILmesh.m` has canonical algorithms (e.g., `meshLayers` skeletonization).
 
 ---
 
@@ -45,13 +45,13 @@ plt.show()
 
 ### Visual Comparison: Warm-Start Truss Optimization Pipeline
 
-See how a raw Delaunay triangulation is progressively refined through warm-start truss equilibration and FEM smoothing — all three rows share the same boundary and element count (580 triangles):
+Raw Delaunay → warm-start truss equilibration → FEM smoothing. All three rows share same boundary and element count (580 triangles):
 
 ![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](output/annulus_quickstart.png?v=5)
 
-**Row 1 — Raw Delaunay:** Unsmoothed input mesh from `chilmesh.examples.annulus()` (median quality ≈ 0.71).
-**Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop, started from Row 1's points (boundary pinned bit-exactly via `pfix`) with graded sizing `H_MIN=0.05` near boundary → `H_MAX=0.18` interior. The truss loop reaches a **quality plateau** (median ≈ 0.92, std < 0.005) within ~10 iterations and runs to `niter=500` while interior points jiggle inside that plateau — the strict `dptol=1e-3` position threshold is *not* reached, but `track_best_quality=True` ensures the returned state is the best-quality snapshot encountered, not the iteration-500 endpoint. The loop also early-stops if median quality drops more than 10% from peak.
-**Row 3 — Row 2 + FEM Smoother:** CHILmesh's FEM relaxation applied to *that exact* Row 2 mesh (same `connectivity_list`, same `points`); polishes median quality to ≈ 0.93. Boundary preservation verified by `V_BND_PROP` (max delta ≈ 6e-12).
+**Row 1 — Raw Delaunay:** `chilmesh.examples.annulus()` (median quality ≈ 0.71).
+**Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop from Row 1's points (boundary pinned bit-exactly via `pfix`), graded sizing `H_MIN=0.05` → `H_MAX=0.18`. Reaches quality plateau (median ≈ 0.92, std < 0.005) within ~10 iterations; `track_best_quality=True` returns best-quality snapshot. Early-stops if quality drops >10% from peak.
+**Row 3 — Row 2 + FEM Smoother:** CHILmesh FEM relaxation on Row 2 mesh; polishes median quality to ≈ 0.93. Boundary verified by `V_BND_PROP` (max delta ≈ 6e-12).
 
 Columns: **left** = mesh wireframe · **center** = skeletonization layers (viridis) · **right** = per-element quality (cool, 4√3·area / Σedge²).
 
@@ -61,18 +61,18 @@ Columns: **left** = mesh wireframe · **center** = skeletonization layers (virid
 python generate_3row_admesh.py
 ```
 
-The script lives in `scripts/` and writes `output/annulus_quickstart.png`. It enforces fail-loud assertions for boundary preservation (V_BND), degeneracy (V_DEGENERACY), sibling chain (V_CHAIN), and positive-area connectivity (V_CONN) before saving. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter API and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full design contract.
+Script in `scripts/`; writes `output/annulus_quickstart.png`. Enforces fail-loud assertions (V_BND, V_DEGENERACY, V_CHAIN, V_CONN) before saving. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for warm-start adapter API and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for full design contract.
 
 ---
 
 ## Features
 
-- **Fast**: 937× speedup vs v0.1.1 through optimized data structures
+- **Fast**: 937× speedup vs v0.1.1
 - **Mixed-Element**: Triangles, quads, and mixed meshes with unified API
-- **Smoothing**: FEM and geometric smoothing for quality improvement
+- **Smoothing**: FEM and geometric smoothing
 - **Analysis**: Element quality metrics, interior angles, layer-based skeletonization
-- **I/O**: Read/write ADCIRC `.fort.14` and SMS `.2dm` formats
-- **Catalog**: ADMESH-Domains integration via `from_admesh_domain()` adapter
+- **I/O**: ADCIRC `.fort.14` and SMS `.2dm`
+- **Catalog**: ADMESH-Domains integration via `from_admesh_domain()`
 
 ---
 
@@ -92,8 +92,6 @@ pip install -e .
 ---
 
 ## Performance (v0.2.0)
-
-**937× faster** than v0.1.1 through systematic optimization.
 
 | Operation | v0.1.1 | v0.2.0 | Speedup |
 |-----------|--------|--------|---------|
@@ -149,16 +147,16 @@ boundary_nodes = mesh.boundary_node_indices()
 
 ## Mesh Element Types
 
-- **Triangles**: 3-vertex elements
-- **Quads**: 4-vertex elements  
-- **Mixed**: Both types in same mesh (triangles padded to 4 columns)
+- **Triangles**: 3-vertex
+- **Quads**: 4-vertex
+- **Mixed**: both types (triangles padded to 4 columns)
 
 ---
 
 ## Downstream Projects
 
-[**MADMESHR**](https://github.com/domattioli/MADMESHR) — Advancing-front mesh adaptation built on CHILmesh  
-[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized mesh generation and smoothing  
+[**MADMESHR**](https://github.com/domattioli/MADMESHR) — Advancing-front mesh adaptation
+[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized mesh generation and smoothing
 [**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) — Mesh catalog for hydrodynamic applications  
 
 ---

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Enable CHILmesh to support **incremental mesh modification** (adding/removing elements, vertices, edges) while maintaining consistency of adjacency structures and skeletonization. This is essential for:
+Enable CHILmesh to support **incremental mesh modification** (adding/removing elements, vertices, edges) while maintaining consistency of adjacency structures and skeletonization. Essential for:
 
 1. **MADMESHR integration:** Advancing-front mesh generation places elements one at a time
 2. **Mesh adaptation:** Future ADMESH use cases (refinement, coarsening, edge swapping)
@@ -195,7 +195,7 @@ def remove_element(self, elem_id: int) -> List[int]:
   Notes:
     - Orphaned edges (no adjacent element) are NOT automatically removed
       (caller can optionally remove via remove_edge).
-    - This preserves vertex ordering, but gaps form in element list.
+    - Preserves vertex ordering, but gaps form in element list.
       Use defragment() if dense numbering needed (not recommended; use sparse IDs).
     - Incremental layer update only.
   
@@ -258,7 +258,7 @@ def remove_vertex(
       - 'remove_orphaned': Remove only if isolated (no adjacent elements/edges).
   
   Returns:
-    List of element IDs that were deleted (due to edge collapse or orphaning).
+    List of element IDs deleted (due to edge collapse or orphaning).
   
   Raises:
     ValueError: If vertex has adjacent elements and strategy='error'.
@@ -318,7 +318,7 @@ def swap_edge(self, edge_id: int) -> bool:
   """
   Swap diagonal of a quad pair (flip shared edge).
   
-  For a quad pair sharing edge (v1, v2), this flips the edge to (v3, v4)
+  For a quad pair sharing edge (v1, v2), flips edge to (v3, v4)
   where [v1, v2, v3, v4] form a convex quadrilateral.
   
   Parameters:
@@ -358,7 +358,7 @@ def connected_components(self) -> List[np.ndarray]:
   
   Notes:
     - Useful for domain splitting (remove_edge can create components).
-    - Components are sorted by size (largest first).
+    - Components sorted by size (largest first).
   
   Example:
     >>> mesh.remove_edge(pinch_edge, strategy='split_domain')
