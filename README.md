@@ -45,11 +45,11 @@ plt.show()
 
 ### Showcase: WNAT_Hagen (52,774 vertices · 98,365 elements)
 
-Reference benchmark mesh — full wireframe and per-element quality, loaded and rendered in seconds:
+Reference benchmark mesh — per-element quality (skew, `4√3·area / Σedge²`) and granular distribution histogram (100 bins):
 
-![WNAT_Hagen mesh and quality plot](output/wnat_hagen_showcase.png)
+![WNAT_Hagen quality plot and distribution](output/wnat_hagen_showcase.png)
 
-Full init + quality analysis on this mesh: **~3.3 seconds** end-to-end (see [Performance](#performance-v020) below). Reproduce with `python scripts/benchmark_wnat_hagen.py`.
+Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality analysis: **~3.3 seconds** end-to-end (see [Performance](#performance-v020) below). Reproduce with `python scripts/benchmark_wnat_hagen.py`.
 
 ### Showcase: Skeletonization & Mesh Plotting
 
