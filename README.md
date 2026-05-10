@@ -97,13 +97,13 @@ pip install -e .
 
 ---
 
-## Performance (v0.2.0)
+## Performance (v0.3.0)
 
 **4,000×+ faster** than v0.1.1 through systematic optimization. Reference mesh: **WNAT_Hagen — 52,774 vertices · 98,365 elements · 151,248 edges · 30 layers** (see [showcase image](#showcase-wnat_hagen-52774-vertices--98365-elements) above).
 
 ### Initialization
 
-| Operation | v0.1.1 (est.) | v0.2.0 (measured) | Speedup |
+| Operation | v0.1.1 (est.) | v0.3.0 (measured) | Speedup |
 |-----------|--------------:|------------------:|--------:|
 | Fast init (no layers) | 3,200s | **0.44s** | **7,307×** |
 | Full init (with layers) | 5,400s | **3.26s** | **1,658×** |
@@ -112,7 +112,7 @@ pip install -e .
 
 ### Query latency (per call)
 
-| Operation | v0.1.1 (est.) | v0.2.0 (measured) | Speedup |
+| Operation | v0.1.1 (est.) | v0.3.0 (measured) | Speedup |
 |-----------|--------------:|------------------:|--------:|
 | `elem2edge` (5k samples) | 2,000μs | **2.08μs** | **963×** |
 | `Vert2Edge` lookup (5k samples) | 3,500μs | **0.17μs** | **21,092×** |
