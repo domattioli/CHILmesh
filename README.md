@@ -99,22 +99,26 @@ pip install -e .
 
 ## Performance (v0.2.0)
 
-**4,000×+ faster** than v0.1.1 through systematic optimization. Measured on WNAT_Hagen (52,774 verts · 98,365 elems · 30 layers):
+**4,000×+ faster** than v0.1.1 through systematic optimization. Reference mesh: **WNAT_Hagen — 52,774 vertices · 98,365 elements · 151,248 edges · 30 layers** (see [showcase image](#showcase-wnat_hagen-52774-vertices--98365-elements) above).
 
-| Operation | v0.1.1 (est.) | v0.2.0 (Apr 2026) | v0.2.0 (May 2026 re-run) | Speedup vs v0.1.1 |
-|-----------|--------------:|------------------:|------------------------:|------------------:|
-| Fast init (no layers) | 3,200s | 3.9s | **0.44s** | **7,307×** |
-| Full init (with layers) | 5,400s | 7.7s | **3.26s** | **1,658×** |
-| Quality analysis | 4,800s | 6.6s | **0.07s** | **68,175×** |
-| **Total workflow** | **13,400s** | **14.3s** | **3.33s** | **4,027×** |
+### Initialization
 
-| Query | v0.1.1 (est.) | v0.2.0 (Apr 2026) | v0.2.0 (May 2026 re-run) | Speedup vs v0.1.1 |
-|-------|--------------:|------------------:|------------------------:|------------------:|
-| `elem2edge` (5k samples) | 2,000μs | 4.0μs | **2.08μs** | **963×** |
-| `Vert2Edge` lookup (5k samples) | 3,500μs | 0.7μs | **0.17μs** | **21,092×** |
-| `Elem2Edge` bulk (1k samples) | 4,500μs | 4.4μs | **0.14μs** | **32,766×** |
+| Operation | v0.1.1 (est.) | v0.2.0 (measured) | Speedup |
+|-----------|--------------:|------------------:|--------:|
+| Fast init (no layers) | 3,200s | **0.44s** | **7,307×** |
+| Full init (with layers) | 5,400s | **3.26s** | **1,658×** |
+| Quality analysis | 4,800s | **0.07s** | **68,175×** |
+| **Total workflow** | **13,400s** | **3.33s** | **4,027×** |
 
-Original April 2026 release numbers preserved for reference. May 2026 re-run via `scripts/benchmark_wnat_hagen.py` (issue #55) shows additional 4-30× improvement, attributed to either hardware variance or post-release vectorization. Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`. See [docs/BENCHMARK.md](docs/BENCHMARK.md) for methodology.
+### Query latency (per call)
+
+| Operation | v0.1.1 (est.) | v0.2.0 (measured) | Speedup |
+|-----------|--------------:|------------------:|--------:|
+| `elem2edge` (5k samples) | 2,000μs | **2.08μs** | **963×** |
+| `Vert2Edge` lookup (5k samples) | 3,500μs | **0.17μs** | **21,092×** |
+| `Elem2Edge` bulk (1k samples) | 4,500μs | **0.14μs** | **32,766×** |
+
+Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`. Historical April 2026 release numbers and methodology in [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 ---
 
