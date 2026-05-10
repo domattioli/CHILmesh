@@ -57,7 +57,7 @@ Pipeline demonstration combining skeletonization, ADMESH full distmesh on a ring
 
 ![Mixed-element mesh: quad core + ADMESH tri ring](output/mixed_truss_fem_demo.png?v=3)
 
-**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers, uniform Δx = 0.25. (2) Strip layers 0–1 as the ADMESH domain; drop layer 2; retain layers 3+ as the quad core. Grid-sample initial interior points within the ring SDF and run ADMESH full distmesh with the outer rectangle perimeter and the layer-1/2 seam both pinned bit-exact — producing 394 quality-graded triangles. (3) Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), then stitch ADMESH tris + gap tris + 60 quads into a combined mesh (466 tris + 60 quads). (4) Boundary-pinned Laplacian smoothing — median element quality 0.75. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers, uniform Δx = 0.25. (2) Strip layers 0–1 as the ADMESH domain; drop layer 2; retain layers 3+ as the quad core. Grid-sample initial interior points within the ring SDF and run ADMESH full distmesh with the outer rectangle perimeter and the layer-1/2 seam both pinned bit-exact — producing 394 quality-graded triangles. (3) Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), then stitch ADMESH tris + gap tris + 60 quads into a combined mesh (466 tris + 60 quads). (4) FEM smooth (Zhou & Shimada) — median element quality 0.76. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
 
 ADMESH generates the triangulation from scratch inside the ring — the graded density radiating from the four 90° corners is visible in panel (2).
 

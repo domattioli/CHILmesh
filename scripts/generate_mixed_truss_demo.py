@@ -274,28 +274,9 @@ def build_combined_mesh(
 # Stage 6: Laplacian smooth (outer boundary pinned)
 # ---------------------------------------------------------------------------
 
-def laplacian_smooth(mesh: CHILmesh, n_iter: int = 30, omega: float = 0.5) -> CHILmesh:
-    """Boundary-pinned Laplacian smoothing."""
-    pts = mesh.points.copy()
-    boundary_verts = np.unique(mesh.edge2vert(mesh.boundary_edges()).flatten())
-    pinned = np.zeros(mesh.n_verts, dtype=bool)
-    pinned[boundary_verts] = True
-
-    edge2vert = mesh.adjacencies["Edge2Vert"]
-    neighbors: list[list[int]] = [[] for _ in range(mesh.n_verts)]
-    for a, b in edge2vert:
-        neighbors[int(a)].append(int(b))
-        neighbors[int(b)].append(int(a))
-
-    for _ in range(n_iter):
-        new_xy = pts[:, :2].copy()
-        for v in range(mesh.n_verts):
-            if pinned[v] or not neighbors[v]:
-                continue
-            new_xy[v] = (1 - omega) * pts[v, :2] + omega * pts[neighbors[v], :2].mean(axis=0)
-        pts[:, :2] = new_xy
-
-    mesh.change_points(pts, acknowledge_change=True)
+def fem_smooth(mesh: CHILmesh) -> CHILmesh:
+    """FEM smoother (Zhou & Shimada, boundary pinned)."""
+    mesh.smooth_mesh(method='fem', acknowledge_change=True)
     return mesh
 
 
@@ -372,8 +353,8 @@ def main(out_path: Path | None = None) -> Path:
         points=mesh_pre.points.copy(),
         compute_layers=True,
     )
-    print("[6/6] Laplacian smooth (30 iter, ω=0.5, outer boundary pinned) …")
-    laplacian_smooth(mesh_smooth)
+    print("[6/6] FEM smooth (Zhou & Shimada, boundary pinned) …")
+    fem_smooth(mesh_smooth)
 
     q_pre, _, _   = mesh_pre.elem_quality()
     q_post, _, _  = mesh_smooth.elem_quality()
@@ -412,7 +393,7 @@ def main(out_path: Path | None = None) -> Path:
     )
     _plot_mixed(
         axes[1, 1], mesh_smooth,
-        f"(4) Laplacian smooth (boundary pinned)\n"
+        f"(4) FEM smooth (Zhou & Shimada, boundary pinned)\n"
         f"median quality {np.median(q_post):.3f}",
     )
 
