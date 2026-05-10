@@ -1430,7 +1430,13 @@ class CHILmesh(CHILmeshPlotMixin):
     def _quad_stiffness_assembly(self, quad_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
         """
         Assemble stiffness matrix contributions from quad elements.
-        Uses Zhou & Shimada analogy: quad-specific matrices D_quad, T_quad.
+
+        Decomposes each quad into two triangles (0-1-2 and 0-2-3) and applies
+        the exact Zhou & Shimada triangle stiffness to each half. The sum of
+        two PSD triangle matrices is PSD, guaranteeing a well-posed solve and
+        bounded interior displacements. The earlier T_quad analogy produced an
+        indefinite element matrix (min eigenvalue -1.25) that caused solver blow-up
+        on mixed meshes.
 
         Parameters:
             quad_indices: Array of quad element indices
@@ -1444,19 +1450,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
         q = self.connectivity_list[quad_indices, :4]
 
-        D_quad = 2.5 * np.eye(2)
-        T_quad = np.array([[-1.25, -1.25], [1.25, -1.25]])
+        D = 2.0 * np.eye(2)
+        T = np.array([[-1.0, -np.sqrt(3)], [np.sqrt(3), -1.0]])
 
         rows, cols, data = [], [], []
-        for elem_idx, quad in enumerate(q):
-            for i in range(4):
-                for j in range(4):
-                    block = D_quad if i == j else T_quad if j == (i+1)%4 else T_quad.T
-                    for di in range(2):
-                        for dj in range(2):
-                            rows.append(2*quad[i] + di)
-                            cols.append(2*quad[j] + dj)
-                            data.append(block[di, dj])
+        for quad in q:
+            # Decompose into two triangles sharing diagonal 0-2
+            for tri in [(quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3])]:
+                for i in range(3):
+                    for j in range(3):
+                        block = D if i == j else T if j == (i + 1) % 3 else T.T
+                        for di in range(2):
+                            for dj in range(2):
+                                rows.append(2 * tri[i] + di)
+                                cols.append(2 * tri[j] + dj)
+                                data.append(block[di, dj])
 
         return rows, cols, data
 
