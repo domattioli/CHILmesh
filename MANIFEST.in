@@ -26,6 +26,7 @@ exclude .gitignore
 # README image assets must be re-included after `prune output`
 include output/annulus_quickstart.png
 include output/wnat_hagen_showcase.png
+include output/mixed_mesh_fem_final.png
 
 global-exclude __pycache__
 global-exclude *.py[co]

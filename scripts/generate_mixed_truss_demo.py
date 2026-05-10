@@ -24,6 +24,7 @@ from scipy.spatial import Delaunay
 
 from chilmesh import CHILmesh
 from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+from chilmesh.admesh_warmstart import distmesh1d
 
 
 NX, NY = 16, 12
@@ -85,6 +86,28 @@ def _seam_ring(quads: np.ndarray) -> np.ndarray:
         walk.append(cur)
         cur = nxt[cur]
     return np.array(walk, dtype=int)
+
+
+def redistribute_outer_perim(points_xy: np.ndarray) -> np.ndarray:
+    """Redistribute outer rectangle perim nodes with distmesh1d, corner-dense.
+
+    h(p) = h_min + (h_max - h_min) * (1 - exp(-(d/sigma)^2))
+    where d = distance from nearest corner. Smaller h near corners → tighter spacing.
+    Returns a new points_xy array (copy) with outer perim positions updated.
+    Inner verts unchanged.
+    """
+    perim_idx = _outer_perim_ring()
+    perim_xy = points_xy[perim_idx]
+    corners = np.array([[0.0, 0.0], [LX, 0.0], [LX, LY], [0.0, LY]])
+
+    def h_fn(xy: np.ndarray) -> np.ndarray:
+        d = np.min(np.linalg.norm(xy[:, None, :] - corners[None, :, :], axis=2), axis=1)
+        return 0.05 + 0.45 * (1.0 - np.exp(-((d / 0.5) ** 2)))
+
+    new_perim = distmesh1d(perim_xy, h_fn, closed=True, niter=2000, deltat=0.4, dptol=1e-6)
+    out = points_xy.copy()
+    out[perim_idx] = new_perim
+    return out
 
 
 def _polygon_sdf(points: np.ndarray, poly_verts: np.ndarray) -> np.ndarray:
@@ -328,8 +351,16 @@ def main(out_path: Path | None = None) -> Path:
 
     print("[2/6] Splitting: ADMESH ring (L0+L1), drop (L2), quad core (L3+) …")
     kept_quads, seam_1_2, seam_2_3 = split_mesh(mesh0, n_admesh=2, n_drop=1)
-    points_xy = mesh0.points[:, :2]
+    points_xy_uniform = mesh0.points[:, :2]
     print(f"     kept quads={len(kept_quads)}  seam_1_2={len(seam_1_2)} nodes  seam_2_3={len(seam_2_3)} nodes")
+
+    print("[2b/6] distmesh1d on outer perim (corner-dense h(p)) …")
+    points_xy = redistribute_outer_perim(points_xy_uniform)
+    perim_idx = _outer_perim_ring()
+    edges_old = np.linalg.norm(np.diff(np.vstack([points_xy_uniform[perim_idx], points_xy_uniform[perim_idx][:1]]), axis=0), axis=1)
+    edges_new = np.linalg.norm(np.diff(np.vstack([points_xy[perim_idx], points_xy[perim_idx][:1]]), axis=0), axis=1)
+    print(f"     perim edges before: min={edges_old.min():.3f} max={edges_old.max():.3f}")
+    print(f"     perim edges after:  min={edges_new.min():.3f} max={edges_new.max():.3f}  (corner-dense)")
 
     print("[3/6] ADMESH full distmesh on outer ring …")
     admesh_pts, admesh_tris, pinned_global = run_admesh_ring(points_xy, seam_1_2)
@@ -400,6 +431,18 @@ def main(out_path: Path | None = None) -> Path:
     plt.tight_layout()
     plt.savefig(out_path, dpi=110, bbox_inches="tight", facecolor="white")
     print(f"     saved {out_path.stat().st_size:,} bytes → {out_path}")
+
+    # Single-panel version for README inline use (final FEM-smoothed mesh only)
+    single_path = out_path.parent / "mixed_mesh_fem_final.png"
+    fig2, ax2 = plt.subplots(1, 1, figsize=(8, 6), facecolor="white")
+    _plot_mixed(
+        ax2, mesh_smooth,
+        f"Mixed-element mesh after FEM smoothing (Zhou & Shimada)\n"
+        f"{n_tris_total} triangles + {len(kept_quads)} quads · median quality {np.median(q_post):.3f}",
+    )
+    plt.tight_layout()
+    plt.savefig(single_path, dpi=200, bbox_inches="tight", facecolor="white")
+    print(f"     saved {single_path.stat().st_size:,} bytes → {single_path}")
     return out_path
 
 
