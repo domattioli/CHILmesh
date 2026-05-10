@@ -116,6 +116,20 @@ for edge_id in boundary:
 
 ---
 
+#### `boundary_node_indices() -> np.ndarray`
+**Stability:** Stable | **Complexity:** O(n_edges)
+
+Get unique vertex indices on the mesh boundary.
+
+**Returns:** Sorted array of boundary vertex IDs
+
+**Example:**
+```python
+bnd_verts = mesh.boundary_node_indices()
+```
+
+---
+
 #### `get_vertex_edges(vert_id: int) -> Set[int]`
 **Stability:** Stable | **Complexity:** O(k) where k = vertex degree
 
@@ -241,6 +255,18 @@ Get interior angles for specified elements.
 
 ---
 
+#### `signed_area(elem_ids: Optional[List[int]] = None) -> np.ndarray`
+**Stability:** Stable | **Complexity:** O(m)
+
+Compute signed area for specified elements using the shoelace formula.
+
+**Parameters:**
+- `elem_ids`: Element indices (None for all)
+
+**Returns:** Array of signed areas (positive = CCW, negative = CW)
+
+---
+
 #### `get_layer(layer_idx: int) -> Dict[str, np.ndarray]`
 **Stability:** Stable | **Complexity:** O(1)
 
@@ -275,6 +301,156 @@ Get mesh metadata for ADMESH-Domains catalog.
 ```python
 meta = mesh.admesh_metadata()
 print(f"Type: {meta['element_type']}, Nodes: {meta['node_count']}")
+```
+
+---
+
+### Visualization Methods
+
+All visualization methods are provided via the `CHILmeshPlotMixin` and return `(fig, ax)` tuples. Every method accepts an optional `ax` parameter to draw into an existing Axes; if omitted, a new figure is created.
+
+#### `plot(elem_ids=None, elem_color='none', edge_color='k', linewidth=1.0, linestyle='-', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot the full mesh. When `elem_color='none'`, draws edges only (fast `LineCollection` path). Otherwise fills elements with the given color via `PolyCollection`.
+
+**Example:**
+```python
+fig, ax = mesh.plot()                     # wireframe
+fig, ax = mesh.plot(elem_color='#cce5ff') # filled elements
+```
+
+---
+
+#### `plot_edge(edge_ids=None, color='g', linewidth=2.5, linestyle='-', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot a subset (or all) edges using a single vectorized `LineCollection` call. O(1) matplotlib draw calls regardless of edge count.
+
+**Example:**
+```python
+fig, ax = mesh.plot_edge()                        # all edges
+fig, ax = mesh.plot_edge(edge_ids=[0, 1, 5])      # specific edges
+```
+
+---
+
+#### `plot_boundary(color='r', linewidth=2.5, linestyle='-', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot boundary (mesh-exterior) edges highlighted. Convenience wrapper around `plot_edge(boundary_edges())`.
+
+**Example:**
+```python
+fig, ax = mesh.plot()
+mesh.plot_boundary(color='red', ax=ax)   # overlay boundary
+```
+
+---
+
+#### `plot_interior_edges(color='b', linewidth=1.0, linestyle='-', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot interior (shared by two elements) edges only. Complement of `plot_boundary()`; together they partition all edges.
+
+**Example:**
+```python
+fig, ax = mesh.plot_interior_edges(color='steelblue', linewidth=0.5)
+```
+
+---
+
+#### `plot_elem(elem_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot elements filled with a uniform color using `PolyCollection`. Mixed tri+quad meshes are handled in two batched numpy gathers.
+
+**Example:**
+```python
+fig, ax = mesh.plot_elem(elem_ids=[0, 5, 10], color='orange')
+```
+
+---
+
+#### `plot_face(face_ids=None, color='b', edge_color='k', linewidth=1.0, linestyle='-', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Alias for `plot_elem()` (same parameters and behavior).
+
+---
+
+#### `plot_point(ids=None, point_type='vertex', color='r', marker='o', size=5, ax=None, **kwargs) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot mesh entities as scatter points.
+
+**Parameters:**
+- `point_type`: `'vertex'`/`'vert'`, `'edge'`/`'midpoint'`, or `'element'`/`'centroid'`
+- `ids`: Entity indices (None for all)
+
+**Raises:** `ValueError` for unknown `point_type`
+
+**Example:**
+```python
+mesh.plot_point(point_type='vertex')                     # all vertices
+mesh.plot_point(ids=[0,1,2], point_type='centroid')      # 3 centroids
+```
+
+---
+
+#### `plot_label(ids=None, label='all', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Annotate mesh entities with their integer IDs.
+
+**Parameters:**
+- `label`: `'vertex'`/`'point'`, `'edge'`, `'element'`/`'centroid'`, or `'all'`
+- `ids`: Entity indices (None for all)
+
+**Example:**
+```python
+fig, ax = mesh.plot()
+mesh.plot_label(label='element', ax=ax)   # overlay element IDs
+```
+
+---
+
+#### `plot_layer(layers=None, cmap='viridis', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot skeletonization layers as filled elements colored by layer index. Includes a colorbar. If `layers` is None, all layers are drawn.
+
+**Example:**
+```python
+fig, ax = mesh.plot_layer()                   # all layers
+fig, ax = mesh.plot_layer(layers=[0, 1, 2])   # first three layers
+```
+
+---
+
+#### `plot_quality(elem_ids=None, cmap='cool', ax=None) -> Tuple[Figure, Axes]`
+**Stability:** Stable
+
+Plot element quality as a filled colormap. Uses one `PolyCollection` per color bin (20 bins), so rendering scales with O(n_bins) not O(n_elements).
+
+**Example:**
+```python
+fig, ax = mesh.plot_quality()              # all elements
+fig, ax = mesh.plot_quality(cmap='RdYlGn') # custom colormap
+```
+
+---
+
+#### `axis_chilmesh(ax=None) -> Axes`
+**Stability:** Stable
+
+Configure axes with equal aspect ratio and mesh-fitted limits. Called automatically by all other plot methods; exposed for customization.
+
+**Example:**
+```python
+fig, ax = plt.subplots()
+mesh.axis_chilmesh(ax=ax)
+# ... add custom artists ...
 ```
 
 ---
@@ -539,14 +715,21 @@ The following changes are backward compatible but discouraged:
 ### O(n) Operations
 - `boundary_edges()` - Scan all edges
 - `elem_quality()` - Compute for all elements
+- `signed_area()` - Vectorised shoelace
+- `interior_angles()` - Vectorised angle computation
 - `pinch_points()` - Analyze all vertices
 
 ### O(n log n) Operations
 - `read_from_fort14()` - Sort edges during discovery
 - `read_from_2dm()` - Build adjacencies
 
+### Visualization Performance
+- `plot_edge()` / `plot_boundary()` / `plot_interior_edges()`: O(1) matplotlib draw calls (single `LineCollection`)
+- `plot_quality()`: O(n_bins) draw calls (20 bins by default) via `PolyCollection`
+- `plot_layer()`: O(n_layers) draw calls
+
 ### O(n²) Avoided
-✅ Phase 1-3 optimizations eliminated O(n²) behaviors from v0.1.1
+✅ Phase 1-4 optimizations eliminated O(n²) behaviors from v0.1.1
 
 ---
 
@@ -562,6 +745,15 @@ print(f"Vertices: {mesh.n_verts}, Elements: {mesh.n_elems}")
 
 quality, angles, stats = mesh.elem_quality()
 print(f"Mean quality: {stats['mean']:.3f}")
+
+bnd = mesh.boundary_node_indices()
+print(f"Boundary nodes: {len(bnd)}")
+```
+
+### Visualize Boundary and Interior
+```python
+fig, ax = mesh.plot()                    # wireframe background
+mesh.plot_boundary(color='red', ax=ax)   # overlay boundary in red
 ```
 
 ### Use Bridge Adapter
@@ -585,5 +777,5 @@ while len(boundary) > 4:
 
 ---
 
-**Last Updated:** 2026-04-27  
-**API Version:** 1.0
+**Last Updated:** 2026-05-09  
+**API Version:** 1.2
