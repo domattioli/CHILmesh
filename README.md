@@ -53,13 +53,11 @@ Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality an
 
 ### Showcase: Mixed-Element Mesh from Quad Core + ADMESH Tri Ring
 
-Pipeline demonstration combining skeletonization, ADMESH full distmesh on a ring domain, Delaunay gap fill, and mixed-element smoothing:
+Final mixed-element mesh after FEM smoothing — 466 corner-graded triangles surrounding 60 quads, all 218 interior nodes relaxed by the Zhou & Shimada FEM smoother (boundary pinned bit-exact, max boundary motion ≈ 6e-11):
 
-![Mixed-element mesh: quad core + ADMESH tri ring](output/mixed_truss_fem_demo.png?v=3)
+![Mixed-element mesh after FEM smoothing](output/mixed_mesh_fem_final.png?v=2)
 
-**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers, uniform Δx = 0.25. (2) Strip layers 0–1 as the ADMESH domain; drop layer 2; retain layers 3+ as the quad core. Grid-sample initial interior points within the ring SDF and run ADMESH full distmesh with the outer rectangle perimeter and the layer-1/2 seam both pinned bit-exact — producing 394 quality-graded triangles. (3) Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), then stitch ADMESH tris + gap tris + 60 quads into a combined mesh (466 tris + 60 quads). (4) FEM smooth (Zhou & Shimada) — median element quality 0.76. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
-
-ADMESH generates the triangulation from scratch inside the ring — the graded density radiating from the four 90° corners is visible in panel (2).
+**Pipeline.** Start with a 16×12 structured quad rectangle (192 quads, 6 skeleton layers). Strip layers 0–1 as the ADMESH domain, drop layer 2, retain layers 3+ as the quad core. Apply `distmesh1d` to the outer rectangle perimeter with a corner-dense edge-length field `h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))` (d = distance to nearest corner) — perimeter edge lengths now span 0.035–0.499 vs. uniform 0.250. Grid-sample interior points within the ring SDF and run ADMESH full distmesh with both the outer rectangle perimeter and the layer-1/2 seam pinned — produces 394 quality-graded triangles densest at the four 90° corners. Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), stitch with the 60 quads into a combined mesh, then run the FEM smoother on the mixed-element result (median quality 0.75). Reproduce: `python scripts/generate_mixed_truss_demo.py` (also writes a 4-panel pipeline diagram to `output/mixed_truss_fem_demo.png`).
 
 ### Showcase: Skeletonization & Mesh Plotting
 
