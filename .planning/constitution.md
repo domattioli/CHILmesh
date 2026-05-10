@@ -355,22 +355,21 @@ Changes can be reverted if:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-04-26 | Dominik Mattioli | Initial constitution (Planning Phase) |
-| 1.1 | 2026-05-08 | Claude Code | Added External Upstream (DomI) section |
+| 1.1 | 2026-05-08 | Claude (DomI downstream rollout) | Added section 11: External Upstream (DomI). Formalized DomI sync contract governance. |
 
 ---
 
-## External Upstream: DomI
+## 11. EXTERNAL UPSTREAM (DOMI)
 
-`domattioli/DomI` manages foundational skills and policy used by this repo.
-`.domi-pin` is committed; session start auto-checks drift via
-`scripts/instructions_on_start.sh`. Hard stop on drift; `/sync-from-domi`
-unblocks.
+Foundational skills and policy governed by [domattioli/DomI](https://github.com/domattioli/DomI).
 
-CHILmesh-specific rules (branch policy, API stability) take precedence over
-DomI universal defaults where they conflict. This precedence flows from the
-session-start read order: `.planning/constitution.md` is read before
-`.claude/CLAUDE.md`, and both override DomI universal defaults pulled from
-`https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md`.
+1. `.domi-pin` ledger MUST be committed and current.
+2. Session start auto-checks drift via `scripts/instructions_on_start.sh`. Hard stop on drift; `/sync-from-domi` unblocks.
+3. Skills from DomI take precedence over inline implementations. Local repo-specific skills (those NOT shipped by DomI) are exempt.
+4. Repo-specific principles in this constitution override DomI universal defaults where they conflict.
+5. This section does NOT affect existing repo-specific algorithmic principles.
+
+CHILmesh-specific rules (branch policy `daily-issue-fixing`, API stability guarantees) take precedence over DomI universal defaults where they conflict. This precedence flows from the session-start read order: `.planning/constitution.md` is read before `.claude/CLAUDE.md`, and both override DomI universal defaults pulled from `https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md`.
 
 ---
 
