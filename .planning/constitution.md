@@ -172,21 +172,6 @@ This constitution does not dictate implementation details, but rather the values
 - Reference papers/issues for non-obvious algorithms
 - Invariants should be explicit (docstring or assert)
 
-**Example:**
-```python
-def skeletonize(self) -> None:
-    """
-    Extract medial axis via boundary peeling.
-    
-    Implements the layer-based decomposition from Mattioli's thesis:
-    iteratively identify boundary elements, then their inner neighbors,
-    creating concentric layers from outside inward.
-    
-    Invariant: self.layers['OE'][i] ∩ self.layers['IE'][i] = ∅
-               (outer and inner elements disjoint per layer)
-    """
-```
-
 ### 4.3 Documentation Standards
 
 **Required for all public APIs:**
@@ -198,29 +183,6 @@ def skeletonize(self) -> None:
 - Paper reference (if applicable)
 - Complexity analysis (e.g., O(n log n))
 - Limitations or special cases
-
-**Required for data structures:**
-- Explicit invariants (what must always be true)
-- Access patterns (how to query efficiently)
-- Modification rules (how to maintain invariants when changing)
-
-**Example:**
-```python
-# In docstring:
-"""
-Returns Vert2Elem adjacency as explicit dict.
-    
-Invariant: vert2elem[v] is a Set[int] containing all elements incident to vertex v.
-           For each elem ∈ vert2elem[v], vertex v must appear in 
-           self.connectivity_list[elem].
-           
-Access: O(1) lookup, O(k) iteration (k = degree of vertex)
-Update: When adding element e with vertices [v1, v2, v3, v4]:
-        for v in [v1, v2, v3, v4]:
-            if v not in vert2elem: vert2elem[v] = set()
-            vert2elem[v].add(e)
-"""
-```
 
 ---
 
@@ -254,18 +216,6 @@ Before releasing version X.Y.Z:
 4. Support old API for minimum 2 releases
 5. Remove in next MINOR version bump
 
-**Example:**
-```python
-def old_method(self):
-    warnings.warn(
-        "old_method() is deprecated and will be removed in 0.3.0. "
-        "Use new_method() instead.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    return self.new_method()
-```
-
 ---
 
 ## 6. COLLABORATION WITH DOWNSTREAM PROJECTS
@@ -298,13 +248,6 @@ mesh = CHILmesh.read_from_fort14(path)
 layers = mesh.get_layers()  # Stable, documented API
 quality = mesh.elem_quality()
 mesh.smooth_mesh(method='fem', acknowledge_change=True)
-```
-
-**Discouraged:**
-```python
-# Directly accessing internal structures (may break)
-for edge_id in mesh.adjacencies['Vert2Edge'][v]:
-    # This structure changed in 0.2.0!
 ```
 
 ---
@@ -427,65 +370,6 @@ Foundational skills and policy governed by [domattioli/DomI](https://github.com/
 5. This section does NOT affect existing repo-specific algorithmic principles.
 
 CHILmesh-specific rules (branch policy `daily-issue-fixing`, API stability guarantees) take precedence over DomI universal defaults where they conflict. This precedence flows from the session-start read order: `.planning/constitution.md` is read before `.claude/CLAUDE.md`, and both override DomI universal defaults pulled from `https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md`.
-
----
-
-## Appendix A: Principles in Action
-
-### Example 1: Fixing Bug in Skeletonization
-
-**Scenario:** Tests discover that skeletonization produces overlapping layers.
-
-**Correct Process:**
-1. Create GitHub issue with minimal reproducible example
-2. Write regression test (fails with current code)
-3. Analyze root cause
-4. Fix algorithm with explanation
-5. Verify test now passes
-6. Document in CHANGELOG and commit message
-7. Communicate fix to downstream projects if they rely on this behavior
-
-**Incorrect Process:**
-- Quietly "fix" without tests
-- Change behavior without documentation
-- Break tests and suppress them
-
-### Example 2: Performance Optimization
-
-**Scenario:** O(n²) edge building is too slow on large meshes.
-
-**Correct Process:**
-1. Profile to confirm bottleneck
-2. Design new approach (hash maps, sorted arrays, etc.)
-3. Implement with tests verifying same output
-4. Benchmark before/after on all fixtures
-5. Document what changed and why (in code and commit message)
-6. Preserve API (internal refactoring, not user-visible)
-7. Report performance improvement in release notes
-
-**Incorrect Process:**
-- Change adjacency structure without updating all code using it
-- Improve speed but break test semantics
-- Introduce randomness or non-determinism
-- Hide changes behind opaque "optimization"
-
-### Example 3: Adding Downstream Integration
-
-**Scenario:** MADMESHR needs fast neighbor queries.
-
-**Correct Process:**
-1. Ask MADMESHR authors: what API would you like?
-2. Document interface in PLANNING document
-3. Implement with clear semantics
-4. Add integration tests simulating MADMESHR usage
-5. Communicate API guarantees (what will never change)
-6. Provide migration guide if replacing old approach
-
-**Incorrect Process:**
-- Guess what they need without asking
-- Make public API directly expose internal structures
-- Change behavior based on implicit understanding
-- Surprise them with incompatibility in next release
 
 ---
 
