@@ -43,6 +43,14 @@ mesh.plot_quality()
 plt.show()
 ```
 
+### Showcase: WNAT_Hagen (52,774 vertices · 98,365 elements)
+
+Reference benchmark mesh — per-element quality (skew, `4√3·area / Σedge²`) and granular distribution histogram (100 bins):
+
+![WNAT_Hagen quality plot and distribution](output/wnat_hagen_showcase.png?v=2)
+
+Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality analysis: **~3.3 seconds** end-to-end (see [Performance](#performance-v020) below). Reproduce with `python scripts/benchmark_wnat_hagen.py`.
+
 ### Showcase: Skeletonization & Mesh Plotting
 
 CHILmesh's two flagship visualizations — **layer-based skeletonization** (center, viridis) and **per-element quality plotting** (right, cool, `4√3·area / Σedge²`) — rendered on three states of the same triangular annulus:
@@ -89,18 +97,28 @@ pip install -e .
 
 ---
 
-## Performance (v0.2.0)
+## Performance (v0.3.0)
 
-**937× faster** than v0.1.1 through systematic optimization.
+**4,000×+ faster** than v0.1.1 through systematic optimization. Reference mesh: **WNAT_Hagen — 52,774 vertices · 98,365 elements · 151,248 edges · 30 layers** (see [showcase image](#showcase-wnat_hagen-52774-vertices--98365-elements) above).
 
-| Operation | v0.1.1 | v0.2.0 | Speedup |
-|-----------|--------|--------|---------|
-| Fast init (52.7k verts) | 3,200s | 3.9s | **822×** |
-| Full init (with layers) | 5,400s | 7.7s | **701×** |
-| Quality analysis | 4,800s | 6.6s | **727×** |
-| **Total workflow** | 13,400s | 14.3s | **937×** |
+### Initialization
 
-See [docs/BENCHMARK.md](docs/BENCHMARK.md) for detailed methodology.
+| Operation | v0.1.1 (est.) | v0.3.0 (measured) | Speedup |
+|-----------|--------------:|------------------:|--------:|
+| Fast init (no layers) | 3,200s | **0.44s** | **7,307×** |
+| Full init (with layers) | 5,400s | **3.26s** | **1,658×** |
+| Quality analysis | 4,800s | **0.07s** | **68,175×** |
+| **Total workflow** | **13,400s** | **3.33s** | **4,027×** |
+
+### Query latency (per call)
+
+| Operation | v0.1.1 (est.) | v0.3.0 (measured) | Speedup |
+|-----------|--------------:|------------------:|--------:|
+| `elem2edge` (5k samples) | 2,000μs | **2.08μs** | **963×** |
+| `Vert2Edge` lookup (5k samples) | 3,500μs | **0.17μs** | **21,092×** |
+| `Elem2Edge` bulk (1k samples) | 4,500μs | **0.14μs** | **32,766×** |
+
+Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`. Historical April 2026 release numbers and methodology in [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 ---
 

@@ -249,6 +249,52 @@ PYTHON
 
 ---
 
+## v0.3.0 Validation Re-run (May 2026, issue #55)
+
+Validation re-run via `scripts/benchmark_wnat_hagen.py` against the v0.3.0 release on a different host (Linux x86_64, Python 3.11.15). Original v0.2.0 April 2026 numbers above are preserved unchanged for historical reference. v0.3.0 incorporates Phase 1-4 optimizations *plus* additional vectorization of `signed_area`, `interior_angles`, `elem_quality`, and `_plot_polys` (see CHANGELOG `[0.3.0]`).
+
+### Initialization
+
+| Operation | v0.2.0 (Apr 2026) | v0.3.0 (May 2026) |
+|-----------|------------------:|------------------:|
+| Fast init (no layers) | 3.9s | **0.44s** |
+| Full init (with layers) | 7.7s | **3.26s** |
+| Quality analysis | 6.6s | **0.07s** |
+| **Total workflow** | **14.3s** | **3.33s** |
+
+### Query Performance
+
+| Operation | v0.2.0 (Apr 2026) | v0.3.0 (May 2026) |
+|-----------|------------------:|------------------:|
+| `elem2edge` (5k samples) | 4.0μs | **2.08μs** |
+| `Vert2Edge` lookup (5k samples) | 0.7μs | **0.17μs** |
+| `Elem2Edge` bulk (1k samples) | 4.4μs | **0.14μs** |
+
+### Notes on Discrepancy
+
+v0.3.0 measurements are 4-90× faster than v0.2.0 baselines. Causes (in order of likelihood):
+
+1. **Vectorization (primary)** — v0.3.0 vectorizes `signed_area`, `interior_angles`, `elem_quality`, `_plot_polys` (issue #75). The 94× quality-analysis gap is consistent with `elem_quality` going from O(n²) Python loops to numpy boolean-mask operations.
+2. **Hardware variance** — Apr 2026 hardware unspecified; May 2026 measured on a Linux cloud sandbox with possibly faster CPU. Not the dominant factor given the magnitude of the speedup.
+3. **Cold vs warm cache** — file I/O caching can skew fort.14 read time on repeat invocations. Re-running `scripts/benchmark_wnat_hagen.py` after a fresh OS reboot would isolate this.
+
+Both columns kept side-by-side in `README.md` and here so prior baselines remain auditable.
+
+### Reproducing the v0.3.0 Run
+
+```bash
+git clone https://github.com/domattioli/ADMESH-Domains /tmp/admesh-domains
+pip install chilmesh==0.3.0
+python -c "
+from importlib.metadata import version; print('chilmesh', version('chilmesh'))
+"
+python scripts/benchmark_wnat_hagen.py --json results.json
+```
+
+Archive `results.json` alongside hardware spec for cross-version comparisons.
+
+---
+
 ## References
 
 - **Benchmark Date:** April 27, 2026
@@ -259,5 +305,5 @@ PYTHON
 
 ---
 
-**Last Updated:** 2026-04-27  
-**Benchmark Version:** 1.0
+**Last Updated:** 2026-05-10 (v0.3.0 release; April 2026 v0.2.0 baselines preserved)  
+**Benchmark Version:** 1.2
