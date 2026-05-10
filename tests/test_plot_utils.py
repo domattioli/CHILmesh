@@ -205,12 +205,13 @@ def test_plot_quality_subset_elem_ids(small_mesh):
 def test_axis_chilmesh_sets_equal_aspect(small_mesh):
     fig, ax = plt.subplots()
     small_mesh.axis_chilmesh(ax=ax)
-    assert ax.get_aspect() == 'equal'
+    # matplotlib normalises set_aspect('equal') to the numeric value 1.0
+    assert ax.get_aspect() in ('equal', 1.0)
     plt.close(fig)
 
 
 def test_axis_chilmesh_without_ax_uses_gca(small_mesh):
     fig, _ = plt.subplots()
     ax = small_mesh.axis_chilmesh()   # no ax supplied — uses gca
-    assert ax.get_aspect() == 'equal'
+    assert ax.get_aspect() in ('equal', 1.0)
     plt.close(fig)
