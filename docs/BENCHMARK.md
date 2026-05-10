@@ -249,6 +249,39 @@ PYTHON
 
 ---
 
+## Re-run Validation (May 2026, issue #55)
+
+Validation re-run via `scripts/benchmark_wnat_hagen.py` on a different host (Linux x86_64, Python 3.11.15). Original April 2026 numbers above are preserved unchanged for historical reference.
+
+### Initialization
+
+| Operation | v0.2.0 Apr 2026 | v0.2.0 May 2026 re-run |
+|-----------|----------------:|-----------------------:|
+| Fast init (no layers) | 3.9s | **0.44s** |
+| Full init (with layers) | 7.7s | **3.26s** |
+| Quality analysis | 6.6s | **0.07s** |
+| **Total workflow** | **14.3s** | **3.33s** |
+
+### Query Performance
+
+| Operation | v0.2.0 Apr 2026 | v0.2.0 May 2026 re-run |
+|-----------|----------------:|-----------------------:|
+| `elem2edge` (5k samples) | 4.0μs | **2.08μs** |
+| `Vert2Edge` lookup (5k samples) | 0.7μs | **0.17μs** |
+| `Elem2Edge` bulk (1k samples) | 4.4μs | **0.14μs** |
+
+### Notes on Discrepancy
+
+May 2026 re-run is 4-90× faster than April 2026 numbers. Causes (in order of likelihood):
+
+1. **Hardware variance** — Apr 2026 hardware unspecified; May 2026 used a Linux cloud sandbox with possibly faster CPU.
+2. **`elem_quality()` vectorization** — 94× quality-analysis gap suggests a code path change (full vectorization) landed between releases. Worth investigating if a source change explains it.
+3. **Cold vs warm cache** — file I/O caching can skew fort.14 read time on second invocations.
+
+Both columns kept side-by-side in `README.md` and here so prior baselines remain auditable.
+
+---
+
 ## References
 
 - **Benchmark Date:** April 27, 2026
@@ -259,5 +292,5 @@ PYTHON
 
 ---
 
-**Last Updated:** 2026-04-27  
-**Benchmark Version:** 1.0
+**Last Updated:** 2026-05-10 (May 2026 re-run added; April 2026 baselines preserved)  
+**Benchmark Version:** 1.1
