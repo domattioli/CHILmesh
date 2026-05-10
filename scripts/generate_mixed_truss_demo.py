@@ -27,7 +27,10 @@ from matplotlib.path import Path as MplPath
 from scipy.spatial import Delaunay
 
 from chilmesh import CHILmesh
-from chilmesh.admesh_warmstart import optimize_with_admesh_truss_arrays
+from chilmesh.admesh_warmstart import (
+    distmesh1d,
+    optimize_with_admesh_truss_arrays,
+)
 
 
 NX, NY = 16, 12
@@ -104,6 +107,27 @@ def split_inner_outer(mesh: CHILmesh, strip_layers: int = 2):
 # ---------------------------------------------------------------------------
 # Stage 4: Delaunay over kept points, filter by centroid
 # ---------------------------------------------------------------------------
+
+def redistribute_outer_perim(points_xy: np.ndarray) -> np.ndarray:
+    """Apply distmesh1d to the outer rectangle perimeter with corner-dense h_fn.
+
+    Returns a new ``points_xy`` (copy) with outer-perim vertex positions
+    redistributed. Inner verts unchanged.
+    """
+    perim_idx = _outer_perim_ring()
+    perim_xy = points_xy[perim_idx]
+
+    corners = np.array([[0, 0], [LX, 0], [LX, LY], [0, LY]])
+
+    def h_fn(xy: np.ndarray) -> np.ndarray:
+        d = np.min(np.linalg.norm(xy[:, None] - corners[None], axis=2), axis=1)
+        return 0.05 + 0.45 * (1 - np.exp(-((d / 0.5) ** 2)))
+
+    new_perim = distmesh1d(perim_xy, h_fn, closed=True, niter=2000, deltat=0.4, dptol=1e-6)
+    out = points_xy.copy()
+    out[perim_idx] = new_perim
+    return out
+
 
 def triangulate_outer_band(
     points_xy: np.ndarray,
@@ -356,17 +380,40 @@ def main(out_path: Path | None = None) -> Path:
     outer_quads, inner_quads = split_inner_outer(mesh0, strip_layers=2)
     print(f"     stripped={len(outer_quads)} quads, kept={len(inner_quads)} quads")
 
-    print("[3/7] Delaunay over kept-vertex set, filter by centroid …")
-    points_xy = mesh0.points[:, :2]
+    print("[3/7] distmesh1d on outer rect perim (corner-dense h(x)) …")
+    points_xy_uniform = mesh0.points[:, :2]
+    points_xy = redistribute_outer_perim(points_xy_uniform)
+    perim = _outer_perim_ring()
+    perim_edges_uniform = np.linalg.norm(
+        np.diff(np.vstack([points_xy_uniform[perim], points_xy_uniform[perim][:1]]), axis=0),
+        axis=1,
+    )
+    perim_edges_redist = np.linalg.norm(
+        np.diff(np.vstack([points_xy[perim], points_xy[perim][:1]]), axis=0),
+        axis=1,
+    )
+    print(
+        f"     perim edges before: min={perim_edges_uniform.min():.3f} max={perim_edges_uniform.max():.3f}"
+    )
+    print(
+        f"     perim edges after:  min={perim_edges_redist.min():.3f} max={perim_edges_redist.max():.3f}"
+    )
+
+    print("[3b/7] Delaunay over kept-vertex set, filter by centroid …")
     tris_global, _, inner_seam = triangulate_outer_band(points_xy, outer_quads, inner_quads)
     print(f"     {len(tris_global)} tris in outer band")
+
+    # Build full points array reflecting the redistributed perim
+    points_xyz_redist = np.column_stack(
+        [points_xy, np.zeros(len(points_xy))]
+    )
 
     # Assemble pre-truss mixed mesh for the (2) panel
     pre_truss_conn = np.vstack(
         [np.column_stack([tris_global, tris_global[:, 0]]), inner_quads]
     )
     mesh_pre = CHILmesh(
-        connectivity=pre_truss_conn, points=mesh0.points, compute_layers=False
+        connectivity=pre_truss_conn, points=points_xyz_redist, compute_layers=False
     )
 
     print("[4/7] ADMESH truss on tris (outer rect + inner seam pinned) …")
@@ -378,7 +425,7 @@ def main(out_path: Path | None = None) -> Path:
 
     print("[5/7] Stitching trussed tris to inner quads …")
     mesh_truss = build_mixed_mesh_after_truss(
-        points_opt, tris_opt, pin_to_local, inner_quads, mesh0.points
+        points_opt, tris_opt, pin_to_local, inner_quads, points_xyz_redist
     )
     print(
         f"     mixed mesh: verts={mesh_truss.n_verts} elems={mesh_truss.n_elems}"
@@ -405,7 +452,7 @@ def main(out_path: Path | None = None) -> Path:
     )
     _plot_mixed(
         axes[0, 1], mesh_pre,
-        f"(2) Strip outer 2 layers, Delaunay band "
+        f"(2) distmesh1d perim → strip layers → Delaunay\n"
         f"({len(tris_global)} tris + {len(inner_quads)} quads)"
     )
     _plot_mixed(

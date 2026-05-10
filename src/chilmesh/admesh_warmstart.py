@@ -37,6 +37,105 @@ from . import CHILmesh
 from ._vendor_admesh_truss import distmesh2d_warmstart
 
 
+def distmesh1d(
+    curve_xy: np.ndarray,
+    h_fn: Callable[[np.ndarray], np.ndarray],
+    *,
+    closed: bool = True,
+    niter: int = 200,
+    deltat: float = 0.2,
+    dptol: float = 1e-3,
+) -> np.ndarray:
+    """Relax nodes along a piecewise-linear curve to a target edge-length field.
+
+    1D analogue of distmesh: each node moves along the curve under symmetric
+    spring forces from its two neighboring edges. Spring rest length at edge
+    midpoint = h_fn(midpoint_xy). Node count is preserved; the underlying curve
+    geometry (segments) is preserved (nodes only slide along it).
+
+    Parameters
+    ----------
+    curve_xy : (M, 2) ndarray
+        Initial nodes in CCW order along the curve. The piecewise-linear curve
+        is defined by consecutive node pairs (last → first if closed).
+    h_fn : callable
+        h_fn(points: (K, 2)) -> (K,) target edge length at each query point.
+    closed : bool
+        If True, treat curve as closed loop; else endpoints fixed.
+    niter : int
+        Maximum iterations.
+    deltat : float
+        Integration step size.
+    dptol : float
+        Convergence tolerance: max(|Δs|) / total_length below this stops.
+
+    Returns
+    -------
+    (M, 2) ndarray
+        Relaxed node positions along the same curve, same count, same CCW order.
+    """
+    pts0 = np.asarray(curve_xy, dtype=float).copy()
+    M = len(pts0)
+    if M < 3:
+        return pts0
+
+    seg_vec0 = np.roll(pts0, -1, axis=0) - pts0
+    if not closed:
+        seg_vec0 = seg_vec0[:-1]
+    seg_len0 = np.linalg.norm(seg_vec0, axis=1)
+    cum_len0 = np.concatenate([[0.0], np.cumsum(seg_len0)])
+    total_len = cum_len0[-1]
+
+    # Each node's initial arclength position
+    s = cum_len0[:M].copy() if not closed else cum_len0[:M].copy()
+
+    n_segs = len(seg_len0)
+
+    def s_to_xy(s_arr: np.ndarray) -> np.ndarray:
+        if closed:
+            s_arr = s_arr % total_len
+        else:
+            s_arr = np.clip(s_arr, 0.0, total_len)
+        seg_idx = np.clip(
+            np.searchsorted(cum_len0[1:], s_arr, side="right"), 0, n_segs - 1
+        )
+        local = (s_arr - cum_len0[seg_idx]) / seg_len0[seg_idx]
+        return pts0[seg_idx] + local[:, None] * seg_vec0[seg_idx]
+
+    for _ in range(niter):
+        s_next = np.roll(s, -1)
+        if closed:
+            L = (s_next - s) % total_len
+        else:
+            L = np.diff(s)
+
+        mid_s = (s + s_next) / 2.0 if closed else (s[:-1] + s[1:]) / 2.0
+        if closed:
+            mid_s = np.where(s_next < s, (s + s_next + total_len) / 2.0, mid_s)
+        mid_xy = s_to_xy(mid_s % total_len if closed else mid_s)
+        h = np.maximum(h_fn(mid_xy), 1e-9)
+
+        F = L - h
+        if closed:
+            net = F - np.roll(F, 1)
+        else:
+            net = np.zeros(M)
+            net[1:-1] = F[1:] - F[:-1]
+
+        ds = deltat * net
+        s = s + ds
+
+        if not closed:
+            s[0] = 0.0
+            s[-1] = total_len
+
+        max_disp = float(np.max(np.abs(ds))) / max(total_len, 1e-12)
+        if max_disp < dptol:
+            break
+
+    return s_to_xy(s)
+
+
 def _infer_boundary_from_triangles(triangles: np.ndarray) -> np.ndarray:
     """
     Infer boundary vertex indices from triangle connectivity.

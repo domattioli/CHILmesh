@@ -53,11 +53,13 @@ Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality an
 
 ### Showcase: Mixed-Element Mesh from Quad Core + Trussed Tri Band
 
-Pipeline demonstration combining skeletonization, Delaunay triangulation, ADMESH warm-start truss, and mixed-element smoothing on a single mesh:
+Pipeline demonstration combining skeletonization, 1D boundary redistribution, Delaunay triangulation, ADMESH warm-start truss, and mixed-element smoothing on a single mesh:
 
-![Mixed-element mesh: quad core + trussed tri band](output/mixed_truss_fem_demo.png?v=1)
+![Mixed-element mesh: quad core + trussed tri band](output/mixed_truss_fem_demo.png?v=2)
 
-**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers. (2) Strip the outer two skeleton layers, retain their vertices, and Delaunay-triangulate the freed band; centroid filter keeps 192 tris in the annular region only. (3) ADMESH warm-start truss relaxes the new tris with both the outer rectangle perimeter AND the inner quad-core seam pinned bit-exact, so the quad core is preserved untouched. (4) Boundary-pinned Laplacian smoothing on the combined mixed mesh (288 elements: 192 tris + 96 quads) — median element quality 0.78. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers, uniform Δx = 0.25 perimeter spacing. (2) Apply `distmesh1d` to the outer rectangle perimeter with a corner-dense edge-length field `h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))` where d is distance to nearest corner — perimeter edges now span 0.035–0.499. Strip the outer two skeleton layers, retain vertices, Delaunay-triangulate the freed band, centroid filter keeps 192 tris in the annular region. (3) ADMESH warm-start truss relaxes the new tris with both the outer rectangle perimeter AND the inner quad-core seam pinned bit-exact, so the quad core is preserved untouched. (4) Boundary-pinned Laplacian smoothing on the combined mixed mesh (288 elements: 192 tris + 96 quads) — median element quality 0.79. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+
+The four sharp 90° outer corners receive denser tri packing thanks to the `distmesh1d` step — visible as the radiating cluster of triangles at each corner in panels (2)–(4).
 
 ### Showcase: Skeletonization & Mesh Plotting
 
