@@ -51,6 +51,14 @@ Reference benchmark mesh — per-element quality (skew, `4√3·area / Σedge²`
 
 Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality analysis: **~3.3 seconds** end-to-end (see [Performance](#performance-v020) below). Reproduce with `python scripts/benchmark_wnat_hagen.py`.
 
+### Showcase: Mixed-Element Mesh from Quad Core + Trussed Tri Band
+
+Pipeline demonstration combining skeletonization, Delaunay triangulation, ADMESH warm-start truss, and mixed-element smoothing on a single mesh:
+
+![Mixed-element mesh: quad core + trussed tri band](output/mixed_truss_fem_demo.png?v=1)
+
+**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers. (2) Strip the outer two skeleton layers, retain their vertices, and Delaunay-triangulate the freed band; centroid filter keeps 192 tris in the annular region only. (3) ADMESH warm-start truss relaxes the new tris with both the outer rectangle perimeter AND the inner quad-core seam pinned bit-exact, so the quad core is preserved untouched. (4) Boundary-pinned Laplacian smoothing on the combined mixed mesh (288 elements: 192 tris + 96 quads) — median element quality 0.78. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+
 ### Showcase: Skeletonization & Mesh Plotting
 
 CHILmesh's two flagship visualizations — **layer-based skeletonization** (center, viridis) and **per-element quality plotting** (right, cool, `4√3·area / Σedge²`) — rendered on three states of the same triangular annulus:
