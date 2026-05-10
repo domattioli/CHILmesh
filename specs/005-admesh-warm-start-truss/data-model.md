@@ -3,19 +3,11 @@
 **Date**: 2026-05-02
 **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md) | **Research**: [research.md](research.md)
 
-This is a single-function library feature plus a demo script. **No persistent data model** — no databases, no schemas, no API entities. What follows are the runtime entities the adapter manipulates.
-
----
-
-## Overview
-
-The adapter is a pure function: triangulation in, optimized triangulation out. The runtime entities are the inputs, the validated intermediate state, the truss loop's working memory, and the output. Plus the four-row figure the demo produces.
+Single-function library + demo script. No persistent data model — runtime entities only.
 
 ---
 
 ## E1. WarmStartInput (function arguments)
-
-The contract surface for `optimize_with_admesh_truss_arrays(...)`.
 
 | Field | Type | Required | Source | Purpose |
 |-------|------|----------|--------|---------|
@@ -33,8 +25,6 @@ The CHILmesh form `optimize_with_admesh_truss(mesh, sdf, size_fn, **kwargs) -> C
 ---
 
 ## E2. ValidatedInput (post-validation, pre-truss)
-
-After running validation (FR-005, 006, 007) but before entering the truss loop, the adapter holds a normalized internal representation:
 
 | Field | Type | Computed from | Purpose |
 |-------|------|--------------|---------|
@@ -62,8 +52,6 @@ Validation rules (raise `ValueError` / `NotImplementedError` with offending indi
 
 ## E3. TrussLoopState (working memory inside `_vendor_admesh_truss.distmesh2d_warmstart`)
 
-The vendored truss loop holds:
-
 | Field | Type | Initial value | Purpose |
 |-------|------|---------------|---------|
 | `p` | `ndarray[N, 2]` | `np.vstack([boundary_xy, interior_xy])` | Working points. Boundary at indices 0..B-1, interior at B..N-1. |
@@ -89,28 +77,24 @@ State transitions per iteration (verbatim from upstream `distmesh2d` lines 140-2
 8. p = p_new
 ```
 
-The vendor copy is **byte-identical** to upstream lines 140-end of `distmesh2d`. The only divergence is the preamble (steps 1-3 of upstream replaced with our warm-start setup).
+Vendor copy byte-identical to upstream lines 140-end of `distmesh2d`. Only divergence: preamble replaced with warm-start setup.
 
 ---
 
 ## E4. WarmStartOutput (return value)
-
-For the array form (`optimize_with_admesh_truss_arrays`):
 
 | Field | Type | Source | Property |
 |-------|------|--------|----------|
 | `points_out` | `ndarray[Np, 2]` | truss loop final state | Boundary at indices 0..B-1 (bit-exact equal to `boundary_xy`); interior at B..Np-1 |
 | `triangles_out` | `ndarray[Mp, 3]` | truss loop final Delaunay | Re-triangulated; *not* equal to input triangles |
 
-For the CHILmesh form: a fresh `CHILmesh(connectivity=triangles_out, points=column_stack([points_out, zeros(Np)]))`.
+CHILmesh form: fresh `CHILmesh(connectivity=triangles_out, points=column_stack([points_out, zeros(Np)]))`.
 
-**Index preservation guarantee**: If a caller passed `boundary_indices=[i0, i1, ..., iB-1]` (in any order), the output's first B rows correspond to those points in *that* order (i.e., `points_out[k] == input_points[boundary_indices[k]]`).
+**Index preservation**: caller's `boundary_indices` order preserved — `points_out[k] == input_points[boundary_indices[k]]`.
 
 ---
 
-## E5. Demo: FourRowFigure (refreshed for new layout)
-
-The demo script's runtime entities, replacing the spec-004 4-row layout:
+## E5. Demo: FourRowFigure (new layout)
 
 | Field | Value |
 |-------|-------|
@@ -120,7 +104,7 @@ The demo script's runtime entities, replacing the spec-004 4-row layout:
 | `output_path` | `tests/output/annulus_quickstart.png` (UNCHANGED) |
 | `suptitle` | `"CHILmesh × ADMESH: Warm-Start Truss Optimization Pipeline"` |
 
-Per-row mesh provenance (the new layout from Q2=d):
+Per-row mesh provenance:
 
 | Row | Source | Smoother applied |
 |-----|--------|------------------|
@@ -129,9 +113,9 @@ Per-row mesh provenance (the new layout from Q2=d):
 | 3 | Row 2 → `mesh.smooth_mesh(method='fem', acknowledge_change=True)` | CHILmesh FEM (`direct_smoother`) |
 | 4 | Row 2 → `smooth_for_quadrangulation(row2.points, row2.triangles, ANNULUS_SDF, ...)` | ADMESH right-isoceles |
 
-Note rows 3 and 4 both branch off row 2 — they are siblings, not sequential.
+Rows 3 and 4 are siblings off row 2 — not sequential.
 
-Per-cell rendering rule (preserved from spec 004):
+Per-cell rendering rule:
 
 | Cell | Renderer | Color source |
 |------|----------|--------------|
@@ -139,7 +123,7 @@ Per-cell rendering rule (preserved from spec 004):
 | `(row, 1)` | `ax.fill(...)` per element | `parula_cmap(elem_to_layer[i] / max(1, n_layers-1))` |
 | `(row, 2)` | `ax.fill(...)` per element | `cool_r_cmap(norm(quality[i]))` (cool_r = red→blue, see spec 004 Q5 history) |
 
-Subplot titles (per spec 004 contract format `"<Row Label>\n<Column Label>"`):
+Subplot titles (format `"<Row Label>\n<Column Label>"`):
 
 | Row | Row Label |
 |-----|-----------|
@@ -158,8 +142,6 @@ Subplot titles (per spec 004 contract format `"<Row Label>\n<Column Label>"`):
 
 ## State Transitions
 
-The whole feature has a single linear runtime flow per call:
-
 ```text
 LOAD ValidatedInput
     | (raise ValueError / NotImplementedError on validation failure)
@@ -176,7 +158,7 @@ COMPUTE q_out (median quality of output)
 RETURN WarmStartOutput
 ```
 
-The demo script's flow:
+Demo script flow:
 
 ```text
 GENERATE row1 (chilmesh.examples.annulus)
@@ -200,6 +182,6 @@ EXIT 0
 
 ## Conclusion
 
-The data model is **runtime-only and intentionally minimal**. The adapter holds a few hundred bytes of working state at most; nothing is persisted. The demo's only persistent artifact is the regenerated PNG at the same path the README already references.
+Runtime-only, intentionally minimal. Nothing persisted. Only artifact: regenerated PNG at same README-referenced path.
 
 **Status**: Ready for `contracts/api-contract.md` and `contracts/visualization-output.md`.

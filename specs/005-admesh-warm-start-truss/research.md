@@ -1,18 +1,15 @@
 # Phase 0 Research: ADMESH Warm-Start Truss Optimization
 
 **Date**: 2026-05-02
-**Spec**: [spec.md](spec.md)
-**Plan**: [plan.md](plan.md)
+**Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
-This document captures the technical investigation done before design. Each finding (R1-R5) maps to a constraint or decision in `plan.md`.
+Technical investigation before design. Each finding (R1-R5) maps to constraint/decision in `plan.md`.
 
 ---
 
 ## R1: ADMESH `main` HEAD has a broken import — `MeshOutput`
 
-### Question
-
-Can we call `admesh.triangulate()` (the public entry point in `admesh/routine.py`) from CHILmesh?
+**Question**: Can we call `admesh.triangulate()` (public entry point in `admesh/routine.py`) from CHILmesh?
 
 ### Investigation
 
@@ -27,16 +24,16 @@ The file `admesh/routine.py` (line 21) imports:
 from admesh.distmesh import MeshOutput, SizeFn, distmesh2d, distmesh2d_admesh
 ```
 
-But `admesh/distmesh.py` defines only `SizeFn`, `distmesh2d`, `fixmesh`, `_initial_distribution`, `_rejection_method`. There is no `MeshOutput` class and no `distmesh2d_admesh` function on `main`.
+`admesh/distmesh.py` defines only `SizeFn`, `distmesh2d`, `fixmesh`, `_initial_distribution`, `_rejection_method`. No `MeshOutput` or `distmesh2d_admesh` on `main`.
 
-Searching git history:
+Git history:
 
 ```text
 f21e340 Restore missing ADMESH-variant distmesh code (MeshOutput, SizeFn, distmesh2d_admesh)
 855670e Fix test_issue_11_ring_sorting: correct numpy array shapes and domain access
 ```
 
-These commits exist on the `daily-issue-fixing` branch but **have not been merged to `main`**. The user's pinned commit `05bc68f` does not contain them.
+These commits on `daily-issue-fixing` — not merged to `main`. Pinned commit `05bc68f` doesn't contain them.
 
 ### Verification
 
@@ -52,17 +49,13 @@ python -c "import sys; sys.path.insert(0, '/tmp/ADMESH'); from admesh.distmesh i
 
 ### Decision
 
-`distmesh2d` is **directly importable**. The CHILmesh adapter calls `admesh.distmesh.distmesh2d` directly and never imports from `admesh.routine`. This sidesteps the broken state without needing a fix upstream.
-
-**Cross-repo issue**: This is candidate ADMESH-A in spec.md's cross-repo tracking section. The user files it on `domattioli/ADMESH/issues`.
+`distmesh2d` directly importable. Adapter calls `admesh.distmesh.distmesh2d` directly; never imports `admesh.routine`. **Cross-repo issue**: ADMESH-A.
 
 ---
 
 ## R2: `pfix` bit-exact preservation — proof from source
 
-### Question
-
-The spec promises bit-exact equality (`np.array_equal`) on the boundary subset. Can ADMESH's `pfix` mechanism actually deliver this?
+**Question**: Can ADMESH's `pfix` mechanism deliver `np.array_equal` bit-exact preservation on boundary subset?
 
 ### Investigation
 
@@ -94,28 +87,15 @@ if nfix > 0:
 
 ### Risk: Re-triangulation reordering
 
-Inside the truss loop:
-
-```python
-tri = Delaunay(p)
-t_all = tri.simplices
-```
-
-scipy's `Delaunay` produces triangles indexing into `p`. If `Delaunay` reorders `p` internally (it doesn't — it returns `tri.simplices` indexing the input array unchanged), our pfix invariant could break. **Verified**: `scipy.spatial.Delaunay(p)` does not modify `p`; `tri.points` is `p` (same object) and indices in `tri.simplices` reference the input array's order. pfix preservation survives Delaunay.
+`scipy.spatial.Delaunay(p)` does not modify `p`; `tri.points is p` (same object). pfix preservation survives Delaunay — verified.
 
 ### Decision
 
-`pfix` is bit-exact preserved by inspection of source. The spec's `np.array_equal` requirement is satisfiable. We add a regression test (V_BND in FR-013, plus a unit test in `test_admesh_warmstart.py`) that exercises this end-to-end so any future scipy or ADMESH change that breaks the invariant fails loudly.
-
-**Cross-repo issue**: Document this contract upstream — candidate ADMESH-C.
+`pfix` bit-exact preserved by source inspection. Regression test (V_BND in FR-013 + unit test) exercises end-to-end. **Cross-repo issue**: ADMESH-C.
 
 ---
 
-## R3: `distmesh2d` public signature — what tunables to forward
-
-### Question
-
-Per FR-009, the adapter forwards optional truss-solver parameters with documented defaults. What are they?
+## R3: `distmesh2d` public signature — tunables to forward
 
 ### Investigation
 
@@ -142,21 +122,17 @@ print(inspect.signature(distmesh2d))
 | `niter` | `500` | Maximum iterations |
 | `seed` | `0` | RNG seed for the rejection step (deterministic) |
 
-\* `fh` accepts None internally; we surface it as `None` default in the adapter too, meaning uniform.
+\* `fh` accepts None = uniform.
 
 ### Decision
 
-The CHILmesh adapter exposes all of these as kwargs and forwards them through. Defaults match upstream so callers who pass nothing get the same behavior as `admesh.triangulate()` would.
-
-**Note on `seed`**: Even though we skip `_rejection_method` (which is the only consumer of the seed), we still accept and forward `seed` for forward-compatibility — if ADMESH adds another stochastic step in the future, our adapter still controls it.
+Adapter exposes all kwargs, forwards through. Defaults match upstream. `seed` forwarded for forward-compatibility even though `_rejection_method` is skipped.
 
 ---
 
 ## R4: Can we inject custom initial points without modifying ADMESH?
 
-### Question
-
-Is there any way (monkey-patch, optional argument, side door) to make `distmesh2d` skip its `_initial_distribution` + `_rejection_method` steps and use our supplied points instead?
+**Question**: Any way (monkey-patch, optional arg, side door) to skip `_initial_distribution` + `_rejection_method` and use our supplied points?
 
 ### Investigation
 
@@ -173,25 +149,17 @@ p = _rejection_method(p, fh, rng)
 # 3. Fixed points first ...
 ```
 
-The local variable `p` is hardcoded to the lattice generator's output. There is no parameter, no sentinel value, no callable injection point that lets a caller substitute a different starting `p`. Monkey-patching `_initial_distribution` is possible (it's module-scoped) but fragile and pollutes test isolation.
-
-### Tested workaround attempt
-
-If we pass our existing points as `pfix`, they get pinned (never moved). We could pin only the boundary and let `_initial_distribution` generate fresh interior points — but that's fresh-from-bbox, which is exactly the existing row 3 behavior we're replacing. Doesn't satisfy "warm-start using row 1's interior."
+Local var `p` hardcoded to lattice generator output. No injection point. Monkey-patching fragile. Passing existing points as `pfix` pins them (doesn't satisfy warm-start using row 1's interior).
 
 ### Decision
 
-The vendor approach is necessary. We copy the inner truss loop (about 50 lines) into `_vendor_admesh_truss.py` with a header comment listing the source SHA. The only behavioral difference: skip lines 110-115 (initial distribution + rejection) and instead start with `p = np.vstack([pfix_boundary, interior_initial_from_caller])`.
-
-**Cross-repo issue**: This is candidate ADMESH-B (add a public warm-start entry point). When that lands, we delete the vendor and call ADMESH directly.
+Vendor approach necessary. Copy inner truss loop (~50 lines) into `_vendor_admesh_truss.py` with source SHA header. Only change: skip lines 110-115, start with `p = np.vstack([pfix_boundary, interior_initial_from_caller])`. **Cross-repo issue**: ADMESH-B. Delete vendor when that lands.
 
 ---
 
 ## R5: Right-isoceles smoother (`smooth_for_quadrangulation`) — does it import cleanly?
 
-### Question
-
-Spec 004 row 4 used `admesh.quad_prep.smooth_for_quadrangulation`. Our new row 4 also uses it (applied to row 2 instead of row 3). Does the broken `routine.py` block this import?
+**Question**: Does broken `routine.py` block `admesh.quad_prep.smooth_for_quadrangulation` import?
 
 ### Investigation
 
@@ -200,19 +168,17 @@ python -c "import sys; sys.path.insert(0, '/tmp/ADMESH'); from admesh.quad_prep 
 # <function smooth_for_quadrangulation at 0x...>
 ```
 
-`admesh.quad_prep` does not import from `admesh.routine`, so it is unaffected by the `MeshOutput` issue. Our new row 4 works exactly as in spec 004.
+`admesh.quad_prep` doesn't import `admesh.routine` — unaffected by `MeshOutput` issue.
 
 ### Decision
 
-No change to row 4's invocation pattern. The only difference vs. spec 004 is the *input mesh* (row 2 instead of row 3).
+No change to row 4 invocation. Only difference vs spec 004: input mesh is row 2 instead of row 3.
 
 ---
 
 ## R6 (bonus): Does scipy `Delaunay` preserve point ordering?
 
-### Question
-
-The truss loop calls `Delaunay(p)` repeatedly. If scipy reorders `p`, our `pfix` invariant breaks (R2). Have we verified this?
+**Question**: If scipy reorders `p`, `pfix` invariant breaks. Verified?
 
 ### Investigation
 
@@ -227,11 +193,11 @@ print(np.array_equal(tri.points, p))  # True — bit-exact
 print(tri.simplices.max() == len(p) - 1)  # True — indices are valid for original p
 ```
 
-scipy `Delaunay` does NOT reorder, copy, or modify the input point array. `tri.points is p`. The simplices reference the input ordering directly.
+scipy `Delaunay` does NOT reorder/copy/modify input array. `tri.points is p`. Simplices reference input ordering directly.
 
 ### Decision
 
-No mitigation needed; the property is contractual upstream. We document this assumption in the adapter docstring so any future scipy major-version bump triggers re-verification.
+No mitigation needed. Document assumption in adapter docstring — triggers re-verification on future scipy major-version bump.
 
 ---
 
@@ -246,4 +212,4 @@ No mitigation needed; the property is contractual upstream. We document this ass
 | R5: quad_prep clean | Confirmed | No changes to row 4 invocation | (none) |
 | R6: Delaunay preserves order | Confirmed | Document assumption | (none) |
 
-**Status**: Phase 0 complete. All assumptions for Phase 1 design are validated.
+**Status**: Phase 0 complete. All Phase 1 design assumptions validated.

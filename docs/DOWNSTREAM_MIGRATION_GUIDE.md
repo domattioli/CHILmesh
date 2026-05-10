@@ -1,14 +1,14 @@
 # Downstream Project Integration Guide
 
-**Version:** 1.0  
-**CHILmesh Version:** 0.2.0+  
-**Target Projects:** MADMESHR, ADMESH, ADMESH-Domains  
+**Version:** 1.0
+**CHILmesh Version:** 0.2.0+
+**Target Projects:** MADMESHR, ADMESH, ADMESH-Domains
 
 ---
 
 ## Overview
 
-This guide is for developers of downstream research projects integrating with CHILmesh 0.2.0+. If you use CHILmesh in MADMESHR, ADMESH, or ADMESH-Domains, this guide explains what changed and how to adapt.
+Guide for developers of downstream research projects integrating with CHILmesh 0.2.0+.
 
 **TL;DR:** Your code probably still works. CHILmesh 0.2.0 is backward compatible. New bridge adapters make common operations clearer.
 
@@ -23,7 +23,7 @@ This guide is for developers of downstream research projects integrating with CH
 
 ### Architecture
 - Adjacency structures modernized (internal implementation)
-- **Public API unchanged** - your code still works
+- **Public API unchanged** — your code still works
 - New bridge adapters provide convenient shortcuts
 
 ### API Additions
@@ -40,20 +40,14 @@ This guide is for developers of downstream research projects integrating with CH
 
 ## Do I Need to Change My Code?
 
-### Short Answer
-**No.** Your existing code will continue to work without modification.
+**No.** Existing code continues to work without modification.
 
-### Should I Update?
-**Yes, eventually.** Updating provides:
-- Better performance (1.5x improvement on large meshes)
-- Clearer code (bridge adapters eliminate verbose patterns)
-- Better error messages and validation
-- Access to new quality metrics and analysis methods
+**Should I update?** Yes, eventually. Benefits: better performance (1.5x improvement), clearer code (bridge adapters), better error messages, new quality metrics.
 
-### Migration Timeline
+**Migration timeline:**
 - **Now**: Update and test (should be drop-in replacement)
 - **Later**: Optionally adopt bridge adapters for clearer code
-- **No rush**: Take time to validate your tests pass first
+- **No rush**: Take time to validate tests pass first
 
 ---
 
@@ -219,28 +213,24 @@ pip install --upgrade 'chilmesh>=0.2.0'
 ```
 
 ### Phase 2: Test Compatibility (30 minutes)
-Run your existing test suite. Everything should pass without code changes.
+Run existing test suite. Everything should pass without code changes.
 
 **If tests fail:**
 - Check error messages
 - Report issue at: https://github.com/domattioli/CHILmesh/issues
-- Include: CHILmesh version, your code snippet, error traceback
+- Include: CHILmesh version, code snippet, error traceback
 
 ### Phase 3: Adopt Bridge Adapters (Optional, 2-4 hours)
 Gradually replace verbose patterns with adapter methods:
-
-1. **Find mesh interactions** in your code
-2. **Check if adapter has convenience method** for your use case
-3. **Refactor to use adapter** (your code becomes clearer)
-4. **Run tests** to verify behavior unchanged
+1. Find mesh interactions in your code
+2. Check if adapter has convenience method for your use case
+3. Refactor to use adapter (code becomes clearer)
+4. Run tests to verify behavior unchanged
 
 ### Phase 4: Performance Profiling (Optional, 1-2 hours)
-Profile your code to measure improvements:
-
 ```bash
 python -m cProfile -s cumtime your_script.py > profile.txt
 ```
-
 Compare before/after upgrade. Bridge adapters often run faster than manual patterns.
 
 ---
@@ -314,18 +304,18 @@ boundary_verts = boundaries[0]
 
 ### Error: "AttributeError: CHILmesh has no attribute 'get_vertex_edges'"
 
-**Cause:** You're using CHILmesh < 0.2.0
+**Cause:** Using CHILmesh < 0.2.0
 
-**Fix:** Upgrade to 0.2.0+
+**Fix:**
 ```bash
 pip install --upgrade 'chilmesh>=0.2.0'
 ```
 
 ### Error: "ModuleNotFoundError: No module named 'chilmesh.bridge'"
 
-**Cause:** You're using CHILmesh < 0.2.0, or bridge module not found
+**Cause:** Using CHILmesh < 0.2.0, or bridge module not found
 
-**Fix:** Upgrade and verify installation
+**Fix:**
 ```bash
 pip install --upgrade 'chilmesh>=0.2.0'
 python -c "from chilmesh.bridge import MeshAdapterForMADMESHR; print('OK')"
@@ -333,7 +323,7 @@ python -c "from chilmesh.bridge import MeshAdapterForMADMESHR; print('OK')"
 
 ### Error: "KeyError: 'Vert2Edge'"
 
-**Cause:** You're accessing internal adjacency structures directly
+**Cause:** Accessing internal adjacency structures directly
 
 **Old (broken in 0.2.0):**
 ```python
@@ -349,36 +339,26 @@ edges = mesh.get_vertex_edges(v)
 
 ### Performance Issues
 
-**Problem:** Your code is slower after upgrading?
+**Problem:** Code slower after upgrading? (Rare — should be faster.)
 
-This is rare (should be faster), but if it happens:
-
-1. **Verify you're using 0.2.0+:**
+1. **Verify 0.2.0+:**
    ```python
    import chilmesh
    print(chilmesh.__version__)  # Should be 0.2.0 or later
    ```
 
-2. **Profile to find bottlenecks:**
+2. **Profile:**
    ```bash
    python -m cProfile -s cumtime your_script.py > profile.txt
    ```
 
-3. **Report with reproducible example:**
-   - CHILmesh version
-   - Minimal code to reproduce
-   - Timing before/after (with mesh size)
+3. **Report** with CHILmesh version, minimal code, timing before/after, mesh size.
 
 ---
 
 ## API Reference by Project
 
 ### MADMESHR: Mesh Adaptation Research
-
-**Key Operations:**
-- Finding element neighbors for refinement decisions
-- Assessing local mesh quality for adaptation criteria
-- Building refinement regions from seed elements
 
 **Relevant CAI Methods:**
 ```python
@@ -395,11 +375,6 @@ refinement_region = adapter.get_refinement_region(seed_elems)
 
 ### ADMESH: Adaptive Mesh Refinement
 
-**Key Operations:**
-- Assessing overall mesh quality
-- Identifying poor quality elements for coarsening/refinement
-- Analyzing angle distributions for robustness
-
 **Relevant CAI Methods:**
 ```python
 # Direct methods
@@ -412,11 +387,6 @@ angle_summary = adapter.get_element_angles_summary()
 ```
 
 ### ADMESH-Domains: Domain Decomposition
-
-**Key Operations:**
-- Extracting domain boundaries
-- Understanding mesh connectivity for domain splitting
-- Managing multi-domain scenarios
 
 **Relevant CAI Methods:**
 ```python
@@ -435,33 +405,19 @@ connectivity_info = adapter.get_mesh_connectivity_info()
 ## Getting Help
 
 ### Questions About Migration
-1. Check this guide (you might find the answer)
-2. Review code examples in `docs/CHILmesh_Access_Interface.md`
-3. Look at test examples in `tests/test_bridge_adapters.py`
+1. Check this guide
+2. Review `docs/CHILmesh_Access_Interface.md`
+3. Look at `tests/test_bridge_adapters.py`
 
 ### Bug Reports
 Include:
 - CHILmesh version: `python -c "import chilmesh; print(chilmesh.__version__)"`
-- Your Python version: `python --version`
+- Python version: `python --version`
 - Minimal reproducible example
 - Full error traceback
-- Your downstream project name (MADMESHR/ADMESH/ADMESH-Domains)
+- Downstream project name (MADMESHR/ADMESH/ADMESH-Domains)
 
 Report at: https://github.com/domattioli/CHILmesh/issues
-
-### Feature Requests
-Tell us what would make integration easier:
-- What operations do you repeat most?
-- Are there bridge adapter methods you'd like to see?
-- Performance concerns specific to your use case?
-
-### Performance Concerns
-Include:
-- CHILmesh version
-- Mesh size (n_verts, n_elems)
-- Operation that's slow
-- Timing before/after upgrade
-- Code snippet showing the slow operation
 
 ---
 
@@ -478,35 +434,32 @@ Include:
 
 ## FAQ
 
-### Q: Will my code break when upgrading?
-**A:** No. CHILmesh 0.2.0 is backward compatible. All existing APIs work unchanged.
+**Q: Will my code break when upgrading?**
+No. CHILmesh 0.2.0 is backward compatible. All existing APIs work unchanged.
 
-### Q: Should I use the bridge adapters?
-**A:** They're optional but recommended. They make code clearer and often run faster. Adopt them at your own pace.
+**Q: Should I use the bridge adapters?**
+Optional but recommended. Code becomes clearer and often runs faster. Adopt at your own pace.
 
-### Q: What if I need the old behavior?
-**A:** You can stick with v0.1.1. But we recommend upgrading for performance benefits.
+**Q: What if I need old behavior?**
+Stick with v0.1.1. But upgrade recommended for performance benefits.
 
-### Q: Can I mix old and new code?
-**A:** Yes. You can use both old patterns and bridge adapters in the same codebase during migration.
+**Q: Can I mix old and new code?**
+Yes. Both old patterns and bridge adapters work in same codebase during migration.
 
-### Q: Is the bridge adapter API stable?
-**A:** Yes. Adapter methods are part of the CAI and guaranteed stable through v1.0.
+**Q: Is bridge adapter API stable?**
+Yes. Adapter methods are part of CAI, guaranteed stable through v1.0.
 
-### Q: How much code do I need to change?
-**A:** None required. Migration is completely optional. Adapters are conveniences, not requirements.
+**Q: How much code do I need to change?**
+None required. Migration completely optional.
 
 ---
 
 ## Example Integration Projects
 
 See `examples/` directory for complete working examples:
-
 - `madmeshr_refinement.py` - MADMESHR mesh adaptation workflow
 - `admesh_quality.py` - ADMESH quality assessment
 - `admesh_domains_setup.py` - ADMESH-Domains domain initialization
-
-Copy and adapt these examples for your own projects.
 
 ---
 
@@ -518,13 +471,12 @@ Copy and adapt these examples for your own projects.
 - Security support: Until 1.0.0 release
 
 **Migration Support:**
-- Expect to spend 1-4 hours updating your project
+- Expect 1-4 hours updating your project
 - Most time spent testing, not code changes
-- Bridge adapters make future updates easier
 
 ---
 
-**Last Updated:** 2026-04-27  
+**Last Updated:** 2026-04-27
 **Guide Version:** 1.0
 
-For the latest information, visit: https://github.com/domattioli/CHILmesh
+For latest information, visit: https://github.com/domattioli/CHILmesh

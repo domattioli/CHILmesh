@@ -12,7 +12,7 @@
 **Labels:** `enhancement`
 
 **Body:**
-ADMESH-Domains is the catalog/delivery layer; CHILmesh is the computational engine. Right now there is no bridge. `Mesh.load()` returns raw bytes/path and users must manually call `CHILmesh.read_from_fort14()` or `read_from_2dm()`.
+ADMESH-Domains = catalog/delivery layer; CHILmesh = computational engine. No bridge exists. `Mesh.load()` returns raw bytes/path; users must manually call `CHILmesh.read_from_fort14()` or `read_from_2dm()`.
 
 **Proposed:**
 ```python
@@ -31,7 +31,7 @@ mesh_obj = domain.meshes[0].load(as_chilmesh=True)
 - CHILmesh-side entry point: `CHILmesh.from_admesh_domain()` (CHILmesh issue #43)
 
 **Acceptance:**
-- [ ] Returns a live `CHILmesh` instance
+- [ ] Returns live `CHILmesh` instance
 - [ ] Works for ADCIRC and SMS_2DM types
 - [ ] `ImportError` with install hint if `chilmesh` not installed
 - [ ] Documented in README and HF dataset card
@@ -44,21 +44,21 @@ mesh_obj = domain.meshes[0].load(as_chilmesh=True)
 **Labels:** `enhancement`, `ci`
 
 **Body:**
-`node_count`, `element_count`, and `bounding_box` are optional schema fields filled in manually. This creates:
+`node_count`, `element_count`, and `bounding_box` are optional schema fields filled manually. Creates:
 1. **Stale data** — contributor enters wrong count; file changes; schema drifts
 2. **Missing data** — many meshes have `null`, breaking queries like "find meshes with < 100K nodes"
 
-**Proposed:** On PR submission, run CHILmesh on each new/modified mesh file to auto-compute:
+**Proposed:** On PR submission, run CHILmesh on each new/modified mesh file:
 ```python
 m = CHILmesh.from_admesh_domain(mesh_record, compute_layers=False)
 computed = m.admesh_metadata()
 # → {node_count, element_count, element_type, bounding_box}
 ```
-Compare against schema values and warn/block on mismatch.
+Compare against schema values; warn/block on mismatch.
 
 **Acceptance:**
 - [ ] CI detects mismatches between schema `node_count` and actual file
-- [ ] Contribution workflow auto-fills the 4 computed fields
+- [ ] Contribution workflow auto-fills 4 computed fields
 - [ ] Backfill migration for existing entries
 - [ ] One-time migration script provided
 
@@ -70,9 +70,9 @@ Compare against schema values and warn/block on mismatch.
 **Labels:** `bug`, `schema`
 
 **Body:**
-`element_type` is `Optional[str]` with no enum. Contributors write anything: "triangles", "tri", "TRI", "Triangular", "mixed", etc. This breaks programmatic queries and CHILmesh integration.
+`element_type` is `Optional[str]` with no enum. Contributors write anything: "triangles", "tri", "TRI", "Triangular", "mixed", etc. Breaks programmatic queries and CHILmesh integration.
 
-**CHILmesh uses a specific vocabulary:**
+**CHILmesh vocabulary:**
 - `"Triangular"` — all triangular elements
 - `"Quadrilateral"` — all quad elements
 - `"Mixed-Element"` — both in same mesh
@@ -97,19 +97,19 @@ element_type: Optional[Literal["Triangular", "Quadrilateral", "Mixed-Element"]] 
 **Labels:** `enhancement`, `schema`
 
 **Body:**
-CHILmesh computes `n_layers` — the number of concentric boundary-peeling layers (skeletonization depth). This is a meaningful topological complexity measure:
+CHILmesh computes `n_layers` — concentric boundary-peeling layer count (skeletonization depth). Meaningful topological complexity measure:
 - Thin estuary: `n_layers = 3`
 - Wide open-ocean domain: `n_layers = 40`
 - Deeply nested channel at pinch point: `n_layers = 2`
 
-It enables MADMESHR training curriculum (filter by complexity tier) and quality screening (very low n_layers may indicate degenerate geometry).
+Enables MADMESHR training curriculum (filter by complexity tier) and quality screening.
 
 **Proposed:**
 ```python
 chilmesh_n_layers: Optional[int] = None
 ```
 
-Prefix `chilmesh_` signals that it's computed by CHILmesh, not a universal mesh format field.
+Prefix `chilmesh_` signals computed by CHILmesh, not universal mesh format field.
 
 **Acceptance:**
 - [ ] Field added as `Optional[int]` with note on provenance
@@ -125,14 +125,12 @@ Prefix `chilmesh_` signals that it's computed by CHILmesh, not a universal mesh 
 **Labels:** `bug`, `documentation`
 
 **Body:**
-The Mesh `type` field accepts `"ADCIRC"`, `"SMS_2DM"`, and `"ADCIRC_GRD"`. The third is not documented anywhere.
+Mesh `type` field accepts `"ADCIRC"`, `"SMS_2DM"`, and `"ADCIRC_GRD"`. Third is undocumented.
 
-Questions that block CHILmesh integration:
+Blocks CHILmesh integration:
 1. What file extension(s) does `"ADCIRC_GRD"` correspond to?
-2. Is it structurally identical to `"ADCIRC"` (`.fort.14`) or a different layout?
+2. Structurally identical to `"ADCIRC"` (`.fort.14`) or different layout?
 3. Should `CHILmesh.from_admesh_domain()` route it to `read_from_fort14()`?
-
-Without this, CHILmesh must either refuse to load `ADCIRC_GRD` meshes or make an undocumented assumption.
 
 **Acceptance:**
 - [ ] All three `type` values documented with file extensions and format notes
@@ -147,7 +145,7 @@ Without this, CHILmesh must either refuse to load `ADCIRC_GRD` meshes or make an
 **Labels:** `enhancement`, `testing`
 
 **Body:**
-`test_case: true` meshes are the canonical fixtures. There is no test that actually loads them into CHILmesh and validates the result. An integration suite would catch:
+`test_case: true` meshes are canonical fixtures. No test actually loads them into CHILmesh. Integration suite would catch:
 - Schema metadata mismatches (wrong `node_count`, `element_type`)
 - CHILmesh reader failures on real-world files
 - Bounding box drift after file updates
@@ -178,5 +176,5 @@ Marked `@pytest.mark.integration` — runs nightly or on new-mesh PRs, not in fa
 
 ---
 
-*These issues are the ADMESH-Domains side of the CHILmesh↔ADMESH-Domains integration story.*  
-*CHILmesh issues #40–44 are the CHILmesh-side counterparts.*
+*These issues are ADMESH-Domains side of CHILmesh↔ADMESH-Domains integration story.*  
+*CHILmesh issues #40–44 are CHILmesh-side counterparts.*

@@ -1,27 +1,21 @@
 # Implementation Plan: ADMESH-Domains I/O Parity
 
 **Branch**: `planning-optimize_modernize` | **Date**: 2026-04-26 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `specs/001-admesh-domains-io-parity/spec.md`
 
 ## Summary
 
-CHILmesh must load any mesh from the ADMESH-Domains catalog, save it back without data loss, and expose metadata fields compatible with the ADMESH-Domains schema. Two critical bugs block this today: the `.fort.14` reader crashes on quad elements, and the writer also crashes on quad elements. This plan fixes both atomically, adds fast initialisation, a metadata method, an ADMESH-Domains entry point, and an SMS `.2dm` reader — enabling CHILmesh to serve as the computational engine behind the catalog.
+CHILmesh must load any mesh from ADMESH-Domains catalog, save it back without data loss, and expose metadata fields compatible with ADMESH-Domains schema. Two critical bugs block this today: `.fort.14` reader crashes on quad elements, and writer also crashes on quad elements. This plan fixes both atomically, adds fast initialisation, metadata method, ADMESH-Domains entry point, and SMS `.2dm` reader.
 
 ## Technical Context
 
-**Language/Version**: Python 3.10, 3.11, 3.12 (all three tested in CI)
+**Language/Version**: Python 3.10, 3.11, 3.12
 **Primary Dependencies**: numpy>=1.23, scipy>=1.10, matplotlib>=3.6
-**Storage**: On-disk mesh files (`.fort.14`, `.14`, `.2dm`); no database
 **Testing**: pytest>=7, pytest-cov
-**Target Platform**: All platforms (pure Python + numpy/scipy)
-**Project Type**: Library (`pip install chilmesh`)
 **Performance Goals**: `compute_layers=False` init in <2s for meshes up to ~15,000 elements (current: ~30s for Block_O ~5,200 elements)
 **Constraints**: Zero regressions on existing 4 triangular fixtures; no new mandatory dependencies
 **Scale/Scope**: Single library module (`src/chilmesh/CHILmesh.py`); 1,000 LOC change estimate
 
 ## Constitution Check
-
-*Constitution is a blank template — no project-specific gates defined. Standard quality gates apply:*
 
 - [x] No new mandatory dependencies introduced
 - [x] All existing tests continue to pass (zero regression requirement — SC-005)
@@ -42,7 +36,7 @@ specs/001-admesh-domains-io-parity/
 ├── checklists/
 │   └── requirements.md  ← quality checklist (all pass)
 ├── spec.md
-└── tasks.md             ← /speckit-tasks output (not yet created)
+└── tasks.md             ← /speckit-tasks output
 ```
 
 ### Source Code (repository root)
@@ -87,7 +81,7 @@ Maps to: FR-001, FR-002, SC-001, SC-002
 
 **A-4: Tests**
 - `tests/test_fort14_quad_roundtrip.py`: load `quad_2x2`, assert `n_verts==9`, `n_elems==4`, `type=="Quadrilateral"`, write to temp file, reload, assert same counts
-- Add `"quad_2x2"` to `conftest.py` `FIXTURE_NAMES` so it participates in all parametrised tests
+- Add `"quad_2x2"` to `conftest.py` `FIXTURE_NAMES`
 
 ---
 
@@ -110,7 +104,7 @@ Depends on: Group A (quad fixture must load correctly first)
 - Logic: all-tri → `"Triangular"`, all-quad → `"Quadrilateral"`, mixed → `"Mixed-Element"`
 
 **B-4: Tests**
-- `tests/test_fast_init.py`: load each fixture with `compute_layers=False`, assert init <2s (use `time.perf_counter`), assert `n_layers==0`, assert `get_layer(0)` raises `RuntimeError`
+- `tests/test_fast_init.py`: load each fixture with `compute_layers=False`, assert init <2s, assert `n_layers==0`, assert `get_layer(0)` raises `RuntimeError`
 
 ---
 
@@ -120,7 +114,7 @@ Depends on: Group B (needs `self.type` set)
 
 **C-1: Implement `admesh_metadata()`**
 - File: `src/chilmesh/CHILmesh.py` (add after `get_layer`)
-- Returns dict with `node_count`, `element_count`, `element_type`, `bounding_box` (see `contracts/public-api.md`)
+- Returns dict with `node_count`, `element_count`, `element_type`, `bounding_box`
 - `element_type` from `self.type` (set in B-3)
 - `bounding_box` from `points[:, 0].min()` / `.max()`, `points[:, 1].min()` / `.max()`
 - Safe to call when `compute_layers=False`
@@ -143,7 +137,7 @@ Depends on: Groups A, B, C
 
 **D-2: Tests**
 - `tests/test_from_admesh_domain.py`:
-  - Mock record (simple dataclass or SimpleNamespace) with `filename`, `type`
+  - Mock record (SimpleNamespace) with `filename`, `type`
   - ADCIRC routing test: record.type="ADCIRC", loads correctly
   - ADCIRC_GRD routing test: routes to fort14 reader
   - SMS_2DM routing test: routes to 2dm reader
@@ -163,10 +157,10 @@ Depends on: Group A (padded-triangle convention established)
 - 1-based node IDs in file; subtract 1 for 0-based storage
 - Mixed meshes → 4-column padded-triangle connectivity
 - `compute_layers` kwarg forwarded to `CHILmesh.__init__`
-- Raise `ValueError` for unsupported element keywords (5-node or unknown)
+- Raise `ValueError` for unsupported element keywords
 
 **E-2: Tests**
-- `tests/test_2dm_reader.py`: write a minimal `.2dm` string to a tmp file; assert correct `n_verts`, `n_elems`, `type`; test triangle-only, quad-only, mixed; test FileNotFoundError; test unsupported element ValueError
+- `tests/test_2dm_reader.py`: write minimal `.2dm` string to tmp file; assert correct `n_verts`, `n_elems`, `type`; test triangle-only, quad-only, mixed; test FileNotFoundError; test unsupported element ValueError
 
 ---
 
@@ -176,8 +170,8 @@ Depends on: Group A (padded-triangle convention established)
 A (quad I/O fix) → B (fast init) → C (metadata) → D (entry point) → E (2dm reader)
 ```
 
-Groups A–D are required for SC-001 through SC-004. Group E (2dm) completes FR-003 and can be delivered independently after D.
+Groups A–D required for SC-001 through SC-004. Group E completes FR-003 and can be delivered independently after D.
 
 ## Complexity Tracking
 
-No constitution violations. No new abstractions beyond the feature spec.
+No constitution violations. No new abstractions beyond feature spec.

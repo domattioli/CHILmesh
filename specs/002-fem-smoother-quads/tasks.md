@@ -1,18 +1,18 @@
 # Implementation Tasks: FEM Smoother for Quad & Mixed-Element Meshes
 
-**Feature**: Extend FEM Smoother for Quad & Mixed-Element Meshes (Issue #4)  
-**Specification**: [spec.md](spec.md)  
-**Plan**: [plan.md](plan.md)  
-**Branch**: `claude/youthful-goldberg-ueQ9R`  
+**Feature**: Extend FEM Smoother for Quad & Mixed-Element Meshes (Issue #4)
+**Specification**: [spec.md](spec.md)
+**Plan**: [plan.md](plan.md)
+**Branch**: `claude/youthful-goldberg-ueQ9R`
 **Created**: 2026-04-27
 
 ---
 
 ## Overview
 
-This document breaks Issue #4 into executable tasks organized by user story. Each story (triangle, quad, mixed) is independently testable. Implement in order: Phase 2 (foundational), then Phase 3-5 (user stories), then Phase 6 (polish).
+Breaks Issue #4 into executable tasks organized by user story. Each story (triangle, quad, mixed) is independently testable. Implement in order: Phase 2 (foundational), then Phase 3-5 (user stories), then Phase 6 (polish).
 
-**MVP Scope**: Complete Phase 2 + Phase 3 (backward compatibility + tests) = minimal viable product  
+**MVP Scope**: Phase 2 + Phase 3 (backward compatibility + tests)
 **Full Scope**: Phases 2-6 (all three mesh types + validation + performance)
 
 ---
@@ -59,13 +59,13 @@ Phase 6: Polish & Validation (final)
 
 ## Phase 1: Setup
 
-No setup tasks required. This is a library modification (no new project structure).
+No setup tasks required. Library modification (no new project structure).
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-These tasks establish shared infrastructure for all user stories. Must complete before any story-specific work.
+Must complete before any story-specific work.
 
 - [ ] T001 Research Zhou & Shimada triangle formulation and quad extension via analogy in `src/chilmesh/CHILmesh.py` (lines 1319-1373)
 
@@ -77,8 +77,8 @@ These tasks establish shared infrastructure for all user stories. Must complete 
 
 ## Phase 3: User Story 1 - Triangle Backward Compat [US1]
 
-**Goal**: Ensure refactored `direct_smoother()` preserves triangle-only behavior  
-**Independent Test**: Run `mesh.smooth_mesh('fem')` on annulus, donut, block_o, structured (tri portion) → compare outputs to v0.2.0 baseline  
+**Goal**: Ensure refactored `direct_smoother()` preserves triangle-only behavior
+**Independent Test**: Run `mesh.smooth_mesh('fem')` on annulus, donut, block_o, structured (tri portion) → compare outputs to v0.2.0 baseline
 **Acceptance**: All existing tests pass without modification, output numerical stability maintained
 
 - [ ] T004 [P] [US1] Write regression tests for triangle smoother in `tests/test_smoothing.py` (fixtures: annulus, donut, block_o for triangles; include boundary condition verification)
@@ -94,8 +94,8 @@ These tasks establish shared infrastructure for all user stories. Must complete 
 
 ## Phase 4: User Story 2 - Quad Mesh Support [US2]
 
-**Goal**: Enable FEM smoothing on pure quad meshes  
-**Independent Test**: Run `mesh.smooth_mesh('fem')` on structured fixture → verify quad elements smoothed, shapes valid, <2s execution  
+**Goal**: Enable FEM smoothing on pure quad meshes
+**Independent Test**: Run `mesh.smooth_mesh('fem')` on structured fixture → verify quad elements smoothed, shapes valid, <2s execution
 **Acceptance**: Quad meshes can be smoothed without manual triangle conversion; quad element validity (no inverted elements); performance <2s
 
 - [ ] T007 [P] [US2] Write tests for quad-only mesh smoother in `tests/test_smoothing.py` (structured fixture; include edge cases: degenerate quads, boundary conditions)
@@ -105,9 +105,9 @@ These tasks establish shared infrastructure for all user stories. Must complete 
   - Assemble global stiffness matrix for quad elements
   - Apply boundary conditions (kinf for boundary nodes)
 
-- [ ] T009 [US2] Update `direct_smoother()` element-type dispatcher to call `_quad_stiffness_assembly()` for quad meshes in `src/chilmesh/CHILmesh.py`
+- [ ] T009 [US2] Update `direct_smoother()` element-type dispatcher to call `_quad_stiffness_assembly()` for quad meshes
 
-- [ ] T010 [US2] Add quad element validity check after smoothing in `src/chilmesh/CHILmesh.py` (verify no inverted elements, positive area)
+- [ ] T010 [US2] Add quad element validity check after smoothing (verify no inverted elements, positive area)
 
 - [ ] T011 [US2] Run quad tests on T007 to verify performance targets (<2s) and element validity (95%+)
 
@@ -115,8 +115,8 @@ These tasks establish shared infrastructure for all user stories. Must complete 
 
 ## Phase 5: User Story 3 - Mixed-Element Mesh Support [US3]
 
-**Goal**: Enable FEM smoothing on meshes with both triangles and quads  
-**Independent Test**: Create synthetic mixed mesh (combine triangles + quads) → Run `mesh.smooth_mesh('fem')` → verify each element type uses correct stiffness, <3s execution  
+**Goal**: Enable FEM smoothing on meshes with both triangles and quads
+**Independent Test**: Create synthetic mixed mesh (combine triangles + quads) → Run `mesh.smooth_mesh('fem')` → verify each element type uses correct stiffness, <3s execution
 **Acceptance**: Mixed meshes can be smoothed in single call; element-type-specific formulations applied; performance <3s; element validity maintained
 
 - [ ] T012 [P] [US3] Write tests for mixed-element mesh smoother in `tests/test_smoothing.py` (synthetic mesh combining annulus triangles + structured quads; include element transition boundaries)
@@ -126,17 +126,15 @@ These tasks establish shared infrastructure for all user stories. Must complete 
   - Assemble global stiffness matrix with element-type-specific blocks
   - Maintain consistent global numbering for nodes
 
-- [ ] T014 [US3] Update `direct_smoother()` dispatcher to handle mixed meshes (call `_mixed_stiffness_assembly()` when both tri and quad elements present) in `src/chilmesh/CHILmesh.py`
+- [ ] T014 [US3] Update `direct_smoother()` dispatcher to handle mixed meshes (call `_mixed_stiffness_assembly()` when both tri and quad elements present)
 
-- [ ] T015 [US3] Add mixed-element validity check after smoothing in `src/chilmesh/CHILmesh.py` (verify no inverted triangles or quads, positive areas)
+- [ ] T015 [US3] Add mixed-element validity check after smoothing (verify no inverted triangles or quads, positive areas)
 
 - [ ] T016 [US3] Run mixed-element tests on T012 to verify performance targets (<3s) and element validity (95%+)
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
-
-Final validation, performance tuning, and documentation.
 
 - [ ] T017 [P] Run full test suite (`pytest -v`) on all 4 fixtures in `tests/test_smoothing.py` and legacy test files to verify no regressions
 
@@ -153,7 +151,7 @@ Final validation, performance tuning, and documentation.
 
 ## Summary
 
-**Total Tasks**: 20 (T001-T020)  
+**Total Tasks**: 20 (T001-T020)
 **Tasks per User Story**:
 - Setup: 0
 - Foundational: 3
@@ -162,7 +160,7 @@ Final validation, performance tuning, and documentation.
 - US3 (Mixed): 5
 - Polish: 4
 
-**MVP Scope** (Phases 2-3): 6 tasks (T001-T006)  
+**MVP Scope** (Phases 2-3): 6 tasks (T001-T006)
 **Full Scope** (Phases 2-6): 20 tasks (T001-T020)
 
 **Parallel Opportunities**:

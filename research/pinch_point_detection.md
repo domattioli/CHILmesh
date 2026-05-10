@@ -2,13 +2,13 @@
 
 ## Problem Statement
 
-For MADMESHR advancing-front mesh generation, we need to identify **bottlenecks** (narrow regions) in a domain where the mesh width becomes critically small. These "pinch points" are ideal candidates for **domain splitting**: divide the domain into independent sub-regions, mesh each separately, and merge results.
+For MADMESHR advancing-front mesh generation, identify **bottlenecks** (narrow regions) where mesh width becomes critically small. These "pinch points" are candidates for **domain splitting**: divide domain into independent sub-regions, mesh each separately, merge results.
 
-**Example:** A domain shaped like a dumbbell (two large lobes connected by a thin neck). MADMESHR can:
-1. Detect the pinch point (narrow neck)
-2. Split the domain at that point
+**Example:** Dumbbell-shaped domain (two large lobes + thin neck). MADMESHR can:
+1. Detect pinch point (narrow neck)
+2. Split domain at that point
 3. Mesh left and right lobes independently
-4. Merge the two sub-meshes
+4. Merge sub-meshes
 
 ---
 
@@ -149,7 +149,7 @@ def pinch_points_via_distance_field(mesh, threshold=0.1):
   """
   Rasterize mesh onto grid, compute distance field, identify bottlenecks.
   
-  This is a grid-based approximation of the medial axis.
+  Grid-based approximation of medial axis.
   """
   
   # Rasterize mesh to binary image (inside/outside)
@@ -190,7 +190,7 @@ def pinch_points_via_distance_field(mesh, threshold=0.1):
 
 **Option 1: Voronoi-Inspired Proxy**
 
-Approximate the "width" of a frontier as the **minimum Euclidean distance** from any frontier edge's centroid to the mesh boundary:
+Approximate "width" of frontier as **minimum Euclidean distance** from any frontier edge's centroid to mesh boundary:
 
 ```python
 def frontier_width_euclidean(frontier_edges, mesh):
@@ -223,7 +223,7 @@ def frontier_width_euclidean(frontier_edges, mesh):
 
 **Option 2: Element Count Ratio**
 
-Simpler heuristic: Frontier is narrow if the number of elements in the layer drops sharply:
+Simpler heuristic: frontier is narrow if element count in layer drops sharply:
 
 ```python
 def frontier_width_element_ratio(layer_idx, mesh):
@@ -435,14 +435,14 @@ def test_pinch_points_reproducible():
 
 1. **Metric tuning:** Which metric (Euclidean or element-ratio) is better for MADMESHR? Recommend experimentation.
 2. **Threshold sensitivity:** How does performance vary with threshold? Recommend benchmark on 5–10 diverse domains.
-3. **False positives:** Are there domain shapes that generate spurious pinch points? (E.g., rotating dumbbell?)
-4. **Multi-scale pinch points:** Should we detect all pinch points or only the top-k narrowest? (Rank by width, return sorted list?)
+3. **False positives:** Are there domain shapes generating spurious pinch points? (E.g., rotating dumbbell?)
+4. **Multi-scale pinch points:** Detect all or only top-k narrowest? (Rank by width, return sorted list?)
 
 ---
 
 ## Future Work
 
-- Integrate with MADMESHR's domain splitting strategy
+- Integrate with MADMESHR domain splitting strategy
 - Compare detected pinch points against manual ground truth (if available)
 - Optimize Euclidean metric (spatial hashing to avoid O(frontier × boundary) comparisons)
 - Extend to 3D meshes (layer-based pinch detection still valid)

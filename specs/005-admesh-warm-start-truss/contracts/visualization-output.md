@@ -9,7 +9,7 @@
 
 ## Purpose
 
-The demo script produces a single PNG asset consumed by the project README. This contract is the PNG's structure and content. Spec 004's contract is replaced by this one; the file path is preserved so README links keep working.
+Demo script produces single PNG for project README. Replaces spec 004's contract; file path preserved so README links keep working.
 
 ---
 
@@ -25,7 +25,7 @@ The demo script produces a single PNG asset consumed by the project README. This
 
 ### Image structure (4×3 subplot grid)
 
-The image MUST contain exactly twelve subplots arranged in a 4×3 grid, with a figure-level title at the top.
+Exactly twelve subplots, 4×3 grid, figure-level title at top.
 
 #### Figure title
 
@@ -33,7 +33,7 @@ The image MUST contain exactly twelve subplots arranged in a 4×3 grid, with a f
 CHILmesh × ADMESH: Warm-Start Truss Optimization Pipeline
 ```
 
-#### Row contracts (NEW — replaces spec 004)
+#### Row contracts (replaces spec 004)
 
 | Row | Mesh source | Smoother applied to that source |
 |-----|-------------|--------------------------------|
@@ -42,11 +42,11 @@ CHILmesh × ADMESH: Warm-Start Truss Optimization Pipeline
 | 3 | **Row 2's mesh** (NOT row 1, NOT a fresh ADMESH) | `mesh.smooth_mesh(method='fem', acknowledge_change=True)` |
 | 4 | **Row 2's mesh** (NOT row 3) | `admesh.quad_prep.smooth_for_quadrangulation(row2.points, row2.triangles, ANNULUS_SDF.fd, h=h0)` |
 
-**Critical invariant**: Rows 3 and 4 BOTH branch off Row 2 — they are siblings, not sequential. Row 4 is NOT "row 3 with right-iso applied"; it is "row 2 with right-iso applied."
+**Critical invariant**: Rows 3 and 4 are siblings off Row 2 — not sequential. Row 4 = "row 2 + right-iso", NOT "row 3 + right-iso".
 
-**Geometric invariant within each row**: All three columns within the same row MUST display the same node positions and the same triangle connectivity. Only the per-element coloring differs.
+**Geometric invariant**: All three columns per row MUST display same node positions and connectivity. Only per-element coloring differs.
 
-**Boundary-preservation invariant**: All four rows MUST have identical boundary point coordinates (subject to FR-013 V_BND and V_BND_PROP). Row 2's boundary equals Row 1's bit-exactly. Row 3 and Row 4 boundaries equal Row 2's within each smoother's documented tolerance (FEM smoother: bit-exact for fixed boundary; right-isoceles: ADMESH's pfix tolerance).
+**Boundary-preservation invariant**: All four rows must have identical boundary coordinates. Row 2 boundary = Row 1 bit-exactly. Rows 3/4 boundaries = Row 2 within each smoother's documented tolerance.
 
 #### Column contracts (preserved from spec 004)
 
@@ -56,7 +56,7 @@ CHILmesh × ADMESH: Warm-Start Truss Optimization Pipeline
 | 2 | Layer skeletonization | MATLAB parula (64 stops, ListedColormap) | `parula_cmap(layer_idx / max(1, n_layers - 1))` |
 | 3 | Element quality | matplotlib `cool_r` (red→blue, NOT plain `cool`) | `cool_r_cmap(quality_value)` normalized to [0,1] |
 
-The `cool_r` (reversed) choice is from spec 004's clarify Q5=b: red = poor quality (0), blue = good quality (1). Inherited unchanged.
+`cool_r` (reversed): red = poor quality (0), blue = good quality (1). Inherited from spec 004 Q5=b.
 
 #### Subplot title contracts
 
@@ -87,9 +87,7 @@ Example: top-left subplot title = `"Raw Delaunay\nMesh"`. Row 3 first column = `
 
 ---
 
-## Programmatic verification (run before saving PNG)
-
-The demo script enforces these assertions in order. Any failure raises `RuntimeError` and the PNG is NOT written.
+## Programmatic verification (run before saving PNG — any failure raises `RuntimeError`, PNG NOT written)
 
 | Check ID | What it verifies | Failure action |
 |----------|------------------|---------------|
@@ -100,13 +98,11 @@ The demo script enforces these assertions in order. Any failure raises `RuntimeE
 | **V_CHAIN** | Row 3's input mesh is `id(row2)` (or hash-equal); Row 4's input mesh is `id(row2)` (or hash-equal); neither used Row 1 directly nor a fresh ADMESH | Raise `RuntimeError("V_CHAIN failed: Row {i} input was not Row 2")` |
 | **V_TRUSS_INVOKED** | The vendored `distmesh2d_warmstart` was called exactly once for Row 2 (tracked via module-level flag) | Raise `RuntimeError("V_TRUSS_INVOKED failed: warm-start truss was not actually invoked for Row 2")` |
 
-If any check fails, the PNG is NOT written — the README's existing image (the last successfully validated one) remains in place.
+On failure, PNG not written — README's existing image remains.
 
 ---
 
 ## Visual acceptance (human inspection)
-
-A reviewer opening the rendered PNG should verify:
 
 - [ ] Each row clearly demonstrates a different stage of the pipeline.
 - [ ] Row 1 looks visibly worse (irregular triangles) than Row 2.
@@ -144,8 +140,8 @@ What stayed the same:
 
 ## Non-contracts (out of scope)
 
-- Element count per row is NOT fixed (varies with truss convergence).
-- Specific RGB pixel values are NOT fixed (depend on matplotlib version anti-aliasing).
-- Run-to-run determinism is enforced **only when** all dependency versions and the RNG seed are pinned (per the API contract's Determinism section). On a different machine with different scipy version, pixels may differ but structure is stable.
-- Animation, interactivity, or alternate output formats (SVG, PDF) are NOT in scope.
-- The `generate_4row_admesh.py` filename is NOT contractually fixed; rename is permitted as long as README is updated and the PNG path stays at `tests/output/annulus_quickstart.png`.
+- Element count per row: varies with truss convergence.
+- Specific RGB pixel values: depend on matplotlib version anti-aliasing.
+- Run-to-run determinism: only when all dep versions + RNG seed pinned. Pixels may differ across machines; structure is stable.
+- Animation, interactivity, alternate output formats (SVG, PDF): NOT in scope.
+- `generate_4row_admesh.py` filename: not contractually fixed; rename OK if README + PNG path preserved.
