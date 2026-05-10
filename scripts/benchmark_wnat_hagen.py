@@ -196,20 +196,21 @@ def print_report(init: dict, query: dict) -> None:
         print(f"{label:<30} {est_str:>15} {_fmt(cur, unit):>12} {_speedup(cur, est):>10}")
     print()
 
-    print("### Query Performance")
+    print("### Query Performance (per-call latency)")
     print()
     q_rows = [
-        ("elem2edge (5k queries)",  "elem2edge_us",       "us"),
-        ("Vert2Edge (5k lookups)",  "vert2edge_us",       "us"),
-        ("Elem2Edge bulk (1k)",     "elem2edge_bulk_us",  "us"),
+        ("elem2edge (5k queries)",  "elem2edge_us"),
+        ("Vert2Edge (5k lookups)",  "vert2edge_us"),
+        ("Elem2Edge bulk (1k)",     "elem2edge_bulk_us"),
     ]
-    print(f"{'Operation':<30} {'v0.1.1 (est)':>15} {'Current':>12} {'Speedup':>10}")
-    print("-" * 70)
-    for label, key, unit in q_rows:
-        cur = query[key]
-        est = BENCHMARK_V011.get(key)
-        est_str = _fmt(est, unit) if est else "N/A"
-        print(f"{label:<30} {est_str:>15} {_fmt(cur, unit):>12} {_speedup(cur, est):>10}")
+    print(f"{'Operation':<30} {'v0.1.1 (est)':>15} {'Current':>14} {'Speedup':>10}")
+    print("-" * 72)
+    for label, key in q_rows:
+        cur_us = query[key]
+        est_us = BENCHMARK_V011.get(key)
+        est_str = f"{est_us:.1f}μs" if est_us else "N/A"
+        cur_str = f"{cur_us:.2f}μs"
+        print(f"{label:<30} {est_str:>15} {cur_str:>14} {_speedup(cur_us, est_us):>10}")
     print()
     print("=" * 70)
 
@@ -234,8 +235,8 @@ def main() -> int:
     print(f"Mesh: {mesh_path}")
     print()
 
-    init_results, mesh_fast, mesh_full = bench_initialization(mesh_path)
-    query_results = bench_queries(mesh_fast)
+    init_results, _mesh_fast, mesh_full = bench_initialization(mesh_path)
+    query_results = bench_queries(mesh_full)
 
     print_report(init_results, query_results)
 
