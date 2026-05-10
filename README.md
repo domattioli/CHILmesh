@@ -51,15 +51,15 @@ Reference benchmark mesh — per-element quality (skew, `4√3·area / Σedge²`
 
 Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality analysis: **~3.3 seconds** end-to-end (see [Performance](#performance-v020) below). Reproduce with `python scripts/benchmark_wnat_hagen.py`.
 
-### Showcase: Mixed-Element Mesh from Quad Core + Trussed Tri Band
+### Showcase: Mixed-Element Mesh from Quad Core + ADMESH Tri Ring
 
-Pipeline demonstration combining skeletonization, 1D boundary redistribution, Delaunay triangulation, ADMESH warm-start truss, and mixed-element smoothing on a single mesh:
+Pipeline demonstration combining skeletonization, ADMESH full distmesh on a ring domain, Delaunay gap fill, and mixed-element smoothing:
 
-![Mixed-element mesh: quad core + trussed tri band](output/mixed_truss_fem_demo.png?v=2)
+![Mixed-element mesh: quad core + ADMESH tri ring](output/mixed_truss_fem_demo.png?v=3)
 
-**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers, uniform Δx = 0.25 perimeter spacing. (2) Apply `distmesh1d` to the outer rectangle perimeter with a corner-dense edge-length field `h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))` where d is distance to nearest corner — perimeter edges now span 0.035–0.499. Strip the outer two skeleton layers, retain vertices, Delaunay-triangulate the freed band, centroid filter keeps 192 tris in the annular region. (3) ADMESH warm-start truss relaxes the new tris with both the outer rectangle perimeter AND the inner quad-core seam pinned bit-exact, so the quad core is preserved untouched. (4) Boundary-pinned Laplacian smoothing on the combined mixed mesh (288 elements: 192 tris + 96 quads) — median element quality 0.79. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+**Stages.** (1) Start with a 16×12 structured quad rectangle — 192 quads, 6 skeletonization layers, uniform Δx = 0.25. (2) Strip layers 0–1 as the ADMESH domain; drop layer 2; retain layers 3+ as the quad core. Grid-sample initial interior points within the ring SDF and run ADMESH full distmesh with the outer rectangle perimeter and the layer-1/2 seam both pinned bit-exact — producing 394 quality-graded triangles. (3) Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), then stitch ADMESH tris + gap tris + 60 quads into a combined mesh (466 tris + 60 quads). (4) Boundary-pinned Laplacian smoothing — median element quality 0.75. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
 
-The four sharp 90° outer corners receive denser tri packing thanks to the `distmesh1d` step — visible as the radiating cluster of triangles at each corner in panels (2)–(4).
+ADMESH generates the triangulation from scratch inside the ring — the graded density radiating from the four 90° corners is visible in panel (2).
 
 ### Showcase: Skeletonization & Mesh Plotting
 

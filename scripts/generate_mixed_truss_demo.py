@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
-"""Mixed-element mesh demo: quad core + triangulated outer band.
+"""Mixed-element mesh demo: ADMESH ring + Delaunay gap + quad core.
 
 Pipeline:
-1. Generate 16x12 structured quad mesh on a 4x3 rectangle.
-2. Skeletonize (CHILmesh layer decomposition) — yields 6 concentric layers.
-3. Strip outer 2 layers of quads, keep their vertices.
-4. Delaunay-triangulate the kept vertex set; filter triangles whose centroid
-   lies inside the inner quad core.
-5. ADMESH warm-start truss on the new triangles ONLY (boundary pinned bit-exact:
-   outer rectangle perimeter + inner quad-core seam).
-6. Combine kept quads + smoothed tris into a single mixed-element mesh.
-7. FEM-smooth the combined mesh.
-8. Render 4-panel figure to ``output/mixed_truss_fem_demo.png``.
+1. Generate 16x12 structured quad mesh (192 quads, 6 skeleton layers).
+2. Skeletonize → split: ADMESH ring (layers 0-1), dropped band (layer 2), quad core (layers 3+).
+3. ADMESH full distmesh on the outer ring: grid-sample initial interior, run truss loop.
+4. Delaunay-triangulate the gap band (layer-2 region) from ring boundary nodes only.
+5. Stitch ADMESH tris + gap tris + quad core into combined mixed-element mesh.
+6. Laplacian-smooth combined mesh (outer boundary pinned).
+7. Render 4-panel figure to output/mixed_truss_fem_demo.png.
 """
 from __future__ import annotations
 
 import matplotlib
-
 matplotlib.use("Agg")
 
 from pathlib import Path
@@ -27,10 +23,7 @@ from matplotlib.path import Path as MplPath
 from scipy.spatial import Delaunay
 
 from chilmesh import CHILmesh
-from chilmesh.admesh_warmstart import (
-    distmesh1d,
-    optimize_with_admesh_truss_arrays,
-)
+from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
 
 
 NX, NY = 16, 12
@@ -50,42 +43,42 @@ def build_quad_grid() -> CHILmesh:
         return j * (NX + 1) + i
 
     quads = np.array(
-        [
-            [vid(i, j), vid(i + 1, j), vid(i + 1, j + 1), vid(i, j + 1)]
-            for j in range(NY)
-            for i in range(NX)
-        ],
+        [[vid(i, j), vid(i + 1, j), vid(i + 1, j + 1), vid(i, j + 1)]
+         for j in range(NY) for i in range(NX)],
         dtype=int,
     )
     return CHILmesh(connectivity=quads, points=points, compute_layers=True)
 
 
 # ---------------------------------------------------------------------------
-# Stage 2-3: split, identify boundaries
+# Boundary helpers
 # ---------------------------------------------------------------------------
 
 def _outer_perim_ring() -> np.ndarray:
-    """Ordered CCW outer perimeter of the original rectangle."""
+    """CCW outer perimeter vertex IDs of the original rectangle."""
     def vid(i, j): return j * (NX + 1) + i
     bottom = [vid(i, 0) for i in range(NX + 1)]
-    right = [vid(NX, j) for j in range(1, NY + 1)]
-    top = [vid(i, NY) for i in range(NX - 1, -1, -1)]
-    left = [vid(0, j) for j in range(NY - 1, 0, -1)]
+    right  = [vid(NX, j) for j in range(1, NY + 1)]
+    top    = [vid(i, NY) for i in range(NX - 1, -1, -1)]
+    left   = [vid(0, j) for j in range(NY - 1, 0, -1)]
     return np.array(bottom + right + top + left, dtype=int)
 
 
-def _inner_seam_ring(inner_quads: np.ndarray) -> np.ndarray:
-    """Walk CCW boundary of the inner quad sub-mesh."""
+def _seam_ring(quads: np.ndarray) -> np.ndarray:
+    """Walk CCW outer boundary of a rectangular quad sub-mesh."""
     edge_count: dict[tuple[int, int], int] = {}
     edge_dir: dict[tuple[int, int], tuple[int, int]] = {}
-    for q in inner_quads:
+    for q in quads:
         for a, b in zip(q, np.roll(q, -1)):
             key = (min(a, b), max(a, b))
             edge_count[key] = edge_count.get(key, 0) + 1
             edge_dir.setdefault(key, (a, b))
     boundary = [edge_dir[k] for k, c in edge_count.items() if c == 1]
     nxt = {a: b for a, b in boundary}
-    start = boundary[0][0]
+    # pick start node NOT on outer perimeter if possible, else any
+    outer_set = set(_outer_perim_ring().tolist())
+    candidates = [a for a, _ in boundary if a not in outer_set]
+    start = candidates[0] if candidates else boundary[0][0]
     walk = [start]
     cur = nxt[start]
     while cur != start:
@@ -94,74 +87,10 @@ def _inner_seam_ring(inner_quads: np.ndarray) -> np.ndarray:
     return np.array(walk, dtype=int)
 
 
-def split_inner_outer(mesh: CHILmesh, strip_layers: int = 2):
-    outer_elem_ids = np.concatenate([mesh.layers["OE"][k] for k in range(strip_layers)])
-    inner_elem_ids = np.concatenate(
-        [mesh.layers["OE"][k] for k in range(strip_layers, mesh.n_layers)]
-    )
-    outer_quads = mesh.connectivity_list[outer_elem_ids]
-    inner_quads = mesh.connectivity_list[inner_elem_ids]
-    return outer_quads, inner_quads
-
-
-# ---------------------------------------------------------------------------
-# Stage 4: Delaunay over kept points, filter by centroid
-# ---------------------------------------------------------------------------
-
-def redistribute_outer_perim(points_xy: np.ndarray) -> np.ndarray:
-    """Apply distmesh1d to the outer rectangle perimeter with corner-dense h_fn.
-
-    Returns a new ``points_xy`` (copy) with outer-perim vertex positions
-    redistributed. Inner verts unchanged.
-    """
-    perim_idx = _outer_perim_ring()
-    perim_xy = points_xy[perim_idx]
-
-    corners = np.array([[0, 0], [LX, 0], [LX, LY], [0, LY]])
-
-    def h_fn(xy: np.ndarray) -> np.ndarray:
-        d = np.min(np.linalg.norm(xy[:, None] - corners[None], axis=2), axis=1)
-        return 0.05 + 0.45 * (1 - np.exp(-((d / 0.5) ** 2)))
-
-    new_perim = distmesh1d(perim_xy, h_fn, closed=True, niter=2000, deltat=0.4, dptol=1e-6)
-    out = points_xy.copy()
-    out[perim_idx] = new_perim
-    return out
-
-
-def triangulate_outer_band(
-    points_xy: np.ndarray,
-    outer_quads: np.ndarray,
-    inner_quads: np.ndarray,
-):
-    """Return (tris_global, tri_candidate_verts) where tris_global indexes
-    into the original global point array."""
-    outer_verts = np.unique(outer_quads.flatten())
-    inner_seam = _inner_seam_ring(inner_quads)
-    candidate_verts = np.unique(np.concatenate([outer_verts, inner_seam]))
-
-    sites = points_xy[candidate_verts]
-    tri = Delaunay(sites)
-    simplices_global = candidate_verts[tri.simplices]
-    centroids = points_xy[simplices_global].mean(axis=1)
-
-    inner_path = MplPath(points_xy[inner_seam])
-    outer_path = MplPath(points_xy[_outer_perim_ring()])
-
-    keep = outer_path.contains_points(centroids, radius=1e-9) & ~inner_path.contains_points(
-        centroids, radius=-1e-9
-    )
-    return simplices_global[keep], candidate_verts, inner_seam
-
-
-# ---------------------------------------------------------------------------
-# Stage 5: ADMESH truss on tris only (boundary pinned)
-# ---------------------------------------------------------------------------
-
-def _polygon_sdf(points: np.ndarray, polygon_verts: np.ndarray) -> np.ndarray:
-    """Signed distance from points to a closed polygon. Negative inside."""
-    a = polygon_verts
-    b = np.roll(polygon_verts, -1, axis=0)
+def _polygon_sdf(points: np.ndarray, poly_verts: np.ndarray) -> np.ndarray:
+    """Signed distance to closed polygon: negative inside."""
+    a = poly_verts
+    b = np.roll(poly_verts, -1, axis=0)
     min_d2 = np.full(len(points), np.inf)
     for i in range(len(a)):
         seg_a, seg_b = a[i], b[i]
@@ -169,149 +98,201 @@ def _polygon_sdf(points: np.ndarray, polygon_verts: np.ndarray) -> np.ndarray:
         ab_len2 = float(ab @ ab)
         if ab_len2 == 0.0:
             continue
-        ap = points - seg_a
-        t = np.clip((ap @ ab) / ab_len2, 0.0, 1.0)
+        t = np.clip(((points - seg_a) @ ab) / ab_len2, 0.0, 1.0)
         proj = seg_a + np.outer(t, ab)
         d2 = ((points - proj) ** 2).sum(axis=1)
         min_d2 = np.minimum(min_d2, d2)
     d = np.sqrt(min_d2)
-    inside = MplPath(polygon_verts).contains_points(points)
+    inside = MplPath(poly_verts).contains_points(points)
     return np.where(inside, -d, d)
 
 
-def truss_tris(
-    points_xy: np.ndarray,
-    tris_global: np.ndarray,
-    pinned_global: np.ndarray,
-    inner_seam: np.ndarray,
-):
-    """Run ADMESH array-form truss on tri sub-mesh."""
-    tri_verts_global = np.unique(tris_global.flatten())
-    g2l = {g: l for l, g in enumerate(tri_verts_global)}
-    tris_local = np.array([[g2l[v] for v in t] for t in tris_global], dtype=int)
-    pts_local = points_xy[tri_verts_global].astype(np.float64)
-    pinned_local = np.array([g2l[g] for g in pinned_global], dtype=int)
+# ---------------------------------------------------------------------------
+# Stage 2: split into three regions
+# ---------------------------------------------------------------------------
 
-    inner_seam_xy = points_xy[inner_seam]
+def split_mesh(mesh: CHILmesh, n_admesh: int = 2, n_drop: int = 1):
+    """Return (kept_quads, seam_1_2, seam_2_3).
+
+    seam_1_2: outer boundary of (layers n_admesh+) = inner boundary of ADMESH ring
+    seam_2_3: outer boundary of (layers n_admesh+n_drop+) = inner boundary of gap band
+    """
+    n = mesh.n_layers
+    assert n >= n_admesh + n_drop + 1, f"need ≥{n_admesh+n_drop+1} layers; got {n}"
+
+    drop_plus_kept_ids = np.concatenate(
+        [mesh.layers["OE"][k] for k in range(n_admesh, n)]
+    )
+    kept_ids = np.concatenate(
+        [mesh.layers["OE"][k] for k in range(n_admesh + n_drop, n)]
+    )
+    drop_plus_kept_quads = mesh.connectivity_list[drop_plus_kept_ids]
+    kept_quads = mesh.connectivity_list[kept_ids]
+
+    seam_1_2 = _seam_ring(drop_plus_kept_quads)  # outer boundary of layers 2+
+    seam_2_3 = _seam_ring(kept_quads)              # outer boundary of layers 3+
+    return kept_quads, seam_1_2, seam_2_3
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: ADMESH full distmesh on outer ring
+# ---------------------------------------------------------------------------
+
+def run_admesh_ring(
+    points_xy: np.ndarray,
+    seam_1_2: np.ndarray,
+    *,
+    niter: int = 400,
+    Fscale: float = 1.2,
+    dptol: float = 1e-3,
+):
+    """Grid-sample interior points within ring SDF and run ADMESH truss.
+
+    Returns (admesh_pts, admesh_tris, pinned_global) where admesh_pts[0:B]
+    are bit-exact copies of points_xy[pinned_global[0:B]].
+    """
+    outer_perim = _outer_perim_ring()
+    pinned_global = np.unique(np.concatenate([outer_perim, seam_1_2]))
+    pfix_xy = points_xy[pinned_global]
+
+    seam_xy = points_xy[seam_1_2]
 
     def sdf(p: np.ndarray) -> np.ndarray:
-        # Outer rectangle SDF (negative inside)
-        dx = np.maximum(0.0 - p[:, 0], p[:, 0] - LX)
-        dy = np.maximum(0.0 - p[:, 1], p[:, 1] - LY)
+        p = np.asarray(p, dtype=float)
+        dx = np.maximum(-p[:, 0], p[:, 0] - LX)
+        dy = np.maximum(-p[:, 1], p[:, 1] - LY)
         sdf_rect = np.where(
             (dx > 0) | (dy > 0),
             np.sqrt(np.maximum(dx, 0) ** 2 + np.maximum(dy, 0) ** 2),
             np.maximum(dx, dy),
         )
-        # Inner polygon SDF (negative inside inner core polygon)
-        sdf_inner = _polygon_sdf(p, inner_seam_xy)
-        # Annular region = rect MINUS inner_polygon = max(sdf_rect, -sdf_inner)
+        sdf_inner = _polygon_sdf(p, seam_xy)
         return np.maximum(sdf_rect, -sdf_inner)
 
-    points_opt, tris_opt = optimize_with_admesh_truss_arrays(
-        pts_local,
-        tris_local,
-        sdf,
-        boundary_indices=pinned_local,
-        niter=80,
-        Fscale=1.05,
-        enforce_non_degradation=False,
+    h0 = LX / NX  # 0.25 — matches the quad grid spacing
+    bbox = (-0.05, -0.05, LX + 0.05, LY + 0.05)
+    geps = 1e-3 * h0
+
+    # Grid-sample initial interior points
+    xs = np.arange(h0 * 0.5, LX, h0 * 0.75)
+    ys = np.arange(h0 * 0.5, LY, h0 * 0.75)
+    xx, yy = np.meshgrid(xs, ys)
+    cands = np.column_stack([xx.ravel(), yy.ravel()])
+    interior_mask = sdf(cands) < -geps
+    interior_init = cands[interior_mask]
+    print(f"     ring SDF: {interior_mask.sum()} initial interior pts from {len(cands)}-pt grid")
+
+    if len(interior_init) < 3:
+        raise RuntimeError("No interior points sampled in ring domain — check SDF")
+
+    admesh_pts, admesh_tris = distmesh2d_warmstart(
+        pfix_xy, interior_init, sdf, None, h0, bbox,
+        niter=niter, Fscale=Fscale, dptol=dptol, deltat=0.2,
     )
-
-    # `boundary_indices` of pts_local = pinned_local. After truss, those
-    # pinned points appear at indices 0..B-1 of points_opt in the SAME ORDER
-    # as pinned_local (per docstring T013).
-    pin_to_local = {int(g): i for i, g in enumerate(pinned_global)}
-
-    # interior_global: tri verts that weren't pinned. Their post-truss positions
-    # may differ in count; not strictly needed downstream because we rebuild
-    # connectivity from tris_opt directly.
-    interior_global = np.setdiff1d(tri_verts_global, pinned_global)
-
-    return points_opt, tris_opt, pin_to_local, interior_global
+    return admesh_pts, admesh_tris, pinned_global
 
 
 # ---------------------------------------------------------------------------
-# Stage 6: rebuild combined mixed-element mesh
+# Stage 4: Delaunay gap fill (layer-2 band)
 # ---------------------------------------------------------------------------
 
-def build_mixed_mesh_after_truss(
-    points_opt: np.ndarray,
-    tris_opt: np.ndarray,
-    pin_to_local: dict[int, int],
-    inner_quads: np.ndarray,
-    points_orig: np.ndarray,
-):
-    """Stitch trussed tris to original quads.
+def triangulate_gap(
+    points_xy: np.ndarray,
+    seam_1_2: np.ndarray,
+    seam_2_3: np.ndarray,
+) -> np.ndarray:
+    """Delaunay-triangulate the gap band between seam_1_2 and seam_2_3.
 
-    points_opt is (Nt, 2): boundary first (0..B-1, matching pinned_global order),
-    then interior. We append the original interior-quad-only points on top.
+    Returns triangle connectivity in original global vertex IDs.
     """
-    # Quad-only verts = inner_quads verts NOT in pin_to_local
-    inner_quad_verts = np.unique(inner_quads.flatten())
-    pinned_globals = set(pin_to_local.keys())
-    quad_only_globals = np.array(
-        [v for v in inner_quad_verts if v not in pinned_globals], dtype=int
+    gap_verts_global = np.unique(np.concatenate([seam_1_2, seam_2_3]))
+    sites = points_xy[gap_verts_global]
+
+    tri = Delaunay(sites)
+    simplices_global = gap_verts_global[tri.simplices]
+    centroids = points_xy[simplices_global].mean(axis=1)
+
+    outer_path = MplPath(points_xy[seam_1_2])
+    inner_path = MplPath(points_xy[seam_2_3])
+    keep = (
+        outer_path.contains_points(centroids, radius=1e-9)
+        & ~inner_path.contains_points(centroids, radius=-1e-9)
     )
-
-    # Concatenate point arrays. Note points_opt is (N, 2); promote to (N, 3) if
-    # needed for CHILmesh (z=0 column).
-    pts_xy = np.vstack([points_opt, points_orig[quad_only_globals, :2]])
-    pts_xyz = np.column_stack([pts_xy, np.zeros(len(pts_xy))])
-
-    Nt = len(points_opt)
-    quad_only_global_to_local = {
-        int(g): Nt + i for i, g in enumerate(quad_only_globals)
-    }
-    quad_remap = {**pin_to_local, **quad_only_global_to_local}
-
-    new_quads = np.array(
-        [[quad_remap[int(v)] for v in q] for q in inner_quads], dtype=int
-    )
-
-    # Tris already in points_opt indexing, pad to 4-col convention
-    new_tris_padded = np.column_stack([tris_opt, tris_opt[:, 0]])
-
-    mixed_conn = np.vstack([new_tris_padded, new_quads])
-    return CHILmesh(
-        connectivity=mixed_conn, points=pts_xyz, compute_layers=False
-    )
+    return simplices_global[keep]
 
 
 # ---------------------------------------------------------------------------
-# Stage 7: FEM smooth
+# Stage 5: stitch into combined mesh
 # ---------------------------------------------------------------------------
 
-def fem_smooth(mesh: CHILmesh) -> CHILmesh:
-    """Try CHILmesh FEM smoother first; fall back to Laplacian on regression.
+def build_combined_mesh(
+    admesh_pts: np.ndarray,
+    admesh_tris: np.ndarray,
+    pinned_global: np.ndarray,
+    gap_tris_global: np.ndarray,
+    kept_quads_global: np.ndarray,
+    points_orig_xy: np.ndarray,
+) -> CHILmesh:
+    """Combine ADMESH tris, gap Delaunay tris, and kept quads.
 
-    Note (2026-05-10): the CHILmesh FEM smoother degrades quality on
-    mixed-element meshes that have an internal seam between quads and tris
-    (interior verts displace by more than mesh extent). Filed as a separate
-    issue. Falling back to boundary-pinned Laplacian smoothing — robust and
-    visually informative for the README showcase.
+    Point layout:
+      0 .. B-1        → pinned boundary nodes (admesh_pts[0:B], bit-exact)
+      B .. B+I-1      → ADMESH interior nodes (admesh_pts[B:])
+      B+I ..          → original mesh nodes used by gap/kept but not pinned
     """
+    B = len(pinned_global)
+
+    all_orig_used = np.unique(np.concatenate([
+        gap_tris_global.flatten(),
+        kept_quads_global.flatten(),
+    ]))
+    orig_extra = np.setdiff1d(all_orig_used, pinned_global)
+
+    pts_combined = np.vstack([admesh_pts, points_orig_xy[orig_extra]])
+    N_admesh = len(admesh_pts)
+
+    # Global original index → new combined index
+    g2new: dict[int, int] = {}
+    for i, g in enumerate(pinned_global):
+        g2new[int(g)] = i
+    for i, g in enumerate(orig_extra):
+        g2new[int(g)] = N_admesh + i
+
+    new_gap  = np.array([[g2new[v] for v in t] for t in gap_tris_global], dtype=int)
+    new_kept = np.array([[g2new[v] for v in q] for q in kept_quads_global], dtype=int)
+
+    # Pad tris to 4-col degenerate convention (first vert repeated)
+    admesh_pad = np.column_stack([admesh_tris, admesh_tris[:, 0]])
+    gap_pad    = np.column_stack([new_gap, new_gap[:, 0]])
+
+    mixed_conn = np.vstack([admesh_pad, gap_pad, new_kept])
+    pts_xyz = np.column_stack([pts_combined, np.zeros(len(pts_combined))])
+    return CHILmesh(connectivity=mixed_conn, points=pts_xyz, compute_layers=False)
+
+
+# ---------------------------------------------------------------------------
+# Stage 6: Laplacian smooth (outer boundary pinned)
+# ---------------------------------------------------------------------------
+
+def laplacian_smooth(mesh: CHILmesh, n_iter: int = 30, omega: float = 0.5) -> CHILmesh:
+    """Boundary-pinned Laplacian smoothing."""
     pts = mesh.points.copy()
     boundary_verts = np.unique(mesh.edge2vert(mesh.boundary_edges()).flatten())
     pinned = np.zeros(mesh.n_verts, dtype=bool)
     pinned[boundary_verts] = True
 
-    # Build vert → neighbor verts map from edge connectivity
     edge2vert = mesh.adjacencies["Edge2Vert"]
     neighbors: list[list[int]] = [[] for _ in range(mesh.n_verts)]
     for a, b in edge2vert:
         neighbors[int(a)].append(int(b))
         neighbors[int(b)].append(int(a))
 
-    n_iter = 30
-    omega = 0.5  # under-relaxation
     for _ in range(n_iter):
         new_xy = pts[:, :2].copy()
         for v in range(mesh.n_verts):
             if pinned[v] or not neighbors[v]:
                 continue
-            mean_xy = pts[neighbors[v], :2].mean(axis=0)
-            new_xy[v] = (1 - omega) * pts[v, :2] + omega * mean_xy
+            new_xy[v] = (1 - omega) * pts[v, :2] + omega * pts[neighbors[v], :2].mean(axis=0)
         pts[:, :2] = new_xy
 
     mesh.change_points(pts, acknowledge_change=True)
@@ -319,12 +300,12 @@ def fem_smooth(mesh: CHILmesh) -> CHILmesh:
 
 
 # ---------------------------------------------------------------------------
-# Plotting
+# Plotting helpers
 # ---------------------------------------------------------------------------
 
 def _plot_mesh_simple(ax, mesh: CHILmesh, title: str):
     mesh.plot(ax=ax, elem_color="#cce0f3")
-    ax.set_title(title, fontsize=11)
+    ax.set_title(title, fontsize=10)
     ax.set_aspect("equal")
     ax.set_xlim(-0.15, LX + 0.15)
     ax.set_ylim(-0.15, LY + 0.15)
@@ -333,27 +314,18 @@ def _plot_mesh_simple(ax, mesh: CHILmesh, title: str):
 
 def _plot_mixed(ax, mesh: CHILmesh, title: str):
     conn = mesh.connectivity_list
-    if conn.shape[1] == 4:
-        is_padded_tri = conn[:, 0] == conn[:, 3]
-    else:
-        is_padded_tri = np.ones(conn.shape[0], dtype=bool)
+    is_tri = (conn[:, 0] == conn[:, 3]) if conn.shape[1] == 4 else np.ones(len(conn), bool)
+    tri_ids  = np.where(is_tri)[0]
+    quad_ids = np.where(~is_tri)[0]
 
-    tri_ids = np.where(is_padded_tri)[0]
-    quad_ids = np.where(~is_padded_tri)[0]
+    if len(quad_ids):
+        CHILmesh(connectivity=conn[quad_ids], points=mesh.points,
+                 compute_layers=False).plot(ax=ax, elem_color="#ffd180")
+    if len(tri_ids):
+        CHILmesh(connectivity=conn[tri_ids, :3], points=mesh.points,
+                 compute_layers=False).plot(ax=ax, elem_color="#a5d6a7")
 
-    if len(quad_ids) > 0:
-        quad_mesh = CHILmesh(
-            connectivity=conn[quad_ids], points=mesh.points, compute_layers=False
-        )
-        quad_mesh.plot(ax=ax, elem_color="#ffd180")
-    if len(tri_ids) > 0:
-        tri_conn = conn[tri_ids][:, :3]
-        tri_mesh = CHILmesh(
-            connectivity=tri_conn, points=mesh.points, compute_layers=False
-        )
-        tri_mesh.plot(ax=ax, elem_color="#a5d6a7")
-
-    ax.set_title(title, fontsize=11)
+    ax.set_title(title, fontsize=10)
     ax.set_aspect("equal")
     ax.set_xlim(-0.15, LX + 0.15)
     ax.set_ylim(-0.15, LY + 0.15)
@@ -369,106 +341,84 @@ def main(out_path: Path | None = None) -> Path:
         out_path = Path(__file__).parent.parent / "output" / "mixed_truss_fem_demo.png"
     out_path.parent.mkdir(exist_ok=True)
 
-    print("[1/7] Generating 16x12 quad rectangle …")
+    print("[1/6] Building 16x12 quad grid …")
     mesh0 = build_quad_grid()
-    print(
-        f"     verts={mesh0.n_verts} elems={mesh0.n_elems} layers={mesh0.n_layers}"
-    )
-    assert mesh0.n_layers >= 5, f"need ≥5 layers; got {mesh0.n_layers}"
+    print(f"     verts={mesh0.n_verts} elems={mesh0.n_elems} layers={mesh0.n_layers}")
 
-    print("[2/7] Splitting inner core (keep) vs outer band (strip) …")
-    outer_quads, inner_quads = split_inner_outer(mesh0, strip_layers=2)
-    print(f"     stripped={len(outer_quads)} quads, kept={len(inner_quads)} quads")
+    print("[2/6] Splitting: ADMESH ring (L0+L1), drop (L2), quad core (L3+) …")
+    kept_quads, seam_1_2, seam_2_3 = split_mesh(mesh0, n_admesh=2, n_drop=1)
+    points_xy = mesh0.points[:, :2]
+    print(f"     kept quads={len(kept_quads)}  seam_1_2={len(seam_1_2)} nodes  seam_2_3={len(seam_2_3)} nodes")
 
-    print("[3/7] distmesh1d on outer rect perim (corner-dense h(x)) …")
-    points_xy_uniform = mesh0.points[:, :2]
-    points_xy = redistribute_outer_perim(points_xy_uniform)
-    perim = _outer_perim_ring()
-    perim_edges_uniform = np.linalg.norm(
-        np.diff(np.vstack([points_xy_uniform[perim], points_xy_uniform[perim][:1]]), axis=0),
-        axis=1,
-    )
-    perim_edges_redist = np.linalg.norm(
-        np.diff(np.vstack([points_xy[perim], points_xy[perim][:1]]), axis=0),
-        axis=1,
-    )
-    print(
-        f"     perim edges before: min={perim_edges_uniform.min():.3f} max={perim_edges_uniform.max():.3f}"
-    )
-    print(
-        f"     perim edges after:  min={perim_edges_redist.min():.3f} max={perim_edges_redist.max():.3f}"
-    )
+    print("[3/6] ADMESH full distmesh on outer ring …")
+    admesh_pts, admesh_tris, pinned_global = run_admesh_ring(points_xy, seam_1_2)
+    print(f"     ADMESH → {len(admesh_pts)} pts, {len(admesh_tris)} tris")
 
-    print("[3b/7] Delaunay over kept-vertex set, filter by centroid …")
-    tris_global, _, inner_seam = triangulate_outer_band(points_xy, outer_quads, inner_quads)
-    print(f"     {len(tris_global)} tris in outer band")
+    print("[4/6] Delaunay gap fill (layer-2 band) …")
+    gap_tris = triangulate_gap(points_xy, seam_1_2, seam_2_3)
+    print(f"     gap → {len(gap_tris)} tris")
 
-    # Build full points array reflecting the redistributed perim
-    points_xyz_redist = np.column_stack(
-        [points_xy, np.zeros(len(points_xy))]
+    print("[5/6] Stitching combined mesh …")
+    mesh_pre = build_combined_mesh(
+        admesh_pts, admesh_tris, pinned_global,
+        gap_tris, kept_quads, points_xy,
     )
+    n_tris_total = len(admesh_tris) + len(gap_tris)
+    print(f"     combined: verts={mesh_pre.n_verts} tris={n_tris_total} quads={len(kept_quads)}")
 
-    # Assemble pre-truss mixed mesh for the (2) panel
-    pre_truss_conn = np.vstack(
-        [np.column_stack([tris_global, tris_global[:, 0]]), inner_quads]
-    )
-    mesh_pre = CHILmesh(
-        connectivity=pre_truss_conn, points=points_xyz_redist, compute_layers=False
-    )
-
-    print("[4/7] ADMESH truss on tris (outer rect + inner seam pinned) …")
-    pinned_global = np.unique(np.concatenate([_outer_perim_ring(), inner_seam]))
-    points_opt, tris_opt, pin_to_local, _ = truss_tris(
-        points_xy, tris_global, pinned_global, inner_seam
-    )
-    print(f"     truss returned {len(points_opt)} pts, {len(tris_opt)} tris")
-
-    print("[5/7] Stitching trussed tris to inner quads …")
-    mesh_truss = build_mixed_mesh_after_truss(
-        points_opt, tris_opt, pin_to_local, inner_quads, points_xyz_redist
-    )
-    print(
-        f"     mixed mesh: verts={mesh_truss.n_verts} elems={mesh_truss.n_elems}"
-    )
-
-    print("[6/7] Smoothing combined mixed mesh (Laplacian, boundary pinned) …")
-    mesh_final = CHILmesh(
-        connectivity=mesh_truss.connectivity_list.copy(),
-        points=mesh_truss.points.copy(),
+    # Rebuild with same points/conn for a fresh mesh object for smoothing
+    mesh_smooth = CHILmesh(
+        connectivity=mesh_pre.connectivity_list.copy(),
+        points=mesh_pre.points.copy(),
         compute_layers=True,
     )
-    fem_smooth(mesh_final)
+    print("[6/6] Laplacian smooth (30 iter, ω=0.5, outer boundary pinned) …")
+    laplacian_smooth(mesh_smooth)
 
-    q_pre, _, _ = mesh_truss.elem_quality()
-    q_final, _, _ = mesh_final.elem_quality()
-    print(f"     quality (post-truss):  median={np.median(q_pre):.3f} min={q_pre.min():.3f}")
-    print(f"     quality (post-FEM):    median={np.median(q_final):.3f} min={q_final.min():.3f}")
+    q_pre, _, _   = mesh_pre.elem_quality()
+    q_post, _, _  = mesh_smooth.elem_quality()
+    print(f"     pre-smooth:  median={np.median(q_pre):.3f}  min={q_pre.min():.3f}")
+    print(f"     post-smooth: median={np.median(q_post):.3f}  min={q_post.min():.3f}")
 
-    print(f"[7/7] Rendering 4-panel figure → {out_path} …")
+    # --- 4-panel figure ---
     fig, axes = plt.subplots(2, 2, figsize=(13, 9), facecolor="white")
+
     _plot_mesh_simple(
         axes[0, 0], mesh0,
-        f"(1) All-quad start: {mesh0.n_elems} quads · {mesh0.n_layers} skeleton layers"
+        f"(1) All-quad start: {mesh0.n_elems} quads · {mesh0.n_layers} skeleton layers",
+    )
+
+    # Panel (2): ADMESH ring only (just show it on blank background to highlight grading)
+    admesh_mesh = CHILmesh(
+        connectivity=admesh_tris,
+        points=np.column_stack([admesh_pts, np.zeros(len(admesh_pts))]),
+        compute_layers=False,
+    )
+    admesh_mesh.plot(ax=axes[0, 1], elem_color="#a5d6a7")
+    axes[0, 1].set_title(
+        f"(2) ADMESH ring (L0+L1): {len(admesh_tris)} tris\n"
+        f"graded from outer rect → seam 1/2 (both pinned)",
+        fontsize=10,
+    )
+    axes[0, 1].set_aspect("equal")
+    axes[0, 1].set_xlim(-0.15, LX + 0.15)
+    axes[0, 1].set_ylim(-0.15, LY + 0.15)
+    axes[0, 1].axis("off")
+
+    _plot_mixed(
+        axes[1, 0], mesh_pre,
+        f"(3) Assembled pre-smooth: {n_tris_total} tris + {len(kept_quads)} quads\n"
+        f"(ADMESH + Delaunay gap + quad core)  median q={np.median(q_pre):.3f}",
     )
     _plot_mixed(
-        axes[0, 1], mesh_pre,
-        f"(2) distmesh1d perim → strip layers → Delaunay\n"
-        f"({len(tris_global)} tris + {len(inner_quads)} quads)"
-    )
-    _plot_mixed(
-        axes[1, 0], mesh_truss,
-        f"(3) ADMESH truss on tris (boundary pinned bit-exact)\n"
-        f"median quality {np.median(q_pre):.3f}"
-    )
-    _plot_mixed(
-        axes[1, 1], mesh_final,
-        f"(4) Laplacian smooth combined mixed mesh\n"
-        f"median quality {np.median(q_final):.3f}"
+        axes[1, 1], mesh_smooth,
+        f"(4) Laplacian smooth (boundary pinned)\n"
+        f"median quality {np.median(q_post):.3f}",
     )
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=110, bbox_inches="tight", facecolor="white")
-    print(f"     saved {out_path.stat().st_size:,} bytes")
+    print(f"     saved {out_path.stat().st_size:,} bytes → {out_path}")
     return out_path
 
 
