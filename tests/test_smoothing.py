@@ -111,28 +111,36 @@ class TestQuadSmoother:
             )
 
     def test_fem_smoother_quad_interior_changes(self, quad_mesh):
-        """Verify interior nodes are actually smoothed on quad mesh."""
-        mesh = quad_mesh
-        original_points = mesh.points.copy()
+        """FEM smoother moves a perturbed interior node back toward equilibrium.
 
-        # Get boundary nodes
+        A uniform grid is already at the FEM optimum — no movement is expected
+        or required. Perturb the interior node first so the smoother has real
+        work to do, then verify it returns closer to the symmetric center.
+        """
+        mesh = quad_mesh
         edge_verts = mesh.edge2vert(mesh.boundary_edges())
         boundary_nodes = set(np.unique(edge_verts.flatten()))
+        interior_nodes = [v for v in range(mesh.n_verts) if v not in boundary_nodes]
 
-        # Smooth
+        if not interior_nodes:
+            return  # no interior nodes — nothing to test
+
+        # Perturb the interior node away from center
+        pts = mesh.points.copy()
+        v = interior_nodes[0]
+        original_xy = pts[v, :2].copy()
+        pts[v, :2] += 0.3  # push off center
+        mesh.change_points(pts, acknowledge_change=True)
+
         smoothed = mesh.direct_smoother(kinf=1e12)
 
-        # Check some interior nodes changed (if any exist)
-        interior_changed = False
-        for v in range(mesh.n_verts):
-            if v not in boundary_nodes:
-                if not np.allclose(smoothed[v, :2], original_points[v, :2], rtol=1e-10):
-                    interior_changed = True
-                    break
-
-        # Note: quad_2x2 might not have interior nodes, so this is optional
-        if len(boundary_nodes) < mesh.n_verts:
-            assert interior_changed, "No interior nodes were modified"
+        # After smoothing, interior node should be closer to original than the perturbed pos
+        dist_after = np.linalg.norm(smoothed[v, :2] - original_xy)
+        dist_before = np.linalg.norm(pts[v, :2] - original_xy)
+        assert dist_after < dist_before, (
+            f"Interior node {v} did not move toward equilibrium after smoothing; "
+            f"dist_before={dist_before:.4f} dist_after={dist_after:.4f}"
+        )
 
     def test_fem_smoother_quad_preserves_z(self, quad_mesh):
         """Verify z-coordinates are preserved on quad mesh."""
