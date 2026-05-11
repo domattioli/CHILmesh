@@ -316,6 +316,131 @@ class TestMixedSmoother:
             )
 
 
+class TestMixedElementFEMSmoother:
+    """Regression tests for FEM smoother on mixed tri+quad meshes (issues #95, #100).
+
+    The symmetric quad decomposition (both diagonals, each weighted 0.5) must give
+    equal stiffness to all four quad vertices and must not collapse interior nodes.
+    """
+
+    @pytest.fixture
+    def mixed_mesh(self):
+        """Mixed-element mesh: 8 padded triangles (top) + 4 quads (bottom), interior nodes at row y=1."""
+        from chilmesh import CHILmesh
+
+        # 3x3 point grid:  top row y=2, seam row y=1 (interior nodes 6,7,8), bottom row y=0
+        pts = np.array(
+            [[i * 1.0, j, 0.0] for j in [2.0, 1.0, 0.0] for i in range(5)],
+            dtype=float,
+        )
+        # 8 CCW triangles covering top two rows, padded [v0,v1,v2,v0]
+        def pad(a, b, c):
+            return [a, b, c, a]
+
+        top = np.array(
+            [pad(0, 6, 5), pad(0, 1, 6), pad(1, 7, 6), pad(1, 2, 7),
+             pad(2, 8, 7), pad(2, 3, 8), pad(3, 9, 8), pad(3, 4, 9)],
+            dtype=int,
+        )
+        # 4 CCW quads covering bottom two rows
+        bot = np.array(
+            [[5, 6, 11, 10], [6, 7, 12, 11], [7, 8, 13, 12], [8, 9, 14, 13]],
+            dtype=int,
+        )
+        conn = np.vstack([top, bot])
+
+        mesh = CHILmesh()
+        mesh.points = pts
+        mesh.connectivity_list = conn
+        mesh.n_verts = len(pts)
+        mesh.n_elems = len(conn)
+        mesh._build_adjacencies()
+        return mesh
+
+    def test_quad_stiffness_is_symmetric(self):
+        """All four quad vertices must receive equal diagonal stiffness (1.5xD each)."""
+        from chilmesh import examples
+        from scipy.sparse import csr_matrix
+
+        mesh = examples.quad_2x2()
+        p = mesh.points[:, :2]
+        n = mesh.n_verts
+        _, quad_idx = mesh._detect_element_types()
+
+        # Restrict to the first quad only to get element-local values
+        rows, cols, data = mesh._quad_stiffness_assembly(quad_idx[:1], p, n)
+        K = csr_matrix((data, (rows, cols)), shape=(2 * n, 2 * n)).toarray()
+
+        first_quad = mesh.connectivity_list[quad_idx[0]]
+        diag_vals = [K[2 * v, 2 * v] for v in first_quad]
+        # All four vertices must have equal diagonal (1.5 x 2 = 3.0)
+        assert all(abs(d - 3.0) < 1e-10 for d in diag_vals), (
+            f"Quad diagonal stiffness is asymmetric: {diag_vals}"
+        )
+
+    def test_mixed_mesh_has_interior_nodes(self, mixed_mesh):
+        """Fixture sanity: vertices 6, 7, 8 should be interior."""
+        edge_verts = mixed_mesh.edge2vert(mixed_mesh.boundary_edges())
+        boundary = set(np.unique(edge_verts.flatten()))
+        interior = [v for v in range(mixed_mesh.n_verts) if v not in boundary]
+        assert interior == [6, 7, 8], f"Expected interior nodes [6,7,8], got {interior}"
+
+    def test_fem_smoother_mixed_no_nan(self, mixed_mesh):
+        """FEM smoother must not produce NaN on a mixed-element mesh."""
+        smoothed = mixed_mesh.direct_smoother(kinf=1e12)
+        assert not np.any(np.isnan(smoothed)), "FEM smoother produced NaN on mixed mesh"
+
+    def test_fem_smoother_mixed_no_element_collapse(self, mixed_mesh):
+        """FEM smoother must not produce folded (zero-area) elements."""
+        # Perturb interior nodes, smooth, check no element collapses
+        pts = mixed_mesh.points.copy()
+        for v in [6, 7, 8]:
+            pts[v, :2] += 0.2
+        mixed_mesh.change_points(pts, acknowledge_change=True)
+
+        smoothed = mixed_mesh.direct_smoother(kinf=1e12)
+        new_pts = mixed_mesh.points.copy()
+        new_pts[:, :2] = smoothed[:, :2]
+        mixed_mesh.change_points(new_pts, acknowledge_change=True)
+
+        q, _, _ = mixed_mesh.elem_quality()
+        assert q.min() > 0.0, f"FEM smoother folded element: min quality={q.min():.4f}"
+
+    def test_fem_smoother_mixed_boundary_preserved(self, mixed_mesh):
+        """Boundary nodes must not move after FEM smoothing on mixed mesh."""
+        original_points = mixed_mesh.points.copy()
+        edge_verts = mixed_mesh.edge2vert(mixed_mesh.boundary_edges())
+        boundary_nodes = np.unique(edge_verts.flatten())
+
+        smoothed = mixed_mesh.direct_smoother(kinf=1e12)
+
+        for v in boundary_nodes:
+            np.testing.assert_allclose(
+                smoothed[v], original_points[v], rtol=1e-8, atol=1e-9,
+                err_msg=f"Boundary node {v} moved after mixed-mesh FEM smooth"
+            )
+
+    def test_fem_smoother_mixed_interior_moves_to_equilibrium(self, mixed_mesh):
+        """Perturbed interior nodes must move back toward their grid positions."""
+        orig_pts = mixed_mesh.points.copy()
+
+        # Perturb all 3 interior nodes
+        pts = orig_pts.copy()
+        for v in [6, 7, 8]:
+            pts[v, :2] += 0.25
+        mixed_mesh.change_points(pts, acknowledge_change=True)
+
+        smoothed = mixed_mesh.direct_smoother(kinf=1e12)
+
+        for v in [6, 7, 8]:
+            dist_after = np.linalg.norm(smoothed[v, :2] - orig_pts[v, :2])
+            dist_before = np.linalg.norm(pts[v, :2] - orig_pts[v, :2])
+            assert dist_after < dist_before, (
+                f"Interior node {v} did not move toward equilibrium: "
+                f"dist_before={dist_before:.4f}, dist_after={dist_after:.4f}"
+            )
+
+
 class TestSmootherIntegration:
     """Integration tests for smooth_mesh() method."""
 
@@ -326,4 +451,3 @@ class TestSmootherIntegration:
 
         # Should not raise
         mesh_copy.smooth_mesh(method="fem", acknowledge_change=True)
-
