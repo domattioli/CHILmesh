@@ -1,21 +1,15 @@
 # Spec-Kit: Specify Phase
 # "CHILmesh as Computational Engine for ADMESH-Domains I/O"
 
-**Branch:** `planning-optimize_modernize`  
-**Date:** 2026-04-26  
-**Methodology:** Spec-Kit — Specify Phase  
-**Scope:** How ADMESH-Domains as the domain I/O layer reshapes CHILmesh's responsibilities  
-**Framing:** ADMESH-Domains is the *catalog and delivery layer*; CHILmesh is the *computational engine*
+**Branch:** `planning-optimize_modernize`
+**Date:** 2026-04-26
+**Scope:** ADMESH-Domains = catalog/delivery layer; CHILmesh = computational engine
 
 ---
 
 ## THE REFRAME
 
-Previous view: CHILmesh is a mesh computation library that happens to read `.fort.14`.
-
-**Correct view:** ADMESH-Domains owns the domain catalog, mesh files, and I/O. CHILmesh is the object users get *after* loading from that catalog. Everything in CHILmesh that relates to I/O, metadata, or format handling must be consistent with ADMESH-Domains' schema.
-
-This is not a minor integration. It is a **redefinition of scope**.
+Previous view: CHILmesh reads `.fort.14`. **Correct view:** ADMESH-Domains owns domain catalog, mesh files, I/O. CHILmesh is object users get *after* loading from that catalog. All CHILmesh I/O, metadata, format handling must be consistent with ADMESH-Domains schema.
 
 ---
 
@@ -24,115 +18,68 @@ This is not a minor integration. It is a **redefinition of scope**.
 ### 1.1 What CHILmesh Does Today (I/O)
 
 ```python
-# ADCIRC .fort.14 — read
 CHILmesh.read_from_fort14(path) -> CHILmesh   # triangular elements ONLY (line 693)
-
-# ADCIRC .fort.14 — write
 mesh.write_to_fort14(filename)                # delegates to write_fort14()
-
-# No other formats
-# No metadata fields matching ADMESH-Domains schema
-# No lazy initialization
-# No bounding_box
-# No domain/catalog awareness
+# No other formats, no metadata, no lazy init, no bounding_box
 ```
 
-**Critical Bug (B5 candidate):**  
-`read_from_fort14()` line 692–693 raises `ValueError` for any element with `num_nodes != 3`.  
-ADMESH-Domains hosts real-world coastal meshes many of which are quad or mixed-element.  
-This means **CHILmesh cannot load the majority of ADMESH-Domains meshes today**.
+**Critical Bug:** `read_from_fort14()` line 692–693 raises `ValueError` for any `num_nodes != 3`. ADMESH-Domains hosts real-world coastal meshes many of which are quad or mixed-element. **CHILmesh cannot load majority of ADMESH-Domains meshes today.**
 
 ### 1.2 What ADMESH-Domains Provides
 
-**Domain schema** (what the catalog stores):
-```
-Domain:
-  name         str       required
-  full_name    str       optional
-  description  str       optional
-  category     "real-world" | "synthetic"
-  region       str       optional
-  applications List[str]
-  bounding_box {min_lat, max_lat, min_lon, max_lon}  optional
-  meshes       List[Mesh]  required, ≥1
+**Mesh schema fields CHILmesh must compute:**
+- `node_count`, `element_count`, `element_type` (CHILmesh computes these)
+- `bounding_box {min_lat, max_lat, min_lon, max_lon}` (CHILmesh computes this)
+- `type`: `"ADCIRC"` | `"SMS_2DM"` | `"ADCIRC_GRD"`
+- `kind`: `"mesh"` | `"boundary"`
 
-Mesh:
-  id              str       required
-  filename        str       required
-  description     str       optional
-  size_mb         float     ≥0
-  node_count      int       optional  ← CHILmesh computes this
-  element_count   int       optional  ← CHILmesh computes this
-  element_type    str       optional  ← CHILmesh computes this
-  type            "ADCIRC" | "SMS_2DM" | "ADCIRC_GRD"
-  contributor     str       optional
-  uploaded_date   str       optional
-  modified_date   str       optional
-  refinement_level str      optional
-  features        List[str]
-  aliases         List[str]
-  bounding_box    {min_lat, max_lat, min_lon, max_lon}  optional  ← CHILmesh computes this
-  license         one-of-7
-  kind            "mesh" | "boundary"
-  test_case       bool
-```
+**File formats:** `.14` / `.fort.14` (ADCIRC) and `.2dm` (SMS 2D mesh).
 
-**File formats supported:**  
-- `.14` / `.fort.14` → ADCIRC format  
-- `.2dm` → SMS 2D mesh format (surface water modeling)
+`Mesh.load()` fetches file from HuggingFace on-demand; CHILmesh then parses into live object.
 
-**Loading pattern:**  
-`Mesh.load()` fetches file from HuggingFace on-demand. Returns raw file bytes or path.  
-CHILmesh must then parse that file into a live `CHILmesh` object.
-
-### 1.3 The Gap (Delta Between Today and Needed)
+### 1.3 The Gap
 
 | Capability | ADMESH-Domains Needs | CHILmesh Today | Gap |
 |------------|---------------------|---------------|-----|
 | Read `.fort.14` triangular | ✓ | ✓ | None |
-| Read `.fort.14` quad/mixed | ✓ (real-world coastal) | ✗ raises ValueError | **CRITICAL BUG** |
-| Read `.2dm` (SMS format) | ✓ | ✗ not implemented | Missing |
-| `node_count` property | ✓ (schema field) | partial (`n_verts`) | Name mismatch |
-| `element_count` property | ✓ (schema field) | partial (`n_elems`) | Name mismatch |
-| `element_type` property | ✓ (schema field) | partial (`type` str) | Name mismatch |
-| `bounding_box` property | ✓ (schema field) | ✗ must compute from points | Missing API |
-| Lazy initialization | ✓ (HF on-demand load) | ✗ full init always | Performance gap |
-| `from_admesh_domain()` | ✓ (integration entry) | ✗ not implemented | Missing |
-| `kind: "boundary"` handling | ✓ (separate mesh type) | ✗ all meshes same | Missing |
-| Metadata dict round-trip | ✓ (catalog sync) | ✗ | Missing |
+| Read `.fort.14` quad/mixed | ✓ | ✗ raises ValueError | **CRITICAL BUG** |
+| Read `.2dm` (SMS format) | ✓ | ✗ | Missing |
+| `node_count` / `element_count` | ✓ | partial (`n_verts`/`n_elems`) | Name mismatch |
+| `bounding_box` property | ✓ | ✗ | Missing API |
+| Lazy initialization | ✓ | ✗ full init always | Performance gap |
+| `from_admesh_domain()` | ✓ | ✗ | Missing |
+| `kind: "boundary"` handling | ✓ | ✗ | Missing |
+| Metadata dict round-trip | ✓ | ✗ | Missing |
 
 ---
 
 ## PART 2: CONSTRAINTS
 
-### Hard Constraints (Must Preserve)
-
-1. **Skeletonization semantics** — immutable (audit Q3, Decision A2)
-2. **`.fort.14` roundtrip** — byte-identical (audit B1)
-3. **Mixed-element support** — triangles + quads in one mesh
-4. **API surface** — `signed_area()`, `elem_quality()`, `plot()` signatures unchanged
-5. **No new external runtime deps** — only scipy/numpy/matplotlib
-   - Exception: `admesh-domains[hf]` is optional (`pip install admesh-domains` optional dep)
+### Hard Constraints
+1. Skeletonization semantics — immutable (audit Q3, Decision A2)
+2. `.fort.14` roundtrip — byte-identical (audit B1)
+3. Mixed-element support — triangles + quads in one mesh
+4. API surface — `signed_area()`, `elem_quality()`, `plot()` signatures unchanged
+5. No new external runtime deps — only scipy/numpy/matplotlib
 
 ### Soft Constraints
-
-1. Backwards compatible property names (`n_verts`, `n_elems` stay; new aliases added)
-2. SMS_2DM reader is best-effort (format is less well-documented than fort.14)
-3. Lazy initialization is opt-in (`compute_layers=False` kwarg)
+1. `n_verts`, `n_elems` stay; new aliases added
+2. SMS_2DM reader is best-effort
+3. Lazy initialization opt-in (`compute_layers=False` kwarg)
 
 ---
 
 ## PART 3: SPECIFIC IMPROVEMENTS
 
-Each improvement is **scoped, testable, and directly driven by the ADMESH-Domains schema**.
+Each improvement scoped, testable, driven by ADMESH-Domains schema.
 
 ---
 
-### Improvement I-1: Fix `read_from_fort14()` for Quad/Mixed Elements [CRITICAL]
+### I-1: Fix `read_from_fort14()` for Quad/Mixed Elements [CRITICAL]
 
 **Current:** Line 692–693 raises `ValueError` for any `num_nodes != 3`.  
-**Required:** Parse 3-node (triangular) and 4-node (quad/mixed) elements from same file.  
-**Why:** ADMESH-Domains hosts real coastal meshes that are mixed or quad-dominant (e.g., ADCIRC GRD files).
+**Required:** Parse 3-node and 4-node elements from same file.  
+**Why:** ADMESH-Domains hosts real coastal meshes; many are mixed or quad-dominant.
 
 **Spec:**
 ```
@@ -154,11 +101,10 @@ Acceptance:
 
 ---
 
-### Improvement I-2: Add `bounding_box` Property
+### I-2: Add `bounding_box` Property
 
-**Current:** No bounding box API. CHILmesh stores `points` (x, y, z) but offers no bbox.  
-**Required:** Property that returns `{min_lon, max_lon, min_lat, max_lat}` matching ADMESH-Domains schema.  
-**Why:** ADMESH-Domains schema has `bounding_box` on both Domain and Mesh. CHILmesh should compute it from `points` for validation/enrichment.
+**Current:** No bbox API. CHILmesh stores `points` (x, y, z), no bbox.  
+**Required:** Property returning `{min_lon, max_lon, min_lat, max_lat}` matching ADMESH-Domains schema.
 
 **Spec:**
 ```python
@@ -181,11 +127,10 @@ Acceptance:
 
 ---
 
-### Improvement I-3: Add `admesh_metadata()` Method
+### I-3: Add `admesh_metadata()` Method
 
-**Current:** CHILmesh has `n_verts`, `n_elems`, `type` but they don't map to ADMESH-Domains schema keys.  
-**Required:** Method that returns dict with ADMESH-Domains Mesh schema-compatible fields.  
-**Why:** Enables CHILmesh to validate or enrich ADMESH-Domains registry entries.
+**Current:** `n_verts`, `n_elems`, `type` don't map to ADMESH-Domains schema keys.  
+**Required:** Method returning ADMESH-Domains Mesh schema-compatible fields.
 
 **Spec:**
 ```python
@@ -209,11 +154,11 @@ Acceptance:
 
 ---
 
-### Improvement I-4: Add SMS_2DM Reader
+### I-4: Add SMS_2DM Reader
 
 **Current:** No `.2dm` reader.  
-**Required:** `CHILmesh.read_from_2dm(path)` that parses SMS 2DM format.  
-**Why:** ADMESH-Domains stores `.2dm` files (`type: "SMS_2DM"`). Without this, CHILmesh cannot load ~30% of ADMESH-Domains meshes.
+**Required:** `CHILmesh.read_from_2dm(path)` parsing SMS 2DM format.  
+**Why:** ADMESH-Domains stores `.2dm` files (`type: "SMS_2DM"`); without this CHILmesh can't load ~30% of catalog.
 
 **SMS 2DM Format (key lines):**
 ```
@@ -241,11 +186,10 @@ Acceptance:
 
 ---
 
-### Improvement I-5: Add `from_admesh_domain()` Classmethod
+### I-5: Add `from_admesh_domain()` Classmethod
 
 **Current:** No integration entry point from ADMESH-Domains.  
-**Required:** Classmethod that accepts an ADMESH-Domains `Mesh` object and returns a `CHILmesh`.  
-**Why:** This is the canonical entry point for "load a mesh from the catalog."
+**Required:** Classmethod accepting ADMESH-Domains `Mesh` object, returning `CHILmesh`.
 
 **Spec:**
 ```python
@@ -289,11 +233,11 @@ Acceptance:
 
 ---
 
-### Improvement I-6: Lazy `_skeletonize()` (Opt-In)
+### I-6: Lazy `_skeletonize()` (Opt-In)
 
 **Current:** `_initialize_mesh()` always runs `_build_adjacencies()` then `_skeletonize()`.  
 **Required:** `__init__` accepts `compute_layers: bool = True`; when False, skip `_skeletonize()`.  
-**Why:** ADMESH-Domains bulk-loads metadata without needing layer data. Skeletonization is the slowest step. This alone may eliminate the 30s Block_O bottleneck for catalog queries.
+**Why:** ADMESH-Domains bulk-loads metadata without needing layers; skeletonization is slowest step.
 
 **Spec:**
 ```python
@@ -324,10 +268,10 @@ Acceptance:
 
 ---
 
-### Improvement I-7: Handle `kind: "boundary"` Meshes
+### I-7: Handle `kind: "boundary"` Meshes
 
-**Current:** CHILmesh treats every loaded mesh as a full 2D domain mesh.  
-**Required:** When `kind == "boundary"`, CHILmesh should tag the object as a boundary description, not a volume mesh. Skeletonization does not apply.
+**Current:** Every loaded mesh treated as full 2D domain mesh.  
+**Required:** When `kind == "boundary"`, tag object as boundary description; skeletonization skipped.
 
 **Spec:**
 ```python
@@ -371,12 +315,12 @@ Ambiguity: 1.0 − (0.35×0.92 + 0.25×0.88 + 0.20×0.90 + 0.20×0.90)
 
 ---
 
-## PART 5: SCOPE BOUNDARY (What This Feature Is NOT)
+## PART 5: SCOPE BOUNDARY
 
-- ❌ Replaces the Phase 1 graph benchmarking/modernization work (different concern)
+- ❌ Replaces Phase 1 graph benchmarking/modernization (different concern)
 - ❌ Adds MADMESHR advancing-front API (Phase 4)
 - ❌ Implements O(n log n) edge discovery optimization (Phase 3)
-- ❌ Bundles ADMESH-Domains as a hard dependency
+- ❌ Bundles ADMESH-Domains as hard dependency
 - ❌ Changes skeletonization algorithm or semantics
 - ❌ Publishes to ADMESH-Domains registry from CHILmesh
 
@@ -394,13 +338,13 @@ Ambiguity: 1.0 − (0.35×0.92 + 0.25×0.88 + 0.20×0.90 + 0.20×0.90)
 | I-4 | SMS_2DM reader | P2 — format coverage | Medium | ~40 |
 | I-7 | `kind: "boundary"` handling | P2 — catalog parity | Low | ~15 |
 
-**All 7 improvements can ship in ONE PR** — they are all I/O and metadata-layer changes with no interaction with graph traversal algorithms.
+All 7 improvements ship in ONE PR — all I/O and metadata-layer changes, no interaction with graph traversal algorithms.
 
 ---
 
 ## PART 7: SINGLE GITHUB ISSUE
 
-These 7 improvements belong in **ONE GitHub issue and ONE PR** because they share:
+7 improvements belong in ONE issue + ONE PR — share:
 - Same motivation (ADMESH-Domains I/O parity)
 - Same test fixtures (real ADMESH-Domains meshes)
 - Same risk profile (I/O layer, no algorithm changes)
@@ -417,22 +361,20 @@ These 7 improvements belong in **ONE GitHub issue and ONE PR** because they shar
 
 ## PART 8: TEST FIXTURES NEEDED
 
-For all 7 improvements, tests need:
+1. Quad/mixed `.fort.14` fixture (e.g., `block_o.14` if it has quads — verify)
+2. Real `.2dm` fixture from ADMESH-Domains (download one `test_case: true` mesh)
+3. Current 4 fixtures (annulus, block_o, structured, donut) for regression
 
-1. A quad/mixed `.fort.14` fixture (e.g., `block_o.14` if it has quads — verify)
-2. A real `.2dm` fixture from ADMESH-Domains (download one `test_case: true` mesh)
-3. The current 4 fixtures (annulus, block_o, structured, donut) for regression
-
-The `.2dm` fixture can be committed to `src/chilmesh/data/` alongside existing `.14` files.
+`.2dm` fixture committed to `src/chilmesh/data/` alongside existing `.14` files.
 
 ---
 
 ## SUMMARY
 
-**One feature addresses 7 improvements, closes a critical bug, and establishes ADMESH-Domains as the canonical I/O layer for CHILmesh:**
+One feature, 7 improvements, closes critical bug, establishes ADMESH-Domains as canonical I/O layer:
 
 1. **I-1 (P0):** Fix fort14 reader — stop crashing on real-world quad/mixed meshes
-2. **I-6 (P0):** Lazy skeletonization — enable fast bulk loading for ADMESH-Domains catalog
+2. **I-6 (P0):** Lazy skeletonization — fast bulk loading for ADMESH-Domains catalog
 3. **I-2 (P1):** `bounding_box` property — metadata parity with catalog schema
 4. **I-3 (P1):** `admesh_metadata()` — expose computed fields in catalog-compatible format
 5. **I-5 (P1):** `from_admesh_domain()` — canonical integration entry point
@@ -440,7 +382,7 @@ The `.2dm` fixture can be committed to `src/chilmesh/data/` alongside existing `
 7. **I-7 (P2):** Boundary mesh handling — `kind` field awareness
 
 **Estimated effort:** 3–4 days (mostly I/O code, no algorithm changes)  
-**Risk:** Low (touches only readers, init flag, and new methods; no existing algorithm logic)  
+**Risk:** Low (touches only readers, init flag, new methods; no existing algorithm logic)  
 **Gate:** All acceptance criteria above pass + all existing tests green
 
 ---

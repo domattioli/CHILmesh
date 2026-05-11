@@ -8,345 +8,184 @@
 
 ## Executive Summary
 
-CHILmesh is transitioning from a bug-fix phase (0.1.1) to a **data structure modernization and bridge architecture phase** (0.2.0). This plan outlines:
+CHILmesh transitions from bug-fix phase (0.1.1) to data structure modernization + bridge architecture (0.2.0):
 
 1. **Immediate priorities** (Weeks 1-4): GitHub issues, stakeholder coordination
 2. **Development phases** (Months 2-6): Three phases of architecture improvements
-3. **Stabilization** (Months 7-9): Testing, performance validation, documentation
-4. **Release & communication** (Months 10-12): v0.2.0 release, integration with downstream projects
+3. **Stabilization** (Months 7-9): Testing, performance validation, docs
+4. **Release & communication** (Months 10-12): v0.2.0 release, downstream integration
 
 **Key Success Criteria:**
-- ✅ 1.5x+ performance improvement on large meshes
+- ✅ 1.5×+ performance improvement on large meshes
 - ✅ Zero breaking changes to public API
 - ✅ Clear bridge interfaces for MADMESHR/ADMESH/ADMESH-Domains
 - ✅ 100% test pass rate on all platforms
-- ✅ Complete documentation of architecture decisions
+- ✅ Complete docs of architecture decisions
 
 ---
 
-## Phase 0: Planning & Coordination (CURRENT - Weeks 1-4)
+## Phase 0: Planning & Coordination (CURRENT — Weeks 1-4)
 
-### Objectives
-1. Create detailed specification for architectural changes
-2. Coordinate with downstream project authors
-3. Set up GitHub issues for tracking
-4. Establish governance principles
-
-### Deliverables
-- ✅ `PLANNING_DATA_STRUCTURE_MODERNIZATION.md` (comprehensive spec)
-- ✅ `CLAUDE.md` (developer guide for AI assistance)
-- ✅ `constitution.md` (governance principles)
-- ✅ `project_plan.md` (this document)
+**Deliverables:**
+- ✅ `PLANNING_DATA_STRUCTURE_MODERNIZATION.md`
+- ✅ `CLAUDE.md`
+- ✅ `constitution.md`
+- ✅ `project_plan.md` (this doc)
 - 🔄 GitHub issues (P1-01 through P3-04, 16 total)
 - 🔄 Communication with MADMESHR/ADMESH/ADMESH-Domains authors
 
-### Timeline
-- **Week 1-2**: Complete planning documents ← **You are here**
-- **Week 3**: Publish to main branch, create GitHub issues
-- **Week 4**: Stakeholder feedback, adjust timeline if needed
+**Timeline:**
+- Week 1-2: Complete planning docs ← **You are here**
+- Week 3: Publish to main, create GitHub issues
+- Week 4: Stakeholder feedback; adjust timeline if needed
 
 ---
 
 ## Phase 1: Hash Map Edge Lookup (Weeks 5-8)
 
-**Focus:** Eliminate O(n²) bottleneck in adjacency building
-**Estimated Effort:** 8-12 hours
-**Risk Level:** Low
+**Focus:** Eliminate O(n²) bottleneck in adjacency building  
+**Effort:** 8-12 hours | **Risk:** Low
 
-### Tasks
-| ID | Task | Owner | Hours | Dependencies |
-|----|----|-------|-------|--------------|
-| P1-01 | Create EdgeMap class | TBD | 2 | None |
-| P1-02 | Refactor _identify_edges() | TBD | 2 | P1-01 |
-| P1-03 | Optimize _build_elem2edge() | TBD | 2 | P1-02 |
-| P1-04 | Optimize _build_edge2elem() | TBD | 2 | P1-02 |
-| P1-05 | Store EdgeMap in adjacencies | TBD | 1 | P1-03, P1-04 |
-| P1-06 | Performance regression tests | TBD | 3 | P1-05 |
+| ID | Task | Hours | Dependencies |
+|----|----|-------|--------------|
+| P1-01 | Create EdgeMap class | 2 | None |
+| P1-02 | Refactor _identify_edges() | 2 | P1-01 |
+| P1-03 | Optimize _build_elem2edge() | 2 | P1-02 |
+| P1-04 | Optimize _build_edge2elem() | 2 | P1-02 |
+| P1-05 | Store EdgeMap in adjacencies | 1 | P1-03, P1-04 |
+| P1-06 | Performance regression tests | 3 | P1-05 |
 
-### Success Criteria
-- All existing tests pass
-- Block_O build time: <45s (currently ~30-60s range)
-- Benchmarks show ≥1.5x improvement on large fixtures
-- No new dependencies
+**Success:** all tests pass; Block_O build <45s; ≥1.5× improvement on large fixtures; no new dependencies
 
-### Outputs
-- `src/chilmesh/mesh_topology.py` (new EdgeMap class)
-- Updated `_build_adjacencies()` using EdgeMap
-- Performance benchmark report
-- All tests passing
+**Outputs:** `src/chilmesh/mesh_topology.py`; updated `_build_adjacencies()`; benchmark report
 
 ---
 
 ## Phase 2: Adjacency Modernization (Weeks 9-14)
 
-**Focus:** Modernize sparse adjacency structures (Vert2Edge, Vert2Elem)
-**Estimated Effort:** 12-16 hours
-**Risk Level:** Medium
+**Focus:** Modernize sparse adjacency structures (Vert2Edge, Vert2Elem)  
+**Effort:** 12-16 hours | **Risk:** Medium
 
-### Tasks
-| ID | Task | Owner | Hours | Dependencies |
-|----|----|-------|-------|--------------|
-| P2-01 | Migrate Vert2Edge to dict | TBD | 2 | P1-06 |
-| P2-02 | Migrate Vert2Elem to dict | TBD | 2 | P1-06 |
-| P2-03 | Add explicit accessor methods | TBD | 2 | P2-01, P2-02 |
-| P2-04 | Update traversal patterns | TBD | 4 | P2-03 |
-| P2-05 | Type hints & validation | TBD | 3 | P2-04 |
-| P2-06 | Adjacency documentation | TBD | 3 | P2-05 |
+| ID | Task | Hours | Dependencies |
+|----|----|-------|--------------|
+| P2-01 | Migrate Vert2Edge to dict | 2 | P1-06 |
+| P2-02 | Migrate Vert2Elem to dict | 2 | P1-06 |
+| P2-03 | Add explicit accessor methods | 2 | P2-01, P2-02 |
+| P2-04 | Update traversal patterns | 4 | P2-03 |
+| P2-05 | Type hints & validation | 3 | P2-04 |
+| P2-06 | Adjacency documentation | 3 | P2-05 |
 
-### Success Criteria
-- All tests still passing
-- Vert2Edge and Vert2Elem explicitly documented as Dict[int, Set[int]]
-- Type hints complete for adjacency methods
-- Traversal patterns updated (no list-of-lists iteration)
-- Performance at least as good as Phase 1
+**Success:** all tests pass; Vert2Edge/Vert2Elem as `Dict[int, Set[int]]`; type hints complete; no list-of-lists iteration; performance ≥ Phase 1
 
-### Outputs
-- Refactored `_build_vert2edge()` and `_build_vert2elem()`
-- New public methods: `get_vertex_edges()`, `get_vertex_elements()`
-- Comprehensive adjacency structure documentation
-- Type hint coverage report
+**Outputs:** refactored `_build_vert2edge()` and `_build_vert2elem()`; new `get_vertex_edges()`, `get_vertex_elements()`; comprehensive adjacency docs
 
 ---
 
 ## Phase 3: Bridge Infrastructure (Weeks 15-26)
 
-**Focus:** Define and implement clean bridge APIs for downstream projects
-**Estimated Effort:** 20-24 hours
-**Risk Level:** High (depends on downstream project coordination)
+**Focus:** Clean bridge APIs for downstream projects  
+**Effort:** 20-24 hours | **Risk:** High (depends on downstream coordination)
 
-### Tasks
-| ID | Task | Owner | Hours | Dependencies |
-|----|----|-------|-------|--------------|
-| P3-01 | Define CAI (CHILmesh Access Interface) | TBD | 4 | P2-06 |
-| P3-02 | Create bridge adapters | TBD | 10 | P3-01 |
-| P3-03 | Integration tests | TBD | 6 | P3-02 |
-| P3-04 | Downstream migration guide | TBD | 4 | P3-03 |
+| ID | Task | Hours | Dependencies |
+|----|----|-------|--------------|
+| P3-01 | Define CAI (CHILmesh Access Interface) | 4 | P2-06 |
+| P3-02 | Create bridge adapters | 10 | P3-01 |
+| P3-03 | Integration tests | 6 | P3-02 |
+| P3-04 | Downstream migration guide | 4 | P3-03 |
 
-### Success Criteria
-- CAI document published and stable
-- Bridge adapters for MADMESHR, ADMESH, ADMESH-Domains
-- Integration tests covering common usage patterns
-- Clear migration path for downstream projects
-- Zero external dependency on internal implementation
+**Success:** CAI published; bridge adapters for MADMESHR/ADMESH/ADMESH-Domains; integration tests passing; no external dependency on internals
 
-### Outputs
-- `docs/CHILmesh_Access_Interface.md` (CAI specification)
-- `src/chilmesh/bridge.py` (adapter implementations)
-- `tests/test_bridge_integration.py` (integration tests)
-- `docs/DOWNSTREAM_MIGRATION_GUIDE.md` (migration documentation)
+**Outputs:** `docs/CHILmesh_Access_Interface.md`; `src/chilmesh/bridge.py`; `tests/test_bridge_integration.py`; `docs/DOWNSTREAM_MIGRATION_GUIDE.md`
 
-### Coordination Notes
-- Requires early feedback from MADMESHR/ADMESH/ADMESH-Domains authors
-- May need to adjust timeline based on downstream project needs
-- Should include calls/meetings to clarify integration patterns
+**Note:** requires early feedback from downstream authors; may need timeline adjustment
 
 ---
 
 ## Phase 4: Stabilization & Testing (Weeks 27-36)
 
-**Focus:** Comprehensive testing, performance validation, final hardening
-**Estimated Effort:** 16-20 hours
-**Risk Level:** Low (mostly verification)
+**Focus:** Comprehensive testing, performance validation, final hardening  
+**Effort:** 16-20 hours | **Risk:** Low
 
-### Activities
-1. **Full Regression Testing**
-   - Run all tests on Python 3.10, 3.11, 3.12
-   - Test on Ubuntu, macOS, Windows
-   - Verify fort.14 roundtrip on all fixtures
+**Activities:**
+1. Full regression testing — Python 3.10/3.11/3.12; Ubuntu/macOS/Windows; fort.14 roundtrip all fixtures
+2. Performance benchmarking — baseline before Phase 1, after Phase 1, after Phase 2; document in release notes
+3. Memory profiling — verify no >10% increase; no leaks in new structures
+4. Documentation review — update README; verify all examples; add architecture docs
+5. Community feedback — share RC with downstream; gather feedback; address before final release
 
-2. **Performance Benchmarking**
-   - Baseline before Phase 1, after Phase 1, after Phase 2
-   - Compare to v0.1.1 on all fixtures
-   - Document improvements in release notes
-
-3. **Memory Profiling**
-   - Check memory usage hasn't increased >10%
-   - Identify any leaks in new structures
-
-4. **Documentation Review**
-   - Update README with new capabilities
-   - Verify all examples still work
-   - Add architecture documentation
-
-5. **Community Feedback**
-   - Share release candidate with MADMESHR/ADMESH/ADMESH-Domains
-   - Gather feedback on bridge APIs
-   - Address issues before final release
-
-### Deliverables
-- Test coverage report (target: >90%)
-- Performance benchmark report
-- Memory profiling results
-- Updated README and documentation
-- Resolved feedback from downstream projects
+**Deliverables:** test coverage report (>90% target); perf benchmark report; memory profiling results; updated README; resolved feedback from downstream
 
 ---
 
 ## Phase 5: Release & Communication (Weeks 37-40)
 
-**Focus:** Final validation, release, and ecosystem communication
-**Estimated Effort:** 4-6 hours
+**Effort:** 4-6 hours
 
-### Release Checklist
+**Release Checklist:**
 - [ ] All tests pass on all platforms
 - [ ] Performance benchmarks meet targets
-- [ ] CHANGELOG.md updated with all changes
+- [ ] CHANGELOG.md updated
 - [ ] Version bumped to 0.2.0 in pyproject.toml
 - [ ] GitHub release notes prepared
 - [ ] PyPI build validated with `twine check`
-- [ ] Migration guide ready for downstream projects
+- [ ] Migration guide ready
 - [ ] Announce in CHIL Lab channels
 - [ ] Tag v0.2.0 in git
 - [ ] Publish to PyPI
 
-### Communication
-- GitHub Release: Detailed notes on Phase 1-3 improvements
-- Email to MADMESHR/ADMESH/ADMESH-Domains authors: Integration guide
-- Lab announcement: What changed and why
-- Update MATLAB documentation (if applicable)
+**Communication:** GitHub Release (detailed notes); email to MADMESHR/ADMESH/ADMESH-Domains (integration guide); lab announcement
 
 ---
 
-## Post-Release: Future Planning (Months 10-12)
+## Post-Release (Months 10-12)
 
-### Immediate (v0.2.1-0.2.x patches)
-- Bug fixes from community feedback
-- Documentation improvements
-- Minor performance enhancements
+**v0.2.1-0.2.x:** bug fixes from community feedback; docs improvements; minor perf enhancements
 
-### Medium-term (v0.3.0 exploration)
-- Gather requirements from downstream projects
-- Evaluate spatial indexing needs
-- Consider mesh mutation APIs (add/remove nodes/edges)
-- Profile memory usage on largest real-world meshes
+**v0.3.0 exploration:** gather downstream requirements; evaluate spatial indexing; mesh mutation APIs; profile memory on largest real-world meshes
 
-### Long-term (v1.0.0 vision)
-- Assess when API can be frozen
-- Evaluate GPU acceleration for smoothing/quality
-- Consider distributed mesh handling
-- Plan for external mesh format support (Gmsh, VTK)
+**v1.0.0 vision:** API freeze assessment; GPU acceleration for smoothing/quality; distributed mesh handling; external format support (Gmsh, VTK)
 
 ---
 
 ## Resource Allocation
 
-### Team
-- **Lead Developer:** Claude Code (AI-assisted development)
+- **Lead Developer:** Claude Code (AI-assisted)
 - **Code Review:** Dominik Mattioli (scientific oversight)
 - **Testing:** Automated via pytest CI/CD
-- **Documentation:** Embedded in code (docstrings) + standalone guides
-
-### Tools & Infrastructure
-- GitHub Issues/Projects for task tracking
-- GitHub Actions for CI/CD (Python 3.10, 3.11, 3.12)
-- PyPI for package distribution
-- pytest for test automation
-
-### External Dependencies
-- **numpy** (required): dense numerical operations
-- **scipy** (required): sparse matrices, spatial structures
-- **matplotlib** (required): visualization
-- **pytest** (dev): testing framework
-
-**No new external dependencies planned for 0.2.0**
+- **No new external dependencies planned for 0.2.0** (numpy, scipy, matplotlib only)
 
 ---
 
 ## Risk Management
 
-### High-Risk Items
-
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
 | Skeletonization breaks | Critical | Comprehensive tests, careful refactoring |
-| Downstream incompatibility | Critical | Early coordination, integration tests, clear APIs |
+| Downstream incompatibility | Critical | Early coordination, integration tests |
 | Performance regression | High | Benchmark every step, revert if slower |
 | Complex merge conflicts | High | Clear branch strategy, small focused PRs |
-
-### Medium-Risk Items
-
-| Risk | Impact | Mitigation |
-|------|--------|-----------|
 | Scope creep | Medium | Strict phase boundaries, issue templates |
 | Timeline slip | Medium | Realistic estimates, track velocity |
-| Technical debt | Medium | Design reviews, architecture documentation |
-| Breaking changes leak | Medium | Automated compatibility tests, code review |
-
-### Low-Risk Items
-- Small bug fixes during development
-- Documentation updates
-- Test improvements
-- Type hint additions
 
 ---
 
 ## Success Metrics
 
-### Quantitative
-- ✅ **Performance**: 1.5x+ improvement on adjacency building
-- ✅ **Coverage**: 100% test pass rate on all platforms
-- ✅ **Compatibility**: Zero breaking changes to public API
-- ✅ **Documentation**: 95%+ of public methods have docstrings
-- ✅ **Integration**: 3+ downstream projects successfully integrating
+**Quantitative:**
+- ✅ 1.5×+ improvement on adjacency building
+- ✅ 100% test pass rate on all platforms
+- ✅ Zero breaking changes to public API
+- ✅ 95%+ of public methods have docstrings
+- ✅ 3+ downstream projects successfully integrating
 
-### Qualitative
-- ✅ **Code clarity**: Easier to understand adjacency structures
-- ✅ **Maintainability**: Fewer open issues related to complexity
-- ✅ **Stakeholder satisfaction**: Positive feedback from downstream authors
-- ✅ **Scientific integrity**: All changes properly documented and tested
-- ✅ **Community engagement**: Active GitHub discussions, clear communication
+**Qualitative:**
+- ✅ Clearer adjacency structures (easier to understand)
+- ✅ Fewer complexity-related open issues
+- ✅ Positive feedback from downstream authors
 
 ---
 
-## Dependency on External Knowledge
-
-### Known Dependencies
-- **MADMESHR internals**: Need to understand what APIs it expects
-- **ADMESH requirements**: Mesh adaptation strategies it uses
-- **ADMESH-Domains patterns**: Domain handling and tagging
-
-### Action Items
-1. **Week 2-3**: Reach out to all three project authors
-2. **Week 3-4**: Schedule calls to clarify integration needs
-3. **Week 5+**: Incorporate feedback into Phase 3 design
-
----
-
-## Governance & Decision-Making
-
-**Principle:** This plan is governed by `constitution.md`
-
-### Decision Authority
-- **Minor changes** (task details, test improvements): Any active developer
-- **Phase scope adjustments**: Maintainer + consensus
-- **Timeline changes**: Maintainer + stakeholder communication
-- **API additions**: Design review + downstream coordination
-
-### Escalation
-1. Start in GitHub issue with context
-2. Request feedback from stakeholders
-3. Escalate to maintainer if consensus not reached
-4. Document decision and rationale in issue
-
----
-
-## Appendix A: Glossary of Terms
-
-| Term | Definition |
-|------|-----------|
-| CAI | CHILmesh Access Interface (stable bridge APIs) |
-| DCEL | Doubly-Connected Edge List (half-edge data structure) |
-| MADMESHR | Downstream research project for mesh adaptation |
-| ADMESH | Mesh adaptation framework |
-| ADMESH-Domains | Domain handling for ADMESH |
-| O(n²) | Quadratic time complexity (slow on large n) |
-| O(n log n) | Linearithmic time complexity (efficient) |
-| Skeletonization | Medial axis extraction via boundary peeling |
-| Fort.14 | ADCIRC mesh file format |
-
----
-
-## Appendix B: Phase Summary Chart
+## Phase Summary Chart
 
 ```
 Phase 0 (Weeks 1-4): Planning ━━━━━━━━━━━
@@ -372,7 +211,7 @@ Phase 5 (Weeks 37-40): Release ━━━━
 
 ---
 
-## Appendix C: File Structure After Modernization
+## File Structure After Modernization
 
 ```
 CHILmesh/
@@ -400,6 +239,22 @@ CHILmesh/
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2026-04-26
+## Glossary
+
+| Term | Definition |
+|------|-----------|
+| CAI | CHILmesh Access Interface (stable bridge APIs) |
+| DCEL | Doubly-Connected Edge List (half-edge data structure) |
+| MADMESHR | Downstream research project for mesh adaptation |
+| ADMESH | Mesh adaptation framework |
+| ADMESH-Domains | Domain handling for ADMESH |
+| O(n²) | Quadratic time complexity |
+| O(n log n) | Linearithmic time complexity |
+| Skeletonization | Medial axis extraction via boundary peeling |
+| Fort.14 | ADCIRC mesh file format |
+
+---
+
+**Document Version:** 1.0  
+**Last Updated:** 2026-04-26  
 **Next Review:** End of Phase 0 (Week 4)

@@ -34,8 +34,8 @@
 All items pass. Spec reviewed against each criterion:
 
 - File format names (`.fort.14`, `.2dm`) are domain-specific terms known to stakeholders, not technology choices — acceptable.
-- SC-003 uses a concrete time bound ("under 2 seconds", "currently ~30 seconds") — measurable and technology-agnostic.
-- Edge cases cover all four failure modes identified in the clarify phase (missing file, unsupported element type, no-layers guard, unknown record type).
+- SC-003 uses concrete time bound ("under 2 seconds", "currently ~30 seconds") — measurable and technology-agnostic.
+- Edge cases cover all four failure modes identified in clarify phase (missing file, unsupported element type, no-layers guard, unknown record type).
 - Coordinate convention resolved in clarify phase: `min_x/max_x/min_y/max_y` — no geographic assumption leaks into spec.
 
 **Status**: COMPLETE — ready for `/speckit-plan`

@@ -5,9 +5,9 @@
 
 ## Summary
 
-Replace the current `_skeletonize()` method in `src/chilmesh/CHILmesh.py` with a faithful Python port of the MATLAB `meshLayers` function from `domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m`. The current Python implementation uses element-element adjacency to compute Inner Elements (IE), which omits elements that share only a vertex (not an edge) with Outer Elements (OE). The MATLAB algorithm computes IE via edges that touch OV vertices — a strictly broader set. This bug fix restores the medial-axis layer separation invariant: a vertex in any element of layer k cannot appear in elements of layer k+2 or beyond.
+Replace `_skeletonize()` in `src/chilmesh/CHILmesh.py` with faithful Python port of MATLAB `meshLayers` function. Current Python uses element-element adjacency for IE — omits elements sharing only a vertex (not an edge) with OE. MATLAB computes IE via edges touching OV vertices (broader set). Bug fix restores layer separation invariant: vertex in layer k cannot appear in layer k+2 or beyond.
 
-The fix preserves the existing `self.layers` dict structure (keys: OE, IE, OV, IV, bEdgeIDs) and `self.n_layers` integer for full backward compatibility. Layer counts will change because they were buggy before — these are documented and tests are updated to MATLAB-correct values.
+Fix preserves `self.layers` dict (OE, IE, OV, IV, bEdgeIDs) and `self.n_layers` for full backward compatibility. Layer counts change (they were buggy) — documented, tests updated to MATLAB-correct values.
 
 ## Technical Context
 
@@ -26,14 +26,13 @@ The fix preserves the existing `self.layers` dict structure (keys: OE, IE, OV, I
 
 ## Constitution Check
 
-CHILmesh has no formal `.specify/memory/constitution.md`. Applicable principles from `.claude/CLAUDE.md`:
+No formal constitution.md. Applicable from CLAUDE.md:
+- Backward Compatibility: `mesh.layers` dict shape + `n_layers` type preserved ✅
+- TDD: Layer separation invariant test + MATLAB layer count test added ✅
+- Code Standards: MATLAB-source line references in comments document WHY each step exists ✅
+- Branch Policy: Working on `main` per active session direction ✅
 
-- **Backward Compatibility**: Public API stable until v1.0 — ✅ this fix preserves the `mesh.layers` dict shape and `mesh.n_layers` integer contract
-- **Test-Driven Development**: ✅ Layer separation invariant test (SC-006) and MATLAB-equivalent layer count test will be added
-- **Code Standards**: Type hints, minimal comments (only WHY) — ✅ the algorithm port will include MATLAB-source line references in comments because they document WHY each step exists
-- **Branch Policy**: ✅ Working on `main` per active session direction (CLAUDE.md is contradictory between `daily-issue-fixing` and `planning-optimize_modernize`; user has been working on `main` throughout this session)
-
-**Constitutional Status**: PASS — no violations.
+**Status**: PASS.
 
 ## Project Structure
 
@@ -73,7 +72,7 @@ tests/
 
 ### MATLAB Reference Algorithm
 
-Source: `domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m`, function `meshLayers` (~lines 1082-1245).
+Source: `domattioli/QuADMesh-MATLAB/.../CHILmesh.m`, function `meshLayers` (~lines 1082-1245).
 
 **Algorithm pseudocode** (verbatim translation, see spec FR-001 through FR-013):
 
@@ -123,7 +122,7 @@ WHILE any(Edge2ElemIDs > 0):              # Until all elements consumed
 CM.nLayers := iL - 1
 ```
 
-### Python Translation Notes
+### Python ↔ MATLAB Translation
 
 | MATLAB | Python |
 |--------|--------|
@@ -138,7 +137,8 @@ CM.nLayers := iL - 1
 
 ### Critical Bug In Current Python Implementation
 
-Current code (lines 824-829):
+Current code (lines 824-829) computes IE via element-element adjacency. MATLAB computes IE via **edges touching OV vertices** — broader, includes elements sharing only a vertex (not an edge) with OE.
+
 ```python
 inner_elems = []
 for elem in outer_elems:
@@ -147,23 +147,17 @@ for elem in outer_elems:
             inner_elems.append(neighbor)
 ```
 
-This computes IE as element-adjacency neighbors of OE. But MATLAB computes IE as elements adjacent to **edges that touch OV vertices**, which is broader: it includes elements that share only a vertex (not an edge) with OE. In a triangular mesh's vertex fan, this distinction matters for elements that touch a vertex at a non-shared edge.
+### Mixed-Element Padding (per Q3)
 
-### Mixed-Element Padding (per Q3 Decision)
+Filter `-1` padding: `vertices = vertices[vertices >= 0]` in `unique(connectivity_list[..., :])` calls. `Edge2Vert` never contains `-1` — no filtering needed there.
 
-Where `connectivity_list` may contain `-1` padding for triangles in mixed meshes:
-- In `unique(connectivity_list[..., :])` calls, filter out `-1` entries: `vertices = vertices[vertices >= 0]`
-- The `Edge2Vert` adjacency does not contain `-1` (edges are always between two real vertices), so no filtering needed there
+### Performance
 
-### Performance Considerations
-
-- The MATLAB algorithm is O(n_elems × n_edges) per iteration in the worst case, with O(n_layers) iterations.
-- For the block_o mesh (~5,200 elements), this should complete in well under 1 second.
-- The bookkeeping uses two `np.copy()` calls (one each for Edge2Vert and Edge2Elem) — memory is O(n_edges), negligible.
+O(n_elems × n_edges) per iteration, O(n_layers) iterations. block_o (~5,200 elements): well under 1 second. Memory: O(n_edges) for two `np.copy()` calls — negligible.
 
 ## Phase 1: Design
 
-### Data Model (in-memory only, no persistent storage)
+### Data Model (in-memory only)
 
 ```python
 self.layers = {
@@ -183,7 +177,7 @@ Layer separation invariant (formally):
     vertices(OE[k] ∪ IE[k]) ∩ vertices(OE[m] ∪ IE[m]) = ∅
 ```
 
-### Quickstart (manual verification)
+### Quickstart (manual)
 
 ```python
 import chilmesh
@@ -200,15 +194,15 @@ mesh.plot_layer(ax=ax)
 plt.show()
 ```
 
-Expected: layered concentric rings, no Layer-N color directly touching Layer-0 for N ≥ 2.
+Expected: concentric rings, no Layer-N touching Layer-0 for N ≥ 2.
 
 ### Contracts
 
-No new external interfaces. Internal `_skeletonize()` method signature unchanged: `_skeletonize(self) -> None`.
+No new external interfaces. `_skeletonize(self) -> None` signature unchanged.
 
 ## Phase 2: Tasks
 
-To be generated by `/speckit-tasks` (see `tasks.md`).
+See `tasks.md`.
 
 ## Risks and Mitigations
 
@@ -221,20 +215,20 @@ To be generated by `/speckit-tasks` (see `tasks.md`).
 
 ## Phase 3: Implementation Order
 
-1. **Add layer separation invariant test first (TDD)**: Create `tests/test_skeletonization_invariant.py` with parametrized test across all 4 fixtures. Initially XFAIL (since current code violates it).
-2. **Capture current (buggy) layer counts**: Record current `mesh.n_layers` for each fixture so we know what's changing.
-3. **Port MATLAB algorithm**: Replace `_skeletonize()` body with the verbatim port; include MATLAB code as comments for traceability.
-4. **Verify layer separation invariant passes**: The XFAIL test should now PASS — remove XFAIL marker.
-5. **Capture new layer counts**: Run tests, observe new `mesh.n_layers` values, add `tests/test_skeletonization_matlab_parity.py` pinning these values for bundled fixtures, and `tests/test_skeletonization_matlab_parity_external.py` for opt-in parity verification on the external ADMESH-Domains catalog.
-6. **Update or delete buggy assertions in `test_layers_annulus.py`**: Per Q2 decision (Option A), update tests with documented justification.
-7. **Regenerate visualization**: Run `python generate_4row_admesh.py`; verify column 2 shows clean concentric rings.
-8. **Run full test suite**: All 288+ tests should pass.
+1. Add layer separation invariant test (TDD): parametrized over all 4 fixtures; initially XFAIL.
+2. Capture current (buggy) layer counts for each fixture.
+3. Port MATLAB algorithm: replace `_skeletonize()` body verbatim with MATLAB comments for traceability.
+4. Verify invariant passes; remove XFAIL marker.
+5. Capture new layer counts; add `test_skeletonization_matlab_parity.py` (bundled) + `_external.py` (opt-in).
+6. Update buggy assertions in `test_layers_annulus.py` per Q2 Option A.
+7. Regenerate visualization; verify column 2 shows clean rings.
+8. Run full test suite (288+ tests pass).
 
 ## Success Validation
 
 Before merge:
-- ✅ Layer separation invariant test passes for all 4 fixtures (SC-001, SC-006)
-- ✅ All previously passing tests still pass; only tests with documented buggy assumptions are updated (SC-002)
-- ✅ Visual inspection of `tests/output/annulus_quickstart.png` shows clean concentric rings (SC-003)
-- ✅ Performance on block_o is within 5× of previous runtime (SC-005)
-- ⚠️ MATLAB layer count match (SC-004): cannot verify directly (no MATLAB locally); rely on layer separation invariant + Italy/Lake Erie ground truth when those meshes are available
+- ✅ Layer separation invariant passes for all 4 fixtures (SC-001, SC-006)
+- ✅ All previously passing tests pass; only buggy-assumption tests updated (SC-002)
+- ✅ Visual inspection of `tests/output/annulus_quickstart.png` shows clean rings (SC-003)
+- ✅ Performance on block_o within 5× of previous runtime (SC-005)
+- ⚠️ MATLAB layer count match (SC-004): no MATLAB locally; rely on invariant + Italy/Lake Erie ground truth when meshes available

@@ -7,19 +7,19 @@
 
 ## Context (informational)
 
-CHILmesh's row 1 fixture (`chilmesh.examples.annulus()`) is a deliberately poor-quality triangulation — a fixed annular boundary with random-Delaunay interior. ADMESH's main optimization engine is the distmesh-style truss/spring solver in `admesh.distmesh.distmesh2d` (referenced at `https://github.com/domattioli/ADMESH/blob/05bc68fc81060f7d710b8f4abb2cc382f85df33f/admesh/routine.py#L27`). Today the public entry point `admesh.triangulate(domain, h_max)` always **generates** an initial point distribution from scratch (rejection sampling within the domain), then runs the truss loop. There is no path to pass in an existing triangulation as the starting state.
+CHILmesh's row 1 fixture (`chilmesh.examples.annulus()`) is deliberately poor-quality. ADMESH's main optimization engine is the distmesh truss/spring solver in `admesh.distmesh.distmesh2d`. Public entry point `admesh.triangulate(domain, h_max)` always generates fresh points from scratch — no path to pass an existing triangulation.
 
-This spec asks for a **generic warm-start adapter**: given ANY triangulation (`points + triangles`) and a description of the domain it lives in (SDF + size function), feed those inputs into ADMESH's truss loop so the interior nodes are optimized against the size function while the input boundary is preserved bit-exactly. The annulus is the V1 demo, but the function MUST be domain-agnostic and triangulation-source-agnostic — it must work on the four bundled CHILmesh fixtures, on a CHILmesh built from a `.fort.14` file, on a CHILmesh built from a `.2dm` file, and on a raw `(points, triangles)` numpy pair without a CHILmesh wrapper.
+This spec asks for a **generic warm-start adapter**: given ANY triangulation (`points + triangles`) and domain description (SDF + size function), feed inputs into ADMESH's truss loop with boundary preserved bit-exactly. Annulus is V1 demo, but function MUST be domain-agnostic and source-agnostic — CHILmesh fixtures, `.fort.14`, `.2dm`, or raw numpy arrays.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Warm-Start Optimization Preserves Boundary (Priority: P1)
 
-As a researcher studying mesh-quality improvement, I have a poor-quality but topologically valid triangulation (e.g., `chilmesh.examples.annulus()`) and I want to run ADMESH's truss solver on it without regenerating the boundary. I should be able to call a single function with the existing mesh and a size function, and receive a higher-quality mesh whose outer and inner boundary points are byte-identical to the input.
+Researcher has poor-quality but topologically valid triangulation. Wants to run ADMESH's truss solver without regenerating boundary. Single function call + size function → higher-quality mesh with byte-identical boundary.
 
-**Why this priority**: This is the core capability. Without it the feature delivers nothing. Boundary preservation is the non-negotiable constraint that distinguishes warm-start from a fresh `admesh.triangulate()`.
+**Why this priority**: Core capability. Boundary preservation distinguishes warm-start from fresh `admesh.triangulate()`.
 
-**Independent Test**: Call the warm-start function on `chilmesh.examples.annulus()` with a constant size function. Verify (a) median element quality strictly improves, and (b) every boundary point in the output appears at the same `(x, y)` coordinates as the corresponding input boundary point — bit-exact equality, not approximate.
+**Independent Test**: Call warm-start on `chilmesh.examples.annulus()` with constant size function. Verify (a) median quality strictly improves, (b) every boundary point at same `(x, y)` — bit-exact, not approximate.
 
 **Acceptance Scenarios**:
 
@@ -31,9 +31,9 @@ As a researcher studying mesh-quality improvement, I have a poor-quality but top
 
 ### User Story 2 - Restructured 4-Row README Visualization (Priority: P2)
 
-As a reader of the project README, I want the existing 4-row visualization to be **restructured** so that the warm-start truss optimizer sits in the center of the narrative — Row 2 — and the two existing post-processors (FEM smoother, right-isoceles smoother) are applied **to the warm-start result** rather than to the raw mesh or to a fresh ADMESH triangulation. This makes the warm-start the foundation of the pipeline rather than an afterthought.
+README reader wants warm-start truss optimizer as Row 2 centerpiece, with FEM smoother and right-isoceles smoother applied to Row 2's result. Fresh-ADMESH-from-bbox row dropped.
 
-**Why this priority**: The user explicitly directed the new row layout. The fresh-ADMESH-from-bbox row (current row 3) is dropped because warm-start with row 1's existing boundary is now the "real" ADMESH integration. Lower priority than the underlying capability, but the visual story is what readers see first.
+**Why this priority**: User explicitly directed new layout. Visual story readers see first.
 
 **New row layout** (replacing the existing 4-row pipeline):
 
@@ -46,7 +46,7 @@ As a reader of the project README, I want the existing 4-row visualization to be
 
 Note: rows 3 and 4 both branch off row 2 (they are alternative downstream smoothers, not sequential — row 4 is NOT row 3 + right-iso).
 
-**Independent Test**: Render the new 4-row PNG and verify (a) row 2's boundary points are bit-exact equal to row 1's boundary points, (b) rows 3 and 4 are both downstream of row 2 (verified via assertion that their input was row 2's mesh, not row 1 and not a fresh ADMESH triangulation), (c) the existing fail-loud assertions (V1–V7 from spec 004) are updated to match the new pipeline.
+**Independent Test**: Render 4-row PNG. Verify (a) row 2 boundary bit-exact equal to row 1, (b) rows 3 and 4 downstream of row 2 (not row 1, not fresh ADMESH), (c) V1-V7 assertions updated to new pipeline.
 
 **Acceptance Scenarios**:
 
@@ -58,16 +58,16 @@ Note: rows 3 and 4 both branch off row 2 (they are alternative downstream smooth
 
 ### User Story 3 - Generic Triangulation-In, Optimized-Mesh-Out (Priority: P1)
 
-As an author of a downstream tool (MADMESHR, ADMESH-Domains adapter, custom workflow, ad-hoc notebook), I want to convert ANY triangulation through ADMESH's truss optimizer without writing the plumbing myself. I should be able to call one function with `(points, triangles, sdf, size_fn)` (or a CHILmesh equivalent) and receive an optimized triangulation back, regardless of where the input came from — bundled fixture, file load, my own numpy arrays, or a third-party mesh library.
+Downstream tool author (MADMESHR, ADMESH-Domains, notebook) wants to convert ANY triangulation through ADMESH's truss optimizer. Single function call `(points, triangles, sdf, size_fn)` → optimized triangulation regardless of source.
 
-**Why this priority**: Elevated to P1 (co-equal with US1) because the user explicitly stated this functionality MUST be extensible: "i should be able to convert any given triangulation via admesh." Without generic-input support, this is just a one-shot demo. With it, this is a reusable building block.
+**Why this priority**: User explicitly stated "i should be able to convert any given triangulation via admesh." Generic-input support makes this reusable building block, not one-shot demo.
 
-**Independent Test**: The function MUST accept inputs in **two equivalent forms**, and the test suite MUST exercise both:
+**Independent Test**: Function MUST accept inputs in **two equivalent forms**; test suite MUST exercise both:
 
 - **Form A (CHILmesh-native)**: `optimize_with_admesh_truss(mesh: CHILmesh, sdf, size_fn, **kwargs) -> CHILmesh`
 - **Form B (raw arrays)**: `optimize_with_admesh_truss_arrays(points: ndarray, triangles: ndarray, sdf, size_fn, **kwargs) -> tuple[ndarray, ndarray]`
 
-The CHILmesh form MUST be a thin convenience wrapper around the raw-arrays form. Both must work on all four bundled fixtures (annulus, donut, block_o, structured) AND on at least one fort.14-loaded mesh from the test corpus AND on at least one synthetic `(points, triangles)` constructed in the test itself.
+CHILmesh form MUST be thin wrapper around raw-arrays form. Both must work on all four bundled fixtures, at least one fort.14-loaded mesh, and at least one synthetic `(points, triangles)`.
 
 **Acceptance Scenarios**:
 
@@ -81,14 +81,14 @@ The CHILmesh form MUST be a thin convenience wrapper around the raw-arrays form.
 
 ### Edge Cases
 
-- **Boundary identification**: How does the function distinguish boundary points from interior points? The current `mesh.boundary_edges()` returns edge IDs, not vertex indices. The function MUST use a deterministic boundary-detection rule (e.g., vertices appearing in any boundary edge) and document it.
-- **SDF mismatch**: If the input mesh's boundary is not on the SDF zero set (within numerical tolerance), the function MUST raise rather than silently letting truss forces drag boundaries off the input geometry.
-- **Connectivity vs free re-triangulation**: ADMESH's distmesh loop **internally re-triangulates** at each iteration (Delaunay over the current point cloud). The output connectivity will therefore NOT match the input connectivity. The spec MUST clarify that "warm-start" means "use the input *points* as the initial distribution," not "preserve input *triangles*."
-- **Convergence failure**: If the truss loop fails to converge within max iterations, the function MUST surface the warning and return the best-so-far mesh, not raise.
-- **Mixed-element / quad inputs**: V1 supports triangles only. Quad / mixed inputs MUST raise `NotImplementedError` with a clear message.
-- **Domain-boundary mismatch**: If the user passes an SDF that doesn't actually contain all the input boundary points (e.g., wrong domain), the function MUST raise rather than trying to "fix" the points.
-- **Degenerate triangles in input**: If the input mesh has triangles with zero or negative area, the function MUST raise rather than feeding them to ADMESH.
-- **Tiny input meshes**: Inputs with fewer than ~10 interior points may not benefit from truss optimization. The function MUST still run but issue a warning if interior count is below a threshold.
+- **Boundary identification**: `mesh.boundary_edges()` returns edge IDs, not vertex indices. Function MUST use deterministic boundary-detection rule and document it.
+- **SDF mismatch**: Boundary not on SDF zero set → raise, not silently drag boundary off geometry.
+- **Connectivity vs re-triangulation**: ADMESH re-triangulates every iteration. Output connectivity ≠ input. "Warm-start" means input *points* as initial distribution, NOT preserving input *triangles*.
+- **Convergence failure**: Hit max iterations → surface RuntimeWarning, return best-so-far mesh.
+- **Mixed/quad inputs**: V1 triangles only. Quad/mixed → `NotImplementedError`.
+- **Domain-boundary mismatch**: SDF doesn't contain input boundary points → raise.
+- **Degenerate triangles**: Zero or negative area → raise before feeding to ADMESH.
+- **Tiny meshes**: <10 interior points → still run, issue RuntimeWarning.
 
 ## Requirements *(mandatory)*
 
@@ -129,11 +129,11 @@ The CHILmesh form MUST be a thin convenience wrapper around the raw-arrays form.
 
 ### Key Entities
 
-- **WarmStartInput**: The triple `(CHILmesh, SDF, SizeFn)` plus optional kwargs. Defines the optimizer's input contract.
-- **BoundaryVertexSet**: The set of vertex indices in the input mesh that lie on the domain boundary, identified via `boundary_edges()` → `Edge2Vert`. Marked as `pfix` for ADMESH.
-- **InteriorVertexSet**: All input vertex indices NOT in BoundaryVertexSet. These are the "free" nodes the truss loop will move.
-- **TrussSolverConfig**: The set of optional kwargs forwarded to `distmesh2d` (max iter, tolerance, retriangulation cadence, force scaling). Has documented defaults.
-- **WarmStartOutput**: A new `CHILmesh` instance built from the optimized point set and ADMESH's final retriangulation. Indexes preserved for boundary points.
+- **WarmStartInput**: `(CHILmesh, SDF, SizeFn)` + optional kwargs. Optimizer input contract.
+- **BoundaryVertexSet**: Vertex indices on domain boundary, identified via `boundary_edges()` → `Edge2Vert`. Becomes `pfix` for ADMESH.
+- **InteriorVertexSet**: All vertex indices NOT in BoundaryVertexSet. Free nodes truss loop moves.
+- **TrussSolverConfig**: Optional kwargs forwarded to `distmesh2d` (max iter, tolerance, retriangulation cadence, force scaling). Documented defaults.
+- **WarmStartOutput**: Fresh `CHILmesh` from optimized point set + ADMESH's final retriangulation. Boundary point indices preserved.
 
 ## Success Criteria *(mandatory)*
 
@@ -150,9 +150,9 @@ The CHILmesh form MUST be a thin convenience wrapper around the raw-arrays form.
 
 ## Cross-Repo Tracking Policy
 
-**Any extensibility hook, public-API addition, or upstream fix that belongs inside ADMESH itself MUST be filed as a new issue on `https://github.com/domattioli/ADMESH/issues` rather than implemented as a private workaround in CHILmesh.** The CHILmesh-side adapter is allowed to be a thin shim only; anything that asks ADMESH to behave differently goes upstream.
+Any extensibility hook, API addition, or upstream fix belonging inside ADMESH MUST be filed on `https://github.com/domattioli/ADMESH/issues` — not implemented as CHILmesh workaround. CHILmesh adapter is thin shim only.
 
-Candidate ADMESH issues identified during specify (to be filed by the user — Claude's MCP scope is restricted to `domattioli/chilmesh` and cannot file on the ADMESH repo):
+Candidate ADMESH issues (file by user — Claude's MCP scope restricted to `domattioli/chilmesh`):
 
 - **ADMESH-A**: Broken import — `MeshOutput` is imported by `admesh/routine.py` but not defined in `admesh/distmesh.py` on `main` HEAD. Fix: define and export `MeshOutput` (or remove the import). This blocks any external caller of `admesh.triangulate()`.
 - **ADMESH-B**: Public warm-start entry point — `admesh.triangulate()` currently always runs `_initial_distribution` to generate fresh points. Proposal: add an optional `initial_points: ndarray | None` argument (or a sibling function `triangulate_from_points(...)`) that bypasses rejection sampling and uses the caller's points as the initial truss state.
@@ -160,15 +160,15 @@ Candidate ADMESH issues identified during specify (to be filed by the user — C
 - **ADMESH-D**: Distmesh re-triangulation cadence — document the current behavior (Delaunay re-triangulation every iteration) and expose the cadence as a tunable. Some warm-start callers may want to skip re-triangulation for the first N iters to keep the input topology longer.
 - **ADMESH-E**: Convergence diagnostics — surface the per-iteration max-displacement and quality-stat history as a return value from `distmesh2d`, so callers can produce convergence plots and decide whether the loop converged sensibly.
 
-The CHILmesh adapter MUST work around any of the above that aren't fixed upstream by the time of implementation, but each workaround MUST link to its tracking issue and be marked as TEMP in the code.
+CHILmesh adapter MUST work around unfixed upstream issues. Each workaround MUST link to tracking issue and be marked TEMP in code.
 
 ## Assumptions
 
-- ADMESH source code is reachable at `https://github.com/domattioli/ADMESH.git` and the implementation team can clone a known-good commit if `main` is broken.
-- The CHILmesh project's existing convention of `sys.path.insert(0, "ADMESH")` for in-tree imports continues to work.
-- The annulus SDF used by the existing row 3 / 4 pipeline (`admesh.domains.ANNULUS`) accepts the row 1 boundary points within tolerance — i.e., row 1's boundary is in fact on the annulus zero set. (This will be verified during the spec→plan transition.)
-- "Truss algorithm" in the user's request refers specifically to ADMESH's distmesh-style spring/repulsion solver (`distmesh2d` and friends), not a generic structural-mechanics solver. This is the authoritative interpretation throughout this spec.
-- Boundary preservation is a hard constraint, not soft: bit-exact equality is the contract. ADMESH's `pfix` mechanism already supports this; we are not asking ADMESH to be modified, only to be invoked with the right inputs.
-- V1 scope is triangle meshes only. Quad and mixed-element warm-start is explicitly deferred.
-- The CHILmesh single-branch policy applies (`planning-optimize_modernize` is the working branch); this spec's directory `specs/005-admesh-warm-start-truss/` is added to that branch without creating a separate `005-*` git branch.
-- The downstream goal of the four-row pipeline (right-isoceles smoothing for tri→quad fusion) is unchanged. The warm-start row is *additive*, not a replacement for any existing row.
+- ADMESH source reachable at `https://github.com/domattioli/ADMESH.git`; team can clone known-good commit if `main` broken.
+- Existing `sys.path.insert(0, "ADMESH")` convention continues to work.
+- Annulus SDF accepts row 1 boundary points within tolerance (verified during spec→plan transition).
+- "Truss algorithm" = ADMESH's distmesh-style spring/repulsion solver (`distmesh2d`), not generic structural-mechanics solver.
+- Boundary preservation hard constraint: bit-exact equality via `pfix` mechanism.
+- V1 scope: triangles only. Quad/mixed warm-start explicitly deferred.
+- CHILmesh single-branch policy applies; `specs/005-admesh-warm-start-truss/` added without creating separate git branch.
+- Warm-start row is *additive*, not replacement for any existing pipeline row.

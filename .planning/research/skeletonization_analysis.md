@@ -2,7 +2,7 @@
 
 ## Overview
 
-Mesh skeletonization (a.k.a. "medial axis extraction via boundary peeling") is a key CHILmesh feature that decomposes the mesh into hierarchical layers by iteratively removing concentric "shells" from the boundary inward. This document analyzes the current algorithm, identifies inefficiencies, and proposes optimizations.
+Mesh skeletonization (medial axis extraction via boundary peeling) decomposes mesh into hierarchical layers by iteratively removing concentric "shells" from boundary inward. This document analyzes current algorithm, identifies inefficiencies, and proposes optimizations.
 
 ---
 
@@ -93,7 +93,7 @@ For typical 2D mesh: **O(√M × M) = O(M^1.5)** (since E ≈ 3M for triangular 
 ### Inefficiencies
 
 1. **O(E) boundary recomputation per layer:** Iterates all edges even though only "frontier" edges change. Could maintain frontier incrementally.
-2. **Set membership in loop:** While O(1) per check, the constant is non-trivial for large sets.
+2. **Set membership in loop:** While O(1) per check, constant is non-trivial for large sets.
 3. **Repeated vertex gathering:** `inner_vertices = all_vertices - outer_vertices` can be computed during element traversal.
 4. **`elem2elem` construction on-the-fly:** Built inside `_skeletonize()` but already partially exists in `adjacencies['Edge2Elem']`.
 
@@ -103,12 +103,12 @@ For typical 2D mesh: **O(√M × M) = O(M^1.5)** (since E ≈ 3M for triangular 
 
 **Q3 (from PROGRESS.md):** Investigate IE (inner elements) divergence in skeletonization.
 
-**Finding:** Existing Python implementation produces a disjoint cover with monotone-shrinking layer sizes on convex annulus and structured fixtures. The algorithm:
-- Expands outward from the boundary
+**Finding:** Existing Python implementation produces disjoint cover with monotone-shrinking layer sizes on convex annulus and structured fixtures. Algorithm:
+- Expands outward from boundary
 - Peels two layers at a time (OE then IE)
 - Produces valid skeletonization as measured by `test_layers_disjoint_cover`
 
-**Resolution:** Current behavior is preserved as an invariant in tests. No algorithmic change needed (per audit guidance).
+**Resolution:** Current behavior preserved as invariant in tests. No algorithmic change needed (per audit guidance).
 
 ---
 
@@ -116,7 +116,7 @@ For typical 2D mesh: **O(√M × M) = O(M^1.5)** (since E ≈ 3M for triangular 
 
 ### Opportunity 1: Incremental Frontier Tracking (O(E) → O(frontier))
 
-Instead of iterating all edges, maintain a frontier queue:
+Instead of iterating all edges, maintain frontier queue:
 
 ```python
 frontier = PriorityQueue()  # Edges with exactly one endpoint in remaining
@@ -147,16 +147,16 @@ If topology changes (add/remove element), instead of full re-skeletonization:
 
 ### Opportunity 3: Medial Axis Pruning (For Pinch-Point Detection)
 
-Current skeletonization produces full medial axis. For domain splitting (MADMESHR use case), we only need bottlenecks:
+Current skeletonization produces full medial axis. For domain splitting (MADMESHR use case), only need bottlenecks:
 
 ```python
 def pinch_points(mesh):
   """Find narrow regions (bottlenecks) in mesh."""
   skeleton = skeletonize(mesh)
   for layer in skeleton.layers:
-    frontier_width = measure_layer_width(layer)
+    frontier_width = measure_layer_width(layer)  # Voronoi vertex spacing?
     if frontier_width < threshold:
-      yield layer.boundary_edges
+      yield layer.boundary_edges  # These are potential split points
 ```
 
 **Benefit:** Provides MADMESHR domain-splitting API.
@@ -170,7 +170,7 @@ def pinch_points(mesh):
 ### Stage 1: Profiling (No code change)
 1. Measure `_skeletonize()` runtime on annulus, structured, block_o
 2. Identify actual bottleneck (frontier recomputation? set membership? vertex gathering?)
-3. Verify that **O(E) per layer** is the limiting factor (likely is)
+3. Verify O(E) per layer is limiting factor (likely is)
 
 ### Stage 2: Refactor for Clarity (O(M^1.5) → O(M^1.5), same complexity, clearer code)
 1. Extract `elem2elem` construction into separate method (cache result)
@@ -194,14 +194,42 @@ def pinch_points(mesh):
 ### Hard Invariants (Must Hold After Modernization)
 
 1. **Disjoint cover:** Every element appears in exactly one layer (OE[i] or IE[i])
-2. **Monotone-shrinking layer sizes (on convex meshes)**
-3. **Layer boundary validity:** Each layer's boundary edges have one element inside, one outside
+   ```python
+   all_elems = set()
+   for i in range(n_layers):
+     all_elems.update(layers['OE'][i])
+     all_elems.update(layers['IE'][i])
+   assert len(all_elems) == n_elems
+   ```
+
+2. **Monotone-shrinking layer sizes (on convex meshes):**
+   ```python
+   for i in range(n_layers - 1):
+     assert len(layers['OE'][i]) >= len(layers['OE'][i+1])
+   ```
+   (Note: Not guaranteed for non-convex meshes; add comment)
+
+3. **Layer boundary validity:** Each layer's boundary edges are exactly those with one element in layer and one outside
+   ```python
+   for i, edge in enumerate(layers['bEdgeIDs'][i]):
+     e1, e2 = edge2elem[edge]
+     assert (e1 in layers['OE'][i] or e1 in layers['IE'][i]) XOR (e2 in layers['OE'][i] or e2 in layers['IE'][i])
+   ```
+
 4. **Vertex containment:** All vertices of elements in layer i must be in OV[i] ∪ IV[i]
+   ```python
+   for elem in layers['OE'][i] + layers['IE'][i]:
+     for vert in elem2vert[elem]:
+       assert vert in layers['OV'][i] or vert in layers['IV'][i]
+   ```
 
 ### Soft Invariants (Currently Hold, Nice to Preserve)
 
 5. **Outer vertices = boundary vertices:** OV[i] = vertices of boundary_edges[i]
+   (Could be optimized away if carefully recomputed)
+
 6. **Layer peeling order:** Layers numbered from boundary inward (layer 0 touches original mesh boundary)
+   (Natural consequence of BFS; document as desired property)
 
 ---
 
@@ -227,6 +255,12 @@ def test_skeletonization_incremental_update():
   # Add element → recompute affected layers
   # Remove element → recompute affected layers
   # Result matches full re-skeletonization
+
+def test_pinch_point_detection():
+  """Test pinch-point API for MADMESHR use case."""
+  # Load mesh, run skeletonization
+  # Identify bottlenecks
+  # Verify detected points are geometrically narrow
 ```
 
 ---
@@ -235,9 +269,16 @@ def test_skeletonization_incremental_update():
 
 - [Medial Axis Wikipedia](https://en.wikipedia.org/wiki/Medial_axis)
 - [Image Skeletonization (Zhang-Suen)](https://en.wikipedia.org/wiki/Skeletonization)
-- Mattioli Thesis: "Mesh Layers" concept ≈ medial axis extraction via BFS
+- Mattioli Thesis: "Mesh Layers" concept (deprecated name) ≈ medial axis extraction via BFS
+- Audit Note Q3 (PROGRESS.md): Disjoint cover and monotone-shrinking sizes preserved
 
 ---
 
+## Next Steps
+
+1. Profile current implementation (identify actual hotspot)
+2. Review proposed frontier optimization with team
+3. Design incremental update semantics (post Phase 2)
+4. Implement stages 2–4 with full test coverage
+
 **Status:** DRAFT - Ready for Phase 3 planning
-**Next Review:** After Phase 1–2 completion

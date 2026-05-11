@@ -5,9 +5,9 @@
 
 ## Summary
 
-Build a generic adapter that feeds an existing triangulation (points + triangles + boundary) into ADMESH's distmesh truss optimizer while preserving the input boundary bit-exactly. The adapter exposes two layered entry points: a low-level array-based form and a high-level CHILmesh wrapper. The implementation **vendors the inner truss loop** of `admesh.distmesh.distmesh2d` (exactly as written upstream at the pinned commit) into a private CHILmesh helper, with the only modification being that the initial point distribution comes from the caller's existing mesh instead of `_initial_distribution` + `_rejection_method`. This lets us bypass ADMESH's broken `routine.py` (missing `MeshOutput`) entirely while still using ADMESH's actual truss algorithm — every line of the truss loop is byte-identical to upstream. Once ADMESH ships an `initial_points` parameter or a `distmesh2d_warmstart` entry point (filed as issue ADMESH-B), the vendored copy is removed and we call ADMESH directly.
+Generic adapter feeding existing triangulation into ADMESH's distmesh truss optimizer with bit-exact boundary preservation. Two entry points: low-level array form + high-level CHILmesh wrapper. Vendors inner truss loop of `admesh.distmesh.distmesh2d` at pinned commit — byte-identical to upstream, only change is warm-start preamble (caller's points replace `_initial_distribution` + `_rejection_method`). Bypasses broken `routine.py` (missing `MeshOutput`). Vendored copy removed when ADMESH-B ships.
 
-The user-facing demo is the existing `generate_4row_admesh.py` restructured per Q2=d: Row 1 = raw annulus, Row 2 = warm-start of Row 1, Row 3 = FEM smoother applied to Row 2, Row 4 = right-isoceles smoother applied to Row 2. The fresh-ADMESH-from-bbox row of the existing pipeline is dropped.
+Demo: `generate_4row_admesh.py` restructured per Q2=d — Row 1 = raw, Row 2 = warm-start of Row 1, Row 3 = FEM of Row 2, Row 4 = right-iso of Row 2. Fresh-ADMESH-from-bbox row dropped.
 
 ## Technical Context
 
@@ -23,15 +23,7 @@ The user-facing demo is the existing `generate_4row_admesh.py` restructured per 
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
-
-CHILmesh's `.specify/memory/constitution.md` is an unfilled template — no concrete principles ratified. The binding governance document is `CLAUDE.md`, which mandates the single-branch policy. Per the precedence rule (CLAUDE.md > system reminders), this plan is committed on `main` because:
-
-1. The README + image work (spec 004 lineage) was pushed to `main` directly when `planning-optimize_modernize` had divergence issues earlier this session.
-2. The remote `planning-optimize_modernize` was force-updated to a different lineage (issue #4 FEM-quad work) and no longer contains spec 004 history.
-3. Putting spec 005 on `main` keeps it adjacent to the other in-tree specs that still live there (001, 002, 002-fem-smoother-quads, and now 005).
-
-**Status**: PASS (no constitution gates; branch policy navigated as documented).
+Binding governance: `CLAUDE.md` single-branch policy. Plan committed on `main` (spec 004 lineage already on `main`; `planning-optimize_modernize` diverged to issue #4 FEM-quad work). **Status**: PASS.
 
 ## Project Structure
 
@@ -70,7 +62,7 @@ CHILmesh/
 └── specs/005-admesh-warm-start-truss/  # NEW: this spec/plan/contracts directory
 ```
 
-**Structure Decision**: Single library module. `optimize_with_admesh_truss` and `optimize_with_admesh_truss_arrays` are added to `src/chilmesh/admesh_warmstart.py`, re-exported from `chilmesh/__init__.py` so callers can write `chilmesh.optimize_with_admesh_truss(...)`. The vendored truss-loop helper lives in `_vendor_admesh_truss.py` (underscore-prefixed = private) and is removed once ADMESH-B is fixed upstream.
+**Structure**: Single library module. Both functions in `admesh_warmstart.py`, re-exported from `__init__.py`. Vendored helper in `_vendor_admesh_truss.py` (private); removed when ADMESH-B lands.
 
 ## Architecture Overview
 
@@ -119,10 +111,10 @@ CHILmesh/
 
 Key architectural decisions:
 
-- **Two-tier API**: The high-level form is purely a wrapper that extracts `(points, triangles, boundary_indices)` and rewraps. All real logic — validation, truss invocation, non-degradation guard — lives in the array form. This satisfies FR-001 + FR-016 (input-source-agnostic).
-- **Vendored truss loop**: The inner loop is copied byte-for-byte from `admesh.distmesh.distmesh2d` at the pinned SHA. The only changes are (1) the initial point distribution comes from the caller, (2) `pfix` is the caller's boundary subset (instead of an optional argument). The vendored module includes a header comment with the source SHA and a TODO referencing ADMESH-B for removal.
-- **Non-degradation as a wrapper layer**: FR-011 (return input on regression) is a thin guard around the truss call, not part of the truss itself. This keeps the vendor module pure and lets us evolve the regression policy without touching the truss math.
-- **Validation upfront**: All input validation runs *before* the truss loop. By the time we enter the truss, the input is guaranteed valid; the truss never has to handle malformed inputs.
+- **Two-tier API**: High-level form extracts `(points, triangles, boundary_indices)` and rewraps. All logic — validation, truss, non-degradation guard — lives in array form (FR-001, FR-016).
+- **Vendored truss loop**: Byte-for-byte copy of `admesh.distmesh.distmesh2d` at pinned SHA. Only changes: (1) initial points from caller, (2) `pfix` = caller's boundary. Header comment includes source SHA + ADMESH-B TODO.
+- **Non-degradation as wrapper layer**: FR-011 guard wraps the truss call; keeps vendor module pure.
+- **Validation upfront**: All validation before truss loop; truss never handles malformed inputs.
 
 ## Constraints & Assumptions
 
@@ -145,7 +137,7 @@ The plan executes in three phases. **Phase 0 (Research)** is documented in `rese
 
 ### Phase 0: Research (DONE — see research.md)
 
-Key findings (full detail in `research.md`):
+Key findings:
 
 - **R1**: `admesh.routine` imports `MeshOutput` from `admesh.distmesh` but `MeshOutput` is not defined there on `main` HEAD (`05bc68f`). The fix exists on `daily-issue-fixing` branch (`f21e340`) but has not landed on `main`. We bypass `routine` entirely; `admesh.distmesh.distmesh2d` is directly importable and complete.
 - **R2**: `distmesh2d`'s `pfix` mechanism stores fixed points at indices `0..nfix-1` and applies `Ftot[:nfix] = 0.0` every iteration — bit-exact preservation is guaranteed by source inspection. Re-triangulation via scipy `Delaunay` does not reorder these indices.
@@ -155,16 +147,14 @@ Key findings (full detail in `research.md`):
 
 ### Phase 1: Design & Contracts
 
-Outputs:
-
-1. **`data-model.md`** — Runtime entities: `WarmStartInput`, `BoundaryVertexSet`, `InteriorVertexSet`, `TrussSolverConfig`, `WarmStartOutput`, plus the four-row figure entities. (No persistent data model.)
-2. **`quickstart.md`** — Three worked examples per FR-018: (a) bundled annulus, (b) bundled donut, (c) raw-arrays from a non-CHILmesh source.
-3. **`contracts/api-contract.md`** — The function signatures (FR-001a/b), validation rules (FR-005, 006, 007), error catalog, kwargs forwarded to `distmesh2d`, return value shape.
-4. **`contracts/visualization-output.md`** — The new 4-row PNG: row layout, column layout (mesh / layers / quality), colormaps (parula / cool_r — preserved from spec 004), fail-loud assertions (V_BND, V_BND_PROP, V_QI, V_CONN, V_CHAIN), title strings.
+1. **`data-model.md`** — Runtime entities: WarmStartInput, ValidatedInput, TrussLoopState, WarmStartOutput, FourRowFigure. No persistent data model.
+2. **`quickstart.md`** — Three worked examples (FR-018): annulus, donut, raw-arrays.
+3. **`contracts/api-contract.md`** — Function signatures (FR-001a/b), validation rules, error catalog, kwargs forwarded to `distmesh2d`, return shape.
+4. **`contracts/visualization-output.md`** — New 4-row PNG: row/column layout, colormaps (parula / cool_r), fail-loud assertions (V_BND, V_BND_PROP, V_QI, V_CONN, V_CHAIN).
 
 ### Phase 2: Tasks (NOT in this file)
 
-Generated by `/speckit-tasks` from this plan. Will produce a sequenced task list grouping work by user story (US1 boundary preservation = MVP; US2 4-row demo; US3 generic input). Each task names exact file paths and acceptance criteria.
+Generated by `/speckit-tasks`. Sequenced by user story (US1 = MVP; US2 = demo; US3 = generic input). Each task names exact file paths and acceptance criteria.
 
 ## Dependencies & Risks
 
@@ -180,31 +170,16 @@ Generated by `/speckit-tasks` from this plan. Will produce a sequenced task list
 
 ## Open Questions Pushed to /speckit-tasks or Implementation
 
-These are decisions the planner consciously defers:
-
-- **Concrete demo size function for warm-start**: the user said "constant size function" implicitly via the spec, but the original `generate_4row_admesh.py` used a both-boundary refinement size function. Should warm-start (Row 2) use constant or graded? Default plan: constant for Row 2 (so the demo is purely about quality improvement, not size grading); the graded function from spec 004 is removed because that row is dropped.
-- **Whether to keep `generate_4row_admesh.py` filename or rename to `generate_4row_warmstart.py`**: Plan says keep the filename to avoid invalidating any external bookmarks; the script's *narrative* changes but the filename and PNG path do not. Implementation can revisit if the team prefers a clean rename.
-- **Whether to add a new fixture `examples.warm_start_demo()`**: out of scope for V1.
+- **Demo size function**: constant for Row 2 (quality improvement only; graded function from spec 004 removed with that row).
+- **Script filename**: keep `generate_4row_admesh.py` to avoid invalidating external bookmarks; PNG path unchanged.
+- **New fixture `examples.warm_start_demo()`**: out of scope V1.
 
 ## Complexity Tracking
 
-The constitution check is PASS (no gates), so no complexity violations to justify. The architectural choice that warrants explicit tracking:
-
-- **Vendored truss loop** is a deliberate temporary measure pending ADMESH-B. It's complexity-positive in the short term (we maintain a copy) but complexity-negative long term once ADMESH-B lands and we delete the file. The vendor module is ~50 lines (the truss inner loop plus the warm-start preamble); the cost is bounded.
+**Vendored truss loop**: deliberate temporary measure pending ADMESH-B. ~50 lines; bounded cost. Deleted once ADMESH-B lands.
 
 ## Acceptance for `/speckit-plan`
 
-This plan is ready when:
-
-- [x] Summary captures the technical approach in one paragraph
-- [x] Technical Context filled with concrete versions / dependencies / pins
-- [x] Constitution Check completed (PASS)
-- [x] Project Structure shows files added / modified
-- [x] Architecture diagram shows the call graph and key decisions
-- [x] Constraints & Assumptions table aligns with clarify answers Q1-Q5
-- [x] Phase 0 research findings inline (full detail in research.md)
-- [x] Phase 1 deliverables enumerated
-- [x] Risk register populated with concrete mitigations
-- [x] Open questions explicitly pushed to /speckit-tasks or implementation
+- [x] Summary, Technical Context, Constitution Check, Project Structure, Architecture diagram, Constraints & Assumptions, Phase 0 findings, Phase 1 deliverables, Risk register, Open questions
 
 Status: **Ready for `/speckit-tasks`**.

@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Defines the exact function signatures, validation contract, error catalog, and behavioral guarantees for the two warm-start adapter entry points. This is the contract downstream callers depend on.
+Exact function signatures, validation contract, error catalog, and behavioral guarantees for both warm-start adapter entry points.
 
 ---
 
@@ -112,9 +112,7 @@ def optimize_with_admesh_truss_arrays(
     """
 ```
 
-### Validation order (deterministic)
-
-The function validates inputs in this exact order; the first failure raises:
+### Validation order (deterministic, first failure raises)
 
 1. `NotImplementedError` if `triangles.shape[1] != 3`.
 2. `ValueError` if any triangle has signed area ≤ 0.
@@ -218,21 +216,12 @@ assert np.array_equal(out1[0], out2[0])
 assert np.array_equal(out1[1], out2[1])
 ```
 
-Determinism holds when:
-- All callable arguments (`sdf`, `size_fn`) are themselves pure / deterministic.
-- Numpy and scipy versions are unchanged.
-- The pinned ADMESH commit is unchanged.
-
-The default `seed=0` is what the demo PNG generator uses, so re-running the demo always produces the same image bytes.
+Determinism holds when: callables are pure, numpy/scipy versions unchanged, pinned ADMESH commit unchanged. Default `seed=0` ensures reproducible demo PNG.
 
 ---
 
 ## Versioning & Stability
 
-This API is introduced as a new feature, not modifying any existing API. The contract above is **public and stable**. Any breaking change requires:
+New feature, not modifying existing API. Contract is **public and stable**. Breaking change requires: new spec/plan/tasks pair, `DeprecationWarning` cycle for at least one minor version.
 
-1. A new spec / plan / tasks pair documenting the change.
-2. A `DeprecationWarning` cycle on the old signature for at least one minor version.
-3. Update to the cross-repo tracking section if ADMESH-side capabilities have changed.
-
-The vendored `_vendor_admesh_truss` module is **private** (underscore prefix). Callers MUST NOT import from it. When ADMESH-B lands, that module is deleted without a deprecation cycle.
+`_vendor_admesh_truss` is **private**. Callers MUST NOT import from it. Deleted without deprecation when ADMESH-B lands.

@@ -9,11 +9,11 @@
 
 ### User Story 1 - Researchers see medially-correct layer assignments (Priority: P1)
 
-A computational hydrodynamics researcher loads any 2D triangular or mixed-element mesh into CHILmesh and visualizes its skeletonization layers. They expect each "layer" to represent a concentric ring at increasing depth from the boundary, with the property that no node from a boundary-layer element shares space with elements that are 2+ layers away.
+Researcher loads any 2D mesh, visualizes skeletonization layers. Expects concentric rings at increasing depth from boundary — no node from boundary-layer element shares space with elements 2+ layers away.
 
-**Why this priority**: Skeletonization is foundational for downstream consumers (MADMESHR, ADMESH-Domains, hydrodynamic models). Incorrect layer assignment cascades into every analysis: medial axis extraction, layer-based smoothing, advancing-front meshing, boundary-layer refinement.
+**Why this priority**: Skeletonization foundational for downstream consumers (MADMESHR, ADMESH-Domains, hydrodynamic models). Incorrect layer assignment cascades into every analysis.
 
-**Independent Test**: Load `chilmesh.examples.annulus()`, call `mesh.layers`, inspect via `mesh.plot_layer()`. Verify that layer color transitions are gradual (Layer 0 → 1 → 2 → ...) with no Layer-N triangle directly touching a Layer-0 triangle for any N ≥ 2.
+**Independent Test**: Load `chilmesh.examples.annulus()`, call `mesh.layers`, inspect via `mesh.plot_layer()`. Verify gradual color transitions (Layer 0 → 1 → 2 → ...) with no Layer-N triangle touching Layer-0 for any N ≥ 2.
 
 **Acceptance Scenarios**:
 
@@ -25,11 +25,11 @@ A computational hydrodynamics researcher loads any 2D triangular or mixed-elemen
 
 ### User Story 2 - Downstream consumers continue to function (Priority: P1)
 
-A developer using CHILmesh as a dependency (e.g., MADMESHR, ADMESH-Domains) accesses `mesh.layers["OE"]`, `mesh.layers["IE"]`, `mesh.layers["OV"]`, `mesh.layers["IV"]`, `mesh.layers["bEdgeIDs"]`, and `mesh.n_layers`. They expect the data structure shape and key names to remain identical to v0.2.0.
+Developer using CHILmesh as dependency accesses `mesh.layers["OE"]`, `["IE"]`, `["OV"]`, `["IV"]`, `["bEdgeIDs"]`, and `mesh.n_layers`. Expects data structure shape and key names identical to v0.2.0.
 
-**Why this priority**: Backward compatibility is mandated by CLAUDE.md ("Public API stable until v1.0").
+**Why this priority**: Backward compatibility mandated by CLAUDE.md ("Public API stable until v1.0").
 
-**Independent Test**: Run the existing CHILmesh test suite (288 tests). All non-skeletonization tests must continue to pass without modification.
+**Independent Test**: Run existing CHILmesh test suite (288 tests). All non-skeletonization tests pass without modification.
 
 **Acceptance Scenarios**:
 
@@ -41,9 +41,9 @@ A developer using CHILmesh as a dependency (e.g., MADMESHR, ADMESH-Domains) acce
 
 ### User Story 3 - Visualization regression check (Priority: P2)
 
-The README's `tests/output/annulus_quickstart.png` shows the warm-start truss optimization pipeline with skeletonization layers in column 2. After the fix, these visualizations must display medially-coherent layer rings.
+README's `tests/output/annulus_quickstart.png` shows warm-start pipeline with skeletonization layers in column 2. After fix, must display medially-coherent rings.
 
-**Why this priority**: This is a public-facing artifact (rendered on GitHub README). Visual incorrectness undermines user trust.
+**Why this priority**: Public-facing artifact on GitHub README. Visual incorrectness undermines trust.
 
 **Independent Test**: Regenerate `tests/output/annulus_quickstart.png` via `python generate_4row_admesh.py` and visually inspect column 2 of each row.
 
@@ -53,11 +53,11 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
 
 ### Edge Cases
 
-- **Single-element mesh** (n_elems == 1): The single element is layer 0 OE; nLayers = 1.
-- **Mesh with internal holes** (annulus, donut): Both outer and inner boundaries seed BFS; layers grow inward from both rings simultaneously.
-- **Mixed-element mesh** (triangles + quads with -1 padding): Padding entries (-1) excluded from vertex enumeration.
-- **Multiple disconnected components**: Each is skeletonized independently; layer indices are global.
-- **Open ocean boundaries** (an ADCIRC concept noted as a future edit in the MATLAB source): Out of scope.
+- Single-element mesh: layer 0 OE; nLayers = 1.
+- Mesh with internal holes (annulus, donut): both outer and inner boundaries seed BFS simultaneously.
+- Mixed-element mesh: padding entries (-1) excluded from vertex enumeration.
+- Multiple disconnected components: each skeletonized independently; indices global.
+- Open ocean boundaries: out of scope.
 
 ## Requirements *(mandatory)*
 
@@ -77,11 +77,11 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
 - **FR-012**: The implementation MUST handle the Python ↔ MATLAB indexing translation correctly: 0-indexed elements/vertices/edges in Python; -1 sentinel for "no neighbor" in `Edge2Elem` (MATLAB uses 0/empty).
 - **FR-013**: Padding entries in `connectivity_list` (typically `-1` for triangles padded to 4 columns) MUST be excluded from vertex enumeration in OV/IV computation.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities
 
-- **Layer**: A single iteration's output, comprising OE (outer elements), IE (inner elements), OV (outer vertices), IV (inner vertices), bEdgeIDs (boundary edges that defined this layer's outer frontier).
-- **Edge2VertIDs (working copy)**: A copy of `Edge2Vert` mutated during skeletonization (vertex IDs in OV[k] are zeroed out as layers are consumed).
-- **Edge2ElemIDs (working copy)**: A copy of `Edge2Elem` mutated during skeletonization (element IDs in OE[k] ∪ IE[k] are zeroed out as layers are consumed).
+- **Layer**: Single iteration output — OE (outer elements), IE (inner elements), OV (outer vertices), IV (inner vertices), bEdgeIDs (boundary edges defining outer frontier).
+- **Edge2VertIDs (working copy)**: `Edge2Vert` copy mutated during skeletonization (OV[k] vertices zeroed as consumed).
+- **Edge2ElemIDs (working copy)**: `Edge2Elem` copy mutated during skeletonization (OE[k] ∪ IE[k] elements zeroed as consumed).
 
 ## Success Criteria *(mandatory)*
 
@@ -102,25 +102,16 @@ The README's `tests/output/annulus_quickstart.png` shows the warm-start truss op
 
 ## Clarifications
 
-### Q1: How to validate MATLAB equivalence without MATLAB locally? (resolved 2026-05-03)
+**Q1** (MATLAB equivalence without MATLAB): Use MATLAB source as literal translation reference with line-by-line comments. Verify primarily via layer separation invariant (SC-001). Cross-check against externally-provided ground-truth counts (Italy: 15, Lake Erie: 17) when available.
 
-**Decision**: Hybrid C + B approach.
-- Use the MATLAB source code as a literal translation reference; include MATLAB code as comments alongside the Python port for line-by-line traceability.
-- Verify correctness primarily via the layer separation invariant (SC-001), which is mathematically stronger than count-matching.
-- Cross-check against externally-provided ground-truth layer counts for real-world domains (Italy: 15 layers, Lake Erie: 17 layers) when those mesh files become available.
+**Q2** (test failures from layer count changes): Option A — update broken tests to MATLAB-correct values; document in commit message; add `test_matlab_layer_counts` pinning new expected values per fixture.
 
-### Q2: How to handle test failures from layer count changes? (resolved 2026-05-03)
-
-**Decision**: Option A — Update broken tests to MATLAB-correct values; document each change in the commit message; add a `test_matlab_layer_counts` regression test pinning the new expected values per fixture (annulus, donut, structured, block_o).
-
-### Q3: How to handle mixed-element meshes (triangles + quads with `-1` padding)? (resolved 2026-05-03)
-
-**Decision**: Option A — Filter `-1` padding entries during vertex reads (`v >= 0` check) in OV/IV computation and connectivity enumeration. The MATLAB algorithm logic is otherwise unchanged. This preserves mixed-mesh support and matches existing CHILmesh conventions elsewhere in the codebase.
+**Q3** (mixed-element padding): Option A — filter `-1` padding via `v >= 0` check in OV/IV computation. MATLAB logic otherwise unchanged.
 
 ## Assumptions
 
-- The MATLAB reference at `domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m`, function `meshLayers`, is the canonical correct algorithm. The Python port should match its behavior bit-for-bit (modulo indexing).
-- The Italy and Lake Erie meshes are large hydrodynamic domains used as benchmark cases in MADMESHR/ADMESH-Domains; they are not bundled with CHILmesh but reference layer counts (15 and 17 respectively) come from external MATLAB runs.
-- The "open ocean boundary" branching mentioned in the MATLAB code (commented out) is out of scope; all boundary edges are treated uniformly.
-- The `_skeletonize()` method is called once per mesh load (not in a hot path). Memory overhead of mutating copies of `Edge2Vert`/`Edge2Elem` is acceptable.
-- Mesh fixtures (annulus, donut, structured, block_o) are representative of all real-world inputs that need to work correctly.
+- MATLAB `meshLayers` function is canonical. Python port matches bit-for-bit (modulo indexing).
+- Italy and Lake Erie meshes not bundled; reference counts (15 and 17) from external MATLAB runs.
+- "Open ocean boundary" branching out of scope; all boundary edges treated uniformly.
+- `_skeletonize()` called once per mesh load (not hot path). Mutating copies of `Edge2Vert`/`Edge2Elem` is acceptable overhead.
+- Four built-in fixtures representative of real-world inputs.
