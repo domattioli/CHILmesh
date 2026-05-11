@@ -494,13 +494,13 @@ class CHILmesh(CHILmeshPlotMixin):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
 
-                # Skip invalid edges (negative vertex ids)
+                # Skip invalid edges (negative vertex ids or padding edges v==v in padded triangles)
                 # In MATLAB the value 0 signified a placeholder for a missing
                 # vertex in mixed element meshes.  In this Python port we use
                 # 0-based indexing, therefore vertex id ``0`` is valid and
                 # should not be discarded.  Only negative ids are considered
                 # invalid.
-                if v1 < 0 or v2 < 0:
+                if v1 < 0 or v2 < 0 or v1 == v2:
                     continue
 
                 # Store edge in canonical form to check for duplicates
@@ -541,8 +541,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
 
-                # Skip invalid edges (negative vertex ids)
-                if v1 < 0 or v2 < 0:
+                # Skip invalid edges (negative vertex ids or padding edges v==v in padded triangles)
+                if v1 < 0 or v2 < 0 or v1 == v2:
                     continue
 
                 # Find the edge index using EdgeMap if available (O(1))
