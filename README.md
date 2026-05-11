@@ -55,7 +55,7 @@ Median quality 0.797. Full init + analysis: **~3.3 seconds** end-to-end. Reprodu
 
 ![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=1)
 
-**Pipeline**: Structured quad core (192 quads) → skeletonized outer ring (ADMESH 394 tris) + gap band Delaunay fill (72 tris) → angle-based smooth. Reproduce with `python scripts/generate_mixed_truss_demo.py`.
+Structured quad core (192 quads) → skeletonized outer ring (ADMESH 394 tris) + gap band Delaunay fill (72 tris) → angle-based smooth. Reproduce with `python scripts/generate_mixed_truss_demo.py`.
 
 ### Showcase: Skeletonization & Mesh Plotting
 
