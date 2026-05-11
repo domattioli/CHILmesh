@@ -7,7 +7,7 @@ Pipeline:
 3. ADMESH full distmesh on the outer ring: grid-sample initial interior, run truss loop.
 4. Delaunay-triangulate the gap band (layer-2 region) from ring boundary nodes only.
 5. Stitch ADMESH tris + gap tris + quad core into combined mixed-element mesh.
-6. Angle-based smooth combined mesh (Zhou & Shimada inscribed-angle, boundary pinned).
+6. FEM smooth combined mesh (symmetric quad stiffness, boundary pinned).
 7. Render 4-panel figure to output/mixed_truss_fem_demo.png.
 """
 from __future__ import annotations
@@ -294,11 +294,11 @@ def build_combined_mesh(
 
 
 # ---------------------------------------------------------------------------
-# Stage 6: FEM smooth (symmetric quad stiffness (outer boundary pinned)
+# Stage 6: Angle-based smooth (outer boundary pinned)
 # ---------------------------------------------------------------------------
 
 def fem_smooth(mesh: CHILmesh) -> CHILmesh:
-    """FEM smoother with symmetric quad stiffness (boundary pinned)."""
+    """FEM smoother with symmetric quad stiffness (Zhou & Shimada, boundary pinned)."""
     mesh.smooth_mesh(method='fem', acknowledge_change=True)
     return mesh
 
@@ -424,7 +424,7 @@ def main(out_path: Path | None = None) -> Path:
     )
     _plot_mixed(
         axes[1, 1], mesh_smooth,
-        f"(4) Angle-based smooth (Zhou & Shimada, boundary pinned)\n"
+        f"(4) FEM smooth (symmetric quad stiffness, boundary pinned)\n"
         f"median quality {np.median(q_post):.3f}",
     )
 
@@ -437,7 +437,7 @@ def main(out_path: Path | None = None) -> Path:
     fig2, ax2 = plt.subplots(1, 1, figsize=(8, 6), facecolor="white")
     _plot_mixed(
         ax2, mesh_smooth,
-        f"Mixed-element mesh after angle-based smoothing (Zhou & Shimada)\n"
+        f"Mixed-element mesh after FEM smoothing (symmetric quad stiffness)\n"
         f"{n_tris_total} triangles + {len(kept_quads)} quads · median quality {np.median(q_post):.3f}",
     )
     plt.tight_layout()
