@@ -294,12 +294,12 @@ def build_combined_mesh(
 
 
 # ---------------------------------------------------------------------------
-# Stage 6: Angle-based smooth (outer boundary pinned)
+# Stage 6: FEM smooth (symmetric quad stiffness (outer boundary pinned)
 # ---------------------------------------------------------------------------
 
-def angle_smooth(mesh: CHILmesh) -> CHILmesh:
-    """Iterative angle-based smoother (Zhou & Shimada inscribed-angle, boundary pinned)."""
-    mesh.smooth_mesh(method='angle-based', acknowledge_change=True)
+def fem_smooth(mesh: CHILmesh) -> CHILmesh:
+    """FEM smoother with symmetric quad stiffness (boundary pinned)."""
+    mesh.smooth_mesh(method='fem', acknowledge_change=True)
     return mesh
 
 
@@ -384,8 +384,8 @@ def main(out_path: Path | None = None) -> Path:
         points=mesh_pre.points.copy(),
         compute_layers=True,
     )
-    print("[6/6] Angle-based smooth (Zhou & Shimada inscribed-angle, boundary pinned) …")
-    angle_smooth(mesh_smooth)
+    print("[6/6] FEM smooth (symmetric quad stiffness, boundary pinned) …")
+    fem_smooth(mesh_smooth)
 
     q_pre, _, _   = mesh_pre.elem_quality()
     q_post, _, _  = mesh_smooth.elem_quality()
