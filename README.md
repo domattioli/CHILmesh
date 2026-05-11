@@ -3,7 +3,7 @@
 </h1>
 
 <p align="center">
-  <strong>Fast 2D mesh generation and analysis for triangular, quadrilateral, and mixed-element meshes.</strong>
+  <strong>Fast 2D mesh representation and analysis for triangular, quadrilateral, and mixed-element meshes of hydrodynamic domains.</strong>
 </p>
 
 <p align="center">
