@@ -1,0 +1,33 @@
+# Controls what ships in the PyPI sdist (source tarball).
+# Wheel contents are governed by [tool.setuptools] in pyproject.toml.
+# Note: directives are applied in order, so prunes come before re-includes.
+
+include LICENSE
+include README.md
+include CHANGELOG.md
+include pyproject.toml
+include requirements.txt
+recursive-include src/chilmesh *.py
+recursive-include src/chilmesh/data *.14 *.fort.14
+
+# Internal / dev-only paths — exclude from sdist
+prune .claude
+prune .planning
+prune .specify
+prune specs
+prune tests
+prune docs
+prune scripts
+prune .github
+prune output
+exclude .domi-pin
+exclude .gitignore
+
+# README image assets must be re-included after `prune output`
+include output/annulus_quickstart.png
+include output/wnat_hagen_showcase.png
+include output/mixed_mesh_fem_final.png
+
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store

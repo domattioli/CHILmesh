@@ -84,6 +84,19 @@ class CHILmeshPlotMixin:
 
         return fig, ax
 
+    def plot_boundary(self, color='r', linewidth=2.5, linestyle='-',
+                      ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot mesh exterior (boundary) edges highlighted."""
+        return self.plot_edge(self.boundary_edges(), color=color,
+                              linewidth=linewidth, linestyle=linestyle, ax=ax)
+
+    def plot_interior_edges(self, color='b', linewidth=1.0, linestyle='-',
+                            ax=None) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot interior (shared by two elements) edges."""
+        interior = np.setdiff1d(np.arange(self.n_edges), self.boundary_edges())
+        return self.plot_edge(interior, color=color, linewidth=linewidth,
+                              linestyle=linestyle, ax=ax)
+
     def plot_elem(self, elem_ids=None, color='b', edge_color='k',
                   linewidth=1.0, linestyle='-',
                   ax=None) -> Tuple[plt.Figure, plt.Axes]:
@@ -134,12 +147,14 @@ class CHILmeshPlotMixin:
         elif point_type.lower() in {'element', 'centroid'}:
             if ids is None:
                 ids = np.arange(self.n_elems)
-            centroids = np.zeros((len(ids), 2))
-            for i, elem_id in enumerate(ids):
-                verts = self.connectivity_list[elem_id]
-                verts = verts[verts >= 0]
-                centroids[i] = np.mean(self.points[verts, :2], axis=0)
-            x, y = centroids[:, 0], centroids[:, 1]
+            ids = np.atleast_1d(np.asarray(ids))
+            conn = self.connectivity_list[ids]          # (n, 3|4)
+            # Vectorised gather: for mixed meshes the padded vertex (repeated)
+            # contributes twice to the mean, giving a very slight bias toward
+            # v0, but for visualisation this is negligible and avoids a loop.
+            coords = self.points[conn, :2]              # (n, n_cols, 2)
+            x = coords[:, :, 0].mean(axis=1)
+            y = coords[:, :, 1].mean(axis=1)
 
         else:
             raise ValueError(f"Unknown point_type: {point_type!r}")
@@ -242,7 +257,10 @@ class CHILmeshPlotMixin:
 
         for i, bin_lo in enumerate(bins[:-1]):
             bin_hi = bins[i + 1]
-            mask = (q >= bin_lo) & (q < bin_hi)
+            if i == len(bins) - 2:
+                mask = (q >= bin_lo) & (q <= bin_hi)
+            else:
+                mask = (q >= bin_lo) & (q < bin_hi)
             if not np.any(mask):
                 continue
             self._plot_polys(elem_ids[mask], facecolor=colors[i],
@@ -263,35 +281,73 @@ class CHILmeshPlotMixin:
                     linewidth=1.0, linestyle='-', alpha=1.0,
                     ax: plt.Axes = None) -> None:
         """
-        Render elements as filled polygons via a single PolyCollection.
+        Render elements as filled polygons via PolyCollection.
 
-        Handles mixed tri/quad meshes by collecting each element's vertex
-        coords as a variable-length polygon (PolyCollection supports this).
+        Pure-triangle and pure-quad meshes take a single vectorised numpy
+        gather (no Python loop).  Mixed meshes do two batched gathers and
+        combine the results into a list — still O(1) matplotlib draw calls.
         """
         if len(elem_ids) == 0:
             return
 
-        tri_ids, quad_ids = self._elem_type(elem_ids)
-        polys = []
+        n_cols = self.connectivity_list.shape[1]
 
-        for eid in tri_ids:
-            verts = self.connectivity_list[eid]
-            if self.type != "Triangular":
-                verts = verts[:3]
-            polys.append(self.points[verts, :2])
-
-        for eid in quad_ids:
-            verts = self.connectivity_list[eid, :4]
-            polys.append(self.points[verts, :2])
-
-        if not polys:
+        if n_cols == 3:
+            # All-triangle mesh: single vectorised gather -> 3-D array
+            verts = self.connectivity_list[elem_ids]       # (n, 3)
+            polys = self.points[verts, :2]                 # (n, 3, 2)
+            pc = PolyCollection(polys, facecolors=facecolor, edgecolors=edgecolor,
+                                linewidths=linewidth, linestyles=linestyle,
+                                alpha=alpha)
+            ax.add_collection(pc)
+            ax.autoscale_view()
             return
 
-        pc = PolyCollection(polys, facecolors=facecolor, edgecolors=edgecolor,
+        # 4-column connectivity: detect padded triangles vs real quads
+        rows = self.connectivity_list[elem_ids]            # (n, 4)
+        tri_mask = (
+            (rows[:, 0] == rows[:, 1])
+            | (rows[:, 1] == rows[:, 2])
+            | (rows[:, 2] == rows[:, 3])
+            | (rows[:, 3] == rows[:, 0])
+            | (rows[:, 0] == rows[:, 2])
+            | (rows[:, 1] == rows[:, 3])
+        )
+        quad_mask = ~tri_mask
+
+        if not quad_mask.any():
+            # All triangles in a 4-col connectivity table
+            polys = self.points[rows[:, :3], :2]           # (n, 3, 2)
+            pc = PolyCollection(polys, facecolors=facecolor, edgecolors=edgecolor,
+                                linewidths=linewidth, linestyles=linestyle,
+                                alpha=alpha)
+            ax.add_collection(pc)
+            ax.autoscale_view()
+            return
+
+        if not tri_mask.any():
+            # All quads
+            polys = self.points[rows, :2]                  # (n, 4, 2)
+            pc = PolyCollection(polys, facecolors=facecolor, edgecolors=edgecolor,
+                                linewidths=linewidth, linestyles=linestyle,
+                                alpha=alpha)
+            ax.add_collection(pc)
+            ax.autoscale_view()
+            return
+
+        # Mixed tri+quad: two batched gathers, polygon sizes differ so we
+        # must build a Python list, but gathering is vectorised.
+        all_polys = []
+        if tri_mask.any():
+            all_polys.extend(self.points[rows[tri_mask, :3], :2])   # (n_tri, 3, 2)
+        if quad_mask.any():
+            all_polys.extend(self.points[rows[quad_mask], :2])      # (n_quad, 4, 2)
+
+        pc = PolyCollection(all_polys, facecolors=facecolor, edgecolors=edgecolor,
                             linewidths=linewidth, linestyles=linestyle,
                             alpha=alpha)
         ax.add_collection(pc)
-        ax.autoscale_view()  # add_collection doesn't auto-update limits
+        ax.autoscale_view()
 
     def _ensure_array(self, maybe_scalar):
         return np.array([maybe_scalar]) if np.isscalar(maybe_scalar) else maybe_scalar

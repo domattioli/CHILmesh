@@ -288,31 +288,55 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         if elem_ids is None:
             elem_ids = np.arange( self.n_elems )
-        
         if np.isscalar( elem_ids ):
-            elem_ids = [elem_ids]
-        
-        areas = np.zeros( len( elem_ids ) )
-        
-        # Determine element types
-        tri_elems, quad_elems = self._elem_type( elem_ids )
-        
-        # Calculate areas for triangular elements
-        for i, elem_id in enumerate( elem_ids ):
-            if elem_id in tri_elems:
-                vertices = self.connectivity_list[elem_id][:3]  # First 3 vertices for triangles
-                x = self.points[vertices, 0]
-                y = self.points[vertices, 1]
-                # Shoelace formula for triangle
-                areas[i] = 0.5 * ((x[0]*(y[1]-y[2]) + x[1]*(y[2]-y[0]) + x[2]*(y[0]-y[1])))
-            elif elem_id in quad_elems:
-                vertices = self.connectivity_list[elem_id]
-                x = self.points[vertices, 0]
-                y = self.points[vertices, 1]
-                # Shoelace formula for quadrilateral
-                areas[i] = 0.5 * ((x[0]*(y[1]-y[3]) + x[1]*(y[2]-y[0]) + 
-                                  x[2]*(y[3]-y[1]) + x[3]*(y[0]-y[2])))
-        
+            elem_ids = np.array( [elem_ids] )
+        elem_ids = np.asarray(elem_ids)
+
+        if self.connectivity_list.shape[1] == 3:
+            # Pure triangular mesh — single vectorised path
+            verts = self.connectivity_list[elem_ids]          # (n, 3)
+            xy = self.points[verts, :2]                       # (n, 3, 2)
+            x, y = xy[:, :, 0], xy[:, :, 1]
+            return 0.5 * (
+                x[:, 0] * (y[:, 1] - y[:, 2])
+                + x[:, 1] * (y[:, 2] - y[:, 0])
+                + x[:, 2] * (y[:, 0] - y[:, 1])
+            )
+
+        # 4-column connectivity: separate padded triangles from quads
+        rows = self.connectivity_list[elem_ids]               # (n, 4)
+        tri_mask = (
+            (rows[:, 0] == rows[:, 1])
+            | (rows[:, 1] == rows[:, 2])
+            | (rows[:, 2] == rows[:, 3])
+            | (rows[:, 3] == rows[:, 0])
+            | (rows[:, 0] == rows[:, 2])
+            | (rows[:, 1] == rows[:, 3])
+        )
+        areas = np.zeros(len(elem_ids))
+
+        if tri_mask.any():
+            verts = rows[tri_mask, :3]
+            xy = self.points[verts, :2]
+            x, y = xy[:, :, 0], xy[:, :, 1]
+            areas[tri_mask] = 0.5 * (
+                x[:, 0] * (y[:, 1] - y[:, 2])
+                + x[:, 1] * (y[:, 2] - y[:, 0])
+                + x[:, 2] * (y[:, 0] - y[:, 1])
+            )
+
+        quad_mask = ~tri_mask
+        if quad_mask.any():
+            verts = rows[quad_mask]
+            xy = self.points[verts, :2]
+            x, y = xy[:, :, 0], xy[:, :, 1]
+            areas[quad_mask] = 0.5 * (
+                x[:, 0] * (y[:, 1] - y[:, 3])
+                + x[:, 1] * (y[:, 2] - y[:, 0])
+                + x[:, 2] * (y[:, 3] - y[:, 1])
+                + x[:, 3] * (y[:, 0] - y[:, 2])
+            )
+
         return areas
     
     def _elem_type( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None 
@@ -470,13 +494,13 @@ class CHILmesh(CHILmeshPlotMixin):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
 
-                # Skip invalid edges (negative vertex ids)
+                # Skip invalid edges (negative vertex ids or padding edges v==v in padded triangles)
                 # In MATLAB the value 0 signified a placeholder for a missing
                 # vertex in mixed element meshes.  In this Python port we use
                 # 0-based indexing, therefore vertex id ``0`` is valid and
                 # should not be discarded.  Only negative ids are considered
                 # invalid.
-                if v1 < 0 or v2 < 0:
+                if v1 < 0 or v2 < 0 or v1 == v2:
                     continue
 
                 # Store edge in canonical form to check for duplicates
@@ -517,8 +541,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 v1 = vertices[i]
                 v2 = vertices[(i+1) % n_vertices]
 
-                # Skip invalid edges (negative vertex ids)
-                if v1 < 0 or v2 < 0:
+                # Skip invalid edges (negative vertex ids or padding edges v==v in padded triangles)
+                if v1 < 0 or v2 < 0 or v1 == v2:
                     continue
 
                 # Find the edge index using EdgeMap if available (O(1))
@@ -648,6 +672,16 @@ class CHILmesh(CHILmeshPlotMixin):
         edge2elem = self.adjacencies["Edge2Elem"]
         boundary_mask = (edge2elem[:, 1] == -1)  # Second element is sentinel
         return np.where( boundary_mask )[0]
+
+    def boundary_node_indices( self ) -> np.ndarray:
+        """
+        Return the indices of all boundary vertices.
+
+        Returns:
+            Sorted array of vertex indices that lie on at least one boundary edge.
+        """
+        edge_verts = self.edge2vert(self.boundary_edges())
+        return np.unique(edge_verts.flatten())
     
     def edge2vert( self, edge_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
@@ -1159,64 +1193,64 @@ class CHILmesh(CHILmeshPlotMixin):
                 If None, all elements are evaluated.
         
         Returns:
-            Array of interior angles for each element
+            Array of interior angles (degrees) with shape (n_elems, 3) for
+            triangular meshes or (n_elems, 4) for quad/mixed meshes.
         """
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
-        
         if np.isscalar(elem_ids):
-            elem_ids = [elem_ids]
-        
-        # Determine element types
-        tri_elems, quad_elems = self._elem_type(elem_ids)
-        
-        # Maximum number of angles per element
-        max_angles = 4 if len(quad_elems) > 0 else 3
-        
-        # Initialize angles array
-        angles = np.zeros((len(elem_ids), max_angles))
-        
-        # Calculate angles for each element
-        for i, elem_id in enumerate(elem_ids):
-            if elem_id in tri_elems:
-                # Triangle angles
-                vertices = self.connectivity_list[elem_id][:3]  # First 3 vertices for triangles
-                coords = self.points[vertices, :2]  # Get x,y coordinates
-                
-                # Calculate angles at each vertex
-                for j in range(3):
-                    v1 = coords[(j+1)%3] - coords[j]
-                    v2 = coords[(j-1)%3] - coords[j]
-                    
-                    # Normalize vectors safely to avoid runtime warnings of NaN
-                    v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
-                    v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
-                    
-                    # Calculate angle in degrees
-                    dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
-                    angle = np.arccos(dot_product) * 180 / np.pi
-                    angles[i, j] = angle
-                    
-            elif elem_id in quad_elems:
-                # Quadrilateral angles
-                vertices = self.connectivity_list[elem_id]  # All 4 vertices
-                coords = self.points[vertices, :2]  # Get x,y coordinates
+            elem_ids = np.array([elem_ids])
+        elem_ids = np.asarray(elem_ids)
 
-                # Calculate angles at each vertex.  Use the same epsilon
-                # guard as the triangle path so degenerate quads with
-                # zero-length edges produce a real number (typically 0)
-                # rather than NaN, which would slip past elem_quality's
-                # ``<= 359.99 -> zero out`` check (B5).
-                for j in range(4):
-                    v1 = coords[(j + 1) % 4] - coords[j]
-                    v2 = coords[(j - 1) % 4] - coords[j]
+        if self.connectivity_list.shape[1] == 3:
+            # Pure triangular mesh — vectorised over all elements,
+            # inner loop only over 3 vertices (constant).
+            verts = self.connectivity_list[elem_ids]   # (n, 3)
+            xy = self.points[verts, :2]                # (n, 3, 2)
+            angles = np.zeros((len(elem_ids), 3))
+            for j in range(3):
+                v1 = xy[:, (j + 1) % 3, :] - xy[:, j, :]  # (n, 2)
+                v2 = xy[:, (j - 1) % 3, :] - xy[:, j, :]  # (n, 2)
+                n1 = np.linalg.norm(v1, axis=1, keepdims=True) + 1e-12
+                n2 = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-12
+                dot = np.clip(((v1 / n1) * (v2 / n2)).sum(axis=1), -1.0, 1.0)
+                angles[:, j] = np.degrees(np.arccos(dot))
+            return angles
 
-                    v1_norm = v1 / (np.linalg.norm(v1) + 1e-12)
-                    v2_norm = v2 / (np.linalg.norm(v2) + 1e-12)
+        # 4-column connectivity
+        rows = self.connectivity_list[elem_ids]        # (n, 4)
+        tri_mask = (
+            (rows[:, 0] == rows[:, 1])
+            | (rows[:, 1] == rows[:, 2])
+            | (rows[:, 2] == rows[:, 3])
+            | (rows[:, 3] == rows[:, 0])
+            | (rows[:, 0] == rows[:, 2])
+            | (rows[:, 1] == rows[:, 3])
+        )
+        quad_mask = ~tri_mask
+        n_angle_cols = 4 if quad_mask.any() else 3
+        angles = np.zeros((len(elem_ids), n_angle_cols))
 
-                    dot_product = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
-                    angle = np.arccos(dot_product) * 180 / np.pi
-                    angles[i, j] = float(np.real(angle))
+        if tri_mask.any():
+            xy = self.points[rows[tri_mask, :3], :2]   # (n_tri, 3, 2)
+            for j in range(3):
+                v1 = xy[:, (j + 1) % 3, :] - xy[:, j, :]
+                v2 = xy[:, (j - 1) % 3, :] - xy[:, j, :]
+                n1 = np.linalg.norm(v1, axis=1, keepdims=True) + 1e-12
+                n2 = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-12
+                dot = np.clip(((v1 / n1) * (v2 / n2)).sum(axis=1), -1.0, 1.0)
+                angles[tri_mask, j] = np.degrees(np.arccos(dot))
+
+        if quad_mask.any():
+            xy = self.points[rows[quad_mask], :2]      # (n_quad, 4, 2)
+            for j in range(4):
+                v1 = xy[:, (j + 1) % 4, :] - xy[:, j, :]
+                v2 = xy[:, (j - 1) % 4, :] - xy[:, j, :]
+                n1 = np.linalg.norm(v1, axis=1, keepdims=True) + 1e-12
+                n2 = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-12
+                dot = np.clip(((v1 / n1) * (v2 / n2)).sum(axis=1), -1.0, 1.0)
+                angles[quad_mask, j] = np.degrees(np.arccos(dot))
+
         return angles
 
     def elem_quality(self, elem_ids=None, quality_type='skew') -> Tuple[np.ndarray, np.ndarray, dict]:
@@ -1230,72 +1264,67 @@ class CHILmesh(CHILmeshPlotMixin):
                 'skew', 'skewness', 'angular skewness': Measures deviation from ideal angles
         
         Returns:
-            Tuple of (Quality, Angles) where:
+            Tuple of (Quality, Angles, stats) where:
             - Quality: Array of quality measurements for each element
             - Angles: Array of interior angles for each element
+            - stats: Dict with mean, median, min, max, std
         """
         if elem_ids is None:
             elem_ids = np.arange(self.n_elems)
-        
         if np.isscalar(elem_ids):
-            elem_ids = [elem_ids]
-        
-        # Determine element types
-        tri_elems, quad_elems = self._elem_type(elem_ids)
-        
+            elem_ids = np.array([elem_ids])
+        elem_ids = np.asarray(elem_ids)
+
+        # Compute boolean masks without O(n²) membership checks
+        if self.connectivity_list.shape[1] == 3:
+            tri_mask = np.ones(len(elem_ids), dtype=bool)
+            quad_mask = np.zeros(len(elem_ids), dtype=bool)
+        else:
+            rows = self.connectivity_list[elem_ids]
+            tri_mask = (
+                (rows[:, 0] == rows[:, 1])
+                | (rows[:, 1] == rows[:, 2])
+                | (rows[:, 2] == rows[:, 3])
+                | (rows[:, 3] == rows[:, 0])
+                | (rows[:, 0] == rows[:, 2])
+                | (rows[:, 1] == rows[:, 3])
+            )
+            quad_mask = ~tri_mask
+
         # Calculate interior angles
         angles = self.interior_angles(elem_ids)
         
         # Initialize quality array
         quality = np.zeros(len(elem_ids))
         
-        # Compute quality based on the selected metric
         if quality_type in ['skew', 'skewness', 'angular skewness']:
-            # Process triangular elements
-            tri_mask = np.array([elem_id in tri_elems for elem_id in elem_ids])
-            if np.any(tri_mask):
-                # Get angles for triangular elements
+            if tri_mask.any():
                 tri_angles = angles[tri_mask, :3]
-                
-                # Calculate max and min angles
                 tri_max = np.max(tri_angles, axis=1)
                 tri_min = np.min(tri_angles, axis=1)
-                
-                # Equiangular skew for triangles (ideal angle = 60°)
                 quality[tri_mask] = 1 - np.maximum(
                     (tri_max - 60) / (180 - 60),
                     (60 - tri_min) / 60
                 )
-            
-            # Process quadrilateral elements
-            quad_mask = np.array([elem_id in quad_elems for elem_id in elem_ids])
-            if np.any(quad_mask):
-                # Get angles for quadrilateral elements
+
+            if quad_mask.any():
                 quad_angles = angles[quad_mask, :]
-                
-                # Calculate max and min angles
                 quad_max = np.max(quad_angles, axis=1)
                 quad_min = np.min(quad_angles, axis=1)
-                
-                # Equiangular skew for quads (ideal angle = 90°)
                 quality[quad_mask] = 1 - np.maximum(
                     (quad_max - 90) / (180 - 90),
                     (90 - quad_min) / 90
                 )
-            
-            # Handle poor angle calculations (concave elements, etc.)
-            # For triangles, sum of angles should be close to 180°
+
+            # Zero out elements with degenerate angle sums
             tri_sum_mask = tri_mask & (np.sum(angles[:, :3], axis=1) <= 179.99)
             quality[tri_sum_mask] = 0
-            
-            # For quads, sum of angles should be close to 360°
             quad_sum_mask = quad_mask & (np.sum(angles, axis=1) <= 359.99)
             quality[quad_sum_mask] = 0
         
         else:
             raise ValueError(f"Unknown quality type: {quality_type}")
         
-        # Calculate statistics for the computed quality
         stats = {
             'mean': float(np.mean(quality)),
             'median': float(np.median(quality)),
@@ -1323,15 +1352,246 @@ class CHILmesh(CHILmeshPlotMixin):
         self.change_points( new_points, acknowledge_change=True )
         return new_points
     
-    def angle_based_smoother( self, angle_limit: float = 30.0 ) -> np.ndarray:
+    def _ordered_vertex_ring(self, v_idx: int, elem_ids: list) -> list | None:
         """
-        Perform angle-based smoothing of the mesh.
-        Based on this: https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf
+        Return CCW-ordered ring of neighbor vertices around interior vertex v_idx.
+
+        Uses element connectivity to chain pred→succ pairs. Returns None if
+        non-manifold or the vertex is on the boundary (open ring).
+        """
+        succ_map: dict[int, int] = {}
+
+        for eid in elem_ids:
+            row = self.connectivity_list[eid]
+            # Determine unique vertex sequence for this element
+            if row.shape[0] == 4 and row[3] == row[0]:
+                verts = row[:3].tolist()          # padded triangle [v0,v1,v2,v0]
+            elif row.shape[0] == 4 and (
+                row[0] == row[1] or row[1] == row[2]
+                or row[2] == row[3] or row[1] == row[3]
+                or row[0] == row[2]
+            ):
+                seen: set[int] = set()
+                verts = []
+                for x in row.tolist():
+                    if x not in seen:
+                        seen.add(x)
+                        verts.append(x)
+            else:
+                verts = row.tolist()
+
+            n_local = len(verts)
+            try:
+                i = verts.index(v_idx)
+            except ValueError:
+                continue
+
+            pred = verts[(i - 1) % n_local]
+            succ = verts[(i + 1) % n_local]
+            succ_map[pred] = succ
+
+        if len(succ_map) != len(elem_ids):
+            return None  # non-manifold
+
+        start = next(iter(succ_map))
+        ring = [start]
+        cur = start
+        for _ in range(len(succ_map) - 1):
+            nxt = succ_map.get(cur)
+            if nxt is None or nxt == start:
+                break
+            ring.append(nxt)
+            cur = nxt
+
+        if succ_map.get(ring[-1]) != start or len(ring) != len(succ_map):
+            return None  # open ring → boundary vertex
+
+        return ring
+
+    def angle_based_smoother(self, n_iter: int = 100, omega: float = 0.5,
+                              tol: float = 1e-8) -> np.ndarray:
+        """
+        Iterative angle-based smoother (Zhou & Shimada 2000).
+
+        For each interior vertex, computes a bisector-weighted correction that
+        drives each sector angle toward the equiangular target 2π/m.  Deficit
+        is clamped to ±π/3 to prevent overshoot in near-degenerate sectors
+        (where even a tiny bisector displacement causes huge angle change).
+        Updates are Gauss-Seidel and accepted only when the local minimum-quality
+        metric strictly improves, guaranteeing monotone quality growth.
+
+        Unlike Laplacian smoothing, corrections are driven by angle-deficit per
+        sector and are accepted only when they actually improve mesh quality.
+
         Parameters:
-            angle_limit: Maximum allowable angle deviation in degrees
+            n_iter: Maximum number of passes over all interior vertices
+            omega:  Initial relaxation factor (halved up to 6× in line search)
+            tol:    Convergence threshold on max per-vertex displacement
+
+        Reference:
+            Zhou, M., & Shimada, K. (2000).
+            "An angle-based approach to two-dimensional mesh smoothing".
+            Proceedings of the 9th International Meshing Roundtable, 373–384.
         """
-        raise NotImplementedError("Angle-based smoothing not implemented yet.")
-        return self.points
+        p = self.points[:, :2].copy()
+        n = self.n_verts
+
+        edge_verts = self.edge2vert(self.boundary_edges())
+        boundary_set = set(np.unique(edge_verts.flatten()).tolist())
+
+        vert2elem = self.adjacencies['Vert2Elem']
+        two_pi = 2.0 * np.pi
+        deficit_cap = np.pi / 3.0   # 60° cap prevents wild corrections in thin sectors
+
+        def _elem_verts(row):
+            """Unique ordered vertices for a connectivity row (handles padded tris)."""
+            if row.shape[0] == 4 and row[3] == row[0]:
+                return row[:3].tolist()
+            if row.shape[0] == 4 and (
+                row[0] == row[1] or row[1] == row[2]
+                or row[2] == row[3] or row[1] == row[3]
+                or row[0] == row[2]
+            ):
+                seen: set[int] = set()
+                out = []
+                for x in row.tolist():
+                    if x not in seen:
+                        seen.add(x)
+                        out.append(x)
+                return out
+            return row.tolist()
+
+        import math as _math
+        _R2D = 180.0 / _math.pi
+
+        def _acos_deg(px0, py0, px1, py1, px2, py2):
+            """Angle at vertex 0 in degrees, using fast scalar math."""
+            ux = px1 - px0; uy = py1 - py0
+            wx = px2 - px0; wy = py2 - py0
+            lu2 = ux*ux + uy*uy
+            lw2 = wx*wx + wy*wy
+            if lu2 < 1e-28 or lw2 < 1e-28:
+                return 0.0
+            c = (ux*wx + uy*wy) / _math.sqrt(lu2 * lw2)
+            return _math.acos(max(-1.0, min(1.0, c))) * _R2D
+
+        def _local_min_quality(verts_lists, v_idx, vpos, p_cur):
+            """Min angular-skewness quality over incident elements (matches elem_quality)."""
+            vpx, vpy = float(vpos[0]), float(vpos[1])
+            min_q = 1e9
+            for verts in verts_lists:
+                n_v = len(verts)
+                px = [vpx if vi == v_idx else float(p_cur[vi][0]) for vi in verts]
+                py = [vpy if vi == v_idx else float(p_cur[vi][1]) for vi in verts]
+
+                if n_v == 3:
+                    # Area check
+                    dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
+                    dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    a0 = _acos_deg(px[0],py[0], px[1],py[1], px[2],py[2])
+                    a1 = _acos_deg(px[1],py[1], px[0],py[0], px[2],py[2])
+                    a2 = 180.0 - a0 - a1
+                    amax = max(a0, a1, a2); amin = min(a0, a1, a2)
+                    q = 1.0 - max((amax - 60.0) / 120.0, (60.0 - amin) / 60.0)
+                else:
+                    # Quad: check two sub-triangle areas
+                    dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
+                    dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    dx1 = px[2]-px[0]; dy1 = py[2]-py[0]
+                    dx2 = px[3]-px[0]; dy2 = py[3]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    a0 = _acos_deg(px[0],py[0], px[3],py[3], px[1],py[1])
+                    a1 = _acos_deg(px[1],py[1], px[0],py[0], px[2],py[2])
+                    a2 = _acos_deg(px[2],py[2], px[1],py[1], px[3],py[3])
+                    a3 = 360.0 - a0 - a1 - a2
+                    amax = max(a0, a1, a2, a3); amin = min(a0, a1, a2, a3)
+                    q = 1.0 - max((amax - 90.0) / 90.0, (90.0 - amin) / 90.0)
+                if q < min_q:
+                    min_q = q
+
+            return min_q
+
+        for _iter in range(n_iter):
+            max_move = 0.0
+
+            for v in range(n):
+                if v in boundary_set:
+                    continue
+
+                elem_ids = list(vert2elem[v])
+                if not elem_ids:
+                    continue
+
+                ring = self._ordered_vertex_ring(v, elem_ids)
+                if ring is None or len(ring) < 2:
+                    continue
+
+                m_ring = len(ring)
+                theta_star = two_pi / m_ring
+                v_pos = p[v]
+                correction = np.zeros(2)
+
+                for k in range(m_ring):
+                    a = p[ring[k]]
+                    b = p[ring[(k + 1) % m_ring]]
+
+                    da = a - v_pos
+                    db = b - v_pos
+                    la = np.linalg.norm(da)
+                    lb = np.linalg.norm(db)
+                    if la < 1e-14 or lb < 1e-14:
+                        continue
+
+                    ua = da / la
+                    ub = db / lb
+                    cos_a = np.clip(ua @ ub, -1.0, 1.0)
+                    alpha_k = np.arccos(cos_a)
+
+                    bisector = ua + ub
+                    bl = np.linalg.norm(bisector)
+                    bisector = bisector / bl if bl > 1e-10 else np.array([-ua[1], ua[0]])
+
+                    # Cap deficit: prevents wild corrections for near-degenerate sectors
+                    deficit = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)
+                    avg_len = (la + lb) * 0.5
+                    correction += deficit * avg_len * bisector
+
+                if np.linalg.norm(correction) < 1e-14:
+                    continue
+
+                ev_lists = [_elem_verts(self.connectivity_list[eid]) for eid in elem_ids]
+                current_q = _local_min_quality(ev_lists, v, v_pos, p)
+
+                # Line search: accept only when local minimum quality strictly improves
+                step = omega * correction / m_ring
+                scale = 1.0
+                accepted = False
+                for _ in range(6):
+                    candidate = v_pos + scale * step
+                    new_q = _local_min_quality(ev_lists, v, candidate, p)
+                    if new_q > current_q:
+                        accepted = True
+                        break
+                    scale *= 0.5
+
+                if accepted:
+                    p[v] = candidate   # Gauss-Seidel: update immediately
+                    move = np.linalg.norm(scale * step)
+                    if move > max_move:
+                        max_move = move
+
+            if max_move < tol:
+                break
+
+        new_points = np.zeros_like(self.points)
+        new_points[:, :2] = p
+        new_points[:, 2] = self.points[:, 2]
+        return new_points
 
     def _detect_element_types(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -1401,7 +1661,13 @@ class CHILmesh(CHILmeshPlotMixin):
     def _quad_stiffness_assembly(self, quad_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
         """
         Assemble stiffness matrix contributions from quad elements.
-        Uses Zhou & Shimada analogy: quad-specific matrices D_quad, T_quad.
+
+        Decomposes each quad into two triangles (0-1-2 and 0-2-3) and applies
+        the exact Zhou & Shimada triangle stiffness to each half. The sum of
+        two PSD triangle matrices is PSD, guaranteeing a well-posed solve and
+        bounded interior displacements. The earlier T_quad analogy produced an
+        indefinite element matrix (min eigenvalue -1.25) that caused solver blow-up
+        on mixed meshes.
 
         Parameters:
             quad_indices: Array of quad element indices
@@ -1415,19 +1681,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
         q = self.connectivity_list[quad_indices, :4]
 
-        D_quad = 2.5 * np.eye(2)
-        T_quad = np.array([[-1.25, -1.25], [1.25, -1.25]])
+        D = 2.0 * np.eye(2)
+        T = np.array([[-1.0, -np.sqrt(3)], [np.sqrt(3), -1.0]])
 
         rows, cols, data = [], [], []
-        for elem_idx, quad in enumerate(q):
-            for i in range(4):
-                for j in range(4):
-                    block = D_quad if i == j else T_quad if j == (i+1)%4 else T_quad.T
-                    for di in range(2):
-                        for dj in range(2):
-                            rows.append(2*quad[i] + di)
-                            cols.append(2*quad[j] + dj)
-                            data.append(block[di, dj])
+        for quad in q:
+            # Decompose into two triangles sharing diagonal 0-2
+            for tri in [(quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3])]:
+                for i in range(3):
+                    for j in range(3):
+                        block = D if i == j else T if j == (i + 1) % 3 else T.T
+                        for di in range(2):
+                            for dj in range(2):
+                                rows.append(2 * tri[i] + di)
+                                cols.append(2 * tri[j] + dj)
+                                data.append(block[di, dj])
 
         return rows, cols, data
 
