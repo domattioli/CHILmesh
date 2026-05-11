@@ -153,8 +153,8 @@ class CHILmesh(CHILmeshPlotMixin):
         Initialize a CHILmesh object.
 
         Parameters:
-            connectivity: Element connectivity list (n_elems x 3 for triangles, n_elems x 4 for quads/mixed)
-            points: Vertex coordinates (n_verts x 3, with z=0 for 2D meshes)
+            connectivity: Element connectivity list (n_elems × 3 for triangles, n_elems × 4 for quads/mixed)
+            points: Vertex coordinates (n_verts × 3, with z=0 for 2D meshes)
             grid_name: Name of the mesh
             compute_layers: If False, skip skeletonization for fast init (default: True)
 
@@ -526,7 +526,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Note:
             If edge_map is provided, uses O(1) lookups instead of linear search,
-            reducing complexity from O(n^2) to O(n log n).
+            reducing complexity from O(n²) to O(n log n).
         """
         max_edges_per_elem = 4 if self.type != "Triangular" else 3
         elem2edge = np.zeros( ( self.n_elems, max_edges_per_elem ), dtype=int )
@@ -615,11 +615,11 @@ class CHILmesh(CHILmeshPlotMixin):
             edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
 
         Returns:
-            Edge-to-element adjacency (n_edges x 2 with -1 for boundary)
+            Edge-to-element adjacency (n_edges × 2 with -1 for boundary)
 
         Note:
             If edge_map is provided, uses O(1) lookups instead of linear search,
-            reducing complexity from O(n^2) to O(n log n).
+            reducing complexity from O(n²) to O(n log n).
         """
         # Initialize with -1 sentinel (no adjacent element)
         edge2elem = np.full( ( self.n_edges, 2 ), -1, dtype=int )
@@ -664,14 +664,29 @@ class CHILmesh(CHILmeshPlotMixin):
     def boundary_edges( self ) -> np.ndarray:
         """
         Identify boundary edges of the mesh.
-        
+
         Returns:
             Indices of boundary edges
         """
-        # Boundary edges have only one adjacent element
-        edge2elem = self.adjacencies["Edge2Elem"]
-        boundary_mask = (edge2elem[:, 1] == -1)  # Second element is sentinel
-        return np.where( boundary_mask )[0]
+        if "Edge2Elem" in self.adjacencies:
+            # Fast path: adjacency structure already built
+            edge2elem = self.adjacencies["Edge2Elem"]
+            boundary_mask = (edge2elem[:, 1] == -1)
+            return np.where(boundary_mask)[0]
+
+        # Fallback for meshes constructed with compute_layers=False:
+        # count edge occurrences; boundary edges appear exactly once.
+        edge_count: dict[tuple, int] = {}
+        edge_list: list[tuple] = []
+        for row in self.connectivity_list:
+            verts = list(row[:3]) if (len(row) == 4 and row[3] == row[0]) else list(row)
+            for i in range(len(verts)):
+                a, b = int(verts[i]), int(verts[(i + 1) % len(verts)])
+                key = (min(a, b), max(a, b))
+                if key not in edge_count:
+                    edge_list.append(key)
+                edge_count[key] = edge_count.get(key, 0) + 1
+        return np.array([i for i, key in enumerate(edge_list) if edge_count[key] == 1], dtype=int)
 
     def boundary_node_indices( self ) -> np.ndarray:
         """
@@ -809,7 +824,7 @@ class CHILmesh(CHILmeshPlotMixin):
         - ``OE[iL]``: elements adjacent to the boundary edges of ``OV[iL]``.
         - ``IE[iL]``: active elements adjacent to ANY edge whose
           ``Edge2Vert`` entry references a vertex in ``OV[iL]``.
-        - ``IV[iL]``: vertices of (``OE`` u ``IE``) not in ``OV[iL]``.
+        - ``IV[iL]``: vertices of (``OE`` ∪ ``IE``) not in ``OV[iL]``.
         - ``bEdgeIDs[iL]``: boundary edges defining this layer's outer frontier.
 
         The vertex-adjacency definition of IE (broader than element-adjacency)
@@ -869,7 +884,7 @@ class CHILmesh(CHILmeshPlotMixin):
             if len(ie) > 0:
                 edge2elem_work[np.isin(edge2elem_work, ie)] = -1
 
-            # Step 8: IV = vertices of (OE u IE) connectivity, minus OV
+            # Step 8: IV = vertices of (OE ∪ IE) connectivity, minus OV
             if len(oe) > 0 or len(ie) > 0:
                 layer_elems = np.concatenate((oe, ie))
                 lv = self.connectivity_list[layer_elems].ravel()
@@ -936,7 +951,7 @@ class CHILmesh(CHILmeshPlotMixin):
             - bounding_box (dict): {"min_x", "max_x", "min_y", "max_y"} with float values
 
         Note:
-            Coordinates are treated as Cartesian (x, y). ADMESH-Domains can map x->lon, y->lat
+            Coordinates are treated as Cartesian (x, y). ADMESH-Domains can map x→lon, y→lat
             in its own adapter layer if needed.
             Safe to call even when compute_layers=False.
         """
@@ -1275,7 +1290,7 @@ class CHILmesh(CHILmeshPlotMixin):
             elem_ids = np.array([elem_ids])
         elem_ids = np.asarray(elem_ids)
 
-        # Compute boolean masks without O(n^2) membership checks
+        # Compute boolean masks without O(n²) membership checks
         if self.connectivity_list.shape[1] == 3:
             tri_mask = np.ones(len(elem_ids), dtype=bool)
             quad_mask = np.zeros(len(elem_ids), dtype=bool)
@@ -1356,7 +1371,7 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         Return CCW-ordered ring of neighbor vertices around interior vertex v_idx.
 
-        Uses element connectivity to chain pred->succ pairs. Returns None if
+        Uses element connectivity to chain pred→succ pairs. Returns None if
         non-manifold or the vertex is on the boundary (open ring).
         """
         succ_map: dict[int, int] = {}
@@ -1404,7 +1419,7 @@ class CHILmesh(CHILmeshPlotMixin):
             cur = nxt
 
         if succ_map.get(ring[-1]) != start or len(ring) != len(succ_map):
-            return None  # open ring -> boundary vertex
+            return None  # open ring → boundary vertex
 
         return ring
 
@@ -1414,8 +1429,8 @@ class CHILmesh(CHILmeshPlotMixin):
         Iterative angle-based smoother (Zhou & Shimada 2000).
 
         For each interior vertex, computes a bisector-weighted correction that
-        drives each sector angle toward the equiangular target 2pi/m.  Deficit
-        is clamped to +/-pi/3 to prevent overshoot in near-degenerate sectors
+        drives each sector angle toward the equiangular target 2π/m.  Deficit
+        is clamped to ±π/3 to prevent overshoot in near-degenerate sectors
         (where even a tiny bisector displacement causes huge angle change).
         Updates are Gauss-Seidel and accepted only when the local minimum-quality
         metric strictly improves, guaranteeing monotone quality growth.
@@ -1425,13 +1440,13 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Parameters:
             n_iter: Maximum number of passes over all interior vertices
-            omega:  Initial relaxation factor (halved up to 6x in line search)
+            omega:  Initial relaxation factor (halved up to 6× in line search)
             tol:    Convergence threshold on max per-vertex displacement
 
         Reference:
             Zhou, M., & Shimada, K. (2000).
             "An angle-based approach to two-dimensional mesh smoothing".
-            Proceedings of the 9th International Meshing Roundtable, 373-384.
+            Proceedings of the 9th International Meshing Roundtable, 373–384.
         """
         p = self.points[:, :2].copy()
         n = self.n_verts
@@ -1441,7 +1456,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         vert2elem = self.adjacencies['Vert2Elem']
         two_pi = 2.0 * np.pi
-        deficit_cap = np.pi / 3.0   # 60 deg cap prevents wild corrections in thin sectors
+        deficit_cap = np.pi / 3.0   # 60° cap prevents wild corrections in thin sectors
 
         def _elem_verts(row):
             """Unique ordered vertices for a connectivity row (handles padded tris)."""
@@ -1662,13 +1677,13 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         Assemble stiffness matrix contributions from quad elements.
 
-        Decomposes each quad into four triangles (both diagonals, each weighted 0.5)
-        and applies the Zhou & Shimada triangle stiffness to each. Averaging both
-        diagonals produces a symmetric stiffness where all four quad vertices receive
-        equal diagonal weight (1.5xD each), eliminating the asymmetry that the single-
-        diagonal decomposition caused in mixed-element meshes. The earlier single-diagonal
-        approach gave the shared-diagonal vertices (v0, v2) double the stiffness of the
-        side vertices (v1, v3), distorting equilibrium at tri/quad seams.
+        Averages both diagonal decompositions (0→2 and 1→3) so every quad vertex
+        receives equal stiffness weighting (1.5×D each). Single-diagonal decomposition
+        double-counts diagonal vertices (2×D vs 1×D), creating asymmetric forces at
+        quad-triangle seams that cause element collapse in mixed meshes.
+
+        Total stiffness magnitude unchanged: 4 triangles × 0.5 weight = 2 triangle
+        contributions, same as the single-diagonal form.
 
         Parameters:
             quad_indices: Array of quad element indices
@@ -1687,22 +1702,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
         rows, cols, data = [], [], []
         for quad in q:
-            # Symmetric decomposition: average of both diagonals (each weighted 0.5).
-            # Diagonal 0-2: tris (v0,v1,v2) and (v0,v2,v3)
-            # Diagonal 1-3: tris (v1,v2,v3) and (v1,v3,v0)
-            # Both sets of tris are CCW for any CCW quad.
-            for tri in [
-                (quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3]),
-                (quad[1], quad[2], quad[3]), (quad[1], quad[3], quad[0]),
+            # Average both diagonals so all 4 vertices get equal stiffness (1.5*D each).
+            # Diagonal 0-2: (0,1,2) + (0,2,3); diagonal 1-3: (0,1,3) + (1,2,3).
+            for diag_tris in [
+                [(quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3])],
+                [(quad[0], quad[1], quad[3]), (quad[1], quad[2], quad[3])],
             ]:
-                for i in range(3):
-                    for j in range(3):
-                        block = D if i == j else T if j == (i + 1) % 3 else T.T
-                        for di in range(2):
-                            for dj in range(2):
-                                rows.append(2 * tri[i] + di)
-                                cols.append(2 * tri[j] + dj)
-                                data.append(0.5 * block[di, dj])
+                for tri in diag_tris:
+                    for i in range(3):
+                        for j in range(3):
+                            block = D if i == j else T if j == (i + 1) % 3 else T.T
+                            for di in range(2):
+                                for dj in range(2):
+                                    rows.append(2 * tri[i] + di)
+                                    cols.append(2 * tri[j] + dj)
+                                    data.append(0.5 * block[di, dj])
 
         return rows, cols, data
 
@@ -1753,7 +1767,7 @@ class CHILmesh(CHILmeshPlotMixin):
         Reference:
             Zhou, M., & Shimada, K. (2000).
             "An angle-based approach to two-dimensional mesh smoothing".
-            In *Proceedings of the 9th International Meshing Roundtable*, 373-384.
+            In *Proceedings of the 9th International Meshing Roundtable*, 373–384.
             Sandia National Laboratories.
             https://api.semanticscholar.org/CorpusID:34335417
         """
@@ -1781,9 +1795,22 @@ class CHILmesh(CHILmeshPlotMixin):
         K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
         F = np.zeros(2*n)
 
-        # Identify boundary nodes and apply constraints
-        edge_verts = self.edge2vert(self.boundary_edges())
-        boundary_nodes = np.unique(edge_verts.flatten())
+        # Identify boundary nodes and apply constraints.
+        # Use adjacency structure when available; otherwise count edge occurrences
+        # directly (supports compute_layers=False meshes used in tests).
+        if "Edge2Elem" in self.adjacencies:
+            edge_verts = self.edge2vert(self.boundary_edges())
+            boundary_nodes = np.unique(edge_verts.flatten())
+        else:
+            edge_count: dict[tuple, int] = {}
+            for row in self.connectivity_list:
+                # strip padding for degenerate-quad triangles
+                verts = list(row[:3]) if (len(row) == 4 and row[3] == row[0]) else list(row)
+                for i in range(len(verts)):
+                    a, b = int(verts[i]), int(verts[(i + 1) % len(verts)])
+                    key = (min(a, b), max(a, b))
+                    edge_count[key] = edge_count.get(key, 0) + 1
+            boundary_nodes = np.unique([v for key, cnt in edge_count.items() if cnt == 1 for v in key])
 
         for v in boundary_nodes:
             F[2*v:2*v+2] = kinf * p[v]
@@ -1893,7 +1920,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Removes elements adjacent to the specified boundary edges. Used in
         advancing-front generation to discard the residual boundary loop
-        when it shrinks to <=4 vertices.
+        when it shrinks to ≤4 vertices.
 
         Parameters:
             edge_ids: List of boundary edge IDs to remove adjacent elements
