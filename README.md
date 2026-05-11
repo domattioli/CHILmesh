@@ -19,7 +19,7 @@
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
-> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB QuADMesh+ codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — see `00_CHILMesh_Class/@CHILmesh/CHILmesh.m` for the canonical algorithms (e.g., `meshLayers` skeletonization).
+> **Note for MATLAB users**: Python successor to the original [MATLAB QuADMesh+](https://github.com/domattioli/QuADMesh-MATLAB). API may evolve until v1.0.
 
 ---
 
@@ -43,21 +43,19 @@ mesh.plot_quality()
 plt.show()
 ```
 
-### Showcase: WNAT_Hagen (52,774 vertices · 98,365 elements)
-
-Reference benchmark mesh — per-element quality (skew, `4√3·area / Σedge²`) and granular distribution histogram (100 bins):
+### Showcase: WNAT_Hagen (52,774 verts · 98,365 elems)
 
 ![WNAT_Hagen quality plot and distribution](output/wnat_hagen_showcase.png?v=2)
 
-Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality analysis: **~3.3 seconds** end-to-end (see [Performance](#performance-v020) below). Reproduce with `python scripts/benchmark_wnat_hagen.py`.
+Median quality 0.797. Full init + analysis: **~3.3 seconds** end-to-end. Reproduce: `python scripts/benchmark_wnat_hagen.py`.
 
-### Showcase: Mixed-Element Mesh from Quad Core + ADMESH Tri Ring
+### Showcase: Mixed-Element Mesh
 
-466 corner-graded triangles surrounding 60 quads after angle-based smoothing (Zhou & Shimada, boundary pinned, median quality 0.733) — wireframe, skeletonization layers, and per-element quality:
+466 corner-graded triangles + 60 quad core, smoothed with Zhou & Shimada angle-based method (boundary pinned, median quality 0.733):
 
 ![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=1)
 
-**Pipeline.** Start with a 16×12 structured quad rectangle (192 quads, 6 skeleton layers). Strip layers 0–1 as the ADMESH domain, drop layer 2, retain layers 3+ as the quad core. Apply `distmesh1d` to the outer rectangle perimeter with a corner-dense edge-length field `h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))` (d = distance to nearest corner) — perimeter edge lengths now span 0.035–0.499 vs. uniform 0.250. Grid-sample interior points within the ring SDF and run ADMESH full distmesh with both the outer rectangle perimeter and the layer-1/2 seam pinned — produces 394 quality-graded triangles densest at the four 90° corners. Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), stitch with the 60 quads into a combined mesh, then run the angle-based smoother (100 iterations, quality-greedy Gauss-Seidel, boundary pinned). Reproduce: `python scripts/generate_mixed_truss_demo.py` (also writes a 4-panel pipeline diagram to `output/mixed_truss_fem_demo.png`).
+**Pipeline**: Structured quad core (192 quads) → skeletonized outer ring (ADMESH 394 tris) + gap band Delaunay fill (72 tris) → angle-based smooth. Reproduce with `python scripts/generate_mixed_truss_demo.py`.
 
 ### Showcase: Skeletonization & Mesh Plotting
 
@@ -65,17 +63,9 @@ CHILmesh's two flagship visualizations — **layer-based skeletonization** (cent
 
 ![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
 
-**Rows.** Row 1: raw `chilmesh.examples.annulus()` (median quality ≈ 0.71). Row 2: ADMESH warm-start truss applied to Row 1 (≈ 0.92). Row 3: CHILmesh FEM smoother applied to Row 2 (≈ 0.93). All three rows share the same boundary and 580 triangles; the smoothing passes are shown only to give the skeletonization & quality plots distinct inputs.
+**Rows**: (1) raw annulus (q ≈ 0.71), (2) ADMESH warm-start (q ≈ 0.92), (3) FEM smooth (q ≈ 0.93). Same boundary + 580 triangles.
 
-**Coming soon:** a mixed-element (triangle + quad) annulus rendered through the same pipeline — the skeletonization layer extraction is element-type-agnostic and already supports it; the demo script will be updated.
-
-#### Regenerate
-
-```bash
-python scripts/generate_3row_admesh.py
-```
-
-Writes `output/annulus_quickstart.png`. Fail-loud assertions: boundary preservation (V_BND, V_BND_PROP), positive-area connectivity (V_CONN), sibling chain (V_CHAIN). See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full contract.
+**Regenerate**: `python scripts/generate_3row_admesh.py` → `output/annulus_quickstart.png`. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for warm-start details.
 
 ---
 
@@ -107,7 +97,7 @@ pip install -e .
 
 ## Performance (v0.3.0)
 
-**4,000×+ faster** than v0.1.1 through systematic optimization. Reference mesh: **WNAT_Hagen — 52,774 vertices · 98,365 elements · 151,248 edges · 30 layers** (see [showcase image](#showcase-wnat_hagen-52774-vertices--98365-elements) above).
+**4,000×+ faster** than v0.1.1. Benchmarks on WNAT_Hagen (52.7k verts · 98.4k elems):
 
 ### Initialization
 
@@ -135,37 +125,27 @@ Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`. Histori
 ```python
 import chilmesh
 
-# Load: built-in examples or fort.14 / 2dm
+# Load
 mesh = chilmesh.examples.annulus()
 mesh = chilmesh.CHILmesh.read_from_fort14('mesh.14')
-mesh = chilmesh.CHILmesh.read_from_2dm('mesh.2dm')
 
-# Smooth (FEM or geometric)
+# Smooth & Analyze
 mesh.smooth_mesh(method='fem', acknowledge_change=True)
-
-# Analyze
 quality, angles, stats = mesh.elem_quality()
-interior_angles = mesh.interior_angles()
 
 # Visualize
-mesh.plot()                    # wireframe
-mesh.plot_quality()            # per-element quality colormap
-mesh.plot_layer()              # skeletonization layers
-mesh.plot_boundary()           # boundary edges highlighted
-mesh.plot_interior_edges()     # interior edges only
-
-# Skeletonization output
-layers = mesh.layers     # {'OE', 'IE', 'OV', 'IV'} per layer
+mesh.plot()           # wireframe
+mesh.plot_quality()   # quality colormap
+mesh.plot_layer()     # skeletonization layers
 
 # Topology
-edges = mesh.boundary_edges()
 boundary_nodes = mesh.boundary_node_indices()
+layers = mesh.layers  # {'OE', 'IE', 'OV', 'IV'} per layer
 
-# Optional: warm-start through ADMESH truss (boundary pinned bit-exact)
+# ADMESH warm-start (optional)
 import numpy as np
-sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
-                            0.3 - np.linalg.norm(p, axis=1))
-mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
+sdf = lambda p: np.linalg.norm(p, axis=1) - 1.0
+mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500)
 ```
 
 ---
