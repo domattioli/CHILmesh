@@ -257,7 +257,10 @@ class CHILmeshPlotMixin:
 
         for i, bin_lo in enumerate(bins[:-1]):
             bin_hi = bins[i + 1]
-            mask = (q >= bin_lo) & (q < bin_hi)
+            if i == len(bins) - 2:
+                mask = (q >= bin_lo) & (q <= bin_hi)
+            else:
+                mask = (q >= bin_lo) & (q < bin_hi)
             if not np.any(mask):
                 continue
             self._plot_polys(elem_ids[mask], facecolor=colors[i],
