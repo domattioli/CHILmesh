@@ -23,6 +23,20 @@
 
 ---
 
+## Contents
+
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Installation](#installation)
+- [Performance](#performance-v030)
+- [API Overview](#api-overview)
+- [Downstream Projects](#downstream-projects)
+- [Citation](#citation)
+- [References](#references)
+- [License](#license)
+
+---
+
 ## Quick Start
 
 Generate, smooth, and analyze 2D meshes in seconds:
