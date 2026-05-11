@@ -1352,15 +1352,246 @@ class CHILmesh(CHILmeshPlotMixin):
         self.change_points( new_points, acknowledge_change=True )
         return new_points
     
-    def angle_based_smoother( self, angle_limit: float = 30.0 ) -> np.ndarray:
+    def _ordered_vertex_ring(self, v_idx: int, elem_ids: list) -> list | None:
         """
-        Perform angle-based smoothing of the mesh.
-        Based on this: https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf
+        Return CCW-ordered ring of neighbor vertices around interior vertex v_idx.
+
+        Uses element connectivity to chain pred→succ pairs. Returns None if
+        non-manifold or the vertex is on the boundary (open ring).
+        """
+        succ_map: dict[int, int] = {}
+
+        for eid in elem_ids:
+            row = self.connectivity_list[eid]
+            # Determine unique vertex sequence for this element
+            if row.shape[0] == 4 and row[3] == row[0]:
+                verts = row[:3].tolist()          # padded triangle [v0,v1,v2,v0]
+            elif row.shape[0] == 4 and (
+                row[0] == row[1] or row[1] == row[2]
+                or row[2] == row[3] or row[1] == row[3]
+                or row[0] == row[2]
+            ):
+                seen: set[int] = set()
+                verts = []
+                for x in row.tolist():
+                    if x not in seen:
+                        seen.add(x)
+                        verts.append(x)
+            else:
+                verts = row.tolist()
+
+            n_local = len(verts)
+            try:
+                i = verts.index(v_idx)
+            except ValueError:
+                continue
+
+            pred = verts[(i - 1) % n_local]
+            succ = verts[(i + 1) % n_local]
+            succ_map[pred] = succ
+
+        if len(succ_map) != len(elem_ids):
+            return None  # non-manifold
+
+        start = next(iter(succ_map))
+        ring = [start]
+        cur = start
+        for _ in range(len(succ_map) - 1):
+            nxt = succ_map.get(cur)
+            if nxt is None or nxt == start:
+                break
+            ring.append(nxt)
+            cur = nxt
+
+        if succ_map.get(ring[-1]) != start or len(ring) != len(succ_map):
+            return None  # open ring → boundary vertex
+
+        return ring
+
+    def angle_based_smoother(self, n_iter: int = 100, omega: float = 0.5,
+                              tol: float = 1e-8) -> np.ndarray:
+        """
+        Iterative angle-based smoother (Zhou & Shimada 2000).
+
+        For each interior vertex, computes a bisector-weighted correction that
+        drives each sector angle toward the equiangular target 2π/m.  Deficit
+        is clamped to ±π/3 to prevent overshoot in near-degenerate sectors
+        (where even a tiny bisector displacement causes huge angle change).
+        Updates are Gauss-Seidel and accepted only when the local minimum-quality
+        metric strictly improves, guaranteeing monotone quality growth.
+
+        Unlike Laplacian smoothing, corrections are driven by angle-deficit per
+        sector and are accepted only when they actually improve mesh quality.
+
         Parameters:
-            angle_limit: Maximum allowable angle deviation in degrees
+            n_iter: Maximum number of passes over all interior vertices
+            omega:  Initial relaxation factor (halved up to 6× in line search)
+            tol:    Convergence threshold on max per-vertex displacement
+
+        Reference:
+            Zhou, M., & Shimada, K. (2000).
+            "An angle-based approach to two-dimensional mesh smoothing".
+            Proceedings of the 9th International Meshing Roundtable, 373–384.
         """
-        raise NotImplementedError("Angle-based smoothing not implemented yet.")
-        return self.points
+        p = self.points[:, :2].copy()
+        n = self.n_verts
+
+        edge_verts = self.edge2vert(self.boundary_edges())
+        boundary_set = set(np.unique(edge_verts.flatten()).tolist())
+
+        vert2elem = self.adjacencies['Vert2Elem']
+        two_pi = 2.0 * np.pi
+        deficit_cap = np.pi / 3.0   # 60° cap prevents wild corrections in thin sectors
+
+        def _elem_verts(row):
+            """Unique ordered vertices for a connectivity row (handles padded tris)."""
+            if row.shape[0] == 4 and row[3] == row[0]:
+                return row[:3].tolist()
+            if row.shape[0] == 4 and (
+                row[0] == row[1] or row[1] == row[2]
+                or row[2] == row[3] or row[1] == row[3]
+                or row[0] == row[2]
+            ):
+                seen: set[int] = set()
+                out = []
+                for x in row.tolist():
+                    if x not in seen:
+                        seen.add(x)
+                        out.append(x)
+                return out
+            return row.tolist()
+
+        import math as _math
+        _R2D = 180.0 / _math.pi
+
+        def _acos_deg(px0, py0, px1, py1, px2, py2):
+            """Angle at vertex 0 in degrees, using fast scalar math."""
+            ux = px1 - px0; uy = py1 - py0
+            wx = px2 - px0; wy = py2 - py0
+            lu2 = ux*ux + uy*uy
+            lw2 = wx*wx + wy*wy
+            if lu2 < 1e-28 or lw2 < 1e-28:
+                return 0.0
+            c = (ux*wx + uy*wy) / _math.sqrt(lu2 * lw2)
+            return _math.acos(max(-1.0, min(1.0, c))) * _R2D
+
+        def _local_min_quality(verts_lists, v_idx, vpos, p_cur):
+            """Min angular-skewness quality over incident elements (matches elem_quality)."""
+            vpx, vpy = float(vpos[0]), float(vpos[1])
+            min_q = 1e9
+            for verts in verts_lists:
+                n_v = len(verts)
+                px = [vpx if vi == v_idx else float(p_cur[vi][0]) for vi in verts]
+                py = [vpy if vi == v_idx else float(p_cur[vi][1]) for vi in verts]
+
+                if n_v == 3:
+                    # Area check
+                    dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
+                    dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    a0 = _acos_deg(px[0],py[0], px[1],py[1], px[2],py[2])
+                    a1 = _acos_deg(px[1],py[1], px[0],py[0], px[2],py[2])
+                    a2 = 180.0 - a0 - a1
+                    amax = max(a0, a1, a2); amin = min(a0, a1, a2)
+                    q = 1.0 - max((amax - 60.0) / 120.0, (60.0 - amin) / 60.0)
+                else:
+                    # Quad: check two sub-triangle areas
+                    dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
+                    dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    dx1 = px[2]-px[0]; dy1 = py[2]-py[0]
+                    dx2 = px[3]-px[0]; dy2 = py[3]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    a0 = _acos_deg(px[0],py[0], px[3],py[3], px[1],py[1])
+                    a1 = _acos_deg(px[1],py[1], px[0],py[0], px[2],py[2])
+                    a2 = _acos_deg(px[2],py[2], px[1],py[1], px[3],py[3])
+                    a3 = 360.0 - a0 - a1 - a2
+                    amax = max(a0, a1, a2, a3); amin = min(a0, a1, a2, a3)
+                    q = 1.0 - max((amax - 90.0) / 90.0, (90.0 - amin) / 90.0)
+                if q < min_q:
+                    min_q = q
+
+            return min_q
+
+        for _iter in range(n_iter):
+            max_move = 0.0
+
+            for v in range(n):
+                if v in boundary_set:
+                    continue
+
+                elem_ids = list(vert2elem[v])
+                if not elem_ids:
+                    continue
+
+                ring = self._ordered_vertex_ring(v, elem_ids)
+                if ring is None or len(ring) < 2:
+                    continue
+
+                m_ring = len(ring)
+                theta_star = two_pi / m_ring
+                v_pos = p[v]
+                correction = np.zeros(2)
+
+                for k in range(m_ring):
+                    a = p[ring[k]]
+                    b = p[ring[(k + 1) % m_ring]]
+
+                    da = a - v_pos
+                    db = b - v_pos
+                    la = np.linalg.norm(da)
+                    lb = np.linalg.norm(db)
+                    if la < 1e-14 or lb < 1e-14:
+                        continue
+
+                    ua = da / la
+                    ub = db / lb
+                    cos_a = np.clip(ua @ ub, -1.0, 1.0)
+                    alpha_k = np.arccos(cos_a)
+
+                    bisector = ua + ub
+                    bl = np.linalg.norm(bisector)
+                    bisector = bisector / bl if bl > 1e-10 else np.array([-ua[1], ua[0]])
+
+                    # Cap deficit: prevents wild corrections for near-degenerate sectors
+                    deficit = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)
+                    avg_len = (la + lb) * 0.5
+                    correction += deficit * avg_len * bisector
+
+                if np.linalg.norm(correction) < 1e-14:
+                    continue
+
+                ev_lists = [_elem_verts(self.connectivity_list[eid]) for eid in elem_ids]
+                current_q = _local_min_quality(ev_lists, v, v_pos, p)
+
+                # Line search: accept only when local minimum quality strictly improves
+                step = omega * correction / m_ring
+                scale = 1.0
+                accepted = False
+                for _ in range(6):
+                    candidate = v_pos + scale * step
+                    new_q = _local_min_quality(ev_lists, v, candidate, p)
+                    if new_q > current_q:
+                        accepted = True
+                        break
+                    scale *= 0.5
+
+                if accepted:
+                    p[v] = candidate   # Gauss-Seidel: update immediately
+                    move = np.linalg.norm(scale * step)
+                    if move > max_move:
+                        max_move = move
+
+            if max_move < tol:
+                break
+
+        new_points = np.zeros_like(self.points)
+        new_points[:, :2] = p
+        new_points[:, 2] = self.points[:, 2]
+        return new_points
 
     def _detect_element_types(self) -> tuple[np.ndarray, np.ndarray]:
         """
