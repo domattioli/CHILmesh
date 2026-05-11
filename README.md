@@ -53,11 +53,11 @@ Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality an
 
 ### Showcase: Mixed-Element Mesh from Quad Core + ADMESH Tri Ring
 
-466 corner-graded triangles surrounding 60 quads after angle-based smoothing (Zhou & Shimada, boundary pinned, median quality 0.733) — wireframe, skeletonization layers, and per-element quality:
+466 corner-graded triangles surrounding 60 quads after FEM smoothing (symmetric quad stiffness, boundary pinned, median quality 0.760) — wireframe, skeletonization layers, and per-element quality:
 
-![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=1)
+![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=2)
 
-**Pipeline.** Start with a 16×12 structured quad rectangle (192 quads, 6 skeleton layers). Strip layers 0–1 as the ADMESH domain, drop layer 2, retain layers 3+ as the quad core. Apply `distmesh1d` to the outer rectangle perimeter with a corner-dense edge-length field `h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))` (d = distance to nearest corner) — perimeter edge lengths now span 0.035–0.499 vs. uniform 0.250. Grid-sample interior points within the ring SDF and run ADMESH full distmesh with both the outer rectangle perimeter and the layer-1/2 seam pinned — produces 394 quality-graded triangles densest at the four 90° corners. Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), stitch with the 60 quads into a combined mesh, then run the angle-based smoother (100 iterations, quality-greedy Gauss-Seidel, boundary pinned). Reproduce: `python scripts/generate_mixed_truss_demo.py` (also writes a 4-panel pipeline diagram to `output/mixed_truss_fem_demo.png`).
+**Pipeline.** Start with a 16×12 structured quad rectangle (192 quads, 6 skeleton layers). Strip layers 0–1 as the ADMESH domain, drop layer 2, retain layers 3+ as the quad core. Apply `distmesh1d` to the outer rectangle perimeter with a corner-dense edge-length field `h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))` (d = distance to nearest corner) — perimeter edge lengths now span 0.035–0.499 vs. uniform 0.250. Grid-sample interior points within the ring SDF and run ADMESH full distmesh with both the outer rectangle perimeter and the layer-1/2 seam pinned — produces 394 quality-graded triangles densest at the four 90° corners. Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), stitch with the 60 quads into a combined mesh, then run the FEM smoother (symmetric quad decomposition, boundary pinned). Reproduce: `python scripts/generate_mixed_truss_demo.py` (also writes a 4-panel pipeline diagram to `output/mixed_truss_fem_demo.png`).
 
 ### Showcase: Skeletonization & Mesh Plotting
 
