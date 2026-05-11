@@ -447,10 +447,10 @@ def main(out_path: Path | None = None) -> Path:
     # 3-panel showcase: wireframe | layers | quality
     showcase_path = out_path.parent / "mixed_mesh_showcase.png"
     fig3, axes3 = plt.subplots(1, 3, figsize=(18, 6), facecolor="white")
-    _plot_mixed(
-        axes3[0], mesh_smooth,
-        f"Mixed mesh · {n_tris_total} tris + {len(kept_quads)} quads",
-    )
+    mesh_smooth.plot(ax=axes3[0], elem_color="white", edge_color="k", linewidth=1.0)
+    axes3[0].set_title(f"Mixed mesh · {n_tris_total} tris + {len(kept_quads)} quads", fontsize=10)
+    axes3[0].set_aspect("equal")
+    axes3[0].axis("off")
     mesh_smooth.plot_layer(ax=axes3[1])
     axes3[1].set_title("Skeletonization layers", fontsize=10)
     axes3[1].set_aspect("equal")
