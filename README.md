@@ -19,7 +19,21 @@
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
-> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB QuADMesh+ codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — see `00_CHILMesh_Class/@CHILmesh/CHILmesh.m` for the canonical algorithms (e.g., `meshLayers` skeletonization).
+---
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Installation](#installation)
+- [Performance](#performance-v030)
+- [API Overview](#api-overview)
+- [Downstream Projects](#downstream-projects)
+- [Citation](#citation)
+- [References](#references)
+- [License](#license)
+
+> **MATLAB users**: Python successor to original QuADMesh+ codebase. Still in development; API may evolve. Original MATLAB (unmaintained) at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — canonical algorithms (e.g., `meshLayers`) in `00_CHILMesh_Class/@CHILmesh/CHILmesh.m`.
 
 ---
 
@@ -43,50 +57,40 @@ mesh.plot_quality()
 plt.show()
 ```
 
-### Showcase: WNAT_Hagen (52,774 vertices · 98,365 elements)
-
-Reference benchmark mesh — per-element quality (skew, `4√3·area / Σedge²`) and granular distribution histogram (100 bins):
+### Showcase: WNAT_Hagen (52,774 verts · 98,365 elems)
 
 ![WNAT_Hagen quality plot and distribution](output/wnat_hagen_showcase.png?v=2)
 
-Median quality 0.797, mean 0.786 across all 98k elements. Full init + quality analysis: **~3.3 seconds** end-to-end (see [Performance](#performance-v020) below). Reproduce with `python scripts/benchmark_wnat_hagen.py`.
+Median q=0.797, mean 0.786. Full init + analysis: **~3.3s** end-to-end. Reproduce: `python scripts/benchmark_wnat_hagen.py`.
 
-### Showcase: Mixed-Element Mesh from Quad Core + ADMESH Tri Ring
+### Showcase: Mixed-Element Mesh
 
-466 corner-graded triangles surrounding 60 quads after FEM smoothing (symmetric quad stiffness, boundary pinned, median quality 0.760) — wireframe, skeletonization layers, and per-element quality:
+466 tris + 60 quads after FEM smoothing (symmetric quad stiffness, boundary pinned, q=0.760):
 
 ![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=2)
 
-**Pipeline.** Start with a 16×12 structured quad rectangle (192 quads, 6 skeleton layers). Strip layers 0–1 as the ADMESH domain, drop layer 2, retain layers 3+ as the quad core. Apply `distmesh1d` to the outer rectangle perimeter with a corner-dense edge-length field `h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))` (d = distance to nearest corner) — perimeter edge lengths now span 0.035–0.499 vs. uniform 0.250. Grid-sample interior points within the ring SDF and run ADMESH full distmesh with both the outer rectangle perimeter and the layer-1/2 seam pinned — produces 394 quality-graded triangles densest at the four 90° corners. Delaunay-triangulate the layer-2 gap band from boundary nodes only (72 tris), stitch with the 60 quads into a combined mesh, then run the FEM smoother (symmetric quad decomposition, boundary pinned). Reproduce: `python scripts/generate_mixed_truss_demo.py` (also writes a 4-panel pipeline diagram to `output/mixed_truss_fem_demo.png`).
+Structured quad core (192 quads) → skeletonized outer ring (ADMESH 394 tris) + gap band Delaunay fill (72 tris) → FEM smooth. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
 
 ### Showcase: Skeletonization & Mesh Plotting
 
-CHILmesh's two flagship visualizations — **layer-based skeletonization** (center, viridis) and **per-element quality plotting** (right, cool, `4√3·area / Σedge²`) — rendered on three states of the same triangular annulus:
+Layer-based skeletonization (center, viridis) and quality plotting (right, `4√3·area / Σedge²`) on three smoothing states (same boundary, 580 triangles):
 
 ![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
 
-**Rows.** Row 1: raw `chilmesh.examples.annulus()` (median quality ≈ 0.71). Row 2: ADMESH warm-start truss applied to Row 1 (≈ 0.92). Row 3: CHILmesh FEM smoother applied to Row 2 (≈ 0.93). All three rows share the same boundary and 580 triangles; the smoothing passes are shown only to give the skeletonization & quality plots distinct inputs.
+Rows: (1) raw Delaunay (q≈0.71), (2) ADMESH warm-start (q≈0.92), (3) FEM smooth (q≈0.93).
 
-**Coming soon:** a mixed-element (triangle + quad) annulus rendered through the same pipeline — the skeletonization layer extraction is element-type-agnostic and already supports it; the demo script will be updated.
-
-#### Regenerate
-
-```bash
-python scripts/generate_3row_admesh.py
-```
-
-Writes `output/annulus_quickstart.png`. Fail-loud assertions: boundary preservation (V_BND, V_BND_PROP), positive-area connectivity (V_CONN), sibling chain (V_CHAIN). See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for the warm-start adapter and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for the full contract.
+**Regenerate**: `python scripts/generate_3row_admesh.py` → `output/annulus_quickstart.png`. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for details.
 
 ---
 
 ## Features
 
-- **Fast**: 937× speedup vs v0.1.1 through optimized data structures
-- **Mixed-Element**: Triangles, quads, and mixed meshes with unified API
-- **Smoothing**: FEM and geometric smoothing for quality improvement
-- **Analysis**: Element quality metrics, interior angles, layer-based skeletonization
-- **I/O**: Read/write ADCIRC `.fort.14` and SMS `.2dm` formats
-- **Catalog**: ADMESH-Domains integration via `from_admesh_domain()` adapter
+- **Fast**: 937× speedup vs v0.1.1
+- **Mixed-Element**: Triangles, quads, mixed meshes
+- **Smoothing**: FEM and geometric smoothing
+- **Analysis**: Quality, angles, skeletonization layers
+- **I/O**: ADCIRC `.fort.14` and SMS `.2dm`
+- **Catalog**: ADMESH-Domains integration
 
 ---
 
