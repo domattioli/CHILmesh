@@ -1753,6 +1753,66 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return rows, cols, data
 
+    def _compute_angle_based_forces(self, p: np.ndarray, n: int) -> np.ndarray:
+        """
+        Compute angle-based RHS force vector for Zhou & Shimada smoother.
+
+        For each interior vertex, computes forces that pull it toward angles that
+        conform to ideal values (60° for triangles, 90° for quads). Uses cotangent
+        weighting: F_i = -0.5 * Σ_{adjacent angles} cot(θ) * (edge_perp)
+
+        Parameters:
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            F: (2*n,) force vector with angle-based forces for interior vertices
+        """
+        import numpy as np
+
+        F = np.zeros(2 * n)
+
+        # Process each element to accumulate angle-based forces
+        for elem_idx, elem in enumerate(self.connectivity_list):
+            # Determine if triangle or quad
+            is_tri = (elem[3] == elem[0]) if len(elem) == 4 else True
+
+            if is_tri:
+                verts = elem[:3]
+                ideal_angle = np.pi / 3  # 60° for triangles
+            else:
+                verts = elem[:4]
+                ideal_angle = np.pi / 2  # 90° for quads
+
+            # Compute angles at each vertex
+            for i in range(len(verts)):
+                v0 = int(verts[i])
+                v1 = int(verts[(i - 1) % len(verts)])
+                v2 = int(verts[(i + 1) % len(verts)])
+
+                # Edge vectors emanating from v0
+                e1 = p[v1] - p[v0]  # to previous vertex
+                e2 = p[v2] - p[v0]  # to next vertex
+
+                # Angle at v0
+                cos_angle = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2) + 1e-14)
+                cos_angle = np.clip(cos_angle, -1.0, 1.0)
+                angle = np.arccos(cos_angle)
+
+                # Cotangent weight (negative because we want to penalize deviations)
+                cot_angle = 1.0 / (np.tan(angle) + 1e-14)
+
+                # Force is perpendicular to edges, weighted by cotangent
+                # Use perpendicular to e2: rotate 90° clockwise = (y, -x)
+                e2_perp = np.array([e2[1], -e2[0]])
+                force = -0.5 * cot_angle * e2_perp
+
+                # Accumulate force (scaled by 0.1 to avoid over-correction)
+                F[2*v0] += 0.1 * force[0]
+                F[2*v0 + 1] += 0.1 * force[1]
+
+        return F
+
     def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
         """
         Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
@@ -1793,7 +1853,9 @@ class CHILmesh(CHILmeshPlotMixin):
             rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
 
         K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
-        F = np.zeros(2*n)
+
+        # Compute angle-based RHS forces for interior nodes
+        F = self._compute_angle_based_forces(p, n)
 
         # Identify boundary nodes and apply constraints.
         # Use adjacency structure when available; otherwise count edge occurrences
