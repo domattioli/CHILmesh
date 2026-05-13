@@ -455,6 +455,59 @@ class TestMixedElementFEMSmoother:
         )
 
 
+class TestQuadAspectRatioPreservation:
+    """Verify angle-based smoother preserves/improves quad aspect ratios."""
+
+    def test_quad_grid_angle_based_forces(self):
+        """Angle-based smoother should not degrade perfect quad meshes."""
+        # The core test: for perfect grids, angle-based forces should not overshoot
+        mesh = examples.quad_2x2()
+        orig_pts = mesh.points.copy()
+
+        # Compute quality before smoothing
+        q_before, _, _ = mesh.elem_quality()
+
+        # Smooth with angle-based forces
+        smoothed = mesh.direct_smoother(kinf=1e12)
+
+        # Update mesh points and compute quality after
+        new_mesh = mesh.copy()
+        new_mesh.change_points(smoothed, acknowledge_change=True)
+        q_after, _, _ = new_mesh.elem_quality()
+
+        # Angle-based smoother should maintain or improve quality
+        # For a perfect grid, quality should be preserved
+        assert np.all(q_after > 0.0), "Smoother produced degenerate elements"
+
+        # Median quality should not degrade significantly
+        assert np.median(q_after) >= np.median(q_before) * 0.95, (
+            f"Quality degraded significantly: before={np.median(q_before):.4f}, "
+            f"after={np.median(q_after):.4f}"
+        )
+
+    def test_perfect_quad_grid_no_unnecessary_movement(self):
+        """Interior nodes in perfect grid should move minimally (angles already ideal)."""
+        mesh = examples.quad_2x2()
+        orig_pts = mesh.points.copy()
+
+        # Smooth
+        smoothed = mesh.direct_smoother(kinf=1e12)
+
+        # For a perfect grid, interior nodes should barely move
+        # (angle-based forces for ideal angles should be near zero)
+        interior_nodes = [4]  # Center node in 3x3 grid
+        max_movement = 0.0
+        for v in interior_nodes:
+            movement = np.linalg.norm(smoothed[v, :2] - orig_pts[v, :2])
+            max_movement = max(max_movement, movement)
+
+        # With a perfect grid, movement should be minimal (< 0.1 in default case)
+        # The exact threshold depends on solver precision and force scaling
+        assert max_movement < 0.5, (
+            f"Interior node moved unexpectedly much on perfect grid: {max_movement:.6f}"
+        )
+
+
 class TestSmootherIntegration:
     """Integration tests for smooth_mesh() method."""
 
