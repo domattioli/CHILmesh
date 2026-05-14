@@ -23,6 +23,20 @@
 
 ---
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Installation](#installation)
+- [Performance](#performance-v030)
+- [API Overview](#api-overview)
+- [Mesh Smoothing](#mesh-smoothing)
+- [Examples](#examples)
+- [Contributing](#contributing)
+- [Citation](#citation)
+
+---
+
 ## Quick Start
 
 Generate, smooth, and analyze 2D meshes in seconds:
@@ -67,7 +81,7 @@ CHILmesh's two flagship visualizations — **layer-based skeletonization** (cent
 
 **Rows.** Row 1: raw `chilmesh.examples.annulus()` (median quality ≈ 0.71). Row 2: ADMESH warm-start truss applied to Row 1 (≈ 0.92). Row 3: CHILmesh FEM smoother applied to Row 2 (≈ 0.93). All three rows share the same boundary and 580 triangles; the smoothing passes are shown only to give the skeletonization & quality plots distinct inputs.
 
-**Coming soon:** a mixed-element (triangle + quad) annulus rendered through the same pipeline — the skeletonization layer extraction is element-type-agnostic and already supports it; the demo script will be updated.
+**Mixed-Element Showcase:** CHILmesh now supports mixed-element meshes (triangles + quads) throughout the full pipeline: load → adjacencies → skeletonization → FEM smoothing → analysis. The FEM smoother uses element-type-specific stiffness matrices (Zhou & Shimada for triangles, quad extension via analogy) with angle-based RHS forces that preserve ideal aspect ratios. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
 
 #### Regenerate
 
@@ -167,6 +181,57 @@ sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
                             0.3 - np.linalg.norm(p, axis=1))
 mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
 ```
+
+---
+
+## Mesh Smoothing
+
+CHILmesh provides **angle-based FEM smoothing** for quality improvement across all element types: triangles, quads, and mixed-element meshes.
+
+### Algorithm: Zhou & Shimada Angle-Based Smoothing
+
+The smoother minimizes angular distortion via the Zhou & Shimada formulation:
+
+- **Energy:** Element stiffness matrices computed from local angle and edge-length geometry
+- **Objective:** Interior nodes driven toward configurations that maximize angles (60° ideal for triangles, 90° for quads)
+- **Boundary:** Fixed pinned constraints; boundary nodes remain unchanged
+- **Solver:** Direct (non-iterative) sparse linear solve via SciPy
+
+### Element-Type Support
+
+| Element Type | Stiffness Matrix | RHS Forces | Status |
+|--------------|-----------------|-----------|--------|
+| Triangles | Zhou & Shimada (D, T matrices) | Angle-based cotangent weighting | ✓ Production |
+| Quads | Extended via analogy (2×2 integration) | Angle-based cotangent weighting | ✓ Production |
+| Mixed | Per-element-type assembly | Per-element-type angle forces | ✓ Production |
+
+**Reference:** Zhou, M., & Shimada, K. (2000). "An angle-based approach to two-dimensional mesh smoothing". *Proceedings of the 9th International Meshing Roundtable*, 373–384.
+
+### Usage
+
+```python
+# Triangular mesh
+mesh.smooth_mesh(method='fem', acknowledge_change=True)
+
+# Quad or mixed-element mesh (same API)
+mesh.smooth_mesh(method='fem', acknowledge_change=True)
+
+# Direct access to smoother (returns new point array)
+new_points = mesh.direct_smoother(kinf=1e12)  # kinf = boundary stiffness
+```
+
+### Properties
+
+- **Preserves topology:** Element-node connectivity unchanged
+- **Preserves boundary:** Boundary nodes remain fixed at input positions
+- **Preserves aspect ratio:** Perfect-grid meshes (square quads, equilateral triangles) are minimally perturbed
+- **Improves quality:** Interior nodes repositioned to maximize angles
+
+### Limitations
+
+- One-shot smoothing (not iterative); convergence is direct solve
+- Assumes 2D planar meshes; z-coordinate preserved but not optimized
+- No mesh mutation (add/remove elements); topology fixed
 
 ---
 
