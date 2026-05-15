@@ -23,6 +23,8 @@ custom initial points without modifying ADMESH source. The inner loop is ~50 lin
 - scipy.spatial.Delaunay preserves point array order (verified via R6)
 - pfix mechanism (Ftot[:nfix] = 0) delivers bit-exact preservation (verified via R2)
 """
+from __future__ import annotations
+
 
 import numpy as np
 from scipy.spatial import Delaunay

@@ -29,6 +29,8 @@ See also:
 - quickstart.md: Worked examples for extensibility contract
 - research.md: Design rationale and cross-repo tracking (ADMESH-A, B, C)
 """
+from __future__ import annotations
+
 
 import numpy as np
 import warnings

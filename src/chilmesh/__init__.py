@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from importlib import metadata
 
 from .CHILmesh import CHILmesh, write_fort14
