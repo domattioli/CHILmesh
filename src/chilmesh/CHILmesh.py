@@ -908,6 +908,8 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         point = np.asarray(point)
         k = min(k, self.n_verts)
+        if k <= 0:
+            return np.array([], dtype=int)
         _, vert_ids = self._vertex_tree.query(point, k=k)
         if k == 1:
             return np.array([vert_ids], dtype=int)
@@ -929,6 +931,8 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         point = np.asarray(point)
         k = min(k, self.n_elems)
+        if k <= 0:
+            return np.array([], dtype=int)
         _, elem_ids = self._centroid_tree.query(point, k=k)
         if k == 1:
             return np.array([elem_ids], dtype=int)
