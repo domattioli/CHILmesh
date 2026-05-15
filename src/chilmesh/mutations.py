@@ -439,17 +439,32 @@ class MutableMesh:
                 self.mesh.connectivity_list[elem_id_del] = [0, 0, 0, 0]
 
         # Re-triangulate: create triangles from new vertex to boundary edges
-        # Ensure CCW orientation by checking signed area
+        # Boundary edges must be consistently oriented (walked in order around cavity)
+        # For now, sort edges by angle from new vertex to ensure consistent ordering
+        p_new = self.mesh.points[new_vert_id, :2]
+
+        # Sort boundary edges by angle from new vertex
+        edge_angles = []
         for e in boundary_edges:
             v1, v2 = e
-            # Check orientation: (new_vert, v1, v2) should have positive area
-            p_new = self.mesh.points[new_vert_id, :2]
+            p1 = self.mesh.points[v1, :2]
+            p2 = self.mesh.points[v2, :2]
+            # Use midpoint angle
+            mid = (p1 + p2) / 2
+            angle = np.arctan2(mid[1] - p_new[1], mid[0] - p_new[0])
+            edge_angles.append((angle, v1, v2))
+
+        edge_angles.sort()  # Sort by angle
+
+        # Create triangles in angle order with CCW check
+        for angle, v1, v2 in edge_angles:
             p1 = self.mesh.points[v1, :2]
             p2 = self.mesh.points[v2, :2]
 
-            area = self._signed_area(p_new, p1, p2)
+            # Check (v1, v2, new_vert) triangle area - should be positive
+            area = self._signed_area(p1, p2, p_new)
             if area < 0:
-                # Reverse orientation
+                # Swap to ensure positive area
                 v1, v2 = v2, v1
 
             new_elem = np.array([[v1, v2, new_vert_id]])
