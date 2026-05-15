@@ -360,6 +360,121 @@ class MutableMesh:
 
         return elem_a
 
+    def insert_vertex(self, point: np.ndarray) -> int:
+        """Insert vertex into mesh; auto-triangulates containing element.
+
+        MVP implementation: Uses Bowyer-Watson cavity approach for interior points.
+        - Finds containing element using spatial indexing
+        - Collects cavity (affected elements)
+        - Inserts new vertex
+        - Re-triangulates cavity with fan triangulation
+
+        Parameters
+        ----------
+        point : ndarray
+            2D coordinate (x, y) to insert
+
+        Returns
+        -------
+        int
+            New vertex ID
+
+        Raises
+        ------
+        ValueError
+            If point is outside mesh
+        """
+        point = np.asarray(point)
+
+        # Find containing element
+        elem_id = self.mesh.find_element(point)
+        if elem_id == -1:
+            raise ValueError(f"Point {point} is outside mesh")
+
+        # Insert new vertex
+        new_vert_id = self._insert_vertex_internal(point)
+
+        # Find cavity: all elements sharing vertices with containing element
+        containing_elem = self.mesh.connectivity_list[elem_id]
+        n_cols = self.mesh.connectivity_list.shape[1]
+        elem_verts = containing_elem[:3] if (n_cols == 3 or containing_elem[2] != containing_elem[3]) else containing_elem[:3]
+
+        cavity_elems = set([elem_id])
+        for v in elem_verts:
+            incident = self.mesh.get_vertex_elements(v)
+            cavity_elems.update(incident)
+
+        cavity_elems = sorted(list(cavity_elems))
+
+        # Find boundary edges of cavity (edges with exactly 1 incident cavity elem)
+        boundary_edges = []
+        for elem_id_cav in cavity_elems:
+            elem = self.mesh.connectivity_list[elem_id_cav]
+            tri_verts = elem[:3] if n_cols == 3 or elem[2] != elem[3] else elem[:3]
+            edges = [(tri_verts[0], tri_verts[1]),
+                    (tri_verts[1], tri_verts[2]),
+                    (tri_verts[2], tri_verts[0])]
+
+            for e in edges:
+                edge_key = tuple(sorted(e))
+                count = sum(1 for e2 in cavity_elems
+                           if edge_key in self._get_edge_set(e2, n_cols))
+                if count == 1:
+                    boundary_edges.append(e)
+
+        # Remove duplicate edges (keep unique)
+        boundary_edges = list(set([tuple(sorted(e)) for e in boundary_edges]))
+        boundary_edges = [e for e in boundary_edges if e[0] != e[1]]
+
+        if not boundary_edges:
+            boundary_edges = [(elem_verts[0], elem_verts[1]),
+                             (elem_verts[1], elem_verts[2]),
+                             (elem_verts[2], elem_verts[0])]
+
+        # Delete cavity elements (mark as zeros)
+        for elem_id_del in cavity_elems:
+            if n_cols == 3:
+                self.mesh.connectivity_list[elem_id_del] = [0, 0, 0]
+            else:
+                self.mesh.connectivity_list[elem_id_del] = [0, 0, 0, 0]
+
+        # Re-triangulate: create triangles from new vertex to boundary edges
+        # Ensure CCW orientation by checking signed area
+        for e in boundary_edges:
+            v1, v2 = e
+            # Check orientation: (new_vert, v1, v2) should have positive area
+            p_new = self.mesh.points[new_vert_id, :2]
+            p1 = self.mesh.points[v1, :2]
+            p2 = self.mesh.points[v2, :2]
+
+            area = self._signed_area(p_new, p1, p2)
+            if area < 0:
+                # Reverse orientation
+                v1, v2 = v2, v1
+
+            new_elem = np.array([[v1, v2, new_vert_id]])
+            self.mesh.connectivity_list = np.vstack([self.mesh.connectivity_list, new_elem])
+
+        self.mesh.n_elems = self.mesh.connectivity_list.shape[0]
+
+        # Rebuild adjacencies
+        self.mesh._build_adjacencies()
+        self._validate_invariants()
+
+        return new_vert_id
+
+    def _get_edge_set(self, elem_id: int, n_cols: int) -> set:
+        """Get edge set for an element."""
+        if elem_id >= self.mesh.n_elems or self.mesh.connectivity_list[elem_id, 0] == 0:
+            return set()
+
+        elem = self.mesh.connectivity_list[elem_id]
+        tri_verts = elem[:3] if n_cols == 3 or elem[2] != elem[3] else elem[:3]
+        edges = [(tri_verts[0], tri_verts[1]),
+                (tri_verts[1], tri_verts[2]),
+                (tri_verts[2], tri_verts[0])]
+        return set([tuple(sorted(e)) for e in edges if e[0] != e[1]])
+
     def _signed_area(self, p0: np.ndarray, p1: np.ndarray, p2: np.ndarray) -> float:
         """Compute signed area of triangle (p0, p1, p2)."""
         return 0.5 * ((p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1]))

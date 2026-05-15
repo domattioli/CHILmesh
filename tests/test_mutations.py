@@ -200,3 +200,95 @@ class TestMergeElements:
 
         with pytest.raises(ValueError, match="itself"):
             mutable.merge_elements(elem_a=0, elem_b=0)
+
+
+class TestInsertVertex:
+    """Tests for vertex insertion (incremental refinement)."""
+
+    def test_insert_vertex_basic(self, triangle_mesh):
+        """Verify insert_vertex adds new vertex and re-triangulates."""
+        mutable = MutableMesh(triangle_mesh)
+        original_n_elems = triangle_mesh.n_elems
+        original_n_verts = triangle_mesh.n_verts
+
+        # Insert at centroid of first element
+        elem_verts = triangle_mesh.connectivity_list[0, :3]
+        point = np.mean(triangle_mesh.points[elem_verts, :2], axis=0)
+
+        new_vert_id = mutable.insert_vertex(point)
+
+        assert new_vert_id == original_n_verts
+        assert triangle_mesh.n_verts == original_n_verts + 1
+        assert triangle_mesh.n_elems > original_n_elems  # Cavity retriangulated
+
+    def test_insert_vertex_increases_count(self, triangle_mesh):
+        """Verify insert_vertex increases vertex and element counts."""
+        mutable = MutableMesh(triangle_mesh)
+        original_n_elems = triangle_mesh.n_elems
+        original_n_verts = triangle_mesh.n_verts
+
+        # Insert at multiple locations
+        for i in range(3):
+            elem_verts = triangle_mesh.connectivity_list[i * 10, :3]
+            point = np.mean(triangle_mesh.points[elem_verts, :2], axis=0)
+            new_vert_id = mutable.insert_vertex(point)
+
+            assert triangle_mesh.n_verts == original_n_verts + i + 1
+            assert triangle_mesh.n_elems > original_n_elems
+
+    def test_insert_vertex_outside_mesh_raises(self, triangle_mesh):
+        """Verify insert_vertex raises for points outside mesh."""
+        mutable = MutableMesh(triangle_mesh)
+
+        # Point far outside mesh
+        far_point = np.array([1e6, 1e6])
+
+        with pytest.raises(ValueError, match="outside"):
+            mutable.insert_vertex(far_point)
+
+    def test_insert_vertex_creates_triangles_from_point(self, triangle_mesh):
+        """Verify inserted vertex has incident elements."""
+        mutable = MutableMesh(triangle_mesh)
+
+        # Insert vertex at centroid of element (guaranteed inside for element interior)
+        # Try first several elements to find one with centroid inside mesh
+        new_vert_id = None
+        for elem_id in range(min(100, triangle_mesh.n_elems)):
+            elem_verts = triangle_mesh.connectivity_list[elem_id, :3]
+            point = np.mean(triangle_mesh.points[elem_verts, :2], axis=0)
+            try:
+                new_vert_id = mutable.insert_vertex(point)
+                break
+            except ValueError:
+                continue
+
+        assert new_vert_id is not None, "Could not find valid insertion point"
+
+        # Check that new vertex appears in some elements
+        incident = triangle_mesh.get_vertex_elements(new_vert_id)
+        assert len(incident) > 0, "Inserted vertex has no incident elements"
+
+    def test_insert_vertex_maintains_ccw(self, triangle_mesh):
+        """Verify inserted vertex produces CCW-oriented triangles."""
+        mutable = MutableMesh(triangle_mesh)
+
+        # Insert vertex at first element with valid centroid
+        new_vert_id = None
+        for elem_id in range(min(100, triangle_mesh.n_elems)):
+            elem_verts = triangle_mesh.connectivity_list[elem_id, :3]
+            point = np.mean(triangle_mesh.points[elem_verts, :2], axis=0)
+            try:
+                new_vert_id = mutable.insert_vertex(point)
+                break
+            except ValueError:
+                continue
+
+        assert new_vert_id is not None, "Could not find valid insertion point"
+
+        # Check all incident elements have positive signed area
+        incident = triangle_mesh.get_vertex_elements(new_vert_id)
+        for elem_id in incident:
+            elem = triangle_mesh.connectivity_list[elem_id, :3]
+            v0, v1, v2 = triangle_mesh.points[elem, :2]
+            signed_area = 0.5 * ((v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1]))
+            assert signed_area > -1e-9, f"Element {elem_id} is not CCW after insert_vertex"
