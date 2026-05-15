@@ -8,7 +8,7 @@ from .utils.plot_utils import CHILmeshPlotMixin
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from scipy.spatial import Delaunay
+from scipy.spatial import Delaunay, cKDTree
 from typing import List, Tuple, Optional as Opt, Dict, Set, Union, Any
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
@@ -232,6 +232,9 @@ class CHILmesh(CHILmeshPlotMixin):
             if compute_layers:
                 self._build_adjacencies()
                 self._skeletonize()
+
+            # Build spatial indices (always, regardless of compute_layers)
+            self._build_spatial_indices()
     
     def _ensure_ccw_orientation( self ) -> None:
         """Ensure counter-clockwise orientation of every element.
@@ -799,6 +802,133 @@ class CHILmesh(CHILmeshPlotMixin):
         if not 0 <= vert_id < self.n_verts:
             raise ValueError(f"Vertex {vert_id} out of range [0, {self.n_verts})")
         return self.adjacencies['Vert2Elem'][vert_id].copy()
+
+    def _build_spatial_indices(self) -> None:
+        """Build KD-trees for fast spatial queries on vertices and element centroids."""
+        self._vertex_tree = cKDTree(self.points[:, :2])
+        self._centroid_tree = cKDTree(self._get_centroids())
+
+    def _get_centroids(self) -> np.ndarray:
+        """Compute element centroids (mean of vertex coordinates)."""
+        n_cols = self.connectivity_list.shape[1]
+        centroids = np.zeros((self.n_elems, 2))
+        for i, elem in enumerate(self.connectivity_list):
+            verts = self.points[elem[:n_cols], :2]
+            centroids[i] = np.mean(verts, axis=0)
+        return centroids
+
+    @property
+    def centroids(self) -> np.ndarray:
+        """Get element centroids (lazy computation)."""
+        if not hasattr(self, '_centroids_cache'):
+            self._centroids_cache = self._get_centroids()
+        return self._centroids_cache
+
+    def _point_in_triangle(self, point: np.ndarray, v0: np.ndarray, v1: np.ndarray, v2: np.ndarray) -> bool:
+        """Check if point is inside triangle using barycentric coordinates."""
+        denom = (v1[1] - v2[1]) * (v0[0] - v2[0]) + (v2[0] - v1[0]) * (v0[1] - v2[1])
+        if abs(denom) < 1e-10:
+            return False
+        a = ((v1[1] - v2[1]) * (point[0] - v2[0]) + (v2[0] - v1[0]) * (point[1] - v2[1])) / denom
+        b = ((v2[1] - v0[1]) * (point[0] - v2[0]) + (v0[0] - v2[0]) * (point[1] - v2[1])) / denom
+        c = 1 - a - b
+        return a >= -1e-10 and b >= -1e-10 and c >= -1e-10
+
+    def _point_in_quad(self, point: np.ndarray, v0: np.ndarray, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray) -> bool:
+        """Check if point is inside quad by checking two triangles."""
+        return (self._point_in_triangle(point, v0, v1, v2) or
+                self._point_in_triangle(point, v0, v2, v3))
+
+    def _point_in_element(self, point: np.ndarray, elem_id: int) -> bool:
+        """Check if point is inside element (handles tri and quad)."""
+        elem = self.connectivity_list[elem_id]
+        verts = self.points[elem, :2]
+        if elem.size == 3 or elem[3] == elem[2]:
+            return self._point_in_triangle(point, verts[0], verts[1], verts[2])
+        else:
+            return self._point_in_quad(point, verts[0], verts[1], verts[2], verts[3])
+
+    def find_element(self, point: np.ndarray) -> int:
+        """
+        Find element containing point using KD-tree + barycentric check.
+
+        Parameters:
+            point: 2D coordinate [x, y]
+
+        Returns:
+            Element ID if found, -1 if point is outside mesh
+
+        Example:
+            >>> elem_id = mesh.find_element(np.array([0.5, 0.5]))
+        """
+        point = np.asarray(point)
+        _, candidates = self._centroid_tree.query(point, k=min(20, self.n_elems))
+        if isinstance(candidates, np.int64):
+            candidates = np.array([candidates])
+        for elem_id in candidates:
+            if self._point_in_element(point, elem_id):
+                return int(elem_id)
+        return -1
+
+    def find_elements_in_radius(self, point: np.ndarray, radius: float) -> np.ndarray:
+        """
+        Find all elements within radius of point.
+
+        Parameters:
+            point: 2D coordinate [x, y]
+            radius: Search radius
+
+        Returns:
+            Array of element IDs within radius
+
+        Example:
+            >>> elems = mesh.find_elements_in_radius(np.array([0.5, 0.5]), radius=0.1)
+        """
+        point = np.asarray(point)
+        elem_ids = self._centroid_tree.query_ball_point(point, radius)
+        return np.array(elem_ids, dtype=int)
+
+    def nearest_vertices(self, point: np.ndarray, k: int = 1) -> np.ndarray:
+        """
+        Find k nearest vertices to point.
+
+        Parameters:
+            point: 2D coordinate [x, y]
+            k: Number of nearest vertices to return
+
+        Returns:
+            Array of k nearest vertex IDs
+
+        Example:
+            >>> verts = mesh.nearest_vertices(np.array([0.5, 0.5]), k=3)
+        """
+        point = np.asarray(point)
+        k = min(k, self.n_verts)
+        _, vert_ids = self._vertex_tree.query(point, k=k)
+        if k == 1:
+            return np.array([vert_ids], dtype=int)
+        return np.array(vert_ids, dtype=int)
+
+    def nearest_elements(self, point: np.ndarray, k: int = 1) -> np.ndarray:
+        """
+        Find k nearest elements (by centroid) to point.
+
+        Parameters:
+            point: 2D coordinate [x, y]
+            k: Number of nearest elements to return
+
+        Returns:
+            Array of k nearest element IDs
+
+        Example:
+            >>> elems = mesh.nearest_elements(np.array([0.5, 0.5]), k=5)
+        """
+        point = np.asarray(point)
+        k = min(k, self.n_elems)
+        _, elem_ids = self._centroid_tree.query(point, k=k)
+        if k == 1:
+            return np.array([elem_ids], dtype=int)
+        return np.array(elem_ids, dtype=int)
 
     def _skeletonize(self) -> None:
         """
