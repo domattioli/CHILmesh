@@ -866,6 +866,10 @@ class CHILmesh(CHILmeshPlotMixin):
         if isinstance(candidates, np.int64):
             candidates = np.array([candidates])
         for elem_id in candidates:
+            # Skip deleted elements (marked as all zeros)
+            elem = self.connectivity_list[elem_id]
+            if np.all(elem == 0):
+                continue
             if self._point_in_element(point, elem_id):
                 return int(elem_id)
         return -1

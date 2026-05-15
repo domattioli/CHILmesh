@@ -10,8 +10,16 @@ from chilmesh import examples
 
 @pytest.fixture(params=["annulus", "donut"])
 def triangle_mesh(request):
-    """Provide triangle-only meshes for mutation testing."""
-    return getattr(examples, request.param)()
+    """Provide fresh (non-cached) triangle-only meshes for mutation testing.
+
+    Uses __wrapped__ to bypass conftest.py's global caching, since mutation
+    tests modify the mesh and would otherwise corrupt the cache for other tests.
+    """
+    example_fn = getattr(examples, request.param)
+    # Use __wrapped__ to bypass caching if available (added by conftest.py)
+    if hasattr(example_fn, '__wrapped__'):
+        return example_fn.__wrapped__()
+    return example_fn()
 
 
 class TestMutableMeshInitialization:
