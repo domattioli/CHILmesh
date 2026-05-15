@@ -247,7 +247,7 @@ Each finding is keyed `F<n>` for cross-referencing in the backlog below.
 
 - **F1 — `angle_based_smoother` and `_ordered_vertex_ring` are entirely uncovered.** `src/chilmesh/CHILmesh.py:1370-1424` and `:1426-1609`. ~190 lines of production code, including the Zhou & Shimada angle-based smoother referenced explicitly by the constitution (`.planning/constitution.md:340-346`, "DOMsmooth Hybrid Fallback"). Recent FEM-smoother work landed tests for the FEM path; the angle path is the documented fallback strategy for mixed meshes and has no regression guard.
 - **F2 — `tests/test_plot_utils.py` is shape-only.** 104 collected items, but the dominant assertion pattern is `isinstance(fig, plt.Figure)` (≈18 sites starting `tests/test_plot_utils.py:30`). The tests verify that `plot()` doesn't crash; they do not verify that anything correct is drawn (no artist counts, no axis-limit checks, no colormap checks). Half of the file's coverage value is essentially smoke testing.
-- **F3 — Unseeded `np.random` in `tests/test_admesh_warmstart.py:303`.** `np.random.uniform(-0.95, 0.95, (n_interior, 2))` feeds into `scipy.spatial.Delaunay` — output triangle IDs and quality metrics are non-deterministic across runs. Today this happens to pass; a future Delaunay/scipy update or a different machine could surface a flake. Use `np.random.default_rng(seed)` consistently as `tests/test_signed_area.py:40` already does.
+- ~~**F3 — Unseeded `np.random` in `tests/test_admesh_warmstart.py:303`.**~~ **WITHDRAWN 2026-05-15:** re-inspection shows `np.random.seed(42)` is set on `tests/test_admesh_warmstart.py:289` inside the same method (`TestExtensibility.test_array_form_source_agnostic`), 14 lines before the `np.random.uniform` call on `:303`. The seed is in scope and effective. Audit was overzealous. The underlying universal-convention proposal (autouse fixture to fail on unseeded `np.random.*`) was nonetheless filed upstream on `domattioli/DomI#63` as a hardening lint.
 
 ### Medium
 
@@ -267,6 +267,19 @@ Each finding is keyed `F<n>` for cross-referencing in the backlog below.
 - **F14 — `_skeletonize` boundary path (`src/chilmesh/CHILmesh.py:908-914`) and tail of `pinch_points` (`:2130-2139`) are uncovered.** Small but algorithmically interesting branches.
 
 ---
+
+## Backlog Status (2026-05-15)
+
+Resolved in this session (autonomous batch on `daily-issue-fixing`):
+
+| ID | Status | Commit | Notes |
+|---|---|---|---|
+| F3 | Withdrawn | — | False alarm; seed already set 14 lines upstream of the cited call. |
+| F4 | ✅ Resolved | `63bf016` | `TRI_FIXTURE_NAMES` exported from `conftest.py`; 4 test files now import. |
+| F9 | ✅ Resolved | `20ac025` | `slow` marker registered in `[tool.pytest.ini_options]`. Warning count 12 → 10. |
+| F11 | ✅ Resolved | `2427103` | README Tests badge points at `python-package.yml`. |
+
+Outstanding backlog (per-finding follow-up tickets pending):
 
 ## Prioritized Backlog (Top 10)
 
