@@ -300,3 +300,36 @@ class TestInsertVertex:
             v0, v1, v2 = triangle_mesh.points[elem, :2]
             signed_area = 0.5 * ((v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1]))
             assert signed_area > -1e-9, f"Element {elem_id} is not CCW after insert_vertex"
+
+    def test_insert_vertex_spatial_index_updated(self, triangle_mesh):
+        """Verify spatial indices are rebuilt after insert_vertex.
+
+        Regression test: spatial indices were stale after mutations.
+        After insert_vertex, find_element() should find the inserted vertex.
+        """
+        mutable = MutableMesh(triangle_mesh)
+
+        # Insert vertex at first element centroid
+        elem_verts = triangle_mesh.connectivity_list[0, :3]
+        point = np.mean(triangle_mesh.points[elem_verts, :2], axis=0)
+
+        new_vert_id = mutable.insert_vertex(point)
+        new_vert_pos = triangle_mesh.points[new_vert_id, :2]
+
+        # Query for element containing new vertex (should exist now)
+        found_elem = triangle_mesh.find_element(new_vert_pos)
+        assert found_elem >= 0, "find_element failed after insert_vertex (spatial index not updated)"
+        assert found_elem < triangle_mesh.n_elems, f"Invalid element ID {found_elem}"
+
+    def test_split_triangle_spatial_index_updated(self, triangle_mesh):
+        """Verify spatial indices are rebuilt after split_triangle."""
+        mutable = MutableMesh(triangle_mesh)
+
+        elem_verts = triangle_mesh.connectivity_list[0, :3]
+        barycenter = np.mean(triangle_mesh.points[elem_verts, :2], axis=0)
+
+        mutable.split_triangle(elem_id=0, point=None)
+
+        # Query at barycenter should succeed after split
+        found_elem = triangle_mesh.find_element(barycenter)
+        assert found_elem >= 0, "find_element failed after split_triangle"

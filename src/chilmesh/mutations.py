@@ -99,8 +99,9 @@ class MutableMesh:
             elem_id, tri_verts, new_vert_id
         )
 
-        # Rebuild adjacencies (necessary after adding vertices/elements)
+        # Rebuild adjacencies and spatial indices (necessary after adding vertices/elements)
         self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
         self._validate_invariants()
         return new_elem_ids
 
@@ -161,8 +162,9 @@ class MutableMesh:
         # Perform swap: modify connectivity
         new_elem_ids = self._swap_edge_internal(elem_a_id, elem_b_id, v0, v1, v2, v3)
 
-        # Rebuild adjacencies (necessary after topology change)
+        # Rebuild adjacencies and spatial indices (necessary after topology change)
         self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
         self._validate_invariants()
         return new_elem_ids
 
@@ -213,8 +215,9 @@ class MutableMesh:
         # Merge operation
         merged_id = self._merge_elements_internal(elem_a, elem_b, shared_edge)
 
-        # Rebuild adjacencies (necessary after topology change)
+        # Rebuild adjacencies and spatial indices (necessary after topology change)
         self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
         self._validate_invariants()
         return merged_id
 
@@ -472,8 +475,9 @@ class MutableMesh:
 
         self.mesh.n_elems = self.mesh.connectivity_list.shape[0]
 
-        # Rebuild adjacencies
+        # Rebuild adjacencies and spatial indices
         self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
         self._validate_invariants()
 
         return new_vert_id
