@@ -880,7 +880,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Parameters:
             point: 2D coordinate [x, y]
-            radius: Search radius
+            radius: Search radius (must be >= 0)
 
         Returns:
             Array of element IDs within radius
@@ -888,6 +888,8 @@ class CHILmesh(CHILmeshPlotMixin):
         Example:
             >>> elems = mesh.find_elements_in_radius(np.array([0.5, 0.5]), radius=0.1)
         """
+        if radius < 0:
+            raise ValueError(f"radius must be >= 0, got {radius}")
         point = np.asarray(point)
         elem_ids = self._centroid_tree.query_ball_point(point, radius)
         return np.array(elem_ids, dtype=int)
