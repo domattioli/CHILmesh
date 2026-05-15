@@ -2,6 +2,7 @@ from importlib import metadata
 
 from .CHILmesh import CHILmesh, write_fort14
 from .mesh_topology import EdgeMap
+from .mutations import MutableMesh
 from . import examples
 from . import bridge
 from .admesh_warmstart import optimize_with_admesh_truss, optimize_with_admesh_truss_arrays
@@ -15,6 +16,7 @@ __all__ = [
     "CHILmesh",
     "write_fort14",
     "EdgeMap",
+    "MutableMesh",
     "examples",
     "bridge",
     "optimize_with_admesh_truss",
