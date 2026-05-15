@@ -12,8 +12,7 @@ import pytest
 
 import chilmesh
 from chilmesh import CHILmesh
-
-FIXTURES = ["annulus", "donut", "block_o", "structured"]
+from conftest import TRI_FIXTURE_NAMES as FIXTURES
 
 
 @pytest.mark.parametrize("name", FIXTURES)
