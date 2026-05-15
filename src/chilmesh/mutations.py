@@ -240,7 +240,15 @@ class MutableMesh:
         dot11 = np.dot(v1, v1)
         dot12 = np.dot(v1, v2)
 
-        inv_denom = 1.0 / (dot00 * dot11 - dot01 * dot01)
+        denom = dot00 * dot11 - dot01 * dot01
+
+        # Check for degenerate triangle (zero or near-zero area)
+        if abs(denom) < 1e-12:
+            raise RuntimeError(
+                f"Point {point} cannot be validated against degenerate triangle (zero area)"
+            )
+
+        inv_denom = 1.0 / denom
         u = (dot11 * dot02 - dot01 * dot12) * inv_denom
         v = (dot00 * dot12 - dot01 * dot02) * inv_denom
 
