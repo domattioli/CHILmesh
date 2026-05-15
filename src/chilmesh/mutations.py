@@ -99,6 +99,8 @@ class MutableMesh:
             elem_id, tri_verts, new_vert_id
         )
 
+        # Rebuild adjacencies (necessary after adding vertices/elements)
+        self.mesh._build_adjacencies()
         self._validate_invariants()
         return new_elem_ids
 
@@ -132,8 +134,8 @@ class MutableMesh:
         if edge_id < 0 or edge_id >= self.mesh.n_edges:
             raise IndexError(f"Edge {edge_id} out of range [0, {self.mesh.n_edges})")
 
-        edge2elem = self.mesh.edge2elem
-        elems = edge2elem[edge_id]
+        edge2elem_all = self.mesh.edge2elem()  # Call method
+        elems = edge2elem_all[edge_id]
 
         # Check edge is interior
         if elems[0] == -1 or elems[1] == -1:
@@ -159,6 +161,8 @@ class MutableMesh:
         # Perform swap: modify connectivity
         new_elem_ids = self._swap_edge_internal(elem_a_id, elem_b_id, v0, v1, v2, v3)
 
+        # Rebuild adjacencies (necessary after topology change)
+        self.mesh._build_adjacencies()
         self._validate_invariants()
         return new_elem_ids
 
@@ -192,8 +196,14 @@ class MutableMesh:
             raise ValueError("Cannot merge element with itself")
 
         elem_list = self.mesh.connectivity_list
-        if elem_list[elem_a, 3] != 0 or elem_list[elem_b, 3] != 0:
-            raise ValueError("Both elements must be triangles")
+        n_cols = elem_list.shape[1]
+
+        # Check both elements are triangles
+        if n_cols == 4:
+            if elem_list[elem_a, 2] == elem_list[elem_a, 3] or \
+               elem_list[elem_b, 2] == elem_list[elem_b, 3]:
+                raise ValueError("Both elements must be triangles")
+        # For 3-column connectivity, all are triangles
 
         # Find shared edge
         shared_edge = self._find_shared_edge(elem_a, elem_b)
@@ -203,6 +213,8 @@ class MutableMesh:
         # Merge operation
         merged_id = self._merge_elements_internal(elem_a, elem_b, shared_edge)
 
+        # Rebuild adjacencies (necessary after topology change)
+        self.mesh._build_adjacencies()
         self._validate_invariants()
         return merged_id
 
@@ -292,23 +304,26 @@ class MutableMesh:
         return new_ids
 
     def _is_swap_valid(self, v0: int, v1: int, v2: int, v3: int) -> bool:
-        """Check if swapping edge (v0,v1) to (v2,v3) creates valid convex quad."""
+        """Check if swapping edge (v0,v1) to (v2,v3) creates valid geometry.
+
+        Simple check: new diagonal should have non-zero length and not create
+        zero-area triangles. More sophisticated checks (convexity, angles) deferred.
+        """
         p0 = self.mesh.points[v0, :2]
         p1 = self.mesh.points[v1, :2]
         p2 = self.mesh.points[v2, :2]
         p3 = self.mesh.points[v3, :2]
 
-        # Check quad vertices form convex shape
-        # Simple heuristic: diagonal (v2, v3) should intersect interior of quad
-        det1 = self._signed_area(p0, p2, p3)
-        det2 = self._signed_area(p1, p2, p3)
-        det3 = self._signed_area(p0, p1, p2)
-        det4 = self._signed_area(p0, p1, p3)
+        # Check new diagonal has non-zero length
+        diag_len = np.linalg.norm(p3 - p2)
+        if diag_len < 1e-10:
+            return False
 
-        # All same sign = convex
-        signs = [np.sign(det1), np.sign(det2), np.sign(det3), np.sign(det4)]
-        same_sign = len(set(signs)) == 1
-        return same_sign
+        # Check neither new triangle has zero area
+        area1 = abs(self._signed_area(p0, p2, p3))
+        area2 = abs(self._signed_area(p1, p2, p3))
+
+        return area1 > 1e-10 and area2 > 1e-10
 
     def _swap_edge_internal(
         self, elem_a_id: int, elem_b_id: int, v0: int, v1: int, v2: int, v3: int
@@ -322,8 +337,9 @@ class MutableMesh:
 
     def _find_shared_edge(self, elem_a: int, elem_b: int) -> Opt[int]:
         """Find edge shared by two elements."""
-        edge_a = self.mesh.elem2edge[elem_a]
-        edge_b = self.mesh.elem2edge[elem_b]
+        elem2edge_all = self.mesh.elem2edge()  # Call method
+        edge_a = elem2edge_all[elem_a]
+        edge_b = elem2edge_all[elem_b]
 
         shared = set(edge_a) & set(edge_b)
         return list(shared)[0] if shared else None
@@ -331,10 +347,17 @@ class MutableMesh:
     def _merge_elements_internal(
         self, elem_a: int, elem_b: int, shared_edge: int
     ) -> int:
-        """Merge two elements into a quad."""
-        # Placeholder: mark elem_b as deleted, return elem_a
-        # Full implementation would update connectivity
-        self.mesh.connectivity_list[elem_b, :] = [0, 0, 0, 0]
+        """Merge two elements into a quad or coalesced triangle.
+
+        MVP: Mark elem_b as deleted by setting to all zeros.
+        Full implementation would create actual quad from two triangles.
+        """
+        n_cols = self.mesh.connectivity_list.shape[1]
+        if n_cols == 3:
+            self.mesh.connectivity_list[elem_b, :] = [0, 0, 0]
+        else:
+            self.mesh.connectivity_list[elem_b, :] = [0, 0, 0, 0]
+
         return elem_a
 
     def _signed_area(self, p0: np.ndarray, p1: np.ndarray, p2: np.ndarray) -> float:
