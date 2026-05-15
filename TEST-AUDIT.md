@@ -274,6 +274,7 @@ Resolved in this session (autonomous batch on `daily-issue-fixing`):
 
 | ID | Status | Commit | Notes |
 |---|---|---|---|
+| F1 | ✅ Resolved | (this commit) | New `tests/test_angle_based_smoother.py` (21 tests). `CHILmesh.py` coverage 73% → 89%. Found one docstring/impl discrepancy: `_ordered_vertex_ring` walks CW around `v`, not CCW as docstring claims (algorithm is direction-agnostic). |
 | F3 | Withdrawn | — | False alarm; seed already set 14 lines upstream of the cited call. |
 | F4 | ✅ Resolved | `63bf016` | `TRI_FIXTURE_NAMES` exported from `conftest.py`; 4 test files now import. |
 | F9 | ✅ Resolved | `20ac025` | `slow` marker registered in `[tool.pytest.ini_options]`. Warning count 12 → 10. |
