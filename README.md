@@ -19,6 +19,21 @@
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
+---
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Installation](#installation)
+- [Performance](#performance-v020)
+- [API Overview](#api-overview)
+- [Mesh Element Types](#mesh-element-types)
+- [Downstream Projects](#downstream-projects)
+- [Citation](#citation)
+- [References](#references)
+- [License](#license)
+
 > **MATLAB users**: Python successor to the original QuADMesh+ codebase. Still in development; API may evolve. Original MATLAB code (no longer maintained) at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — `00_CHILMesh_Class/@CHILmesh/CHILmesh.m` has canonical algorithms (e.g., `meshLayers` skeletonization).
 
 ---
@@ -43,36 +58,40 @@ mesh.plot_quality()
 plt.show()
 ```
 
-### Visual Comparison: Warm-Start Truss Optimization Pipeline
-
-Raw Delaunay → warm-start truss equilibration → FEM smoothing. All three rows share same boundary and element count (580 triangles):
+### Showcase: WNAT_Hagen (52,774 verts · 98,365 elems)
 
 ![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](output/annulus_quickstart.png?v=5)
 
-**Row 1 — Raw Delaunay:** `chilmesh.examples.annulus()` (median quality ≈ 0.71).
-**Row 2 — Row 1 + ADMESH Truss (warm-start):** Vendored `distmesh2d` truss loop from Row 1's points (boundary pinned bit-exactly via `pfix`), graded sizing `H_MIN=0.05` → `H_MAX=0.18`. Reaches quality plateau (median ≈ 0.92, std < 0.005) within ~10 iterations; `track_best_quality=True` returns best-quality snapshot. Early-stops if quality drops >10% from peak.
-**Row 3 — Row 2 + FEM Smoother:** CHILmesh FEM relaxation on Row 2 mesh; polishes median quality to ≈ 0.93. Boundary verified by `V_BND_PROP` (max delta ≈ 6e-12).
+Median q=0.797, mean 0.786. Full init + analysis: **~3.3s** end-to-end. Reproduce: `python scripts/benchmark_wnat_hagen.py`.
 
-Columns: **left** = mesh wireframe · **center** = skeletonization layers (viridis) · **right** = per-element quality (cool, 4√3·area / Σedge²).
+### Showcase: Mixed-Element Mesh
 
-#### How to regenerate this figure
+466 tris + 60 quads after FEM smoothing (symmetric quad stiffness, boundary pinned, q=0.760):
 
-```bash
-python generate_3row_admesh.py
-```
+![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=2)
 
-Script in `scripts/`; writes `output/annulus_quickstart.png`. Enforces fail-loud assertions (V_BND, V_DEGENERACY, V_CHAIN, V_CONN) before saving. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) for warm-start adapter API and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for full design contract.
+Structured quad core (192 quads) → skeletonized outer ring (ADMESH 394 tris) + gap band Delaunay fill (72 tris) → FEM smooth. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+
+### Showcase: Skeletonization & Mesh Plotting
+
+Layer-based skeletonization (center, viridis) and quality plotting (right, `4√3·area / Σedge²`) on three smoothing states (same boundary, 580 triangles):
+
+![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
+
+Rows: (1) raw Delaunay (q≈0.71), (2) ADMESH warm-start (q≈0.92), (3) FEM smooth (q≈0.93).
+
+**Regenerate**: `python scripts/generate_3row_admesh.py` → `output/annulus_quickstart.png`. See [`src/chilmesh/admesh_warmstart.py`](src/chilmesh/admesh_warmstart.py) and [`specs/005-admesh-warm-start-truss/`](specs/005-admesh-warm-start-truss/) for details.
 
 ---
 
 ## Features
 
 - **Fast**: 937× speedup vs v0.1.1
-- **Mixed-Element**: Triangles, quads, and mixed meshes with unified API
+- **Mixed-Element**: Triangles, quads, mixed meshes
 - **Smoothing**: FEM and geometric smoothing
-- **Analysis**: Element quality metrics, interior angles, layer-based skeletonization
+- **Analysis**: Quality, angles, skeletonization layers
 - **I/O**: ADCIRC `.fort.14` and SMS `.2dm`
-- **Catalog**: ADMESH-Domains integration via `from_admesh_domain()`
+- **Catalog**: ADMESH-Domains integration
 
 ---
 
