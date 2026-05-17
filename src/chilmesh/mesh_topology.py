@@ -1,4 +1,6 @@
 """Mesh topology utilities for efficient edge lookup and management."""
+from __future__ import annotations
+
 
 from typing import Dict, Tuple, Optional
 import numpy as np
