@@ -7,7 +7,7 @@ Pipeline:
 3. ADMESH full distmesh on the outer ring: grid-sample initial interior, run truss loop.
 4. Delaunay-triangulate the gap band (layer-2 region) from ring boundary nodes only.
 5. Stitch ADMESH tris + gap tris + quad core into combined mixed-element mesh.
-6. Angle-based smooth combined mesh (Zhou & Shimada inscribed-angle, boundary pinned).
+6. FEM smooth combined mesh (symmetric quad stiffness, boundary pinned).
 7. Render 4-panel figure to output/mixed_truss_fem_demo.png.
 """
 from __future__ import annotations
@@ -297,9 +297,9 @@ def build_combined_mesh(
 # Stage 6: Angle-based smooth (outer boundary pinned)
 # ---------------------------------------------------------------------------
 
-def angle_smooth(mesh: CHILmesh) -> CHILmesh:
-    """Iterative angle-based smoother (Zhou & Shimada inscribed-angle, boundary pinned)."""
-    mesh.smooth_mesh(method='angle-based', acknowledge_change=True)
+def fem_smooth(mesh: CHILmesh) -> CHILmesh:
+    """FEM smoother with symmetric quad stiffness (Zhou & Shimada, boundary pinned)."""
+    mesh.smooth_mesh(method='fem', acknowledge_change=True)
     return mesh
 
 
@@ -384,8 +384,8 @@ def main(out_path: Path | None = None) -> Path:
         points=mesh_pre.points.copy(),
         compute_layers=True,
     )
-    print("[6/6] Angle-based smooth (Zhou & Shimada inscribed-angle, boundary pinned) …")
-    angle_smooth(mesh_smooth)
+    print("[6/6] FEM smooth (symmetric quad stiffness, boundary pinned) …")
+    fem_smooth(mesh_smooth)
 
     q_pre, _, _   = mesh_pre.elem_quality()
     q_post, _, _  = mesh_smooth.elem_quality()
@@ -424,7 +424,7 @@ def main(out_path: Path | None = None) -> Path:
     )
     _plot_mixed(
         axes[1, 1], mesh_smooth,
-        f"(4) Angle-based smooth (Zhou & Shimada, boundary pinned)\n"
+        f"(4) FEM smooth (symmetric quad stiffness, boundary pinned)\n"
         f"median quality {np.median(q_post):.3f}",
     )
 
@@ -437,7 +437,7 @@ def main(out_path: Path | None = None) -> Path:
     fig2, ax2 = plt.subplots(1, 1, figsize=(8, 6), facecolor="white")
     _plot_mixed(
         ax2, mesh_smooth,
-        f"Mixed-element mesh after angle-based smoothing (Zhou & Shimada)\n"
+        f"Mixed-element mesh after FEM smoothing (symmetric quad stiffness)\n"
         f"{n_tris_total} triangles + {len(kept_quads)} quads · median quality {np.median(q_post):.3f}",
     )
     plt.tight_layout()
@@ -447,10 +447,10 @@ def main(out_path: Path | None = None) -> Path:
     # 3-panel showcase: wireframe | layers | quality
     showcase_path = out_path.parent / "mixed_mesh_showcase.png"
     fig3, axes3 = plt.subplots(1, 3, figsize=(18, 6), facecolor="white")
-    mesh_smooth.plot(ax=axes3[0], elem_color="white", edge_color="k", linewidth=1.0)
-    axes3[0].set_title(f"Mixed mesh · {n_tris_total} tris + {len(kept_quads)} quads", fontsize=10)
-    axes3[0].set_aspect("equal")
-    axes3[0].axis("off")
+    _plot_mixed(
+        axes3[0], mesh_smooth,
+        f"Mixed mesh · {n_tris_total} tris + {len(kept_quads)} quads",
+    )
     mesh_smooth.plot_layer(ax=axes3[1])
     axes3[1].set_title("Skeletonization layers", fontsize=10)
     axes3[1].set_aspect("equal")
