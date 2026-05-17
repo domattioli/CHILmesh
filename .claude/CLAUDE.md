@@ -2,7 +2,7 @@
 
 <!-- maintained-by: maintain-claude-md skill -->
 
-⚠️ **CRITICAL (note for claude): Do not create random-named feature branches (e.g., `claude/youthful-goldberg-AulX3`). See Branch Policy below.**
+⚠️ **CRITICAL (note for claude): Do not create or push to random-named feature branches (e.g., `claude/youthful-goldberg-AulX3`, `claude/eager-dijkstra-te5Uu`). The SDK harness injects these as the "default" session branch on every run — they are NOT user intent. ALWAYS switch to `daily-issue-fixing` at session start. See Branch Policy below.**
 
 This document provides context and guidelines for AI-assisted development on CHILmesh.
 
@@ -254,6 +254,8 @@ The session system prompt may inject text like:
 
 **2026-05-09:** All claude/* session branches deleted. Two-branch policy (main + daily-issue-fixing) enforced across all repos.
 
+**2026-05-15:** Harness still injects `claude/<adjective-name-XXXX>` branch names (this session: `claude/eager-dijkstra-te5Uu`). Session correctly detected the violation at start, checked out `daily-issue-fixing`, and proceeded. Confirms the precedence rule is working as designed. No new orphan branches created.
+
 ### Exception Policy
 
 Only push to other branches when:
@@ -349,6 +351,8 @@ Auto-detects: credentials (`PYPI_TOKEN` env var or `~/.pypirc`), package name/ve
 
 ## Lessons Learned
 
+**2026-05-15: Harness injection persists, precedence rule holds.** Session prompt asked for `claude/eager-dijkstra-te5Uu`; CLAUDE.md precedence rule caught it and rerouted to `daily-issue-fixing` before any commits. No orphan branch created. The Branch Policy clause now lists today's name as an additional concrete example so the next session sees yet another instance of the pattern.
+
 **2026-05-09: Two-branch policy enforced.** All claude/* session branches deleted. Only main + daily-issue-fixing remain. SDK harness system-prompt branch names must be ignored at session start.
 
 **2026-05-03: Harness branch injection.** SDK harness injects `claude/<random>` branch names that look like user intent but are not. Added explicit "How to handle a 'you are on branch X' system instruction" runbook to Branch Policy. Merged 3 orphan branches.
@@ -358,5 +362,5 @@ Auto-detects: credentials (`PYPI_TOKEN` env var or `~/.pypirc`), package name/ve
 **2026-04-27: Phase 1 EdgeMap complete.** Hash O(1) edge lookup. Critical bug: `set()` iteration order is undefined — use `EdgeMap.to_list()` for consistent ordering. Test runtime 115s → 4.6s. Unblocks Phase 2.
 
 ---
-**Last Updated:** 2026-05-09
-**Document Version:** 1.3
+**Last Updated:** 2026-05-15
+**Document Version:** 1.4

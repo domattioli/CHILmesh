@@ -13,6 +13,7 @@ import chilmesh
 from chilmesh import examples as _examples
 
 FIXTURE_NAMES = ["annulus", "donut", "block_o", "structured", "quad_2x2"]
+TRI_FIXTURE_NAMES = [n for n in FIXTURE_NAMES if n != "quad_2x2"]
 
 
 # Memoize the example loaders for the duration of the test session so the

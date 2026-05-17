@@ -1,7 +1,7 @@
 # CHILmesh Governing Constitution
 
 **Effective Date:** 2026-04-26
-**Version:** 1.0
+**Version:** 1.1
 **Scope:** Development governance, decision-making, and evolution principles
 
 ---
@@ -321,15 +321,48 @@ Revert if: tests fail unexpectedly; performance regresses >10% on large fixtures
 
 ---
 
-## 10. DOCUMENT CONTROL
+## 10. FEATURE-SPECIFIC PRINCIPLES
+
+### 10.1 I/O and Data Loading
+
+**Zero-Regression I/O:** Fort.14 reader/writer must preserve mesh through roundtrip (geometry equality). Quad element support atomic with triangle support (no partial implementations). New format readers (SMS 2DM, etc.) transparent via routing layer. Backward compat: existing code using `read_from_fort14()` unchanged.
+
+**Boundary Preservation (Bit-Exact):** Operations affecting mesh coordinates (ADMESH warm-start, optimization) verify boundary vertices unchanged via `np.array_equal()` (not approximate equality). Documented in contracts; tested on all fixtures.
+
+### 10.2 Mesh Smoothing Algorithms
+
+**FEM Smoother Requirements:**
+- Backward compat: public API `smooth_mesh(method='fem')` signature unchanged
+- Supports all element types: pure triangles, pure quads, mixed (padded triangles + quads)
+- Boundary pinning: fixed boundary preserved exactly; interior nodes converge toward equilibrium
+- No element collapse: minimum element quality preserved across all fixtures
+
+**DOMsmooth Hybrid Fallback (Issue #95, #100):** If FEM assembly for mixed meshes produces quality degradation, fallback strategy:
+1. Separate connectivity into tri-only and quad-only submeshes
+2. Apply FEM smoothing independently to each
+3. Recombine into original mixed mesh
+4. Run iterative angle-based smoother (Zhou & Shimada) for final polish
+
+This preserves element quality guarantees while maintaining API: `smooth_mesh('fem', acknowledge_change=True)` auto-selects FEM or DOMsmooth based on mesh composition.
+
+### 10.3 Skeletonization Fidelity
+
+**MATLAB Equivalence:** Layer separation invariant must hold: vertex in layer k cannot appear in layers k+2 or beyond. Port from MATLAB reference code; document source line references in comments. Layer counts may change (buggy counts corrected) but dict structure preserved.
+
+**Algorithm Stability:** Skeletonization preserves invariants across all mesh types (triangular, quad, mixed). Tests verify layer disjoint cover and vertex-layer assignment correctness on all fixtures.
+
+---
+
+## 11. DOCUMENT CONTROL
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.1 | 2026-05-11 | Dominik Mattioli | Consolidate spec principles: I/O atomicity, boundary preservation, FEM/DOMsmooth hybrid, MATLAB fidelity |
 | 1.0 | 2026-04-26 | Dominik Mattioli | Initial constitution (Planning Phase) |
 
 ---
 
-## External Upstream: DomI
+## 12. External Upstream: DomI
 
 `domattioli/DomI` manages foundational skills and policy used by this repo.
 `.domi-pin` committed; session start auto-checks drift via
@@ -342,7 +375,7 @@ both override DomI universal defaults.
 
 ---
 
-## Appendix A: Principles in Action
+## Appendix A: Principles in Action (Spec-Independent)
 
 ### Example 1: Fixing Bug in Skeletonization
 

@@ -294,7 +294,7 @@ def build_combined_mesh(
 
 
 # ---------------------------------------------------------------------------
-# Stage 6: Angle-based smooth (outer boundary pinned)
+# Stage 6: FEM smooth (symmetric quad stiffness (outer boundary pinned)
 # ---------------------------------------------------------------------------
 
 def fem_smooth(mesh: CHILmesh) -> CHILmesh:

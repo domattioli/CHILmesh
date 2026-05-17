@@ -9,6 +9,37 @@ echo "=== Session Start: CHILmesh ==="
 echo "Branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null) | Dirty: $(git status --porcelain 2>/dev/null | wc -l | tr -d ' ') files"
 echo ""
 
+# Remote health check — auto-heal dead local git proxy by falling back to github.com
+# Pattern: cloud sessions sometimes route `origin` through a local proxy (127.0.0.1:<port>)
+# that dies mid-session. Detect dead proxy + rewrite remote when GITHUB_TOKEN available.
+# See DomI #48 (push-via-mcp) for the workaround that motivated this.
+_remote_url=$(git config --get remote.origin.url 2>/dev/null || echo "")
+if [[ "$_remote_url" =~ ^http://(.+@)?127\.0\.0\.1:([0-9]+)/ ]]; then
+  _port="${BASH_REMATCH[2]}"
+  if ! (echo > /dev/tcp/127.0.0.1/"$_port") 2>/dev/null; then
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+      git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/domattioli/CHILmesh.git"
+      echo "⚠ Local git proxy dead on :$_port — switched origin to github.com via GITHUB_TOKEN"
+      # Resync local with remote (covers case where prior session pushed via MCP)
+      if git fetch origin daily-issue-fixing 2>/dev/null; then
+        _local_sha=$(git rev-parse HEAD 2>/dev/null || echo "")
+        _remote_sha=$(git rev-parse origin/daily-issue-fixing 2>/dev/null || echo "")
+        if [ -n "$_local_sha" ] && [ -n "$_remote_sha" ] && [ "$_local_sha" != "$_remote_sha" ]; then
+          if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
+            git reset --hard origin/daily-issue-fixing >/dev/null
+            echo "  ↳ Resynced HEAD: $_local_sha → $_remote_sha"
+          else
+            echo "  ↳ Dirty tree; not resyncing. Local=$_local_sha Remote=$_remote_sha"
+          fi
+        fi
+      fi
+    else
+      echo "⚠ Local git proxy dead on :$_port and no GITHUB_TOKEN — push will fail" >&2
+    fi
+  fi
+fi
+echo ""
+
 # DomI drift check (plugin cache → skills marketplace → vendored)
 _find_check_pin() {
   for d in "$HOME/.claude/plugins/cache/DomI/sync-from-domi" \
