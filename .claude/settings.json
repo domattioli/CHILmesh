@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/session_start.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/branch_guard.sh",
+            "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/commit_msg_guard.sh",
+            "timeout": 3
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/secret_path_guard.sh",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/stop_introspect.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -9,7 +9,7 @@ description = "Layer-based 2D triangular, quadrilateral and mixed-element mesh l
 authors = [{name = "Dominik Mattioli"}]
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 keywords = [
     "mesh",
     "adcirc",
@@ -28,6 +28,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
