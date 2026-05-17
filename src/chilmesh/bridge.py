@@ -5,6 +5,8 @@ with MADMESHR, ADMESH, and ADMESH-Domains. Each adapter adds
 domain-specific convenience methods while delegating to the base
 CHILmesh public API (CAI).
 """
+from __future__ import annotations
+
 
 from typing import Dict, Set, Tuple, List, Optional
 import numpy as np
