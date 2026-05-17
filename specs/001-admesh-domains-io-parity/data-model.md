@@ -9,7 +9,7 @@
 
 ### `CHILmesh` (extended)
 
-The single in-memory representation of a loaded mesh. All changes in this feature are additive extensions.
+Single in-memory representation of a loaded mesh. All changes in this feature are additive extensions.
 
 | Attribute | Type | Description | Change |
 |---|---|---|---|
@@ -106,17 +106,17 @@ from_admesh_domain(record, compute_layers=True)
 | `num_nodes` must be 3 or 4 in `.2dm` | `read_from_2dm()` raises `ValueError` with element ID |
 | `get_layer()` requires `compute_layers=True` at init time | `RuntimeError` raised in `get_layer()` when `n_layers == 0` |
 | File must exist before any reader is called | `FileNotFoundError` raised in `from_admesh_domain()` |
-| `element_type` vocabulary is constrained | `admesh_metadata()` always returns one of the three canonical strings |
+| `element_type` vocabulary is constrained | `admesh_metadata()` always returns one of three canonical strings |
 
 ---
 
 ## Connectivity Convention (padded triangles)
 
-For a mixed-element mesh stored in a 4-column `connectivity_list`:
+For mixed-element mesh stored in 4-column `connectivity_list`:
 
 - **Quad**: `[v0, v1, v2, v3]` — all four distinct vertices
 - **Triangle**: `[v0, v1, v2, v0]` — fourth slot repeats first vertex
 
-This convention is already established in `_ensure_ccw_orientation()` (line 140) and `_elem_type()`. All new code must honour it.
+Convention already established in `_ensure_ccw_orientation()` (line 140) and `_elem_type()`. All new code must honour it.
 
-`_elem_type()` identifies a row as a triangle when `row[3] == row[0]` (or the array has only 3 columns).
+`_elem_type()` identifies row as triangle when `row[3] == row[0]` (or array has only 3 columns).

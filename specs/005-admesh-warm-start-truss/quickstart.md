@@ -3,11 +3,7 @@
 **Date**: 2026-05-02
 **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md) | **API contract**: [contracts/api-contract.md](contracts/api-contract.md)
 
-This guide shows three worked examples covering the extensibility contract (FR-018):
-
-1. Bundled annulus (the simplest case — uses the CHILmesh form)
-2. Bundled donut (proves domain-agnostic — different SDF, same API)
-3. Raw `(points, triangles)` from a non-CHILmesh source (proves source-agnostic — uses the array form)
+Three worked examples covering extensibility contract (FR-018): (1) bundled annulus — CHILmesh form; (2) bundled donut — domain-agnostic; (3) raw `(points, triangles)` — source-agnostic, array form.
 
 ---
 
@@ -28,13 +24,13 @@ git clone https://github.com/domattioli/ADMESH.git ./ADMESH
 cd ADMESH && git checkout 05bc68f && cd ..
 ```
 
-The CHILmesh adapter resolves ADMESH via `sys.path.insert(0, "ADMESH")` at import time if not pip-installed.
+Adapter resolves ADMESH via `sys.path.insert(0, "ADMESH")` at import if not pip-installed.
 
 ---
 
 ## Example 1: Bundled annulus (CHILmesh form)
 
-The minimal one-liner. This is also exactly what Row 2 of the README's 4-row visualization does.
+Minimal one-liner — same as Row 2 of README's 4-row visualization.
 
 ```python
 import chilmesh
@@ -76,18 +72,11 @@ optimized.plot()
 plt.show()
 ```
 
-**What happened under the hood**:
-1. `optimize_with_admesh_truss` extracted `(points, triangles, boundary_indices)` from the CHILmesh.
-2. Validated triangle-only, positive areas, boundary-on-SDF, all points within bbox.
-3. Called the vendored `distmesh2d_warmstart` with our boundary as `pfix` and our interior as the warm-start free points (skipping `_initial_distribution`).
-4. Truss loop ran ~50-200 iterations until convergence (default `dptol=1e-3`).
-5. Wrapped the output `(points, triangles)` in a fresh CHILmesh.
+**Under the hood**: extracted `(points, triangles, boundary_indices)` → validated → called vendored `distmesh2d_warmstart` with boundary as `pfix`, interior as warm-start free points (skipped `_initial_distribution`) → ran ~50-200 iterations → wrapped output in fresh CHILmesh.
 
 ---
 
-## Example 2: Bundled donut (different domain, same API)
-
-Same function, completely different geometry. This demonstrates FR-017 (domain-agnostic).
+## Example 2: Bundled donut (different domain, same API — FR-017)
 
 ```python
 import chilmesh
@@ -134,13 +123,11 @@ elem_areas = optimized.elem_quality()[0]  # quality, but we want sizes — use a
 # (See `chilmesh.signed_area()` for actual area computation; pseudocode here.)
 ```
 
-**Key point**: The exact same function works on a completely different domain. The only thing that changed is the `sdf` and `size_fn` callables — the library code knows nothing about annuli vs donuts.
+**Key point**: Same function, different domain. Only `sdf` and `size_fn` changed — library knows nothing about annuli vs donuts.
 
 ---
 
-## Example 3: Raw arrays from a non-CHILmesh source (array form)
-
-This is the most general case — prove you can warm-start *any* triangulation, not just ones produced by CHILmesh.
+## Example 3: Raw arrays from non-CHILmesh source (array form)
 
 ```python
 from chilmesh import optimize_with_admesh_truss_arrays
@@ -196,18 +183,15 @@ print(f"Optimized: {len(points_out)} points, {len(triangles_out)} triangles")
 print(f"Boundary preserved: {n_boundary} points bit-exact")
 ```
 
-**What this proves**:
-- The function accepts plain numpy arrays — no CHILmesh dependency on the *input* side.
-- A user-supplied SDF for a brand-new domain (the unit square) works without any library changes.
-- An explicit `boundary_indices` argument bypasses the auto-detection (handy when you already know which points are boundary).
+**What this proves**: plain numpy arrays accepted (no CHILmesh dependency on input); user-supplied SDF for any domain works; explicit `boundary_indices` bypasses auto-detection.
 
 ---
 
 ## Common patterns
 
-### Pattern: Inferring boundary from the triangulation
+### Pattern: Inferring boundary from triangulation
 
-If you don't know which indices are boundary, omit `boundary_indices` and the adapter infers them via "edges in exactly one triangle":
+Omit `boundary_indices`; adapter infers via "edges in exactly one triangle":
 
 ```python
 points_out, triangles_out = optimize_with_admesh_truss_arrays(
@@ -218,11 +202,9 @@ points_out, triangles_out = optimize_with_admesh_truss_arrays(
 )
 ```
 
-This works for any closed-domain triangulation but assumes the input is well-formed (no duplicate triangles, no self-intersecting edges).
+Works for any closed-domain triangulation; assumes well-formed input.
 
 ### Pattern: Tuning truss convergence
-
-For a stubborn input where the default 500 iterations isn't enough:
 
 ```python
 optimized = chilmesh.optimize_with_admesh_truss(
@@ -234,9 +216,7 @@ optimized = chilmesh.optimize_with_admesh_truss(
 )
 ```
 
-### Pattern: Suppressing the non-degradation guard
-
-If you specifically want to see what the truss *would* produce, even if it's worse:
+### Pattern: Suppressing non-degradation guard
 
 ```python
 optimized = chilmesh.optimize_with_admesh_truss(
@@ -290,12 +270,10 @@ assert np.array_equal(input_boundary_xy, output_boundary_xy), \
 
 ## Verification checklist
 
-After running the adapter, verify:
+- [ ] Output is valid `CHILmesh` (CHILmesh form) or `(points, triangles)` tuple (array form)
+- [ ] No `RuntimeError`; warnings acceptable but informative
+- [ ] `np.array_equal(output_boundary, input_boundary)` True
+- [ ] `output.elem_quality()[0].mean() >= input.elem_quality()[0].mean()` (with default `enforce_non_degradation=True`)
+- [ ] Output connectivity valid (positive areas everywhere)
 
-- [ ] Output is a valid `CHILmesh` instance (CHILmesh form) or a `(points, triangles)` tuple (array form).
-- [ ] No `RuntimeError` was raised; warnings are acceptable but tell you something happened.
-- [ ] `np.array_equal(output_boundary, input_boundary)` is True for the boundary subset.
-- [ ] `output.elem_quality()[0].mean() >= input.elem_quality()[0].mean()` (with `enforce_non_degradation=True`, default).
-- [ ] The output's connectivity is a valid triangulation (positive areas everywhere).
-
-If any of these fail, file an issue at `https://github.com/domattioli/chilmesh/issues` with a minimal reproducer.
+Failures: file issue at `https://github.com/domattioli/chilmesh/issues` with minimal reproducer.

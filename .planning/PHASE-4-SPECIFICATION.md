@@ -10,16 +10,16 @@
 
 ## Executive Summary
 
-Phase 4 integrates CHILmesh's modernized API with MADMESHR, ADMESH-Domains, and hypothetical ADMESH. The phase culminates in releasing version 0.2.0 with breaking-change signaling, migration guide, and documented architectural decisions.
+Phase 4 integrates CHILmesh's modernized API with MADMESHR, ADMESH-Domains, hypothetical ADMESH. Culminates in v0.2.0 with breaking-change signaling, migration guide, architectural decisions documented.
 
 **Deliverables:**
 - MADMESHR integration (advancing-front API, domain splitting)
-- ADMESH-Domains bulk-load optimization verification
-- Version 0.2.0 release with migration guide
+- ADMESH-Domains bulk-load verification
+- v0.2.0 release with migration guide
 - Governance docs updated (CLAUDE.md, constitution.md, PROJECT_PLAN.md, API.md)
-- Lessons learned document
+- Lessons learned doc
 
-**Success:** MADMESHR can use CHILmesh for advancing-front generation; 0.2.0 released with clear signaling.
+**Success:** MADMESHR uses CHILmesh for advancing-front generation; 0.2.0 released with clear signaling.
 
 ---
 
@@ -27,9 +27,9 @@ Phase 4 integrates CHILmesh's modernized API with MADMESHR, ADMESH-Domains, and 
 
 ### 4.1 Goals
 
-**Primary:** Ship version 0.2.0 as breaking-change release with clear migration path.
+**Primary:** Ship v0.2.0 as breaking-change release with clear migration path.
 
-**Secondary:** Validate that MADMESHR and ADMESH-Domains can leverage new CHILmesh APIs effectively.
+**Secondary:** Validate MADMESHR and ADMESH-Domains leverage new CHILmesh APIs.
 
 ### 4.2 In-Scope Integration
 
@@ -37,8 +37,8 @@ Phase 4 integrates CHILmesh's modernized API with MADMESHR, ADMESH-Domains, and 
 
 **What MADMESHR needs:**
 1. Place quads/triangles incrementally on advancing-front boundary
-2. Detect pinch points (bottlenecks) and split domain
-3. Remove boundary loop elements and pack into result
+2. Detect pinch points (bottlenecks); split domain
+3. Remove boundary loop elements; pack into result
 
 **CHILmesh Support:**
 ```python
@@ -69,8 +69,8 @@ class CHILmesh:
 
 **Integration Path:**
 - MADMESHR calls `mesh.add_advancing_front_element(verts, type)` in loop
-- CHILmesh internal state stays consistent (adjacencies updated, layers stale until rebuild)
-- MADMESHR can query `advancing_front_boundary_edges()` to find where to place next element
+- CHILmesh state stays consistent (adjacencies updated, layers stale until rebuild)
+- MADMESHR queries `advancing_front_boundary_edges()` to find next placement
 
 **Test Case:** Simple advancing-front scenario (annulus → fill center) using MADMESHR API.
 
@@ -79,7 +79,7 @@ class CHILmesh:
 **What ADMESH-Domains needs:**
 - Fast mesh loading (O(n log n) vs. O(n²))
 - Metadata queries (size, quality, type)
-- Lazy initialization (don't compute skeletonization unless requested)
+- Lazy init (skip skeletonization unless requested)
 
 **CHILmesh Support (Already From Phase 1–3):**
 ```python
@@ -92,104 +92,78 @@ class CHILmesh:
     # ADMESH-Domains can load, query metadata, export without layer computation
 ```
 
-**Verification:** Benchmark ADMESH-Domains loading 10 sample meshes; confirm <500ms per mesh.
+**Verification:** Benchmark ADMESH-Domains loading 10 sample meshes; confirm <500ms each.
 
 #### **4.2.3 ADMESH (Hypothetical) Readiness**
 
-**Status:** GitHub 404 — assuming future availability. Prepare APIs without direct integration.
+**Status:** GitHub 404 — future availability assumed. Prepare APIs without direct integration.
 
 **Likely needs (from thesis):**
-- Edge-swapping (improve mesh quality)
+- Edge-swapping (improve quality)
 - Node repositioning (smoothing)
 - Refinement/coarsening (local modification)
 
-**CHILmesh Readiness (From Phase 2):**
-- `add_element()`, `remove_element()` → supports refinement/coarsening
-- `swap_edge()` (Phase 2 or 3) → edge-swapping support
+**CHILmesh Readiness (Phase 2):**
+- `add_element()`, `remove_element()` → refinement/coarsening
+- `swap_edge()` → edge-swapping
 - Existing smoothing methods (FEM, angle-based) → node repositioning
 
-**No additional work needed for Phase 4; APIs from Phases 2–3 are sufficient.**
+**No additional work needed; Phase 2–3 APIs sufficient.**
 
 ### 4.3 Documentation Updates
 
-**Create/Update:**
-
-1. **API.md** (New)
-   - Public methods: old (deprecated) vs. new (0.2.0+)
-   - Examples: adding elements, querying adjacencies, detecting components
-   - Deprecation warnings (which old methods to avoid)
-
-2. **MIGRATION_GUIDE.md** (New)
-   - 0.1.x → 0.2.0 breaking changes
-   - Code examples: old way vs. new way
-   - FAQ: "Why did you change the adjacency dict?"
-
-3. **CLAUDE.md** (Update)
-   - Add "Modernization Task" section (copy from GOVERNANCE_UPDATES.md Part 3a)
-   - Link to MIGRATION_GUIDE.md
-
-4. **constitution.md** (Update)
-   - Add "Graph Representation & Data Structure Governance" section (from GOVERNANCE_UPDATES.md Part 3b)
-   - Document Decisions A1–A5
-
-5. **PROJECT_PLAN.md** (Update)
-   - Add "0.2.0 Modernization Release" section (from GOVERNANCE_UPDATES.md Part 3c)
-   - Roadmap updated, Phase 4 complete
-
-6. **CHANGELOG.md** (Update)
-   - New "0.2.0" entry with breaking-change section
-   - List all new methods
-   - Reference MIGRATION_GUIDE.md
+1. **API.md** (New) — public methods: deprecated vs. new (0.2.0+); examples; deprecation warnings
+2. **MIGRATION_GUIDE.md** (New) — 0.1.x → 0.2.0 breaking changes; old vs. new code examples; FAQ
+3. **CLAUDE.md** (Update) — add "Modernization Task" section; link MIGRATION_GUIDE.md
+4. **constitution.md** (Update) — add "Graph Representation Governance"; document Decisions A1–A5
+5. **PROJECT_PLAN.md** (Update) — add "0.2.0 Modernization Release" section; roadmap updated
+6. **CHANGELOG.md** (Update) — "0.2.0" entry with breaking changes; list new methods; ref MIGRATION_GUIDE.md
 
 ### 4.4 Governance Documents
 
-**Commit Lessons Learned Document** (final deliverable):
-
-Create `MODERNIZATION_LESSONS_LEARNED.md` summarizing:
-- What worked (spec-kit methodology, benchmark framework, research docs)
-- What didn't (if anything)
-- Recommendations for future modernization efforts
-- Architectural decisions made + rationale
-
-See Part 5 of this spec.
+Create `MODERNIZATION_LESSONS_LEARNED.md`:
+- What worked (spec-kit, benchmarks, research docs)
+- What didn't
+- Recommendations for future modernization
+- Architectural decisions + rationale
 
 ### 4.5 Test Coverage
 
 **Integration Tests:**
-- [ ] MADMESHR advancing-front scenario (add 10 elements, verify mesh valid)
-- [ ] ADMESH-Domains bulk load (load 5 meshes, time <500ms each)
+- [ ] MADMESHR advancing-front scenario (add 10 elements, verify valid)
+- [ ] ADMESH-Domains bulk load (5 meshes, <500ms each)
 - [ ] Fort.14 roundtrip after dynamic ops (modify, export, reimport, identical)
 - [ ] All Phase 1–3 tests passing
 
 **Release Tests:**
 - [ ] Version bumped to 0.2.0 in setup.py, pyproject.toml
 - [ ] CHANGELOG.md updated with breaking-change section
-- [ ] MIGRATION_GUIDE.md exists and is complete
+- [ ] MIGRATION_GUIDE.md exists and complete
 - [ ] API.md documents all public methods
 
 ### 4.6 Acceptance Criteria
 
 - [ ] MADMESHR integration API defined and tested
-- [ ] ADMESH-Domains bulk-load benchmarked (<500ms per mesh)
+- [ ] ADMESH-Domains bulk-load benchmarked (<500ms/mesh)
 - [ ] Version bumped to 0.2.0
 - [ ] CHANGELOG.md, MIGRATION_GUIDE.md, API.md created
 - [ ] CLAUDE.md, constitution.md, PROJECT_PLAN.md updated
-- [ ] Lessons learned document written
+- [ ] Lessons learned doc written
 - [ ] All tests passing (0 regressions)
-- [ ] Release candidate (RC1) tagged and tested
+- [ ] RC1 tagged and tested
 
-### 4.7 Out of Scope (Phase 4)
+### 4.7 Out of Scope
 
 - ❌ Publishing to PyPI (separate release process)
-- ❌ Porting MATLAB original to Python (already done in 0.1.x)
-- ❌ New feature requests beyond downstream integration
+- ❌ Porting MATLAB original to Python (done in 0.1.x)
+- ❌ New features beyond downstream integration
 - ❌ CI/CD setup (separate audit follow-up)
 
 ---
 
 ## Timeline
 
-**2–3 days** (most work is coordination + documentation; APIs from Phase 3 are ready)
+**2–3 days** (coordination + docs; APIs from Phase 3 ready)
 
 ---
 
@@ -197,23 +171,23 @@ See Part 5 of this spec.
 
 Before 0.2.0 ship:
 
-1. ✓ All issues #35–38 (Phase 1 research) closed
-2. ✓ Phase 2 implementation complete + all tests passing
-3. ✓ Phase 3 optimization complete + benchmarks meet targets
+1. ✓ Issues #35–38 (Phase 1 research) closed
+2. ✓ Phase 2 complete + all tests passing
+3. ✓ Phase 3 complete + benchmarks pass
 4. ✓ MADMESHR integration validated
-5. ✓ ADMESH-Domains bulk-load optimization verified
-6. ✓ Documentation complete (API.md, MIGRATION_GUIDE.md, etc.)
+5. ✓ ADMESH-Domains bulk-load verified
+6. ✓ Docs complete (API.md, MIGRATION_GUIDE.md, etc.)
 7. ✓ Version bumped to 0.2.0
-8. ✓ Lessons learned document approved
+8. ✓ Lessons learned approved
 
-Then: Tag release candidate (RC1), get final approval, publish to PyPI.
+Then: Tag RC1, get final approval, publish to PyPI.
 
 ---
 
 ## Handoff to Future Maintenance
 
-After 0.2.0 release:
+After 0.2.0:
 - Break into Issues #40+ for maintenance/feature work
-- Standing task: "Monitor MADMESHR integration, support evolving needs"
-- Quarterly review: Any ADMESH updates? MADMESHR feedback?
+- Standing task: monitor MADMESHR integration, support evolving needs
+- Quarterly review: ADMESH updates? MADMESHR feedback?
 

@@ -9,28 +9,13 @@
 
 ## Overview
 
-Implementation tasks for the ADMESH warm-start truss adapter. Divided into 6 phases:
-- **Phase 1**: Setup & prerequisites
-- **Phase 2**: Core adapter implementation (array form)
-- **Phase 3**: Vendored truss loop integration
-- **Phase 4**: High-level CHILmesh wrapper
-- **Phase 5**: Comprehensive test suite
-- **Phase 6**: Demo script & visualization
+7-phase implementation. US1 = MVP (array form + CHILmesh wrapper); US2 = 4-row demo; US3 = generic input.
 
-**User Stories**:
-- US1: Boundary-preserving optimization (MVP — array form + CHILmesh wrapper)
-- US2: Four-row demo visualization (new layout per Q2=d)
-- US3: Generic input support (array form + domain-agnostic SDF)
-
-**Dependencies**: None blocking; all work is parallelizable after US1 core implementation.
-
-**Estimated Effort**: ~30-40 implementation tasks; ~20 test/validation tasks.
-
-**Success Criteria** (from plan.md):
-- SC-001: Annulus median quality ≥ 0.60 after warm-start
-- SC-002: Bit-exact boundary preservation (`np.array_equal` verification)
-- SC-003: Adapter completes < 30s on 580-element annulus
-- SC-007/SC-008: Domain-agnostic & source-agnostic (donut + array form)
+**Success Criteria:**
+- SC-001: Annulus median quality ≥ 0.60
+- SC-002: Bit-exact boundary preservation (`np.array_equal`)
+- SC-003: Adapter < 30s on 580-element annulus
+- SC-007/SC-008: Domain-agnostic + source-agnostic
 
 ---
 
@@ -47,7 +32,7 @@ Implementation tasks for the ADMESH warm-start truss adapter. Divided into 6 pha
 
 ### Boundary Identification & Validation (FR-002, FR-005-007)
 
-- [ ] T005 [P] Implement `_infer_boundary_from_triangles(triangles: ndarray) -> ndarray` helper: Edges appearing in exactly one triangle → boundary vertex indices; ensure deterministic ordering via `np.unique` (FR-007)
+- [ ] T005 [P] Implement `_infer_boundary_from_triangles(triangles: ndarray) -> ndarray`: edges in exactly one triangle → boundary vertex indices; deterministic via `np.unique` (FR-007)
 - [ ] T006 [P] Implement validation block in `optimize_with_admesh_truss_arrays()`:
   - V_TRI: Raise `NotImplementedError` if `triangles.shape[1] != 3`
   - V_AREA: Raise `ValueError` if any triangle has signed area ≤ 0; list offending indices (FR-005)
@@ -220,66 +205,34 @@ Implementation tasks for the ADMESH warm-start truss adapter. Divided into 6 pha
 
 ## Parallel Opportunities
 
-**Phase 2 parallelization** (after T004 skeleton created):
-- T005-T008: Boundary identification & validation
-- T009-T013: Core algorithm (all depend on T005-T008)
-
-**Phase 5 parallelization** (after T022 fixtures created):
-- T023-T026: Boundary preservation tests
-- T027-T031: Error handling tests
-- T032-T035: Domain/source agnosticity tests
-- T037-T040: Integration tests
-
-**Phase 6 parallelization** (after T043 layout created):
-- T044-T049: Assertions & colormaps (independent of PNG rendering)
-- T053-T055: Quickstart examples (independent of demo restructuring)
+- After T004: T005-T008 (validation), then T009-T013 (core algorithm)
+- After T022: T023-T026, T027-T031, T032-T035, T037-T040 (all parallel)
+- After T043: T044-T049, T053-T055 (parallel)
 
 ---
 
 ## Dependencies
 
-- T001: no deps
-- T002: depends on ADMESH being available (environmental)
-- T003-T004: depend on T001
-- T005-T008: depend on T001
-- T009-T013: depend on T005-T008
-- T015-T018: depend on T001 (skeleton exists)
-- T019-T021: depend on T009-T018 (core functions exist)
-- T022: no deps on implementation (test fixtures already available)
-- T023-T040: depend on T019-T021 (functions ready to test)
-- T041-T052: depend on T019-T021 (functions ready for demo)
-- T053-T065: depend on T050 (all work complete)
+Sequential blockers: T001 → T005-T021 → T022-T052 → T053-T065
 
-**Sequential blockers**:
-1. T001 (create skeleton)
-2. T005-T021 (implement all public functions)
-3. T022-T052 (tests & demo)
-4. T053-T065 (final verification)
-
-**Can run in parallel after each sequential blocker**:
-- After T001: All phases can start skeleton review
-- After T005-T008: Error handling tests (T027-T031) can run independently
-- After T009-T021: All unit tests (T023-T040) can run in parallel
-- After T041-T049: All demo verification (T053-T055) can run in parallel
+Key deps: T003-T008 depend on T001; T009-T013 depend on T005-T008; T019-T021 depend on T009-T018; T023-T040 depend on T019-T021; T041-T052 depend on T019-T021.
 
 ---
 
 ## Success Criteria (Acceptance)
 
-All tasks complete when:
-
-1. **V_BND**: `np.array_equal(output_boundary, input_boundary)` passes for all test domains
-2. **V_QI**: Annulus median quality ≥ 0.60 after warm-start
-3. **SC-003**: Adapter completes < 30s on 580-element annulus
-4. **V_TRUSS_INVOKED**: Demo script verifies truss was actually invoked for Row 2
-5. **All tests pass**: `pytest tests/test_admesh_warmstart.py -v` with 40+ test cases
-6. **PNG regenerated**: New 4-row visualization in `tests/output/annulus_quickstart.png`
-7. **Examples work**: All three quickstart.md examples run without error
-8. **Imports work**: `from chilmesh import optimize_with_admesh_truss, optimize_with_admesh_truss_arrays`
+1. V_BND: `np.array_equal(output_boundary, input_boundary)` for all test domains
+2. V_QI: Annulus median quality ≥ 0.60
+3. SC-003: Adapter < 30s on 580-element annulus
+4. V_TRUSS_INVOKED: Demo verifies truss invoked for Row 2
+5. `pytest tests/test_admesh_warmstart.py -v` — 40+ tests pass
+6. PNG regenerated at `tests/output/annulus_quickstart.png`
+7. All three quickstart.md examples run without error
+8. `from chilmesh import optimize_with_admesh_truss, optimize_with_admesh_truss_arrays` works
 
 ---
 
-**Status**: Ready for implementation.  
-**Date**: 2026-05-02  
+**Status**: Ready for implementation.
+**Date**: 2026-05-02
 **Phase**: 2 → Implementation
 

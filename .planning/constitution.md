@@ -1,55 +1,55 @@
 # CHILmesh Governing Constitution
 
 **Effective Date:** 2026-04-26
-**Version:** 1.1
+**Version:** 1.0
 **Scope:** Development governance, decision-making, and evolution principles
 
 ---
 
 ## 1. PREAMBLE
 
-We, the developers of CHILmesh, establish this constitution to:
+Establishes principles to:
 - Ensure sustainable, high-quality development
 - Maintain clear decision-making processes
 - Preserve scientific integrity and reproducibility
 - Enable productive collaboration with downstream projects
-- Document principles that guide long-term evolution
+- Document principles guiding long-term evolution
 
-This constitution does not dictate implementation details, but rather the values and processes that inform them.
+Not about implementation details — about values and processes.
 
 ---
 
 ## 2. CORE PRINCIPLES
 
 ### 2.1 Scientific Integrity
-- **All algorithms are rooted in published literature** or novel research
-- **Reproducibility is non-negotiable**: changes must be testable, benchmarkable
-- **Performance claims are backed by measurements**, not intuition
-- **Breaking changes are documented** with rationale, not silently introduced
+- Algorithms rooted in published literature or novel research
+- Reproducibility non-negotiable: changes must be testable, benchmarkable
+- Performance claims backed by measurements
+- Breaking changes documented with rationale
 
 ### 2.2 Backward Compatibility
-- **Public APIs are stable** until major version bump (v1.0 → v2.0)
-- **Internal refactoring is hidden** behind consistent public interfaces
-- **Deprecations require warning period**: mark old methods, support new ones in parallel
-- **Tests define contracts**: if tests pass, users' code works
+- Public APIs stable until major version bump (v1.0 → v2.0)
+- Internal refactoring hidden behind consistent public interfaces
+- Deprecations require warning period: mark old methods, support new in parallel
+- Tests define contracts: if tests pass, users' code works
 
 ### 2.3 Transparency
-- **Design decisions are documented** before implementation
-- **Trade-offs are explicit**: performance vs memory, complexity vs maintainability
-- **Rationale is preserved** in commit messages, not discarded
-- **Limitations are acknowledged**: no feature pretending to be universal
+- Design decisions documented before implementation
+- Trade-offs explicit: performance vs memory, complexity vs maintainability
+- Rationale preserved in commit messages
+- Limitations acknowledged
 
 ### 2.4 Pragmatism
-- **Perfect is the enemy of good**: incremental improvement beats comprehensive redesign
-- **Measure before optimizing**: profile, don't guess
-- **One tool per job**: avoid over-engineering or premature abstraction
-- **Minimize dependencies**: each external library is a long-term commitment
+- Incremental improvement beats comprehensive redesign
+- Measure before optimizing
+- One tool per job; avoid over-engineering
+- Minimize dependencies: each external library is long-term commitment
 
 ### 2.5 Collaborative Integration
-- **Downstream projects are first-class stakeholders**
-- **Bridge layers are explicit and documented**
-- **Integration testing catches incompatibilities early**
-- **Communication with MADMESHR/ADMESH/ADMESH-Domains is proactive**
+- Downstream projects are first-class stakeholders
+- Bridge layers explicit and documented
+- Integration testing catches incompatibilities early
+- Communication with MADMESHR/ADMESH/ADMESH-Domains is proactive
 
 ---
 
@@ -57,80 +57,56 @@ This constitution does not dictate implementation details, but rather the values
 
 ### 3.1 Decision Authority
 
-#### Minor Decisions (Implementation Details)
-**Authority:** Any active developer with commit access
-**Examples:**
-- Variable naming, code organization
-- Internal refactoring (same semantics, different implementation)
-- Test additions
-- Documentation improvements
+#### Minor (Implementation Details)
+**Authority:** Any active developer with commit access  
+**Examples:** variable naming, internal refactoring, test additions, docs  
+**Process:** commit with clear message; tests must pass
 
-**Process:**
-- Commit with clear message
-- Reference related issue if applicable
-- Tests must pass
-
-#### Medium Decisions (API Additions, Internal Structure)
-**Authority:** Project maintainer (Dominik Mattioli) + consensus with active developers
-**Examples:**
-- New public method signatures
-- Changing adjacency structure representations
-- Adding optional dependencies
-- Deprecating old features
-
+#### Medium (API Additions, Internal Structure)
+**Authority:** Maintainer (Dominik Mattioli) + consensus  
+**Examples:** new public methods, adjacency structure changes, optional dependencies, deprecations  
 **Process:**
 1. Create GitHub issue with `design` label
-2. Document in comment: what, why, tradeoffs
+2. Document: what, why, tradeoffs
 3. Solicit feedback (minimum 3 days)
-4. Seek consensus; if blocked, maintainer decides
-5. Record decision in issue before implementation
+4. Seek consensus; maintainer decides if blocked
+5. Record decision before implementation
 
-#### Major Decisions (Version Strategy, Mission Scope)
-**Authority:** Maintainer + consultation with downstream project authors
-**Examples:**
-- v0.2.0 roadmap and timeline
-- Major API redesign
-- Accepting large new dependencies
-- Changing mesh element types supported
-
+#### Major (Version Strategy, Mission Scope)
+**Authority:** Maintainer + downstream project authors  
+**Examples:** v0.2.0 roadmap, major API redesign, large new dependencies  
 **Process:**
 1. Draft in GitHub issue with `strategic` label
 2. Propose to MADMESHR/ADMESH/ADMESH-Domains authors
-3. Gather requirements from downstream projects
-4. Plan in detail (e.g., PLANNING_DATA_STRUCTURE_MODERNIZATION.md)
+3. Gather downstream requirements
+4. Plan in detail (spec doc)
 5. Announce in CHANGELOG and project_plan.md
 6. Execute in phases with clear milestones
 
 ### 3.2 Breaking Changes
 
-**Definition:** Any change requiring downstream code modifications
-- API signature changes
-- Return type changes
-- Behavior changes in existing methods
+**Definition:** Any change requiring downstream code modifications (API signature, return type, behavior changes)
 
 **Policy:**
-1. **Avoid until v1.0**: minimize breaking changes in 0.x releases
-2. **Document extensively** if necessary:
-   - Rationale in GitHub issue
-   - Migration guide in CHANGELOG
-   - Deprecation warning in old code (minimum 1 version)
-3. **Coordinate with downstream**: notify MADMESHR/ADMESH/ADMESH-Domains authors
-4. **Major version bump** signals breaking changes (0.1.1 → 1.0.0)
+1. Avoid until v1.0
+2. Document extensively: rationale in GitHub issue; migration guide in CHANGELOG; deprecation warning (minimum 1 version)
+3. Coordinate with downstream — notify MADMESHR/ADMESH/ADMESH-Domains
+4. Major version bump signals breaking changes
 
 ### 3.3 Code Review Standards
 
 **Required for all commits:**
-1. **Semantic correctness**: code does what it claims
-2. **Test coverage**: new behavior has corresponding tests
-3. **Documentation**: public APIs have docstrings
-4. **Backward compatibility**: old tests still pass
-5. **Performance**: benchmark reported if algorithmic change
+1. Semantic correctness
+2. Test coverage (new behavior has tests)
+3. Documentation (public APIs have docstrings)
+4. Backward compatibility (old tests pass)
+5. Performance benchmark if algorithmic change
 
-**When in doubt, ask:**
-- Is this a scientific paper's algorithm? → Cite it
-- Does this change touch skeletonization? → Comprehensive testing
-- Does this affect I/O? → All fixtures must round-trip
-- Is this slow on large meshes? → Profile and report
+**When in doubt:**
+- Algorithm from paper? → Cite it
+- Touches skeletonization? → Comprehensive testing
+- Affects I/O? → All fixtures must round-trip
+- Slow on large meshes? → Profile and report
 
 ---
 
@@ -138,98 +114,121 @@ This constitution does not dictate implementation details, but rather the values
 
 ### 4.1 Testing Requirements
 
-**Baseline:**
-- All commits must pass existing test suite
-- Parametrize over all four built-in fixtures
-- New features require new tests (test-driven preferred)
-- No test regressions without documented justification
+**Baseline:** all commits pass existing suite; parametrize over all four fixtures; new features require tests; no regressions without documented justification
 
 **Performance Baseline:**
-- Adjacency building:
-  - Annulus: < 1ms
-  - Donut: < 10ms
-  - Structured: < 20ms
-  - Block_O: < 45s (currently ~30s, target is to improve)
-- Skeletonization: < 2x adjacency build time
-- Fort.14 I/O: < 1s for all fixtures
+- Annulus adjacency build: <1ms
+- Donut adjacency build: <10ms
+- Structured adjacency build: <20ms
+- Block_O: <45s (currently ~30s, target to improve)
+- Skeletonization: <2× adjacency build time
+- Fort.14 I/O: <1s all fixtures
 
 **Correctness Invariants:**
-- ✅ Signed area > 0 (counter-clockwise orientation)
+- ✅ Signed area > 0 (CCW orientation)
 - ✅ All vertices indexed [0, n_verts)
 - ✅ All elements indexed [0, n_elems)
-- ✅ Connectivity valid (no out-of-range indices)
+- ✅ Connectivity valid (no out-of-range)
 - ✅ Skeletonization: disjoint cover of elements
 - ✅ Fort.14 roundtrip: mesh → write → read ≡ mesh (geometry equality)
 
 ### 4.2 Code Style
 
-**Language:** Python 3.10+
-**Import style:** Standard library → numpy/scipy → local modules
-**Type hints:** Required for public APIs
-**Comments:**
-- Document *why*, not *what*
-- Avoid comments that restate code
-- Reference papers/issues for non-obvious algorithms
-- Invariants should be explicit (docstring or assert)
+**Language:** Python 3.10+  
+**Import style:** standard library → numpy/scipy → local modules  
+**Type hints:** required for public APIs  
+**Comments:** document *why*, not *what*; reference papers/issues for non-obvious algorithms; invariants explicit (docstring or assert)
+
+```python
+def skeletonize(self) -> None:
+    """
+    Extract medial axis via boundary peeling.
+    
+    Implements layer-based decomposition: iteratively identify boundary elements,
+    then their inner neighbors, creating concentric layers outside inward.
+    
+    Invariant: self.layers['OE'][i] ∩ self.layers['IE'][i] = ∅
+               (outer and inner elements disjoint per layer)
+    """
+```
 
 ### 4.3 Documentation Standards
 
-**Required for all public APIs:**
-- Docstring with purpose, parameters, returns
-- Type hints (e.g., `def foo(x: ndarray) -> Set[int]`)
-- Example usage in docstring or test
+**Public APIs:** docstring with purpose/parameters/returns; type hints; example usage
 
-**Required for algorithms:**
-- Paper reference (if applicable)
-- Complexity analysis (e.g., O(n log n))
-- Limitations or special cases
+**Algorithms:** paper reference; complexity analysis; limitations or special cases
+
+**Data structures:** explicit invariants; access patterns; modification rules
+
+```python
+"""
+Returns Vert2Elem adjacency as explicit dict.
+    
+Invariant: vert2elem[v] is a Set[int] of all elements incident to vertex v.
+           For each elem ∈ vert2elem[v], vertex v appears in connectivity_list[elem].
+           
+Access: O(1) lookup, O(k) iteration (k = vertex degree)
+Update: When adding element e with vertices [v1, v2, v3, v4]:
+        for v in [v1, v2, v3, v4]:
+            if v not in vert2elem: vert2elem[v] = set()
+            vert2elem[v].add(e)
+"""
+```
 
 ---
 
 ## 5. RELEASE PROCESS
 
-### 5.1 Versioning Scheme
+### 5.1 Versioning
 
 **Format:** MAJOR.MINOR.PATCH (e.g., 0.1.1)
 - **MAJOR:** Reserved for v1.0.0 when API stabilizes
 - **MINOR:** New features, internal refactoring, performance improvements
-- **PATCH:** Bug fixes, test improvements, documentation
+- **PATCH:** Bug fixes, tests, documentation
 
 ### 5.2 Release Checklist
 
-Before releasing version X.Y.Z:
-- [ ] All tests pass on Python 3.10, 3.11, 3.12
-- [ ] All tests pass on Ubuntu, macOS
-- [ ] CHANGELOG.md is updated with user-visible changes
-- [ ] Version number updated in pyproject.toml
-- [ ] README examples are verified to run and produce expected output
-- [ ] Performance benchmarks recorded (adjacency, skeletonization, fort.14)
+- [ ] All tests pass on Python 3.10, 3.11, 3.12 × Ubuntu, macOS
+- [ ] CHANGELOG.md updated with user-visible changes
+- [ ] Version updated in pyproject.toml
+- [ ] README examples verified
+- [ ] Performance benchmarks recorded
 - [ ] GitHub release notes written with migration guide (if needed)
-- [ ] PyPI package built and checked with `twine check`
+- [ ] PyPI package built + checked with `twine check`
 
 ### 5.3 Deprecation Policy
 
-**Deprecation Timeline:**
-1. Announce in GitHub issue (1 week minimum discussion)
-2. Mark with `@warnings.warn(..., DeprecationWarning)` in code
+Timeline:
+1. Announce in GitHub issue (1 week minimum)
+2. Mark with `@warnings.warn(..., DeprecationWarning)`
 3. Document in CHANGELOG as "Deprecated in 0.x.y"
 4. Support old API for minimum 2 releases
 5. Remove in next MINOR version bump
+
+```python
+def old_method(self):
+    warnings.warn(
+        "old_method() is deprecated and will be removed in 0.3.0. "
+        "Use new_method() instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return self.new_method()
+```
 
 ---
 
 ## 6. COLLABORATION WITH DOWNSTREAM PROJECTS
 
-### 6.1 Commitment
+### 6.1 CHILmesh Commits To
 
-CHILmesh commits to:
-1. **Stability**: Public APIs stable until v1.0
-2. **Communication**: Advance notice of major changes (2+ weeks)
-3. **Bridge layer**: Clear, documented interface for integration
-4. **Testing**: Integration tests verify downstream compatibility
-5. **Support**: Help with API questions and migration issues
+1. **Stability**: public APIs stable until v1.0
+2. **Communication**: advance notice of major changes (2+ weeks)
+3. **Bridge layer**: clear, documented integration interface
+4. **Testing**: integration tests verify downstream compatibility
+5. **Support**: help with API questions and migration
 
-### 6.2 Expectations from Downstream Projects
+### 6.2 Expectations from Downstream
 
 - Use only documented public APIs
 - Provide feedback on limitations or missing features
@@ -241,7 +240,7 @@ CHILmesh commits to:
 
 **Recommended:**
 ```python
-# Downstream project uses CHILmesh via stable API
+# Downstream uses CHILmesh via stable API
 from chilmesh import CHILmesh
 
 mesh = CHILmesh.read_from_fort14(path)
@@ -250,53 +249,41 @@ quality = mesh.elem_quality()
 mesh.smooth_mesh(method='fem', acknowledge_change=True)
 ```
 
+**Discouraged:**
+```python
+# Directly accessing internal structures (may break)
+for edge_id in mesh.adjacencies['Vert2Edge'][v]:
+    # This structure changed in 0.2.0!
+```
+
 ---
 
 ## 7. LONG-TERM VISION
 
 ### 7.1 Phase Milestones
 
-**0.1.x (Current)**
-- Bug fixes and hardening
-- Clear documentation of existing functionality
-- Bridge architecture design
+**0.1.x (Current):** bug fixes; clear docs; bridge architecture design
 
-**0.2.0 (Proposed)**
-- Data structure modernization (Phase 1-3 of PLANNING_DATA_STRUCTURE_MODERNIZATION.md)
-- Public bridge APIs for MADMESHR/ADMESH/ADMESH-Domains
-- Improved performance (O(n²) → O(n log n) on edge building)
+**0.2.0 (Proposed):** data structure modernization; public bridge APIs; O(n log n) edge building
 
-**0.3.0-0.9.x (Future)**
-- Advanced features as needed by downstream projects
-- Spatial indexing if required
-- Parallel operations (mesh refinement, smoothing)
+**0.3.0–0.9.x (Future):** advanced features as needed; spatial indexing; parallel operations
 
-**1.0.0 (Eventually)**
-- API stabilization
-- Full backward compatibility guarantee
-- Mature ecosystem and integrations
+**1.0.0 (Eventually):** API stabilization; full backward compatibility guarantee; mature ecosystem
 
 ### 7.2 Success Metrics
 
 - ✅ All tests pass consistently
-- ✅ Zero regressions reported from downstream projects
-- ✅ Performance improves monotonically with each release
+- ✅ Zero regressions from downstream projects
+- ✅ Performance improves monotonically per release
 - ✅ Code clarity improves (fewer bugs, easier to understand)
-- ✅ Documentation completeness reaches 95%+
+- ✅ Documentation completeness 95%+
 - ✅ Community engagement (GitHub issues/discussions active)
 
 ### 7.3 Technical Debt Management
 
-**Acceptable:**
-- Short-term hacks with clear FIXME comments
-- Intentional simplifications that can be optimized later
-- Legacy code paths that will be refactored in next version
+**Acceptable:** short-term hacks with clear FIXME; intentional simplifications; legacy code paths flagged for refactor
 
-**Unacceptable:**
-- Undocumented behavior changes
-- Silent performance regressions
-- Breaking changes without deprecation period
-- Commented-out code (delete it)
+**Unacceptable:** undocumented behavior changes; silent performance regressions; breaking changes without deprecation; commented-out code
 
 ---
 
@@ -304,49 +291,33 @@ mesh.smooth_mesh(method='fem', acknowledge_change=True)
 
 ### 8.1 Disagreement Process
 
-If developers disagree on technical direction:
-1. **Document both positions** in GitHub issue
-2. **Present evidence**: performance data, scientific rationale, downstream impact
-3. **Seek consensus**: iterate until agreement or compromise
-4. **Escalate to maintainer** if consensus not reached within 1 week
-5. **Maintainer decides** with explicit rationale in issue
+1. Document both positions in GitHub issue
+2. Present evidence: performance data, scientific rationale, downstream impact
+3. Seek consensus; iterate until agreement or compromise
+4. Escalate to maintainer if consensus not reached within 1 week
+5. Maintainer decides with explicit rationale
 
 ### 8.2 Reverting Changes
 
-Changes can be reverted if:
-- Tests fail unexpectedly
-- Performance regresses >10% on large fixtures
-- Breaking change not caught in review
-- Scientific error discovered (algorithmic flaw)
+Revert if: tests fail unexpectedly; performance regresses >10% on large fixtures; breaking change not caught; scientific error discovered
 
-**Process:**
-1. Identify regression
-2. Create issue with reproducible example
-3. Revert commit
-4. Post-mortem: improve tests or review process
-5. Re-implement correctly
+**Process:** identify regression → create issue with reproducible example → revert commit → post-mortem → re-implement correctly
 
 ---
 
-## 9. AMENDMENTS TO CONSTITUTION
+## 9. AMENDMENTS
 
 **Change Process:**
-1. Propose amendment in GitHub issue labeled `constitution`
-2. Justify why current principles are insufficient
+1. Propose in GitHub issue labeled `constitution`
+2. Justify why current principles insufficient
 3. Draft new principle/policy
 4. Solicit feedback (minimum 1 week)
 5. Maintainer approves or suggests refinement
-6. Merge amended constitution.md to main branch
+6. Merge to main branch
 
-**Vote Required For:**
-- Changes to core principles (Section 2)
-- Changes to backward compatibility policy
-- Changes to release/versioning scheme
+**Vote Required For:** core principle changes; backward compatibility policy; versioning scheme
 
-**Maintainer Decision For:**
-- Governance structure changes
-- Process improvements
-- Clarifications of existing principles
+**Maintainer Decision For:** governance structure; process improvements; clarifications
 
 ---
 
@@ -355,22 +326,42 @@ Changes can be reverted if:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-04-26 | Dominik Mattioli | Initial constitution (Planning Phase) |
-| 1.1 | 2026-05-08 | Claude (DomI downstream rollout) | Added section 11: External Upstream (DomI). Formalized DomI sync contract governance. |
 
 ---
 
-## 11. EXTERNAL UPSTREAM (DOMI)
+## External Upstream: DomI
 
-Foundational skills and policy governed by [domattioli/DomI](https://github.com/domattioli/DomI).
+`domattioli/DomI` manages foundational skills and policy used by this repo.
+`.domi-pin` committed; session start auto-checks drift via
+`scripts/instructions_on_start.sh`. Hard stop on drift; `/sync-from-domi` unblocks.
 
-1. `.domi-pin` ledger MUST be committed and current.
-2. Session start auto-checks drift via `scripts/instructions_on_start.sh`. Hard stop on drift; `/sync-from-domi` unblocks.
-3. Skills from DomI take precedence over inline implementations. Local repo-specific skills (those NOT shipped by DomI) are exempt.
-4. Repo-specific principles in this constitution override DomI universal defaults where they conflict.
-5. This section does NOT affect existing repo-specific algorithmic principles.
-
-CHILmesh-specific rules (branch policy `daily-issue-fixing`, API stability guarantees) take precedence over DomI universal defaults where they conflict. This precedence flows from the session-start read order: `.planning/constitution.md` is read before `.claude/CLAUDE.md`, and both override DomI universal defaults pulled from `https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md`.
+CHILmesh-specific rules (branch policy, API stability) take precedence over
+DomI universal defaults where they conflict. This precedence flows from session-start
+read order: `.planning/constitution.md` is read before `.claude/CLAUDE.md`, and
+both override DomI universal defaults.
 
 ---
 
-**This constitution is a living document. It reflects our current values and will evolve as CHILmesh matures.**
+## Appendix A: Principles in Action
+
+### Example 1: Fixing Bug in Skeletonization
+
+**Correct:** create issue with reproducible example → write regression test (fails) → analyze root cause → fix with explanation → verify test passes → document in CHANGELOG → communicate to downstream
+
+**Incorrect:** quietly "fix" without tests; change behavior without documentation; break tests and suppress them
+
+### Example 2: Performance Optimization
+
+**Correct:** profile to confirm bottleneck → design new approach → implement with tests verifying same output → benchmark before/after all fixtures → document what changed and why → preserve API → report improvement in release notes
+
+**Incorrect:** change adjacency structure without updating all using code; improve speed but break test semantics; introduce non-determinism
+
+### Example 3: Adding Downstream Integration
+
+**Correct:** ask MADMESHR authors what API they want → document interface → implement with clear semantics → add integration tests → communicate API guarantees → provide migration guide
+
+**Incorrect:** guess without asking; expose internal structures as public API; surprise downstream with incompatibility
+
+---
+
+**This constitution is a living document. It reflects current values and will evolve as CHILmesh matures.**

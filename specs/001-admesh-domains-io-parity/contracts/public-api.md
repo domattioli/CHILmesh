@@ -3,7 +3,7 @@
 **Phase 1 output for `/speckit-plan`**
 **Branch**: `planning-optimize_modernize` | **Date**: 2026-04-26
 
-These are the contracts between CHILmesh and its callers (researchers, ADMESH-Domains, MADMESHR). Each entry defines the function signature, pre/post-conditions, and error behaviour. Implementation must not deviate from these contracts without updating this document.
+Contracts between CHILmesh and callers (researchers, ADMESH-Domains, MADMESHR). Each entry defines function signature, pre/post-conditions, and error behaviour. Implementation must not deviate without updating this document.
 
 ---
 
@@ -45,11 +45,11 @@ CHILmesh.read_from_fort14(
 ```
 
 **Pre-conditions**:
-- `full_file_name` points to a readable ADCIRC `.fort.14` file
+- `full_file_name` points to readable ADCIRC `.fort.14` file
 - File elements have `num_nodes` of 3 or 4
 
 **Post-conditions**:
-- Returns initialised `CHILmesh` with all nodes and elements from the file
+- Returns initialised `CHILmesh` with all nodes and elements from file
 - Round-trip fidelity: `n_verts` and `n_elems` match file header counts
 - `compute_layers` forwarded to `CHILmesh.__init__`
 
@@ -70,7 +70,7 @@ CHILmesh.read_from_2dm(
 ```
 
 **Pre-conditions**:
-- `full_file_name` points to a readable SMS `.2dm` file
+- `full_file_name` points to readable SMS `.2dm` file
 - Node lines: `ND id x y z`
 - Element lines: `E3T id n1 n2 n3 mat` or `E4Q id n1 n2 n3 n4 mat`
 

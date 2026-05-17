@@ -35,10 +35,10 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 
 ## Phase 2: Foundational — Group A (Quad I/O)
 
-*Critical fix: reader and writer must handle quad/mixed elements. This unblocks all user stories.*
+*Critical fix: reader and writer must handle quad/mixed elements. Unblocks all user stories.*
 
 ### Understanding Current State
-- [ ] T003 Inspect `read_from_fort14()` at `src/chilmesh/CHILmesh.py:662–699` and identify the `ValueError` on line 692–693
+- [ ] T003 Inspect `read_from_fort14()` at `src/chilmesh/CHILmesh.py:662–699` and identify `ValueError` on line 692–693
 - [ ] T004 Inspect `write_fort14()` at `src/chilmesh/CHILmesh.py:969–995` and identify hardcoded `"3"` on line 991
 
 ### Reader Implementation
@@ -55,7 +55,7 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 
 ### Integration & Tests
 - [ ] T013 Create `tests/test_fort14_quad_roundtrip.py`: load `quad_2x2`, assert `n_verts==9`, `n_elems==4`, `type=="Quadrilateral"`, write to tmpfile, reload, assert counts match
-- [ ] T014 [P] Add quad roundtrip tests for all quad-supporting fixtures (Block_O, annulus if mixed, etc.)
+- [ ] T014 [P] Add quad roundtrip tests for all quad-supporting fixtures
 - [ ] T015 Ensure `quad_2x2` passes all parametrised tests in `conftest.py` (e.g., `test_ccw`, `test_elem_type`)
 
 ---
@@ -76,7 +76,7 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 - [ ] T018 [P] Implement routing logic in `from_admesh_domain()`: `"SMS_2DM"` → `read_from_2dm()`, else → `read_from_fort14()`
 - [ ] T019 [P] Add file-not-found guard in `from_admesh_domain()`: check `Path(filename).exists()`, raise `FileNotFoundError("File not found: {path}. If using ADMESH-Domains, call mesh_record.load() first.")`
 - [ ] T020 [P] Handle unknown `record.type` in `from_admesh_domain()`: emit `warnings.warn(f"Unrecognised mesh type '{t}', falling back to ADCIRC reader.")` then route to `read_from_fort14()`
-- [ ] T021 [P] Forward `compute_layers` kwarg through `from_admesh_domain()` to the chosen reader
+- [ ] T021 [P] Forward `compute_layers` kwarg through `from_admesh_domain()` to chosen reader
 
 ### Testing US1
 - [ ] T022 Create `tests/test_from_admesh_domain.py` with mock ADMESH-Domains record (SimpleNamespace with `filename`, `type`)
@@ -85,7 +85,7 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 - [ ] T025 [P] Test unknown type: `record.type="UNKNOWN"` → emits warning, falls back to `read_from_fort14()`
 - [ ] T026 [P] Test missing file: `record.filename=/nonexistent` → raises `FileNotFoundError` with guidance message
 - [ ] T027 [P] Test `compute_layers=False` forwarding: mesh initialised with no layers
-- [ ] T028 Create integration test: load a real quad/mixed mesh from ADMESH-Domains (if available locally), run `elem_quality()` and `interior_angles()`, verify no crashes
+- [ ] T028 Create integration test: load real quad/mixed mesh from ADMESH-Domains (if available locally), run `elem_quality()` and `interior_angles()`, verify no crashes
 
 ---
 
@@ -96,7 +96,7 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 **Independent Test Criteria**:
 - Load each fixture with `compute_layers=False` → init completes in <2s
 - Call `admesh_metadata()` on each → `node_count` and `element_count` match file
-- `element_type` is one of the three canonical strings
+- `element_type` is one of three canonical strings
 - `bounding_box` keys exist and have sensible values
 
 ### Fast Initialisation Implementation
@@ -113,25 +113,21 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 - [ ] T035 [P] Implement `CHILmesh.admesh_metadata()` method in `src/chilmesh/CHILmesh.py` (after `get_layer()`)
 - [ ] T036 [P] Populate metadata dict with `node_count` (from `n_verts`), `element_count` (from `n_elems`), `element_type` (from `self.type`)
 - [ ] T037 [P] Compute and populate `bounding_box` dict in `admesh_metadata()`: `min_x/max_x/min_y/max_y` from `points[:, 0]` and `points[:, 1]` extrema
-- [ ] T038 [P] Ensure `admesh_metadata()` is safe to call with `compute_layers=False` (no dependencies on layers)
+- [ ] T038 [P] Ensure `admesh_metadata()` safe to call with `compute_layers=False`
 
 ### Testing US2
 - [ ] T039 Create `tests/test_admesh_metadata.py`
-- [ ] T040 [P] Test fast init: load each fixture with `compute_layers=False`, assert init time <2s (use `time.perf_counter`), assert `n_layers==0`
+- [ ] T040 [P] Test fast init: load each fixture with `compute_layers=False`, assert init time <2s, assert `n_layers==0`
 - [ ] T041 [P] Test metadata accuracy: call `admesh_metadata()` on each fixture; assert `node_count == n_verts`, `element_count == n_elems`, `element_type` is canonical string
 - [ ] T042 [P] Test bounding_box: verify `min_x <= max_x`, `min_y <= max_y`, extrema match actual point coordinates
-- [ ] T043 [P] Test metadata with `compute_layers=False`: confirm metadata still available (no layers required)
+- [ ] T043 [P] Test metadata with `compute_layers=False`: confirm metadata still available
 
 ---
 
 ## Phase 5: User Story 3 — Validate Metadata Before Contributing (P3)
 
-*Requirement*: Contributors can load a mesh, call `admesh_metadata()`, and compare returned values against manifest entries to catch mismatches.
+*Requirement*: Contributors can load mesh, call `admesh_metadata()`, and compare returned values against manifest entries to catch mismatches.
 *Depends on*: Phase 2 (quad reader), Phase 4 (metadata method)
-**Independent Test Criteria**:
-- Load a mesh with wrong `node_count` in metadata (manually crafted test case)
-- Call `admesh_metadata()` → `node_count` mismatch is immediately visible
-- Metadata dict is complete (all 4 schema fields present)
 
 ### Guard Improvements
 - [ ] T044 Improve `get_layer()` error message in `src/chilmesh/CHILmesh.py:649`: prepend guard `if self.n_layers == 0: raise RuntimeError("Layers not computed. Re-initialise with compute_layers=True.")`
@@ -140,13 +136,11 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 - [ ] T045 Create `tests/test_metadata_validation.py`
 - [ ] T046 [P] Test metadata completeness: call `admesh_metadata()`, assert dict has all 4 keys (`node_count`, `element_count`, `element_type`, `bounding_box`)
 - [ ] T047 [P] Test `get_layer()` guard: initialise with `compute_layers=False`, call `get_layer(0)`, assert `RuntimeError` with guidance message
-- [ ] T048 [P] Test contributor workflow: manually construct a mesh record with wrong `node_count`, load via `from_admesh_domain()`, call `admesh_metadata()`, verify mismatch detectable
+- [ ] T048 [P] Test contributor workflow: manually construct mesh record with wrong `node_count`, load via `from_admesh_domain()`, call `admesh_metadata()`, verify mismatch detectable
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
-
-*Complete remaining features and error handling.*
 
 ### SMS .2dm Reader (Group E)
 - [ ] T049 [P] Implement `CHILmesh.read_from_2dm()` staticmethod in `src/chilmesh/CHILmesh.py` (after `read_from_fort14`)
@@ -186,21 +180,13 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 **Phase-2 Extension** (add US2):
 - T029–T043: Fast init + metadata
 - **Result**: Catalog queries fast (<2s), metadata accurate (SC-004)
-- **Incremental effort**: ~15 tasks, ~35% of total
 
 **Full Scope** (all phases):
 - T044–T065: US3 + polish + 2dm reader
-- **Result**: Complete ADMESH-Domains integration, SMS support, full error handling
 
 **Parallelisation**:
 - Setup (T001–T002): Serial prerequisite
 - Foundational (T003–T015): T005–T009 [P] (reader), T010–T012 [P] (writer) can run in parallel
 - US1 (T016–T028): T016–T021 [P] can run in parallel with foundational
-- US2 (T029–T043): T029–T038 [P] can run in parallel; T039–T043 [P] tests can run in parallel once implementations complete
-- US3 (T044–T048): Serialized (depends on US2 completion)
-- Polish (T049–T065): T049–T058 [P] 2dm reader, T059–T062 [P] docs, T063–T065 [P] tests can run in parallel
-
-**Estimated velocity** (if parallelised):
-- Critical path: Phases 1–2 (Setup → Quad fix) → Phase 3 (Entry point) → Phase 4 (Metadata) → Phase 5 (Guard) → Phase 6 (Polish)
-- Serial: ~15 phases × ~3 days/phase ≈ 45 days (conservative)
-- With parallelisation: ~25 days (50% faster, mainly in Groups B–E and testing phases)
+- US2 (T029–T043): T029–T038 [P] can run in parallel
+- Polish (T049–T065): T049–T058 [P] 2dm reader, T059–T062 [P] docs can run in parallel

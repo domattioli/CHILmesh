@@ -5,9 +5,7 @@
 
 ## Format: `[ID] [P?] [Story] Description with file path`
 
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: US1=correctness, US2=backward compat, US3=visualization
-- Tests are explicitly required (FR-006 SC-006); TDD order applies
+**[P]** = parallelizable | **US1** = correctness | **US2** = backward compat | **US3** = visualization. TDD order applies.
 
 ---
 
@@ -22,9 +20,9 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
 
 ## Phase 3: User Story 1 — Correctness (P1)
 
-**Goal**: The layer separation invariant holds across all fixtures.
+**Goal**: Layer separation invariant holds across all fixtures.
 
-**Independent Test**: A regression test that enumerates layer pairs (k, m) with |k-m| ≥ 2 and asserts disjoint vertex sets, parametrized over all 4 fixtures. The test must pass.
+**Independent Test**: Parametrized regression test over all 4 fixtures — enumerate layer pairs (k, m) with |k-m| ≥ 2, assert disjoint vertex sets.
 
 ### TDD Phase: Write Tests First
 
@@ -53,7 +51,7 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
 
 ## Phase 4: User Story 2 — Backward Compatibility (P1)
 
-**Goal**: All existing tests pass; layer counts are pinned to MATLAB-correct values.
+**Goal**: All existing tests pass; layer counts pinned to MATLAB-correct values.
 
 **Independent Test**: Full pytest suite passes, including `test_layers_annulus.py` and `test_invariants.py`.
 
@@ -66,9 +64,9 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
 
 ## Phase 5: User Story 3 — Visualization (P2)
 
-**Goal**: Public README image shows medially-correct layer rings.
+**Goal**: Public README image shows medially-correct rings.
 
-**Independent Test**: Regenerate `tests/output/annulus_quickstart.png` and visually inspect column 2 of all 4 rows.
+**Independent Test**: Regenerate `tests/output/annulus_quickstart.png`, visually inspect column 2 of all 4 rows.
 
 - [ ] T011 [US3] Run `python generate_4row_admesh.py` to regenerate `tests/output/annulus_quickstart.png` with the new skeletonization.
 - [ ] T012 [US3] Visually inspect the regenerated image (display via Read tool) and verify column 2 (Layers) of all 4 rows shows clean concentric ring transitions with no Layer-N triangles touching Layer-0 triangles for N ≥ 2.
@@ -89,13 +87,11 @@ No foundational refactoring needed — the existing `_skeletonize()` method is a
 - T010 (after all test updates) → T011 → T012 (visualization after tests pass)
 - T010 + T012 → T013 → T014 → T015 (final cleanup and documentation)
 
-## Parallel Execution Examples
+## Parallel Execution
 
-- T003 and T009 can be created in parallel (different test files, no shared state). However, T009 depends on T005's output for the actual values, so create T003 first, run through to T005, then create T009.
-- T013 (CHANGELOG update) can run in parallel with T011 (image regeneration).
+- T003 and T009 parallel (different test files) — but T009 needs T005's layer counts first.
+- T013 (CHANGELOG) parallel with T011 (image regeneration).
 
 ## Implementation Strategy
 
-**MVP scope = User Story 1 only** (T001-T006). Once the layer separation invariant is fixed and the regression test passes, the core correctness goal is achieved. US2 (backward compat / test updates) and US3 (visualization) follow naturally as cleanup.
-
-If US1 alone takes longer than expected (e.g., performance regression on block_o), defer US3 to a follow-up commit.
+**MVP = US1 only** (T001-T006). Invariant fixed + regression test passes = core goal achieved. US2 (test updates) and US3 (visualization) follow as cleanup. Defer US3 if block_o shows performance regression.

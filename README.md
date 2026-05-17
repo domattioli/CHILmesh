@@ -26,14 +26,15 @@
 - [Quick Start](#quick-start)
 - [Features](#features)
 - [Installation](#installation)
-- [Performance](#performance-v030)
+- [Performance](#performance-v020)
 - [API Overview](#api-overview)
+- [Mesh Element Types](#mesh-element-types)
 - [Downstream Projects](#downstream-projects)
 - [Citation](#citation)
 - [References](#references)
 - [License](#license)
 
-> **MATLAB users**: Python successor to original QuADMesh+ codebase. Still in development; API may evolve. Original MATLAB (unmaintained) at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — canonical algorithms (e.g., `meshLayers`) in `00_CHILMesh_Class/@CHILmesh/CHILmesh.m`.
+> **MATLAB users**: Python successor to the original QuADMesh+ codebase. Still in development; API may evolve. Original MATLAB code (no longer maintained) at [domattioli/QuADMesh-MATLAB](https://github.com/domattioli/QuADMesh-MATLAB) — `00_CHILMesh_Class/@CHILmesh/CHILmesh.m` has canonical algorithms (e.g., `meshLayers` skeletonization).
 
 ---
 
@@ -59,7 +60,7 @@ plt.show()
 
 ### Showcase: WNAT_Hagen (52,774 verts · 98,365 elems)
 
-![WNAT_Hagen quality plot and distribution](output/wnat_hagen_showcase.png?v=2)
+![CHILmesh quickstart: raw Delaunay → ADMESH warm-start truss → FEM smoother](output/annulus_quickstart.png?v=5)
 
 Median q=0.797, mean 0.786. Full init + analysis: **~3.3s** end-to-end. Reproduce: `python scripts/benchmark_wnat_hagen.py`.
 
@@ -109,28 +110,16 @@ pip install -e .
 
 ---
 
-## Performance (v0.3.0)
+## Performance (v0.2.0)
 
-**4,000×+ faster** than v0.1.1 through systematic optimization. Reference mesh: **WNAT_Hagen — 52,774 vertices · 98,365 elements · 151,248 edges · 30 layers** (see [showcase image](#showcase-wnat_hagen-52774-vertices--98365-elements) above).
+| Operation | v0.1.1 | v0.2.0 | Speedup |
+|-----------|--------|--------|---------|
+| Fast init (52.7k verts) | 3,200s | 3.9s | **822×** |
+| Full init (with layers) | 5,400s | 7.7s | **701×** |
+| Quality analysis | 4,800s | 6.6s | **727×** |
+| **Total workflow** | 13,400s | 14.3s | **937×** |
 
-### Initialization
-
-| Operation | v0.1.1 (est.) | v0.3.0 (measured) | Speedup |
-|-----------|--------------:|------------------:|--------:|
-| Fast init (no layers) | 3,200s | **0.44s** | **7,307×** |
-| Full init (with layers) | 5,400s | **3.26s** | **1,658×** |
-| Quality analysis | 4,800s | **0.07s** | **68,175×** |
-| **Total workflow** | **13,400s** | **3.33s** | **4,027×** |
-
-### Query latency (per call)
-
-| Operation | v0.1.1 (est.) | v0.3.0 (measured) | Speedup |
-|-----------|--------------:|------------------:|--------:|
-| `elem2edge` (5k samples) | 2,000μs | **2.08μs** | **963×** |
-| `Vert2Edge` lookup (5k samples) | 3,500μs | **0.17μs** | **21,092×** |
-| `Elem2Edge` bulk (1k samples) | 4,500μs | **0.14μs** | **32,766×** |
-
-Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`. Historical April 2026 release numbers and methodology in [docs/BENCHMARK.md](docs/BENCHMARK.md).
+See [BENCHMARK.md](BENCHMARK.md) for detailed methodology.
 
 ---
 
@@ -139,45 +128,54 @@ Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`. Histori
 ```python
 import chilmesh
 
-# Load: built-in examples or fort.14 / 2dm
+# Load examples or from file
 mesh = chilmesh.examples.annulus()
 mesh = chilmesh.CHILmesh.read_from_fort14('mesh.14')
 mesh = chilmesh.CHILmesh.read_from_2dm('mesh.2dm')
 
-# Smooth (FEM or geometric)
+# Smooth mesh
 mesh.smooth_mesh(method='fem', acknowledge_change=True)
+
+# Warm-start an existing triangulation through ADMESH's distmesh truss loop.
+# Boundary points are pinned bit-exactly; interior is relaxed to equilibrium.
+import numpy as np
+sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
+                            0.3 - np.linalg.norm(p, axis=1))
+mesh = chilmesh.optimize_with_admesh_truss(
+    mesh, sdf, niter=500, deltat=0.02, Fscale=0.5
+)
 
 # Analyze
 quality, angles, stats = mesh.elem_quality()
 interior_angles = mesh.interior_angles()
 
 # Visualize
-mesh.plot()                    # wireframe
-mesh.plot_quality()            # per-element quality colormap
-mesh.plot_layer()              # skeletonization layers
-mesh.plot_boundary()           # boundary edges highlighted
-mesh.plot_interior_edges()     # interior edges only
+mesh.plot()
+mesh.plot_quality()
+mesh.plot_layer()
 
-# Skeletonization output
-layers = mesh.layers     # {'OE', 'IE', 'OV', 'IV'} per layer
+# Layer structure (skeletonization)
+layers = mesh.layers  # {'OE': [...], 'IE': [...], 'OV': [...], 'IV': [...]}
 
-# Topology
+# Access topology
 edges = mesh.boundary_edges()
 boundary_nodes = mesh.boundary_node_indices()
-
-# Optional: warm-start through ADMESH truss (boundary pinned bit-exact)
-import numpy as np
-sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
-                            0.3 - np.linalg.norm(p, axis=1))
-mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
 ```
+
+---
+
+## Mesh Element Types
+
+- **Triangles**: 3-vertex
+- **Quads**: 4-vertex
+- **Mixed**: both types (triangles padded to 4 columns)
 
 ---
 
 ## Downstream Projects
 
-[**MADMESHR**](https://github.com/domattioli/MADMESHR) — Advancing-front mesh adaptation built on CHILmesh  
-[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized mesh generation and smoothing  
+[**MADMESHR**](https://github.com/domattioli/MADMESHR) — Advancing-front mesh adaptation
+[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized mesh generation and smoothing
 [**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) — Mesh catalog for hydrodynamic applications  
 
 ---

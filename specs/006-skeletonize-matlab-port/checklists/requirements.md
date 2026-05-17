@@ -31,5 +31,4 @@
 
 ## Notes
 
-- All checklist items pass. Spec is ready for `/speckit-clarify` or `/speckit-plan`.
-- Critical FR is FR-008: IE includes vertex-only neighbors of OE (the bug in the current Python port).
+All items pass. Spec ready for `/speckit-clarify` or `/speckit-plan`. Critical FR: FR-008 (IE includes vertex-only neighbors of OE — the bug in current Python port).

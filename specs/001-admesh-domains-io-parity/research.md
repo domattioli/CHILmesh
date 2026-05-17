@@ -7,16 +7,16 @@
 
 ## 1. Reader fix — quad/mixed elements in `.fort.14`
 
-**Question**: What is the minimal change to `read_from_fort14()` that handles 3- and 4-node elements without breaking existing triangular-only meshes?
+**Question**: Minimal change to `read_from_fort14()` handling 3- and 4-node elements without breaking existing triangular-only meshes?
 
 **Finding** (`src/chilmesh/CHILmesh.py:688–698`):
-The reader pre-allocates `elements = np.zeros((n_elements, 3), ...)` then raises on `num_nodes != 3`. For mixed-element support:
-- Pre-scan the element block to determine max `num_nodes` (1 pass), or
-- Use a Python list and convert after reading (simpler, one pass).
+Reader pre-allocates `elements = np.zeros((n_elements, 3), ...)` then raises on `num_nodes != 3`. For mixed-element support:
+- Pre-scan element block to determine max `num_nodes` (1 pass), or
+- Use Python list and convert after reading (simpler, one pass).
 
-**Decision**: Two-pass approach — scan for max node count first, then allocate. Cleaner than a list because `connectivity_list` is always a dense NumPy array downstream.
+**Decision**: Two-pass approach — scan for max node count first, then allocate. Cleaner than list because `connectivity_list` is always dense NumPy array downstream.
 
-**Padded-triangle convention** (already used in CCW code at line 140): triangles in a 4-column array store `[v0, v1, v2, v0]` (repeat first vertex). This matches the project's existing convention for mixed-element meshes.
+**Padded-triangle convention** (already used in CCW code at line 140): triangles in 4-column array store `[v0, v1, v2, v0]` (repeat first vertex). Matches project's existing convention for mixed-element meshes.
 
 **Alternatives considered**:
 - Ragged Python lists — rejected; all downstream code (adjacency, skeletonize) assumes dense ndarray.
@@ -26,9 +26,9 @@ The reader pre-allocates `elements = np.zeros((n_elements, 3), ...)` then raises
 
 ## 2. Writer fix — quad/mixed elements in `write_fort14()`
 
-**Question**: What does a valid quad line look like in ADCIRC `.fort.14` format?
+**Question**: What does valid quad line look like in ADCIRC `.fort.14` format?
 
-**Finding**: The ADCIRC grid format uses `element_id num_nodes v1 v2 v3 [v4]`. For a triangle: `1 3 n1 n2 n3`. For a quad: `1 4 n1 n2 n3 n4`. The `num_nodes` field drives the count.
+**Finding**: ADCIRC grid format uses `element_id num_nodes v1 v2 v3 [v4]`. Triangle: `1 3 n1 n2 n3`. Quad: `1 4 n1 n2 n3 n4`. `num_nodes` field drives count.
 
 **Current bug** (`src/chilmesh/CHILmesh.py:989–991`):
 ```python
@@ -37,17 +37,17 @@ for i, tri in enumerate(elements, start=1):
     f.write(f"{i} 3 {n1} {n2} {n3}\n")  # hardcoded 3
 ```
 
-**Decision**: Detect element type per row using `_elem_type()` — or more efficiently, check whether the 4th column equals the 1st column (pad check). Write 3 or 4 node indices accordingly. This is atomic with the reader fix (same PR / commit).
+**Decision**: Detect element type per row — check whether 4th column equals 1st column (pad check). Write 3 or 4 node indices accordingly. Atomic with reader fix (same PR / commit).
 
 ---
 
 ## 3. `compute_layers=False` kwarg — fast initialisation
 
-**Question**: Where in `_initialize_mesh()` does the slow path live, and what is the minimal change?
+**Question**: Where in `_initialize_mesh()` does slow path live, and what is minimal change?
 
-**Finding** (`src/chilmesh/CHILmesh.py:101–118`): `_initialize_mesh()` always calls `_skeletonize()` at line 118, which drives the ~30s Block_O cost. `_build_adjacencies()` at line 115 is also O(n²) but needed for `admesh_metadata()` — actually no: `admesh_metadata()` only needs `n_verts`, `n_elems`, `type`, and `points` extrema, none of which require adjacency computation.
+**Finding** (`src/chilmesh/CHILmesh.py:101–118`): `_initialize_mesh()` always calls `_skeletonize()` at line 118, driving the ~30s Block_O cost. `_build_adjacencies()` at line 115 is also O(n²) but not needed for `admesh_metadata()` — which only needs `n_verts`, `n_elems`, `type`, and `points` extrema.
 
-**Decision**: Add `compute_layers: bool = True` to `__init__` and `_initialize_mesh`. When `False`, skip both `_build_adjacencies()` and `_skeletonize()`. Gate `get_layer()` with a clear error when `n_layers == 0`. This achieves <2s for all fixture sizes.
+**Decision**: Add `compute_layers: bool = True` to `__init__` and `_initialize_mesh`. When `False`, skip both `_build_adjacencies()` and `_skeletonize()`. Gate `get_layer()` with clear error when `n_layers == 0`. Achieves <2s for all fixture sizes.
 
 **Guard message** (from clarify phase F-4):
 ```
@@ -62,7 +62,7 @@ for i, tri in enumerate(elements, start=1):
 
 **Finding** (`.planning/ADMESH-DOMAINS-CLARIFY.md`, Finding C-3 and Q-2):
 - ADMESH-Domains schema uses `min_lat/max_lat/min_lon/max_lon` but CHILmesh fixtures are Cartesian.
-- **Decision** (Q-2 Option A): CHILmesh returns `min_x/max_x/min_y/max_y`. The adapter layer in ADMESH-Domains maps x→lon, y→lat.
+- **Decision** (Q-2 Option A): CHILmesh returns `min_x/max_x/min_y/max_y`. Adapter layer in ADMESH-Domains maps x→lon, y→lat.
 - `element_type` vocabulary: `"Triangular"` | `"Quadrilateral"` | `"Mixed-Element"` (matches `_elem_type()` output logic).
 
 **Method signature**:
@@ -71,9 +71,9 @@ def admesh_metadata(self) -> dict:
     # Returns: node_count, element_count, element_type, bounding_box
 ```
 
-`element_type` is derived by calling `_elem_type()` on all elements and checking counts — if all tri → "Triangular", all quad → "Quadrilateral", mixed → "Mixed-Element".
+`element_type` derived by calling `_elem_type()` on all elements and checking counts — if all tri → "Triangular", all quad → "Quadrilateral", mixed → "Mixed-Element".
 
-**`type` property** (set at mesh load time): The `CHILmesh.type` attribute is already declared in `__init__` (line 81) as `None`. Set it to the `element_type` string during `_initialize_mesh()`.
+**`type` property** (set at mesh load time): `CHILmesh.type` attribute declared in `__init__` (line 81) as `None`. Set to `element_type` string during `_initialize_mesh()`.
 
 ---
 
@@ -97,24 +97,22 @@ def admesh_metadata(self) -> dict:
 
 ## 6. SMS `.2dm` reader
 
-**Question**: What is the SMS `.2dm` file format?
+**Question**: What is SMS `.2dm` file format?
 
-**Finding**: SMS `.2dm` is a text format with keyword-prefixed lines:
+**Finding**: SMS `.2dm` is text format with keyword-prefixed lines:
 - `MESH2D` — header (first line, optional)
 - `ND id x y z` — node definition
 - `E3T id n1 n2 n3 mat` — triangular element (mat = material ID, ignored)
 - `E4Q id n1 n2 n3 n4 mat` — quad element
 - Lines starting with `#` are comments
 
-**Decision**: Parse node and element lines in a single pass using a keyword dispatch dict. Nodes are 1-indexed in the file; subtract 1 for 0-based storage. Material ID is discarded. Mixed meshes (E3T + E4Q in same file) use padded-triangle convention.
+**Decision**: Parse node and element lines in single pass using keyword dispatch dict. Nodes are 1-indexed in file; subtract 1 for 0-based storage. Material ID discarded. Mixed meshes (E3T + E4Q) use padded-triangle convention.
 
-**Alternatives considered**: Using a library (meshio) — rejected; adds a heavy dependency for a format with a trivial parser.
+**Alternatives considered**: Using meshio — rejected; adds heavy dependency for format with trivial parser.
 
 ---
 
 ## 7. Error handling strategy
-
-**Question**: What error types and messages are most actionable for each failure mode?
 
 **Decision** (from clarify phase F-3, F-4, spec FR-007):
 
@@ -129,12 +127,10 @@ def admesh_metadata(self) -> dict:
 
 ## 8. Test fixture — synthetic quad mesh
 
-**Question**: What is the minimal quad `.fort.14` fixture that tests all code paths?
-
 **Decision** (from clarify phase Q-1, Option C):
 - Synthetic: 2×2 regular quad grid → 9 nodes, 4 quad elements. Committed to `src/chilmesh/data/quad_2x2.fort.14`.
 - Deterministic, no download required, covers reader + writer + roundtrip + metadata tests.
-- Real ADMESH-Domains mesh: deferred to a future `@pytest.mark.integration` test (separate issue).
+- Real ADMESH-Domains mesh: deferred to future `@pytest.mark.integration` test.
 
 **Format** (9 nodes, 4 quads, all 1-based in file):
 ```

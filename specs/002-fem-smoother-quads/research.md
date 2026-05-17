@@ -1,8 +1,8 @@
 # Research: FEM Smoother Extension to Quads & Mixed Elements
 
-**Date**: 2026-05-02  
-**Phase**: Phase 0 (Research & Clarification)  
-**Input**: Issue #4, Spec 002-fem-smoother-quads/spec.md  
+**Date**: 2026-05-02
+**Phase**: Phase 0 (Research & Clarification)
+**Input**: Issue #4, Spec 002-fem-smoother-quads/spec.md
 **Objective**: Understand Zhou & Shimada triangle formulation and derive quad extension
 
 ---
@@ -11,7 +11,7 @@
 
 ### Triangle Stiffness Matrices
 
-The current CHILmesh implementation uses two 2×2 matrices:
+Current CHILmesh implementation uses two 2×2 matrices:
 
 ```
 D = 2 * I     = [[2, 0], [0, 2]]          (diagonal block)
@@ -20,7 +20,7 @@ T = [[-1, -√3], [√3, -1]]                 (off-diagonal block)
 
 ### Assembly Pattern (3-Node Triangle)
 
-For a triangle element with nodes [i, j, k]:
+For triangle element with nodes [i, j, k]:
 
 ```
 Global stiffness assembly:
@@ -41,17 +41,17 @@ Global stiffness assembly:
 ### Mathematical Properties
 
 - **D determinant**: 4.0
-- **T determinant**: 4.0  
+- **T determinant**: 4.0
 - **T is skew-symmetric**: T^T ≠ T, but has consistent coupling
 - **Eigenvalues of T**: -1 ± √3i (complex conjugate pair, magnitude 2)
 
 ### Physical Interpretation
 
-The matrices encode:
+Matrices encode:
 - **D (diagonal)**: Self-stiffness of each node (how much it resists movement)
 - **T (coupling)**: Inter-node coupling (how nodes influence each other)
 
-For triangles, the values are optimized to:
+For triangles, values optimized to:
 - Minimize angle distortion
 - Favor 60° angles (equilateral triangles)
 - Penalize obtuse angles and degeneracies
@@ -64,14 +64,14 @@ For triangles, the values are optimized to:
 
 ### Design Principle
 
-To extend Zhou & Shimada to quadrilaterals, we use **energy minimization analogy**:
+To extend Zhou & Shimada to quadrilaterals, use **energy minimization analogy**:
 - Triangles optimize for 60° angles (3 angles per element)
 - Quads optimize for 90° angles (4 angles per element)
 - Apply same optimization principle with element-type-specific coefficients
 
 ### Quad Stiffness Matrices
 
-For a quadrilateral element with nodes [i, j, k, l]:
+For quadrilateral element with nodes [i, j, k, l]:
 
 ```
 D_quad = 2.5 * I  = [[2.5, 0], [0, 2.5]]        (diagonal block)
@@ -86,7 +86,7 @@ T_quad = [[-1.25, -1.25], [1.25, -1.25]]        (off-diagonal block)
 
 ### Assembly Pattern (4-Node Quad)
 
-For a quad element with nodes [i, j, k, l] (in CCW order):
+For quad element with nodes [i, j, k, l] (in CCW order):
 
 ```
 Global stiffness assembly:
@@ -108,22 +108,22 @@ Global stiffness assembly:
 
 ## Mixed-Element Assembly
 
-For a mesh containing both triangles and quads:
+For mesh containing both triangles and quads:
 
 1. **Element type detection**: Per-element, check connectivity column count
    - Triangle: 3 valid vertices (or 4th is padding/-1)
    - Quad: 4 valid vertices
 
-2. **Stiffness assembly**: 
+2. **Stiffness assembly**:
    - Apply D/T for triangle elements
    - Apply D_quad/T_quad for quad elements
    - Both contribute to same global stiffness matrix K
 
-3. **Global DOF numbering**: 
+3. **Global DOF numbering**:
    - Node i has DOFs: [2*i, 2*i+1] (x, y components)
    - Consistent regardless of element type
 
-4. **Boundary conditions**: 
+4. **Boundary conditions**:
    - Boundary nodes marked by kinf constraint
    - Applied uniformly regardless of incident element types
 
@@ -192,7 +192,7 @@ Existing boundary condition logic (kinf constraint) remains unchanged:
 
 **Question**: How to handle quads with zero area or near-zero area?
 
-**Approach**: 
+**Approach**:
 - Detect degenerate quads pre-smoothing (area < 1e-10 relative to mesh)
 - Skip smoothing for these elements
 - Mark in validation report as "skipped degenerate"
@@ -200,7 +200,7 @@ Existing boundary condition logic (kinf constraint) remains unchanged:
 
 ### 2. Tri-Quad Boundary Coupling
 
-**Question**: How does the smoother handle nodes shared by triangle and quad elements?
+**Question**: How does smoother handle nodes shared by triangle and quad elements?
 
 **Approach**:
 - Each node in global DOF numbering receives contributions from all incident elements
@@ -210,8 +210,7 @@ Existing boundary condition logic (kinf constraint) remains unchanged:
 
 ### 3. Padding in Mixed Meshes
 
-**Question**: CHILmesh stores mixed meshes as (n_elems, 4) array with padding.
-How to detect element type reliably?
+**Question**: CHILmesh stores mixed meshes as (n_elems, 4) array with padding. How to detect element type reliably?
 
 **Approach**:
 - **Triangles**: connectivity_list[i, 3] == -1 or is padding marker
@@ -224,11 +223,11 @@ How to detect element type reliably?
 
 ### For MVP (Phase 2-3)
 
-1. ✅ Implement quad matrices D_quad, T_quad as above (simple analogy)
-2. ✅ Create `_detect_element_type()` helper
-3. ✅ Refactor `direct_smoother()` to element dispatcher
-4. ✅ Add regression tests (triangle backward compat)
-5. ✅ Validate on structured fixture (quads only)
+1. Implement quad matrices D_quad, T_quad as above (simple analogy)
+2. Create `_detect_element_type()` helper
+3. Refactor `direct_smoother()` to element dispatcher
+4. Add regression tests (triangle backward compat)
+5. Validate on structured fixture (quads only)
 
 ### For Future Phases (Phase 4-5)
 
@@ -250,16 +249,13 @@ How to detect element type reliably?
    - Original triangle formulation (60° optimization)
    - https://api.semanticscholar.org/CorpusID:34335417
 
-2. **Balendran (2006)**: Cited in CHILmesh docstring
-   - Triangle stiffness matrix derivation
+2. **Balendran (2006)**: Cited in CHILmesh docstring — Triangle stiffness matrix derivation
 
-3. **FEM Theory**: Standard quad stiffness (bilinear isoparametric)
-   - Not used here; keeping Zhou & Shimada analogy for consistency
+3. **FEM Theory**: Standard quad stiffness (bilinear isoparametric) — Not used here; keeping Zhou & Shimada analogy for consistency
 
-4. **Mesh Quality Metrics**: Knupp (2001), Field (2000)
-   - Element validity criteria (non-inverted, positive area)
+4. **Mesh Quality Metrics**: Knupp (2001), Field (2000) — Element validity criteria (non-inverted, positive area)
 
 ---
 
-**Document Status**: READY FOR IMPLEMENTATION  
+**Document Status**: READY FOR IMPLEMENTATION
 **Next Step**: Execute Phase 2 tasks (T001-T003)
