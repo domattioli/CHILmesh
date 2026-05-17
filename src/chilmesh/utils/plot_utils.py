@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # plot_utils.py
 import numpy as np
 import matplotlib.pyplot as plt
