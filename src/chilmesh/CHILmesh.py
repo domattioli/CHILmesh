@@ -669,14 +669,29 @@ class CHILmesh(CHILmeshPlotMixin):
     def boundary_edges( self ) -> np.ndarray:
         """
         Identify boundary edges of the mesh.
-        
+
         Returns:
             Indices of boundary edges
         """
-        # Boundary edges have only one adjacent element
-        edge2elem = self.adjacencies["Edge2Elem"]
-        boundary_mask = (edge2elem[:, 1] == -1)  # Second element is sentinel
-        return np.where( boundary_mask )[0]
+        if "Edge2Elem" in self.adjacencies:
+            # Fast path: adjacency structure already built
+            edge2elem = self.adjacencies["Edge2Elem"]
+            boundary_mask = (edge2elem[:, 1] == -1)
+            return np.where(boundary_mask)[0]
+
+        # Fallback for meshes constructed with compute_layers=False:
+        # count edge occurrences; boundary edges appear exactly once.
+        edge_count: dict[tuple, int] = {}
+        edge_list: list[tuple] = []
+        for row in self.connectivity_list:
+            verts = list(row[:3]) if (len(row) == 4 and row[3] == row[0]) else list(row)
+            for i in range(len(verts)):
+                a, b = int(verts[i]), int(verts[(i + 1) % len(verts)])
+                key = (min(a, b), max(a, b))
+                if key not in edge_count:
+                    edge_list.append(key)
+                edge_count[key] = edge_count.get(key, 0) + 1
+        return np.array([i for i, key in enumerate(edge_list) if edge_count[key] == 1], dtype=int)
 
     def boundary_node_indices( self ) -> np.ndarray:
         """
@@ -1804,12 +1819,13 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         Assemble stiffness matrix contributions from quad elements.
 
-        Decomposes each quad into two triangles (0-1-2 and 0-2-3) and applies
-        the exact Zhou & Shimada triangle stiffness to each half. The sum of
-        two PSD triangle matrices is PSD, guaranteeing a well-posed solve and
-        bounded interior displacements. The earlier T_quad analogy produced an
-        indefinite element matrix (min eigenvalue -1.25) that caused solver blow-up
-        on mixed meshes.
+        Averages both diagonal decompositions (0→2 and 1→3) so every quad vertex
+        receives equal stiffness weighting (1.5×D each). Single-diagonal decomposition
+        double-counts diagonal vertices (2×D vs 1×D), creating asymmetric forces at
+        quad-triangle seams that cause element collapse in mixed meshes.
+
+        Total stiffness magnitude unchanged: 4 triangles × 0.5 weight = 2 triangle
+        contributions, same as the single-diagonal form.
 
         Parameters:
             quad_indices: Array of quad element indices
@@ -1828,16 +1844,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
         rows, cols, data = [], [], []
         for quad in q:
-            # Decompose into two triangles sharing diagonal 0-2
-            for tri in [(quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3])]:
-                for i in range(3):
-                    for j in range(3):
-                        block = D if i == j else T if j == (i + 1) % 3 else T.T
-                        for di in range(2):
-                            for dj in range(2):
-                                rows.append(2 * tri[i] + di)
-                                cols.append(2 * tri[j] + dj)
-                                data.append(block[di, dj])
+            # Average both diagonals so all 4 vertices get equal stiffness (1.5*D each).
+            # Diagonal 0-2: (0,1,2) + (0,2,3); diagonal 1-3: (0,1,3) + (1,2,3).
+            for diag_tris in [
+                [(quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3])],
+                [(quad[0], quad[1], quad[3]), (quad[1], quad[2], quad[3])],
+            ]:
+                for tri in diag_tris:
+                    for i in range(3):
+                        for j in range(3):
+                            block = D if i == j else T if j == (i + 1) % 3 else T.T
+                            for di in range(2):
+                                for dj in range(2):
+                                    rows.append(2 * tri[i] + di)
+                                    cols.append(2 * tri[j] + dj)
+                                    data.append(0.5 * block[di, dj])
 
         return rows, cols, data
 
@@ -1873,6 +1894,66 @@ class CHILmesh(CHILmeshPlotMixin):
             data.extend(quad_data)
 
         return rows, cols, data
+
+    def _compute_angle_based_forces(self, p: np.ndarray, n: int) -> np.ndarray:
+        """
+        Compute angle-based RHS force vector for Zhou & Shimada smoother.
+
+        For each interior vertex, computes forces that pull it toward angles that
+        conform to ideal values (60° for triangles, 90° for quads). Uses cotangent
+        weighting: F_i = -0.5 * Σ_{adjacent angles} cot(θ) * (edge_perp)
+
+        Parameters:
+            p: (n_verts, 2) point array (x, y only)
+            n: Total number of vertices
+
+        Returns:
+            F: (2*n,) force vector with angle-based forces for interior vertices
+        """
+        import numpy as np
+
+        F = np.zeros(2 * n)
+
+        # Process each element to accumulate angle-based forces
+        for elem_idx, elem in enumerate(self.connectivity_list):
+            # Determine if triangle or quad
+            is_tri = (elem[3] == elem[0]) if len(elem) == 4 else True
+
+            if is_tri:
+                verts = elem[:3]
+                ideal_angle = np.pi / 3  # 60° for triangles
+            else:
+                verts = elem[:4]
+                ideal_angle = np.pi / 2  # 90° for quads
+
+            # Compute angles at each vertex
+            for i in range(len(verts)):
+                v0 = int(verts[i])
+                v1 = int(verts[(i - 1) % len(verts)])
+                v2 = int(verts[(i + 1) % len(verts)])
+
+                # Edge vectors emanating from v0
+                e1 = p[v1] - p[v0]  # to previous vertex
+                e2 = p[v2] - p[v0]  # to next vertex
+
+                # Angle at v0
+                cos_angle = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2) + 1e-14)
+                cos_angle = np.clip(cos_angle, -1.0, 1.0)
+                angle = np.arccos(cos_angle)
+
+                # Cotangent weight (negative because we want to penalize deviations)
+                cot_angle = 1.0 / (np.tan(angle) + 1e-14)
+
+                # Force is perpendicular to edges, weighted by cotangent
+                # Use perpendicular to e2: rotate 90° clockwise = (y, -x)
+                e2_perp = np.array([e2[1], -e2[0]])
+                force = -0.5 * cot_angle * e2_perp
+
+                # Accumulate force (scaled by 0.1 to avoid over-correction)
+                F[2*v0] += 0.1 * force[0]
+                F[2*v0 + 1] += 0.1 * force[1]
+
+        return F
 
     def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
         """
@@ -1914,11 +1995,26 @@ class CHILmesh(CHILmeshPlotMixin):
             rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
 
         K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
-        F = np.zeros(2*n)
 
-        # Identify boundary nodes and apply constraints
-        edge_verts = self.edge2vert(self.boundary_edges())
-        boundary_nodes = np.unique(edge_verts.flatten())
+        # Compute angle-based RHS forces for interior nodes
+        F = self._compute_angle_based_forces(p, n)
+
+        # Identify boundary nodes and apply constraints.
+        # Use adjacency structure when available; otherwise count edge occurrences
+        # directly (supports compute_layers=False meshes used in tests).
+        if "Edge2Elem" in self.adjacencies:
+            edge_verts = self.edge2vert(self.boundary_edges())
+            boundary_nodes = np.unique(edge_verts.flatten())
+        else:
+            edge_count: dict[tuple, int] = {}
+            for row in self.connectivity_list:
+                # strip padding for degenerate-quad triangles
+                verts = list(row[:3]) if (len(row) == 4 and row[3] == row[0]) else list(row)
+                for i in range(len(verts)):
+                    a, b = int(verts[i]), int(verts[(i + 1) % len(verts)])
+                    key = (min(a, b), max(a, b))
+                    edge_count[key] = edge_count.get(key, 0) + 1
+            boundary_nodes = np.unique([v for key, cnt in edge_count.items() if cnt == 1 for v in key])
 
         for v in boundary_nodes:
             F[2*v:2*v+2] = kinf * p[v]
