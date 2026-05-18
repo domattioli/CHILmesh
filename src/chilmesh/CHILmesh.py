@@ -990,7 +990,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 active_count = np.sum(edge2elem_work >= 0, axis=1)
                 iLbEdgeIDs = np.where(active_count == 1)[0]
 
-            if len(iLbEdgeIDs) == 0:
+            if len(iLbEdgeIDs) == 0:  # pragma: no cover -- safety break: unreachable on valid meshes (outer while exits first)
                 break
 
             # Step 2: OV = unique vertices on boundary edges (from working copy)
@@ -1016,7 +1016,7 @@ class CHILmesh(CHILmeshPlotMixin):
             if len(ov_edge_indices) > 0:
                 ie_raw = edge2elem_work[ov_edge_indices].ravel()
                 ie = np.unique(ie_raw[ie_raw >= 0]).astype(int)
-            else:
+            else:  # pragma: no cover -- unreachable: OV vertices come from these very edges, so at least one row matches
                 ie = np.empty(0, dtype=int)
             self.layers["IE"].append(ie)
 
@@ -1032,7 +1032,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 lv = self.connectivity_list[layer_elems].ravel()
                 lv = lv[lv >= 0]
                 iv = np.setdiff1d(np.unique(lv), ov).astype(int)
-            else:
+            else:  # pragma: no cover -- unreachable: OE is non-empty whenever iLbEdgeIDs is non-empty (guarded above)
                 iv = np.empty(0, dtype=int)
             self.layers["IV"].append(iv)
 
@@ -2205,7 +2205,7 @@ class CHILmesh(CHILmeshPlotMixin):
         for vert_id in range(self.n_verts):
             edges = self.get_vertex_edges(vert_id)
 
-            if len(edges) < 2:
+            if len(edges) < 2:  # pragma: no cover -- unreachable: every valid-mesh vertex has >=2 incident edges
                 continue
 
             # Compute distances to neighbors
