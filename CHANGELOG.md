@@ -67,7 +67,8 @@ documentation polish. No public-API breaking changes.
   analysis" to accurately scope the library. Advancing-front-related
   API references retain the "generation" terminology where it applies.
 - Smoothing section rewritten to enumerate the three algorithms
-  (Zhou-Shimada FEM, Zhou-Shimada angle-based, ADMESH truss warm-start)
+  (Balendran direct FEM, Zhou-Shimada angle-based, ADMESH Spring-Based
+  Truss Smoother)
   in a comparison table with selection guidance.
 - `CITATION.cff` keyword `mesh-generation` → `mesh-processing` /
   `mesh-smoothing`.

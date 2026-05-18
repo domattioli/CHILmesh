@@ -88,7 +88,7 @@ See [`examples/`](examples/) for more runnable scripts.
 
 - **Fast** — full init + quality analysis on a 98,365-element mesh in **~3.3 s** (4.3× faster than v0.2.0). Hash-mapped O(1) edge lookups, vectorised numpy core ops, kd-tree spatial queries at O(log n)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
-- **Smoothing** — three algorithms: Zhou-Shimada FEM (direct solve), Zhou-Shimada angle-based (iterative), and ADMESH truss warm-start (force relaxation)
+- **Smoothing** — three algorithms: Balendran direct FEM (one-shot solve), Zhou-Shimada angle-based (iterative), and the ADMESH Spring-Based Truss Smoother (force relaxation)
 - **Mesh alterations** — `insert_vertex`, coord-only vertex moves, advancing-front element addition; topology-update primitives via the `MutableMesh` API (full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94))
 - **Analysis** — element quality, interior angles, layer-based skeletonization
 - **I/O** — ADCIRC `.fort.14` and SMS `.2dm` read/write
@@ -178,9 +178,9 @@ Three smoothing algorithms — pick by use case. Each preserves boundary nodes, 
 
 | Algorithm | API | Style | When |
 |---|---|---|---|
-| **Zhou-Shimada FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | Direct sparse solve; one shot | Best general-purpose default. Stable on tri / quad / mixed. |
+| **Balendran direct FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | One-shot sparse solve | Best general-purpose default. Stable on tri / quad / mixed. |
 | **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | DOMsmooth hybrid fallback for difficult mixed meshes where FEM stalls. |
-| **ADMESH truss warm-start** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
+| **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
 
 ```python
 mesh.smooth_mesh(method='fem', acknowledge_change=True)         # default
@@ -188,7 +188,12 @@ mesh.smooth_mesh(method='angle-based', acknowledge_change=True) # fallback
 mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
 ```
 
-Stiffness assembly, convergence parameters, and algorithm details: [`docs/API.md`](docs/API.md). The FEM and angle-based methods follow Zhou & Shimada (2000), *"An angle-based approach to two-dimensional mesh smoothing,"* Proc. 9th IMR, 373–384.
+Stiffness assembly, convergence parameters, and algorithm details: [`docs/API.md`](docs/API.md).
+
+**References.**
+- FEM smoother: Balendran, B. (1999). *"A direct smoothing method for surface meshes."* Proc. 8th International Meshing Roundtable, pp. 189–193.
+- Angle-based smoother: Zhou, M. & Shimada, K. (2000). *"An angle-based approach to two-dimensional mesh smoothing."* Proc. 9th IMR, pp. 373–384.
+- ADMESH Spring-Based Truss Smoother: Conroy et al., *"ADMESH: An advanced, automatic unstructured mesh generator for shallow water models."* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
 
 ---
 
@@ -261,10 +266,10 @@ CHILmesh started as the Python successor to QuADMESH+ (Mattioli, OSU MSc 2017) �
 
 ## References
 
-- [FEM Smoother (Zhou & Shimada, 2000)](https://api.semanticscholar.org/CorpusID:34335417)
-- [Angle-Based Smoothing](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf)
-- [ADMESH Paper](https://doi.org/10.1007/s10236-012-0574-0)
-- Original MATLAB implementation funded by [Aquaveo](https://aquaveo.com/)
+- Balendran, B. (1999). *"A direct smoothing method for surface meshes,"* Proc. 8th IMR, 189–193. (FEM smoother basis.)
+- Zhou, M. & Shimada, K. (2000). *"An angle-based approach to two-dimensional mesh smoothing,"* Proc. 9th IMR, 373–384. [PDF](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf). (Angle-based smoother.)
+- Conroy et al., *"ADMESH: An advanced, automatic unstructured mesh generator for shallow water models,"* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0). (ADMESH Spring-Based Truss Smoother.)
+- Original MATLAB implementation funded by [Aquaveo](https://aquaveo.com/).
 
 ---
 
