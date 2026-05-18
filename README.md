@@ -72,13 +72,13 @@ Per-element quality (skew, `4√3·area / Σedge²`) and a 100-bin distribution.
 
 ![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=2)
 
-466 corner-graded triangles surrounding 60 quads after FEM smoothing (symmetric quad stiffness, boundary pinned, median quality 0.760). 16×12 quad core, distmesh1d-graded perimeter (`h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))`), Delaunay-stitched gap band, then FEM smoother. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+Demonstrates **mixed-element support** end-to-end: a quad core stitched to an ADMESH triangle ring runs through wireframe rendering, layer-based skeletonization, and per-element quality analysis on a single mesh. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
 
 ### Skeletonization + quality plotting (3 smoothing states)
 
 ![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
 
-The two flagship visualisations — layer-based skeletonization (centre) and per-element quality (right) — on three states of the same 580-triangle annulus: raw (median q ≈ 0.71), ADMESH warm-start truss (≈ 0.92), and FEM smoother (≈ 0.93). Reproduce: `python scripts/generate_3row_admesh.py`.
+Shows the **two flagship visualisations** — `plot_layer()` (centre) and `plot_quality()` (right) — applied to the same annulus at three smoothing states (raw, ADMESH warm-start truss, FEM smoother). Same API, same fixture, different inputs: how skeletonization and quality reads track mesh evolution. Reproduce: `python scripts/generate_3row_admesh.py`.
 
 ---
 
