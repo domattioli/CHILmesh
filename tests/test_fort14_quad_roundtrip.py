@@ -63,9 +63,11 @@ def test_quad_compute_layers_false():
     assert elapsed < 1.0, f"Fast init took {elapsed:.2f}s, should be <1s"
 
     # Verify mesh loaded correctly
-    assert mesh.n_verts == 9
-    assert mesh.n_elems == 4
-    assert mesh.type == "Quadrilateral"
+    assert mesh.n_verts == 9, f"quad_2x2 fast-init n_verts={mesh.n_verts}, expected 9"
+    assert mesh.n_elems == 4, f"quad_2x2 fast-init n_elems={mesh.n_elems}, expected 4"
+    assert mesh.type == "Quadrilateral", (
+        f"quad_2x2 fast-init type={mesh.type!r}, expected 'Quadrilateral'"
+    )
 
     # Verify layers not computed
     assert mesh.n_layers == 0, f"Expected n_layers=0, got {mesh.n_layers}"
@@ -81,7 +83,9 @@ def test_quad_padding_convention():
     mesh = chilmesh.examples.quad_2x2()
 
     # All rows should have 4 columns (padded triangles or quads)
-    assert mesh.connectivity_list.shape[1] == 4
+    assert mesh.connectivity_list.shape[1] == 4, (
+        f"quad_2x2 connectivity has {mesh.connectivity_list.shape[1]} cols, expected 4"
+    )
 
     # All rows should be quads (no triangle padding needed in this fixture)
     for i, row in enumerate(mesh.connectivity_list):
