@@ -5,7 +5,7 @@ hand out mutation-safe meshes. If ``copy()`` ever degrades to a shallow copy,
 every mutating test would silently corrupt the cached mesh and bleed state
 across parametrised runs. These tests guard that contract directly.
 
-Tracks TEST-AUDIT F5.
+Tracks .planning/TEST-AUDIT.md F5.
 """
 from __future__ import annotations
 
