@@ -1971,16 +1971,17 @@ class CHILmesh(CHILmeshPlotMixin):
         Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
         Supports triangle, quad, and mixed-element meshes.
 
-        Based on the Zhou & Shimada formulation (triangles) extended to quads
-        via analogy (maintaining energy-minimization principle).
+        Implements the Balendran direct smoothing formulation for triangles,
+        extended to quads via analogy (maintaining the energy-minimization
+        principle on a per-element stiffness matrix).
 
         Parameters:
             kinf: Large stiffness value for fixed boundary vertices
 
         Reference:
-            Zhou, M., & Shimada, K. (2000).
-            "An angle-based approach to two-dimensional mesh smoothing".
-            In *Proceedings of the 9th International Meshing Roundtable*, 373–384.
+            Balendran, B. (1999).
+            "A direct smoothing method for surface meshes".
+            In *Proceedings of the 8th International Meshing Roundtable*, 189–193.
             Sandia National Laboratories.
             https://api.semanticscholar.org/CorpusID:34335417
         """

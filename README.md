@@ -3,7 +3,7 @@
 </h1>
 
 <p align="center">
-  <strong>Fast 2D mesh generation and analysis for triangular, quadrilateral, and mixed-element meshes.</strong>
+  <strong>Fast 2D mesh processing, smoothing, and analysis for triangular, quadrilateral, and mixed-element meshes.</strong>
 </p>
 
 <p align="center">
@@ -16,6 +16,7 @@
   <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/badge/OSU_CHIL-ADMESH-66bb33?logo=github&logoColor=ba0c2f&labelColor=ffffff" alt="ADMESH"></a>
   <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
+  <a href="https://zenodo.org/badge/latestdoi/693749657"><img src="https://zenodo.org/badge/693749657.svg" alt="DOI"></a>
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
@@ -63,34 +64,37 @@ See [`examples/`](examples/) for more runnable scripts.
 
 ## Gallery
 
-### WNAT_Hagen — 52,774 vertices · 98,365 elements
+<p align="center">
+  <img src="output/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
+  <br>
+  <sub><em><strong>Figure 1.</strong> Scale demo on WNAT_Hagen (52,774 vertices · 98,365 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_wnat_showcase.py</code>.</em></sub>
+</p>
 
-![WNAT_Hagen quality plot and distribution](output/wnat_hagen_showcase.png?v=2)
+<p align="center">
+  <img src="output/mixed_mesh_showcase.png?v=2" alt="Mixed-element mesh: wireframe, layers, quality">
+  <br>
+  <sub><em><strong>Figure 2.</strong> Mixed-element pipeline — wireframe, skeletonization, and per-element quality on one tri+quad mesh, all via the standard API. Reproduce: <code>python scripts/generate_mixed_truss_demo.py</code>.</em></sub>
+</p>
 
-Per-element quality (skew, `4√3·area / Σedge²`) and a 100-bin distribution. Median quality 0.797, full init + quality analysis in **~3.3 s** end-to-end. Reproduce: `python scripts/benchmark_wnat_hagen.py`.
-
-### Mixed-element mesh — quads + ADMESH tri ring
-
-![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=2)
-
-Demonstrates **mixed-element support** end-to-end: a quad core stitched to an ADMESH triangle ring runs through wireframe rendering, layer-based skeletonization, and per-element quality analysis on a single mesh. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
-
-### Skeletonization + quality plotting (3 smoothing states)
-
-![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
-
-Shows the **two flagship visualisations** — `plot_layer()` (centre) and `plot_quality()` (right) — applied to the same annulus at three smoothing states (raw, ADMESH warm-start truss, FEM smoother). Same API, same fixture, different inputs: how skeletonization and quality reads track mesh evolution. Reproduce: `python scripts/generate_3row_admesh.py`.
+<p align="center">
+  <img src="output/annulus_quickstart.png?v=7" alt="Skeletonization + quality plotting across three smoothing states">
+  <br>
+  <sub><em><strong>Figure 3.</strong> Flagship plots <code>plot_layer()</code> and <code>plot_quality()</code> tracking how skeletonization and quality respond to smoothing (raw → truss → FEM). Reproduce: <code>python scripts/generate_3row_admesh.py</code>.</em></sub>
+</p>
 
 ---
 
 ## Features
 
-- **Fast** — hash-mapped adjacencies and vectorised core ops; large meshes (~100k elements) initialise in seconds, not hours
+- **Fast** — full init + quality analysis on a 98,365-element mesh in **~3.3 s** (4.3× faster than v0.2.0).
+  - Hash-mapped O(1) edge lookups, vectorised numpy core ops, kd-tree spatial queries at O(log n)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
-- **Smoothing** — angle-based FEM smoother for quality improvement (Zhou & Shimada 2000)
+- **Smoothing** — three algorithms: Balendran direct FEM (one-shot solve), Zhou-Shimada angle-based (iterative), and the ADMESH Spring-Based Truss Smoother (force relaxation)
+- **Mesh alterations** — `insert_vertex`, coord-only vertex moves, advancing-front element addition; topology-update primitives via the `MutableMesh` API (full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94))
 - **Analysis** — element quality, interior angles, layer-based skeletonization
-- **I/O** — ADCIRC `.fort.14` and SMS `.2dm` read/write
-- **Spatial queries** — point-in-element, k-nearest vertices, radius search (v0.3.0)
+- **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS](https://www.aquaveo.com/sms) `.2dm` read/write. ([gmsh](https://gmsh.info/) Coming Soon)
+- **Spatial queries** — point-in-element, k-nearest vertices, radius search.
+- **Mesh traversal algorithms** (in-development)
 - **ADMESH-Domains integration** — `from_admesh_domain()` adapter for catalog meshes
 
 ---
@@ -125,7 +129,18 @@ pip install -e .
 
 CHILmesh is engineered for fast initialisation, query, and analysis on large unstructured 2D meshes. Hash-mapped edge adjacencies reduce topology build from `O(n²)` to amortised `O(n)`; core operations (`signed_area`, `interior_angles`, `elem_quality`) are fully vectorised over numpy arrays; a centroid kd-tree backs spatial queries (`find_element`, `nearest_vertices`) at `O(log n)` per call.
 
-Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements) initialises end-to-end in a few seconds on commodity hardware. Full numbers, per-stage breakdown, and reproducibility scripts in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
+
+| Stage | v0.2.0 | v0.4.0 |
+|---|---:|---:|
+| Fast init (no layers) | 3.9 s | **0.44 s** |
+| Full init (with layers) | 7.7 s | **3.26 s** |
+| Quality analysis | 6.6 s | **0.07 s** |
+| **Total workflow** | **14.3 s** | **3.33 s** |
+| `find_element` (per call) | n/a | **< 50 μs** |
+| `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** |
+
+Per-stage breakdown, methodology, and historical baselines in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
 
 ---
 
@@ -161,16 +176,26 @@ Full reference in [`docs/API.md`](docs/API.md). Optional ADMESH truss warm-start
 
 ## Mesh Smoothing
 
-Angle-based FEM smoother (Zhou & Shimada 2000) for triangles, quads, and mixed meshes. One API across element types; boundary nodes are pinned, topology preserved, aspect ratio favoured.
+Three smoothing algorithms — pick by use case. Each preserves boundary nodes, leaves topology unchanged, and accepts mixed-element meshes.
+
+| Algorithm | API | Style | When |
+|---|---|---|---|
+| **Balendran direct FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | One-shot sparse solve | Best general-purpose default. Stable on tri / quad / mixed. |
+| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | DOMsmooth hybrid fallback for difficult mixed meshes where FEM stalls. |
+| **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
 
 ```python
-mesh.smooth_mesh(method='fem', acknowledge_change=True)        # any element type
-new_points = mesh.direct_smoother(kinf=1e12)                   # boundary stiffness
+mesh.smooth_mesh(method='fem', acknowledge_change=True)         # default
+mesh.smooth_mesh(method='angle-based', acknowledge_change=True) # fallback
+mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
 ```
 
-Parameters, stiffness assembly details, and the angle-based fallback (`mesh.smooth_mesh(method='angle-based', ...)`) for mixed meshes are documented in [`docs/API.md`](docs/API.md).
+Stiffness assembly, convergence parameters, and algorithm details: [`docs/API.md`](docs/API.md).
 
-**Reference:** Zhou, M., & Shimada, K. (2000). "An angle-based approach to two-dimensional mesh smoothing." *Proc. 9th International Meshing Roundtable*, 373–384.
+**References.**
+- FEM smoother: Balendran, B. (1999). *"A direct smoothing method for surface meshes."* Proc. 8th International Meshing Roundtable, pp. 189–193.
+- Angle-based smoother: Zhou, M. & Shimada, K. (2000). *"An angle-based approach to two-dimensional mesh smoothing."* Proc. 9th IMR, pp. 373–384.
+- ADMESH Spring-Based Truss Smoother: Conroy et al. (2012) *"ADMESH: An advanced, automatic unstructured mesh generator for shallow water models."* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
 
 ---
 
@@ -213,9 +238,9 @@ Each subcommand has its own `--help` with an example. Also available as `python 
 
 ## Downstream Projects
 
-[**MADMESHR**](https://github.com/domattioli/MADMESHR) — Advancing-front mesh adaptation built on CHILmesh
-[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized mesh generation and smoothing
-[**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) — Mesh catalog for hydrodynamic applications
+[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized 2D triangular mesh generation for hydrodynamic domains
+[**MADMESHR**](https://github.com/domattioli/MADMESHR) — AI based quad- and mixed element generation for hydrodynamic domains.
+[**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) — Mesh catalog for hydrodynamic domains.
 
 ---
 
@@ -226,6 +251,8 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 ---
 
 ## Citation
+
+CHILmesh started as the Python successor to QuADMESH+ (Mattioli, OSU MSc 2017) — a MATLAB mesh generator built for storm-surge / coastal-ocean modelling against ADCIRC. The Python port extracts the reusable layer-based skeletonization, smoothing, and `.fort.14` machinery so downstream projects (MADMESHR, ADMESH, ADMESH-Domains) can share one library across modelling workflows. See [thesis PDF](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf) for the original mathematical formulation.
 
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
@@ -241,9 +268,6 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 
 ## References
 
-- [FEM Smoother (Balendran, 1999)](https://api.semanticscholar.org/CorpusID:34335417)
-- [Angle-Based Smoothing (Zhou & Shimada, 2000)](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf)
-- [ADMESH Paper (Conroy, 2012)](https://doi.org/10.1007/s10236-012-0574-0)
 - [Source of MATLAB implementation (Mattioli, 2017)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 ---
