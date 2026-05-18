@@ -277,6 +277,7 @@ class CHILmeshPlotMixin:
 
     def plot_quality_histogram(self, elem_ids=None, bins: int = 100,
                                cmap: str = 'cool',
+                               auto_norm: bool = False,
                                ax: Optional[plt.Axes] = None
                                ) -> Tuple[plt.Figure, plt.Axes]:
         """
@@ -295,6 +296,14 @@ class CHILmeshPlotMixin:
             Base colormap name; the reversed form (``cmap + "_r"``) is
             applied so high quality reads cyan and low quality reads
             magenta, matching :meth:`plot_quality`.
+        auto_norm : bool
+            If False (default), bars span the [0, 1] quality range with the
+            same normalisation as :meth:`plot_quality` — values look
+            visually consistent between the two plots. If True, bar colours
+            are normalised over the observed quality range
+            ``[q.min(), q.max()]`` so within-mesh variation reads more
+            distinctly when the distribution is narrow (e.g. high-quality
+            meshes confined to the upper third of the colormap).
         ax : matplotlib.axes.Axes, optional
             Target axes. A new figure/axes pair is created if omitted.
 
@@ -317,7 +326,10 @@ class CHILmeshPlotMixin:
         widths = np.diff(edges)
         midpoints = edges[:-1] + widths / 2.0
 
-        norm = Normalize(vmin=0.0, vmax=1.0)
+        if auto_norm and q.size > 0 and float(q.max() - q.min()) > 0:
+            norm = Normalize(vmin=float(q.min()), vmax=float(q.max()))
+        else:
+            norm = Normalize(vmin=0.0, vmax=1.0)
         colors = matplotlib.colormaps[cmap + "_r"](norm(midpoints))
 
         ax.bar(edges[:-1], counts, width=widths, align='edge',
