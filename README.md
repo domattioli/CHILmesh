@@ -235,6 +235,21 @@ new_points = mesh.direct_smoother(kinf=1e12)  # kinf = boundary stiffness
 
 ---
 
+## Examples
+
+Runnable scripts in [`examples/`](examples/) demonstrate common tasks against bundled fixtures — no external mesh files required:
+
+- [`01_quickstart.py`](examples/01_quickstart.py) — load a mesh, print stats, save a plot
+- [`02_fort14_roundtrip.py`](examples/02_fort14_roundtrip.py) — fort.14 read / write
+- [`03_smoothing.py`](examples/03_smoothing.py) — angle-based smoother on perturbed interior
+- [`04_spatial_queries.py`](examples/04_spatial_queries.py) — `find_element`, radius search, k-nearest vertices
+
+```bash
+python examples/01_quickstart.py
+```
+
+---
+
 ## Downstream Projects
 
 [**MADMESHR**](https://github.com/domattioli/MADMESHR) — Advancing-front mesh adaptation built on CHILmesh  
