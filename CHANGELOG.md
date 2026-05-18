@@ -8,6 +8,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### ✨ Added
 
+#### Command-line interface (issue #117)
+- `chilmesh` CLI with four subcommands wrapping the existing public API
+  - `chilmesh info <mesh>` — vert/elem/edge/layer counts + skew-quality stats
+  - `chilmesh convert <in> <out>` — format conversion (.14/.fort.14/.2dm in, .14/.fort.14 out)
+  - `chilmesh smooth <in> -o <out> --method {angle-based,fem,laplacian} --iter N` — in-place relaxation; reports median/min quality delta
+  - `chilmesh plot <in> -o <fig> [--layers|--quality]` — static PNG/PDF/SVG by suffix
+- New module `src/chilmesh/cli.py` + `__main__.py` so `python -m chilmesh ...` also works
+- `[project.scripts] chilmesh = "chilmesh.cli:main"` entry point in `pyproject.toml`
+- `tests/test_cli.py` exercises each subcommand via `subprocess.run([sys.executable, "-m", "chilmesh", ...])` on the bundled `annulus` fixture
+- No new runtime dependencies — stdlib `argparse` over the existing public API
+
 #### Layer-paths feature (PR #118)
 - `chilmesh.layer_paths` module — port of MATLAB `PathsOnOV` vertex-ordering heuristic for outer-vertex traversal
 - `tests/test_layer_paths.py` — regression suite (207 LOC)
