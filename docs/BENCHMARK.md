@@ -1,24 +1,53 @@
 # CHILmesh Performance Benchmarks
 
-**Version:** 0.2.0 (with Phase 1-3 optimizations)  
-**Reference Mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements)  
-**Date:** April 2026
+**Version:** 0.4.0 (Phase 5 spatial indexing + layer-paths)
+**Reference Mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers)
+**Date:** May 2026
 
 ---
 
 ## Executive Summary
 
-v0.2.0 delivers dramatic performance improvements through three phases of systematic optimization:
+v0.4.0 builds on the v0.2.0 hash-mapped adjacency foundation with vectorised core ops, a centroid kd-tree spatial index, and a layer-paths perf pass:
 
-- **Phase 1 (EdgeMap):** O(n²) → O(n log n) edge discovery
-- **Phase 2 (Adjacency):** Dict-based structures + validation
-- **Phase 3 (Bridge):** Stable API for downstream integration
+- **v0.2.0 — Phases 1–3** — hash-mapped edge / vertex adjacencies; O(n²) → amortised O(n) topology build
+- **v0.3.0 — Vectorisation pass (#75)** — `signed_area`, `interior_angles`, `elem_quality` lifted to numpy array ops
+- **v0.3.0 — Phase 5 (#115)** — `find_element`, `find_elements_in_radius`, `nearest_vertices` backed by lazy centroid kd-tree
+- **v0.4.0 — Layer-paths (#118)** — scoped subgraph build for outer-vertex traversal: `O(L·m)` → `O(m)`
 
-**Result: 150×+ speedup on large meshes**
+Cumulative result on the WNAT_Hagen reference workload: end-to-end init + quality analysis now runs in **~3.3 s**, with per-query latencies in the sub-microsecond range and bounded kd-tree build (`< 0.5 s`) for the spatial query path.
 
 ---
 
-## WNAT_Hagen Mesh Benchmark
+## Current Performance (v0.4.0)
+
+### Workflow
+
+| Stage | v0.2.0 | v0.4.0 | Δ |
+|---|---:|---:|---:|
+| Fast init (no layers) | 3.9 s | **0.44 s** | 8.9× |
+| Full init (with layers) | 7.7 s | **3.26 s** | 2.4× |
+| Quality analysis | 6.6 s | **0.07 s** | 94× |
+| Spatial index build (kd-tree) | n/a | **< 0.5 s** | — |
+| **Total workflow** | **14.3 s** | **3.33 s** | **4.3×** |
+
+### Query latency (per call, 5k samples)
+
+| Operation | v0.2.0 | v0.4.0 |
+|---|---:|---:|
+| `elem2edge` | 4.4 μs | **2.08 μs** |
+| `Vert2Edge` lookup | 0.7 μs | **0.17 μs** |
+| `Elem2Edge` bulk (1k samples) | n/a | **0.14 μs** |
+| `find_element` (centroid kd-tree + barycentric check) | n/a | **< 50 μs** |
+| `nearest_vertices` (k=5) | n/a | **< 30 μs** |
+
+### Layer-paths (PR #118)
+
+The `chilmesh.layer_paths` traversal previously built a full mesh subgraph per layer (`O(L·m)` where `L` = layer count, `m` = edges). The v0.4.0 path scopes the subgraph to layer elements only, dropping the dependency on `L` and yielding **O(m)** per layer for typical inputs.
+
+---
+
+## Historical baseline — WNAT_Hagen v0.2.0 (April 2026)
 
 ### Mesh Specifications
 ```
@@ -184,6 +213,6 @@ PYTHON
 
 ---
 
-**Last Updated:** 2026-04-27  
-**Benchmark Version:** 1.0  
+**Last Updated:** 2026-05-18
+**Benchmark Version:** 2.0 (v0.4.0)
 **Repository:** https://github.com/domattioli/CHILmesh
