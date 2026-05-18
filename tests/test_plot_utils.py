@@ -322,6 +322,60 @@ def test_plot_quality_subset_elem_ids(small_mesh):
 
 
 # ---------------------------------------------------------------------------
+# plot_quality_histogram
+# ---------------------------------------------------------------------------
+
+def test_plot_quality_histogram_returns_fig_ax(small_mesh):
+    fig, ax = small_mesh.plot_quality_histogram(bins=20)
+    assert isinstance(fig, plt.Figure)
+    assert isinstance(ax, plt.Axes)
+    assert ax.get_title() == "Element Quality Distribution", (
+        f"expected title 'Element Quality Distribution', got {ax.get_title()!r}"
+    )
+    assert ax.get_xlabel() == "Quality"
+    assert ax.get_ylabel() == "# of Elements"
+    # x-axis covers full [0, 1] quality range regardless of data extent
+    xmin, xmax = ax.get_xlim()
+    assert xmin == 0.0 and xmax == 1.0, f"xlim {xmin, xmax} != (0.0, 1.0)"
+    # one Rectangle patch per bin
+    assert len(ax.patches) == 20, (
+        f"expected 20 bins, got {len(ax.patches)} Rectangle patches"
+    )
+    plt.close(fig)
+
+
+def test_plot_quality_histogram_total_count_matches_subset(small_mesh):
+    ids = np.arange(min(5, small_mesh.n_elems))
+    fig, ax = small_mesh.plot_quality_histogram(elem_ids=ids, bins=10)
+    total = sum(int(p.get_height()) for p in ax.patches)
+    assert total == len(ids), (
+        f"histogram total {total} != requested elem count {len(ids)}"
+    )
+    plt.close(fig)
+
+
+def test_plot_quality_histogram_bin_colors_track_midpoints(small_mesh):
+    """Each bar's face colour must equal the cool_r colormap value at its
+    bin midpoint, matching the 2-D plot_quality colormap."""
+    import matplotlib
+    from matplotlib.colors import Normalize
+
+    fig, ax = small_mesh.plot_quality_histogram(bins=5)
+    cmap = matplotlib.colormaps['cool_r']
+    norm = Normalize(vmin=0.0, vmax=1.0)
+    expected_midpoints = np.linspace(0.1, 0.9, 5)  # bin centres for 5 bins on [0,1]
+    expected_colors = cmap(norm(expected_midpoints))
+
+    for patch, expected in zip(ax.patches, expected_colors):
+        actual = np.array(patch.get_facecolor())
+        np.testing.assert_allclose(
+            actual, expected, atol=1e-6,
+            err_msg=f"bar at x={patch.get_x():.2f} colour mismatch",
+        )
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
 # axis_chilmesh helper
 # ---------------------------------------------------------------------------
 

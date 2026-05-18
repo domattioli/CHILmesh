@@ -447,20 +447,33 @@ def main():
             overlay_tracked(ax, row_items[i])
             ax.axis('off')
 
-            # Column 1: Layers
+            # Column 1: Layers — discrete colorbar (layers are integer-valued)
             ax = axes[i, 1]
+            n_layers = max(len(row.layers["OE"]), len(row.layers["IE"]))
+            n_layers = max(1, n_layers)
+            layer_cmap = parula_cmap.resampled(n_layers)
+            layer_norm = mcolors.BoundaryNorm(
+                boundaries=np.arange(n_layers + 1), ncolors=n_layers
+            )
             layer_colors = get_layer_colors(row, parula_cmap)
             for tri, color_val in zip(triangles, layer_colors):
+                # Recover integer layer index from the normalised 0..1 value.
+                layer_idx = int(round(color_val * max(1, n_layers - 1)))
                 ax.fill(points[tri, 0], points[tri, 1],
-                        color=parula_cmap(color_val), edgecolor='black',
-                        linewidth=0.35, alpha=1.0)
+                        color=layer_cmap(layer_norm(layer_idx)),
+                        edgecolor='black', linewidth=0.35, alpha=1.0)
             ax.set_aspect('equal')
             ax.set_title(f"{row_label}\n{col_labels[1]} ({quality_str})", fontsize=9)
             overlay_tracked(ax, row_items[i])
             ax.axis('off')
-            sm1 = cm.ScalarMappable(cmap=parula_cmap, norm=mcolors.Normalize(vmin=0, vmax=1))
+            sm1 = cm.ScalarMappable(cmap=layer_cmap, norm=layer_norm)
             sm1.set_array([])
-            cbar1 = plt.colorbar(sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.85)
+            cbar1 = plt.colorbar(
+                sm1, ax=ax, orientation='vertical', pad=0.02, shrink=0.85,
+                ticks=np.arange(n_layers) + 0.5,
+                format='%d',
+            )
+            cbar1.ax.set_yticklabels([str(k) for k in range(n_layers)])
             cbar1.set_label("Layer", fontsize=8)
 
             # Column 2: Quality

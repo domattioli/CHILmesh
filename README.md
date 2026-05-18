@@ -33,6 +33,7 @@
 - [API Overview](#api-overview)
 - [Mesh Smoothing](#mesh-smoothing)
 - [Examples](#examples)
+- [CLI](#cli)
 - [Contributing](#contributing)
 - [Citation](#citation)
 
@@ -72,19 +73,19 @@ Per-element quality (skew, `4√3·area / Σedge²`) and a 100-bin distribution.
 
 ![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=2)
 
-466 corner-graded triangles surrounding 60 quads after FEM smoothing (symmetric quad stiffness, boundary pinned, median quality 0.760). 16×12 quad core, distmesh1d-graded perimeter (`h(p) = 0.05 + 0.45·(1 − exp(−(d/0.5)²))`), Delaunay-stitched gap band, then FEM smoother. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
+Demonstrates **mixed-element support** end-to-end: a quad core stitched to an ADMESH triangle ring runs through wireframe rendering, layer-based skeletonization, and per-element quality analysis on a single mesh. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
 
 ### Skeletonization + quality plotting (3 smoothing states)
 
 ![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
 
-The two flagship visualisations — layer-based skeletonization (centre) and per-element quality (right) — on three states of the same 580-triangle annulus: raw (median q ≈ 0.71), ADMESH warm-start truss (≈ 0.92), and FEM smoother (≈ 0.93). Reproduce: `python scripts/generate_3row_admesh.py`.
+Shows the **two flagship visualisations** — `plot_layer()` (centre) and `plot_quality()` (right) — applied to the same annulus at three smoothing states (raw, ADMESH warm-start truss, FEM smoother). Same API, same fixture, different inputs: how skeletonization and quality reads track mesh evolution. Reproduce: `python scripts/generate_3row_admesh.py`.
 
 ---
 
 ## Features
 
-- **Fast** — 4,000×+ workflow speedup vs v0.1.1 via hash-mapped adjacencies and vectorised core ops
+- **Fast** — hash-mapped adjacencies and vectorised core ops; large meshes (~100k elements) initialise in seconds, not hours
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — angle-based FEM smoother for quality improvement (Zhou & Shimada 2000)
 - **Analysis** — element quality, interior angles, layer-based skeletonization
@@ -96,9 +97,20 @@ The two flagship visualisations — layer-based skeletonization (centre) and per
 
 ## Installation
 
-From PyPI:
+From PyPI (pip):
 ```bash
 pip install chilmesh
+```
+
+With [uv](https://docs.astral.sh/uv/) (faster, pip-compatible):
+```bash
+uv pip install chilmesh        # or:  uv add chilmesh
+```
+
+From conda-forge (once published):
+```bash
+conda install -c conda-forge chilmesh
+# or: mamba install -c conda-forge chilmesh
 ```
 
 From source:
@@ -109,15 +121,11 @@ pip install -e .
 
 ---
 
-## Performance (v0.3.0)
+## Performance
 
-WNAT_Hagen workflow (52,774 vertices · 98,365 elements):
+CHILmesh is engineered for fast initialisation, query, and analysis on large unstructured 2D meshes. Hash-mapped edge adjacencies reduce topology build from `O(n²)` to amortised `O(n)`; core operations (`signed_area`, `interior_angles`, `elem_quality`) are fully vectorised over numpy arrays; a centroid kd-tree backs spatial queries (`find_element`, `nearest_vertices`) at `O(log n)` per call.
 
-| Stage | v0.1.1 | v0.3.0 | Speedup |
-|---|---:|---:|---:|
-| **Total workflow** | 13,400 s | **3.33 s** | **4,027×** |
-
-Full breakdown (init, quality, per-query latency) and methodology in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`.
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements) initialises end-to-end in a few seconds on commodity hardware. Full numbers, per-stage breakdown, and reproducibility scripts in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
 
 ---
 
@@ -178,6 +186,28 @@ Runnable scripts in [`examples/`](examples/) demonstrate common tasks against bu
 ```bash
 python examples/01_quickstart.py
 ```
+
+---
+
+## CLI
+
+`chilmesh` ships with a small shell entry point for inspection, conversion, smoothing, and plotting. No new dependencies — pure stdlib `argparse` over the existing public API.
+
+```bash
+# Mesh statistics (verts, elems, edges, layers, quality)
+chilmesh info path/to/mesh.fort.14
+
+# Format conversion (output format inferred from suffix)
+chilmesh convert mesh.2dm mesh.fort.14
+
+# In-place smoothing
+chilmesh smooth mesh.fort.14 -o smoothed.fort.14 --method angle-based --iter 50
+
+# Static figure (PNG / PDF / SVG by suffix; --layers or --quality for overlays)
+chilmesh plot mesh.fort.14 -o mesh.png --quality
+```
+
+Each subcommand has its own `--help` with an example. Also available as `python -m chilmesh ...` when the script isn't on PATH.
 
 ---
 

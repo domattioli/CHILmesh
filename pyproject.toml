@@ -52,6 +52,9 @@ dev = [
     "twine",
 ]
 
+[project.scripts]
+chilmesh = "chilmesh.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/domattioli/CHILmesh"
 Source = "https://github.com/domattioli/CHILmesh"

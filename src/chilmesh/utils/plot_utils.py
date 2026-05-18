@@ -275,6 +275,59 @@ class CHILmeshPlotMixin:
         ax.set_title("Element Quality")
         return fig, ax
 
+    def plot_quality_histogram(self, elem_ids=None, bins: int = 100,
+                               cmap: str = 'cool',
+                               ax: Optional[plt.Axes] = None
+                               ) -> Tuple[plt.Figure, plt.Axes]:
+        """
+        Plot a histogram of element quality with bars coloured by the same
+        ``cmap`` used by :meth:`plot_quality`. Bar `i` is filled with the
+        colormap value at its bin midpoint, so the histogram reads as a
+        1-D companion to the 2-D quality colormap.
+
+        Parameters
+        ----------
+        elem_ids : array-like, optional
+            Subset of element IDs to include. Defaults to all elements.
+        bins : int
+            Number of histogram bins on the quality axis [0, 1].
+        cmap : str
+            Base colormap name; the reversed form (``cmap + "_r"``) is
+            applied so high quality reads cyan and low quality reads
+            magenta, matching :meth:`plot_quality`.
+        ax : matplotlib.axes.Axes, optional
+            Target axes. A new figure/axes pair is created if omitted.
+
+        Returns
+        -------
+        (Figure, Axes)
+        """
+        if elem_ids is None:
+            elem_ids = np.arange(self.n_elems)
+        elif np.isscalar(elem_ids):
+            elem_ids = np.array([elem_ids])
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 4))
+        else:
+            fig = ax.figure
+
+        q, _, _ = self.elem_quality(elem_ids=elem_ids)
+        counts, edges = np.histogram(q, bins=bins, range=(0.0, 1.0))
+        widths = np.diff(edges)
+        midpoints = edges[:-1] + widths / 2.0
+
+        norm = Normalize(vmin=0.0, vmax=1.0)
+        colors = matplotlib.colormaps[cmap + "_r"](norm(midpoints))
+
+        ax.bar(edges[:-1], counts, width=widths, align='edge',
+               color=colors, edgecolor='k', linewidth=0.3)
+        ax.set_xlim(0.0, 1.0)
+        ax.set_xlabel('Quality')
+        ax.set_ylabel('# of Elements')
+        ax.set_title('Element Quality Distribution')
+        return fig, ax
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
