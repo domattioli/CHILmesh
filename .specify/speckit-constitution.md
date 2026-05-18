@@ -265,7 +265,7 @@ If a spec is abandoned or superseded:
 
 ### 6.1 Alignment with constitution.md
 
-CHILmesh's global constitution (`.planning/constitution.md`) takes precedence over speckit-constitution. If conflict:
+CHILmesh's global constitution (`.specify/memory/constitution.md`) takes precedence over speckit-constitution. If conflict:
 
 - **Global governance principles** (testing, backward compatibility, peer review) → apply as written
 - **Spec structure/format** (file names, metadata) → follow speckit-constitution
@@ -424,4 +424,4 @@ specs/003-example-feature/
 
 ---
 
-**This constitution is a living document. Amendments follow the process in § 5 of `.planning/constitution.md`.**
+**This constitution is a living document. Amendments follow the process in the Governance section of `.specify/memory/constitution.md`.**

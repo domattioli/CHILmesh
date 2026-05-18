@@ -24,13 +24,19 @@ def test_fort14_roundtrip_identity(name, tmp_path):
 
     out = tmp_path / f"{name}.fort.14"
     ok = mesh.write_to_fort14(str(out), grid_name=mesh.grid_name or name)
-    assert ok is True, "write_to_fort14 returned a falsy value"
-    assert out.exists() and out.stat().st_size > 0
+    assert ok is True, f"{name}: write_to_fort14 returned a falsy value"
+    assert out.exists() and out.stat().st_size > 0, (
+        f"{name}: fort14 output missing or empty at {out}"
+    )
 
     reloaded = CHILmesh.read_from_fort14(out)
 
-    assert reloaded.n_verts == mesh.n_verts
-    assert reloaded.n_elems == mesh.n_elems
+    assert reloaded.n_verts == mesh.n_verts, (
+        f"{name}: n_verts drift {mesh.n_verts} -> {reloaded.n_verts}"
+    )
+    assert reloaded.n_elems == mesh.n_elems, (
+        f"{name}: n_elems drift {mesh.n_elems} -> {reloaded.n_elems}"
+    )
     np.testing.assert_allclose(reloaded.points[:, :2], mesh.points[:, :2], atol=1e-7)
 
     # Connectivity is allowed to differ in vertex *order within an element*
@@ -38,4 +44,6 @@ def test_fort14_roundtrip_identity(name, tmp_path):
     # the *set* of vertices defining each element must match.
     orig_sets = [frozenset(row[:3]) for row in mesh.connectivity_list]
     rel_sets = [frozenset(row[:3]) for row in reloaded.connectivity_list]
-    assert sorted(orig_sets) == sorted(rel_sets)
+    assert sorted(orig_sets) == sorted(rel_sets), (
+        f"{name}: connectivity vertex-sets differ after roundtrip"
+    )

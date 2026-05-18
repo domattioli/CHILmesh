@@ -29,7 +29,7 @@ CHILmesh is a Python library for 2D triangular, quadrilateral, and mixed-element
 **Documentation:**
 - `.planning/MODERNIZATION_LESSONS_LEARNED.md` - Design decisions and tradeoffs
 - `.planning/project_plan.md` - Complete roadmap and timeline
-- `.planning/constitution.md` - Governance and API stability guarantees
+- `.specify/memory/constitution.md` - Canonical project constitution (governance, principles, API stability). `.planning/constitution.md` is a redirect stub.
 
 ## Code Standards
 
@@ -310,10 +310,10 @@ claude plugin install request-from-domi@DomI    # opt-in (file/vote on skill req
 Every scheduled Claude Code routine targeting CHILmesh uses **this exact session prompt** (paste into the routine config as the session instruction line):
 
 ```
-Read https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md then .planning/constitution.md → .planning/project_plan.md → .claude/CLAUDE.md.
+Read https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md then .specify/memory/constitution.md → .planning/project_plan.md → .claude/CLAUDE.md.
 ```
 
-Read order is precedence order: DomI universal defaults are loaded first, then CHILmesh-specific rules layer on top. CHILmesh's `.planning/constitution.md` and `.claude/CLAUDE.md` override DomI defaults wherever they conflict.
+Read order is precedence order: DomI universal defaults are loaded first, then CHILmesh-specific rules layer on top. CHILmesh's `.specify/memory/constitution.md` and `.claude/CLAUDE.md` override DomI defaults wherever they conflict.
 
 ---
 

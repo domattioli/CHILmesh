@@ -28,14 +28,20 @@ def test_ccw_flips_clockwise_triangle():
     pts = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0]])  # CW order
     conn = np.array([[0, 1, 2]])
     mesh = CHILmesh(connectivity=conn, points=pts, grid_name="cw_tri")
-    assert mesh.signed_area().min() > 0  # constructor flipped it
+    areas = mesh.signed_area()
+    assert areas.min() > 0, (
+        f"CW triangle not flipped by constructor: signed_area={areas.tolist()}"
+    )
 
 
 def test_ccw_flips_clockwise_quad():
     pts = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]])  # CW order
     conn = np.array([[0, 1, 2, 3]])
     mesh = CHILmesh(connectivity=conn, points=pts, grid_name="cw_quad")
-    assert mesh.signed_area().min() > 0
+    areas = mesh.signed_area()
+    assert areas.min() > 0, (
+        f"CW quad not flipped by constructor: signed_area={areas.tolist()}"
+    )
 
 
 def test_ccw_mixed_element_does_not_scramble_triangle_row():
@@ -58,8 +64,11 @@ def test_ccw_mixed_element_does_not_scramble_triangle_row():
     # The padded triangle's first three vertices must remain {0,1,2}; the
     # quad-permutation [0,3,2,1] would have produced [0,0,2,1].
     tri_row = mesh.connectivity_list[0]
-    assert set(tri_row[:3].tolist()) == {0, 1, 2}
-    assert mesh.signed_area().min() > 0
+    assert set(tri_row[:3].tolist()) == {0, 1, 2}, (
+        f"B4 regression: padded triangle scrambled, row={tri_row.tolist()}"
+    )
+    areas = mesh.signed_area()
+    assert areas.min() > 0, f"mixed-element CCW failed: signed_area={areas.tolist()}"
 
 
 def test_ccw_mixed_element_flips_padded_cw_triangle_correctly():
@@ -108,6 +117,10 @@ def test_ccw_mixed_element_flips_only_cw_quad():
     conn = np.array([[0, 1, 2, 0], [1, 3, 5, 4]])
     mesh = CHILmesh(connectivity=conn, points=pts, grid_name="mixed_cw_quad")
     areas = mesh.signed_area()
-    assert (areas > 0).all()
+    assert (areas > 0).all(), f"CW quad not flipped: signed_area={areas.tolist()}"
     # Padded triangle row's first 3 vertices unchanged.
-    assert set(mesh.connectivity_list[0, :3].tolist()) == {0, 1, 2}
+    tri_row = mesh.connectivity_list[0]
+    assert set(tri_row[:3].tolist()) == {0, 1, 2}, (
+        f"padded triangle row mutated when only the adjacent quad needed a flip; "
+        f"row={tri_row.tolist()}"
+    )

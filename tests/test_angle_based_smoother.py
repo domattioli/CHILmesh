@@ -2,9 +2,10 @@
 ``_ordered_vertex_ring`` helper (TEST-AUDIT.md F1).
 
 Both functions sat at zero coverage before this file existed. The
-constitution (.planning/constitution.md §10.2) names the Zhou & Shimada
-angle-based smoother as the DOMsmooth Hybrid Fallback for mixed meshes,
-so a regression net is mandatory before any future refactor.
+constitution (.specify/memory/constitution.md, "Feature-Specific
+Principles → Mesh Smoothing") names the Zhou & Shimada angle-based
+smoother as the DOMsmooth Hybrid Fallback for mixed meshes, so a
+regression net is mandatory before any future refactor.
 
 Invariants pinned here:
 - Boundary vertices are not moved.

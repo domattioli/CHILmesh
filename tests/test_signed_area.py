@@ -69,7 +69,9 @@ def test_signed_area_quad_shoelace_matches_numpy():
         )
 
     np.testing.assert_allclose(np.abs(areas), expected, rtol=1e-10, atol=1e-12)
-    assert (areas > 0).all()
+    assert (areas > 0).all(), (
+        f"random-quads signed_area has non-positive entries after CCW: areas={areas.tolist()}"
+    )
 
 
 def test_signed_area_unit_triangle():
