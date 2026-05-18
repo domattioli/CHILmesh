@@ -19,7 +19,7 @@
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
-> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB QuADMesh+ codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference at [src/@CHILmesh/CHILmesh.m](src/@CHILmesh/CHILmesh.m).
+> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference at [src/@CHILmesh/CHILmesh.m](src/@CHILmesh/CHILmesh.m).
 
 ---
 
