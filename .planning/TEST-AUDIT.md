@@ -283,6 +283,7 @@ Resolved in this session (autonomous batch on `daily-issue-fixing`):
 | F7 | ✅ Resolved | `64d5eb7` | `tests/test_2dm_reader.py` migrated to `tmp_path`; 9 `NamedTemporaryFile(delete=False)`/manual-`unlink()` blocks removed. |
 | F9 | ✅ Resolved | `20ac025` | `slow` marker registered in `[tool.pytest.ini_options]`. Warning count 12 → 10. |
 | F11 | ✅ Resolved | `2427103` | README Tests badge points at `python-package.yml`. |
+| F14 | ✅ Resolved | `3eb5391` | Four uncovered lines in `_skeletonize` and `pinch_points` are defensive guards unreachable on valid meshes — marked with `# pragma: no cover` and inline rationale. Added 4 new behavioral lock-in tests for `pinch_points` (threshold edge cases, monotonicity, idempotency) in `tests/test_advancing_front.py`. `CHILmesh.py` 89% → 90%; total 88% → 89%. |
 
 Outstanding backlog (per-finding follow-up tickets pending):
 
