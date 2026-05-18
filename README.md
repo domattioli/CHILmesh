@@ -33,6 +33,7 @@
 - [API Overview](#api-overview)
 - [Mesh Smoothing](#mesh-smoothing)
 - [Examples](#examples)
+- [CLI](#cli)
 - [Contributing](#contributing)
 - [Citation](#citation)
 
@@ -185,6 +186,28 @@ Runnable scripts in [`examples/`](examples/) demonstrate common tasks against bu
 ```bash
 python examples/01_quickstart.py
 ```
+
+---
+
+## CLI
+
+`chilmesh` ships with a small shell entry point for inspection, conversion, smoothing, and plotting. No new dependencies — pure stdlib `argparse` over the existing public API.
+
+```bash
+# Mesh statistics (verts, elems, edges, layers, quality)
+chilmesh info path/to/mesh.fort.14
+
+# Format conversion (output format inferred from suffix)
+chilmesh convert mesh.2dm mesh.fort.14
+
+# In-place smoothing
+chilmesh smooth mesh.fort.14 -o smoothed.fort.14 --method angle-based --iter 50
+
+# Static figure (PNG / PDF / SVG by suffix; --layers or --quality for overlays)
+chilmesh plot mesh.fort.14 -o mesh.png --quality
+```
+
+Each subcommand has its own `--help` with an example. Also available as `python -m chilmesh ...` when the script isn't on PATH.
 
 ---
 
