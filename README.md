@@ -237,16 +237,14 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 }
 ```
 
-[Read thesis PDF](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
-
 ---
 
 ## References
 
-- [FEM Smoother (Zhou & Shimada, 2000)](https://api.semanticscholar.org/CorpusID:34335417)
-- [Angle-Based Smoothing](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf)
-- [ADMESH Paper](https://doi.org/10.1007/s10236-012-0574-0)
-- Original MATLAB implementation funded by [Aquaveo](https://aquaveo.com/)
+- [FEM Smoother (Balendran, 1999)](https://api.semanticscholar.org/CorpusID:34335417)
+- [Angle-Based Smoothing (Zhou & Shimada, 2000)](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf)
+- [ADMESH Paper (Conroy, 2012)](https://doi.org/10.1007/s10236-012-0574-0)
+- [Source of MATLAB implementation (Mattioli, 2017)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 ---
 
