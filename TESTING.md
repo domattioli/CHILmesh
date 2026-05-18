@@ -184,6 +184,6 @@ Reproducible: Run 10 times with seed=42
 
 ## Related
 
-- Issue #110: Test suite holistic audit (TEST-AUDIT.md)
+- Issue #110: Test suite holistic audit (.planning/TEST-AUDIT.md)
 - Issue #111: Test surface audit + upstream report
 - `.specify/memory/constitution.md`: Test-first principle (Principle III)
