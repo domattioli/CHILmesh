@@ -14,9 +14,9 @@
 <p align="center">
   <a href="https://ceg.osu.edu/computational-hydrodynamics-and-informatics-laboratory"><img src="https://img.shields.io/badge/CHIL%20Lab%20@%20OSU-a7b1b7?logo=academia&logoColor=ba0c2f&labelColor=ba0c2f" alt="CHIL Lab @ OSU"></a>
   <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/badge/OSU_CHIL-ADMESH-66bb33?logo=github&logoColor=ba0c2f&labelColor=ffffff" alt="ADMESH"></a>
-  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white" alt="PyPI"></a>
+  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white&cacheSeconds=300" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
-  <a href="https://zenodo.org/badge/latestdoi/693749657"><img src="https://zenodo.org/badge/693749657.svg" alt="DOI"></a>
+  <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.20263854.svg" alt="DOI"></a>
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
@@ -180,8 +180,9 @@ Three smoothing algorithms — pick by use case. Each preserves boundary nodes, 
 
 | Algorithm | API | Style | When |
 |---|---|---|---|
+
 | **Balendran direct FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | One-shot sparse solve | Best general-purpose default. Stable on tri / quad / mixed. |
-| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | DOMsmooth hybrid fallback for difficult mixed meshes where FEM stalls. |
+| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | Fallback for difficult mixed meshes where FEM stalls. |
 | **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
 
 ```python
@@ -252,23 +253,33 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 
 ## Citation
 
-CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor, with `.fort.14` I/O and a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
+CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor serving as a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
 
 ```bibtex
-@mastersthesis{mattioli2017quadmesh,
-  author       = {Mattioli, Dominik O.},
-  title        = {{QuADMESH+}: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models},
-  school       = {The Ohio State University},
-  year         = {2017},
-  url          = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
+@software{mattioli_chilmesh,
+  author    = {Mattioli, Dominik O. and Kubatko, Ethan J.},
+  title     = {{CHILmesh}: a fast 2D mesh library for triangular,
+               quadrilateral, and mixed-element grids},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {0.4.1},
+  doi       = {10.5281/zenodo.20263854},
+  url       = {https://github.com/domattioli/CHILmesh}
 }
 ```
 
----
+**MATLAB source (Mattioli, 2017 thesis).**
 
-## References
-
-- [Source of MATLAB implementation (Mattioli, 2017)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
+```bibtex
+@mastersthesis{mattioli2017quadmesh,
+  author = {Mattioli, Dominik O.},
+  title  = {{QuADMESH+}: A Quadrangular ADvanced Mesh Generator
+            for Hydrodynamic Models},
+  school = {The Ohio State University},
+  year   = {2017},
+  url    = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
+}
+```
 
 ---
 
