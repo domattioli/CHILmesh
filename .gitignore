@@ -75,3 +75,6 @@ output/annulus_layer2_boundary.*
 output/annulus_layers.png
 output/annulus_smoothed_retri.png
 output/layer2_debug.png
+
+# Manim intermediate render artifacts (keep only final mp4s)
+output/media/
