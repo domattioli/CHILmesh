@@ -1137,7 +1137,7 @@ class CHILmesh(CHILmeshPlotMixin):
         Returns:
             A CHILmesh object
         """
-        with open(full_file_name, 'r') as f:
+        with open(full_file_name, 'r', encoding='utf-8', newline='') as f:
             # Read header
             header = f.readline().strip()
 
@@ -1258,7 +1258,7 @@ class CHILmesh(CHILmeshPlotMixin):
         nodes = {}  # node_id -> [x, y, z]
         elements = []  # list of (type, vertices)
 
-        with open(full_file_name, 'r') as f:
+        with open(full_file_name, 'r', encoding='utf-8', newline='') as f:
             for line in f:
                 line = line.strip()
 
@@ -2259,7 +2259,7 @@ def write_fort14( filename: Path, points: np.ndarray, elements: np.ndarray, grid
         grid_name: Header string
     """
     try:
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8', newline='\n') as f:
             f.write(f"{grid_name}\n")
             f.write(f"{len(elements)} {len(points)}\n")
 
