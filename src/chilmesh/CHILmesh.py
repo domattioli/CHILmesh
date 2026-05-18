@@ -1081,6 +1081,17 @@ class CHILmesh(CHILmeshPlotMixin):
             "bEdgeIDs": self.layers["bEdgeIDs"][layer_idx]
         }
 
+    def paths_on_outer_vertices(self, layer_idx: int) -> List[np.ndarray]:
+        """Ordered vertex paths along the outer boundary of a layer.
+
+        Thin wrapper around :func:`chilmesh.layer_paths.paths_on_outer_vertices`.
+        Returns the layer's outer-vertex subgraph as a sequence of closed
+        walks covering every boundary edge, with junction-aware ordering
+        used by downstream layer-based heuristics (Tri2Quad, etc.).
+        """
+        from .layer_paths import paths_on_outer_vertices
+        return paths_on_outer_vertices(self, layer_idx)
+
     def admesh_metadata(self) -> Dict[str, Any]:
         """
         Return mesh metadata compatible with ADMESH-Domains schema.
