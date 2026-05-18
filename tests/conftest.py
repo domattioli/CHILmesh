@@ -21,6 +21,11 @@ TRI_FIXTURE_NAMES = [n for n in FIXTURE_NAMES if n != "quad_2x2"]
 # dominate the test runtime. Block_O alone takes ~30s on first load and
 # is touched by many parametrized tests. Tests that mutate a mesh in place
 # must call ``.copy()`` first.
+#
+# xdist safety (#122): pytest-xdist uses process-per-worker, so each worker
+# owns an independent ``_MESH_CACHE`` dict — no cross-worker race on
+# initialization. Cost: each worker rebuilds the cache once. Acceptable
+# given the alternative (shared-memory cache) needs file locks.
 _MESH_CACHE: dict = {}
 
 

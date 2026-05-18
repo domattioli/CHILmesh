@@ -15,9 +15,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   authored on Windows roundtrip identically to LF-terminated files
   authored on POSIX; writes force `newline='\n'` so the produced bytes
   are byte-identical across all platforms. Adds
-  `tests/test_io_portability.py` to lock the invariant. The `windows-latest`
-  CI runner and OS-portable `build-and-smoke` venv path remain open
-  under #121.
+  `tests/test_io_portability.py` to lock the invariant.
+- **OS-portable `build-and-smoke` venv path** (#121, partial). The smoke
+  install step in `.github/workflows/python-package.yml` now uses
+  `$RUNNER_TEMP/smoke` (GitHub-provided absolute tmp path) and resolves
+  the venv interpreter via `sys.platform` so the step works unchanged on
+  Linux, macOS, and Windows runners. `shell: bash` pinned (Git Bash on
+  Windows). The `windows-latest` matrix add remains open under #121.
+
+### 🛠 Build & CI
+
+- `tests/conftest.py`: documented xdist safety of session-scope
+  `_MESH_CACHE` (#122). pytest-xdist's process-per-worker model gives
+  each worker an independent dict — no shared-state race. Empirically
+  confirmed via `pytest -n auto -k "not block_o"` (649 passed,
+  deterministic across runs).
 
 ## [0.4.1] — 2026-05-18 (Consumer-Readiness + Zenodo Patch)
 
