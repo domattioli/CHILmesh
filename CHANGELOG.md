@@ -83,7 +83,11 @@ documentation polish. No public-API breaking changes.
 
 ---
 
-## [0.4.0] — 2026-05-18 (Phase 5 Spatial Indexing + Layer-Paths Release)
+## [0.4.0] — 2026-05-18 (Spatial Indexing + Layer-Paths + CLI + Audit Polish)
+
+Builds on the v0.3.0 vectorisation foundation with first-class spatial
+queries, a shell-friendly CLI, an outer-vertex traversal port, and
+broad consumer-readiness polish.
 
 ### ✨ Added
 
@@ -111,30 +115,8 @@ documentation polish. No public-API breaking changes.
 - `insert_vertex(point)` — vertex insertion primitive (initial mesh-mutation surface; see #94 for the full Phase 5 mutation API)
 - Lazy-built kd-tree on element centroids; bounded `< 0.5s` build on WNAT_Hagen, `< 50μs` per `find_element` call
 
-#### New public methods (vectorization release)
-- `boundary_node_indices()` — returns unique boundary vertex indices (PR #86, closes README API gap)
-- `plot_boundary()` — convenience plot for boundary edges only
-- `plot_interior_edges()` — convenience plot for interior edges only
-
 #### Examples directory
 - `examples/01_quickstart.py`, `02_fort14_roundtrip.py`, `03_smoothing.py`, `04_spatial_queries.py` — runnable consumer scripts against the bundled fixtures; no external mesh files required
-
-#### Reproducible benchmarking
-- `scripts/benchmark_wnat_hagen.py` — measures init/quality/query performance on WNAT_Hagen reference mesh; markdown report + optional `--json` for CI archival (issue #55)
-
-### ⚡ Performance
-
-#### Core operation vectorization (issue #75)
-- `signed_area`: O(n²) loop → fully vectorised shoelace formula on `(n,3,2)` / `(n,4,2)` arrays
-- `interior_angles`: outer loop replaced with numpy gather `self.points[verts, :2]`
-- `elem_quality`: O(n²) `[elem_id in tri_elems for elem_id in elem_ids]` → boolean mask from connectivity shape
-- `_plot_polys`: per-element Python loop → numpy fancy indexing fed to `PolyCollection`
-- `plot_point` centroid path: loop → vectorised `points[conn,:2].mean(axis=1)`
-
-#### Measured impact (WNAT_Hagen, 52,774 verts · 98,365 elems)
-- Total workflow: 14.3s → **3.33s** (4.3× faster than v0.2.0; 4,027× vs v0.1.1 baseline)
-- Quality analysis: 6.6s → **0.07s** (94× faster than v0.2.0)
-- `Vert2Edge` lookup: 0.7μs → **0.17μs** per call
 
 ### 🧪 Testing
 
@@ -150,16 +132,11 @@ documentation polish. No public-API breaking changes.
 - **F14** — defensive-branch `# pragma: no cover` annotations on truly-unreachable guards in `_skeletonize` and `pinch_points`; behavioural lock-in tests added for `pinch_points` semantics
 - Total: 582 tests passing / 13 skipped (was 439 / 9 in the original audit); `CHILmesh.py` line coverage 89% → 90%, total 88% → 89%
 
-### 🛠 Packaging
-
-- `MANIFEST.in` added: PyPI sdist excludes `.claude/`, `.planning/`, `.specify/`, `specs/`, `tests/`, `scripts/`, `.github/`, `.domi-pin`. Wheel layout unchanged.
-
 ### 📚 Documentation
 
 - README trimmed 288 → 224 lines: install command now visible on first laptop screen; deep content (BENCHMARK, API) lives under `docs/`. All three showcase images preserved in a dedicated Gallery section
 - README ToC added (#106); `Contributing` section resolves previously-stale ToC link
 - `examples/README.md` indexes the runnable scripts
-- `docs/BENCHMARK.md`: appended May 2026 re-run section preserving original April 2026 baselines
 - `docs/API.md`: Visualization section added; `plot_boundary` / `plot_interior_edges` documented
 - `TESTING.md` added: pytest invocation patterns, fixture table, debugging tips
 - Constitution consolidated into `.specify/memory/constitution.md` (#107); `.planning/constitution.md` and `.specify/speckit-constitution.md` retained as redirect stubs
@@ -174,6 +151,46 @@ documentation polish. No public-API breaking changes.
 - Repo-root cleanup: 5 audit/plan docs and `docs/introspections/` relocated into `.planning/` for a cleaner GitHub landing-page impression; no packaging change (sdist already pruned `.planning/`)
 - DomI sync contract: `.domi-pin` and `scripts/instructions_on_start.sh` enforce upstream-skill drift detection at session start (#81, #112, #113)
 - HOOKS-AUDIT.md inventoried hook surface and identified upstream-relevant gaps (#112)
+
+---
+
+## [0.3.0] — 2026-05-10 (Vectorization & Benchmark Validation)
+
+Tag `v0.3.0` (commit `cf8f399`, PR #91) shipped the core-operation vectorisation pass and the reproducible benchmark harness.
+
+### ✨ Added
+
+#### New public methods
+- `boundary_node_indices()` — returns unique boundary vertex indices (PR #86, closes README API gap)
+- `plot_boundary()` — convenience plot for boundary edges only
+- `plot_interior_edges()` — convenience plot for interior edges only
+
+#### Reproducible benchmarking
+- `scripts/benchmark_wnat_hagen.py` — measures init/quality/query performance on WNAT_Hagen reference mesh; markdown report + optional `--json` for CI archival (issue #55)
+
+### ⚡ Performance
+
+#### Core operation vectorization (issue #75)
+- `signed_area`: O(n²) loop → fully vectorised shoelace formula on `(n,3,2)` / `(n,4,2)` arrays
+- `interior_angles`: outer loop replaced with numpy gather `self.points[verts, :2]`
+- `elem_quality`: O(n²) `[elem_id in tri_elems for elem_id in elem_ids]` → boolean mask from connectivity shape
+- `_plot_polys`: per-element Python loop → numpy fancy indexing fed to `PolyCollection`
+- `plot_point` centroid path: loop → vectorised `points[conn,:2].mean(axis=1)`
+
+#### Measured impact (WNAT_Hagen, 52,774 verts · 98,365 elems)
+- Total workflow: 14.3 s → **3.33 s** (4.3× faster than v0.2.0; ~4,000× vs the v0.1.1 baseline)
+- Quality analysis: 6.6 s → **0.07 s** (94× faster than v0.2.0)
+- `Vert2Edge` lookup: 0.7 μs → **0.17 μs** per call
+
+These numbers carry forward unchanged into v0.4.0 — Phase 5 spatial queries and layer-paths are additive features, not workflow-level speedups.
+
+### 🛠 Packaging
+
+- `MANIFEST.in` added: PyPI sdist excludes `.claude/`, `.planning/`, `.specify/`, `specs/`, `tests/`, `scripts/`, `.github/`, `.domi-pin`. Wheel layout unchanged.
+
+### 📚 Documentation
+
+- `docs/BENCHMARK.md`: appended May 2026 re-run section preserving original April 2026 baselines
 
 ## [0.2.1] — TBD (Bug Fix Release)
 
