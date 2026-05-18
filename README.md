@@ -181,7 +181,7 @@ Three smoothing algorithms — pick by use case. Each preserves boundary nodes, 
 | Algorithm | API | Style | When |
 |---|---|---|---|
 | **Balendran direct FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | One-shot sparse solve | Best general-purpose default. Stable on tri / quad / mixed. |
-| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | Fallback for difficult mixed meshes where FEM stalls; better for illustative rendering. |
+| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | DOMsmooth hybrid fallback for difficult mixed meshes where FEM stalls. |
 | **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
 
 ```python
@@ -252,7 +252,7 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 
 ## Citation
 
-CHILmesh started as the Python successor to QuADMESH+ (Mattioli, OSU MSc 2017) — a MATLAB mesh generator built for storm-surge / coastal-ocean modelling against ADCIRC. The Python port extracts the reusable layer-based skeletonization, smoothing, and `.fort.14` machinery so downstream projects (MADMESHR, ADMESH, ADMESH-Domains) can share one library across modelling workflows. See [thesis PDF](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf) for the original mathematical formulation.
+CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor, with `.fort.14` I/O and a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
 
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
