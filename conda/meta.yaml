@@ -1,0 +1,53 @@
+{% set name = "chilmesh" %}
+{% set version = "0.4.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: 0000000000000000000000000000000000000000000000000000000000000000  # TODO: fill from PyPI after upload
+
+build:
+  number: 0
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+requirements:
+  host:
+    - python >=3.8
+    - setuptools >=61
+    - pip
+  run:
+    - python >=3.8
+    - numpy >=1.23
+    - scipy >=1.10
+    - matplotlib-base >=3.6
+
+test:
+  imports:
+    - chilmesh
+    - chilmesh.utils
+  requires:
+    - pip
+  commands:
+    - pip check
+
+about:
+  home: https://github.com/domattioli/CHILmesh
+  summary: Layer-based 2D triangular, quadrilateral and mixed-element mesh library with first-class ADCIRC fort.14 I/O
+  description: |
+    CHILmesh is a Python library for 2D triangular, quadrilateral, and
+    mixed-element mesh generation, smoothing, and analysis with layer-based
+    skeletonization. First-class I/O for ADCIRC fort.14 and SMS 2dm formats,
+    angle-based FEM smoothing (Zhou & Shimada 2000), and spatial query API
+    via centroid kd-tree.
+  license: MIT
+  license_file: LICENSE
+  doc_url: https://github.com/domattioli/CHILmesh#readme
+  dev_url: https://github.com/domattioli/CHILmesh
+
+extra:
+  recipe-maintainers:
+    - domattioli

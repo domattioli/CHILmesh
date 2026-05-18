@@ -96,9 +96,20 @@ The two flagship visualisations — layer-based skeletonization (centre) and per
 
 ## Installation
 
-From PyPI:
+From PyPI (pip):
 ```bash
 pip install chilmesh
+```
+
+With [uv](https://docs.astral.sh/uv/) (faster, pip-compatible):
+```bash
+uv pip install chilmesh        # or:  uv add chilmesh
+```
+
+From conda-forge (once published):
+```bash
+conda install -c conda-forge chilmesh
+# or: mamba install -c conda-forge chilmesh
 ```
 
 From source:
