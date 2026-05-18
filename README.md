@@ -8,16 +8,16 @@
 
 <p align="center">
   <strong><a href="https://scholar.google.com/citations?user=IBFSkOcAAAAJ&hl=en">Dominik Mattioli</a><sup>1†</sup>, <a href="https://scholar.google.com/citations?user=mYPzjIwAAAAJ&hl=en">Ethan Kubatko</a><sup>2</sup></strong><br>
-  <sup>†</sup>Corresponding author | <sup>1</sup>Penn State University | <sup>2</sup>Ohio State University (CHIL)
+  <sup>†</sup>Corresponding author | <sup>1</sup>Unaffiliated | <sup>2</sup>Ohio State University (CHIL)
 </p>
 
 <p align="center">
   <a href="https://ceg.osu.edu/computational-hydrodynamics-and-informatics-laboratory"><img src="https://img.shields.io/badge/CHIL%20Lab%20@%20OSU-a7b1b7?logo=academia&logoColor=ba0c2f&labelColor=ba0c2f" alt="CHIL Lab @ OSU"></a>
-  <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/badge/OSU_CHIL-ADMESH-66bb33?logo=github&logoColor=ba0c2f&labelColor=ffffff" alt="ADMESH"></a>
   <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white&cacheSeconds=300" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
   <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://zenodo.org/badge/693749657.svg" alt="DOI"></a>
-  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
+  <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src="https://img.shields.io/badge/MATLAB-File%20Exchange-orange?logo=mathworks&logoColor=white" alt="MATLAB File Exchange"></a>
+<a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>  
 </p>
 
 > **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference at [src/@CHILmesh/CHILmesh.m](src/@CHILmesh/CHILmesh.m).
@@ -42,9 +42,13 @@
 
 ## Quick Start
 
+
 ```bash
 pip install chilmesh
 ```
+
+
+
 
 ```python
 import chilmesh
@@ -57,6 +61,8 @@ quality, angles, stats = mesh.elem_quality()
 mesh.plot_quality()
 plt.show()
 ```
+
+
 
 See [`examples/`](examples/) for more runnable scripts.
 
@@ -102,26 +108,38 @@ See [`examples/`](examples/) for more runnable scripts.
 ## Installation
 
 From PyPI (pip):
+
 ```bash
 pip install chilmesh
 ```
 
+
+
 With [uv](https://docs.astral.sh/uv/) (faster, pip-compatible):
+
 ```bash
 uv pip install chilmesh        # or:  uv add chilmesh
 ```
 
+
+
 From conda-forge (once published):
+
 ```bash
 conda install -c conda-forge chilmesh
 # or: mamba install -c conda-forge chilmesh
 ```
 
+
+
 From source:
+
 ```bash
 git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
 pip install -e .
 ```
+
+
 
 ---
 
@@ -145,6 +163,7 @@ Per-stage breakdown, methodology, and historical baselines in [`docs/BENCHMARK.m
 ---
 
 ## API Overview
+
 
 ```python
 import chilmesh
@@ -170,6 +189,8 @@ neighbors = mesh.nearest_vertices([0.5, 0.0], k=5)
 in_radius = mesh.find_elements_in_radius([0.5, 0.0], radius=0.2)
 ```
 
+
+
 Full reference in [`docs/API.md`](docs/API.md). Optional ADMESH truss warm-start via `chilmesh.optimize_with_admesh_truss`.
 
 ---
@@ -185,11 +206,14 @@ Three smoothing algorithms — pick by use case. Each preserves boundary nodes, 
 | **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | Fallback for difficult mixed meshes where FEM stalls. |
 | **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
 
+
 ```python
 mesh.smooth_mesh(method='fem', acknowledge_change=True)         # default
 mesh.smooth_mesh(method='angle-based', acknowledge_change=True) # fallback
 mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
 ```
+
+
 
 Stiffness assembly, convergence parameters, and algorithm details: [`docs/API.md`](docs/API.md).
 
@@ -209,15 +233,19 @@ Runnable scripts in [`examples/`](examples/) demonstrate common tasks against bu
 - [`03_smoothing.py`](examples/03_smoothing.py) — angle-based smoother on perturbed interior
 - [`04_spatial_queries.py`](examples/04_spatial_queries.py) — `find_element`, radius search, k-nearest vertices
 
+
 ```bash
 python examples/01_quickstart.py
 ```
+
+
 
 ---
 
 ## CLI
 
 `chilmesh` ships with a small shell entry point for inspection, conversion, smoothing, and plotting. No new dependencies — pure stdlib `argparse` over the existing public API.
+
 
 ```bash
 # Mesh statistics (verts, elems, edges, layers, quality)
@@ -232,6 +260,8 @@ chilmesh smooth mesh.fort.14 -o smoothed.fort.14 --method angle-based --iter 50
 # Static figure (PNG / PDF / SVG by suffix; --layers or --quality for overlays)
 chilmesh plot mesh.fort.14 -o mesh.png --quality
 ```
+
+
 
 Each subcommand has its own `--help` with an example. Also available as `python -m chilmesh ...` when the script isn't on PATH.
 
@@ -255,6 +285,7 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 
 CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor serving as a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
 
+
 ```bibtex
 @software{mattioli_chilmesh,
   author    = {Mattioli, Dominik O. and Kubatko, Ethan J.},
@@ -268,7 +299,10 @@ CHILmesh originated in MATLAB as the mixed-element data structure backing a skel
 }
 ```
 
+
+
 **MATLAB source (Mattioli, 2017 thesis).**
+
 
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
@@ -280,6 +314,7 @@ CHILmesh originated in MATLAB as the mixed-element data structure backing a skel
   url    = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
 }
 ```
+
 
 ---
 
