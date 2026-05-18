@@ -1,6 +1,12 @@
 # CHILmesh Constitution
 
-**Version:** 1.0 | **Adopted:** 2026-05-15 | **Status:** Governance Contract
+**Version:** 1.1 | **Adopted:** 2026-05-15 | **Last Amended:** 2026-05-18 | **Status:** Governance Contract
+
+This is the canonical project constitution. The older `.planning/constitution.md`
+is preserved as a redirect stub. The spec-structure guide at
+`.specify/speckit-constitution.md` is a separate document about how to lay out
+individual feature specs (`spec.md`, `plan.md`, `tasks.md` etc.) and is NOT a
+project-principles document.
 
 ---
 
@@ -103,27 +109,132 @@ Original QuADMesh+ (MATLAB) is reference for:
 
 ## Governance
 
+### Decision Authority
+
+| Scope | Authority | Process |
+|---|---|---|
+| Minor (naming, internal refactor, tests, docs) | Any contributor with commit access | Commit with clear message; tests must pass |
+| Medium (API additions, internal structure, deprecations) | Maintainer + consensus | GH issue with `design` label; document tradeoffs; minimum 3-day feedback window |
+| Major (version strategy, mission scope, large dependencies) | Maintainer + downstream authors (MADMESHR/ADMESH/ADMESH-Domains) | GH issue with `strategic` label; gather downstream requirements; phased plan recorded in `project_plan.md` and CHANGELOG |
+
+### Breaking Changes
+
+Any change requiring downstream code modification. Policy:
+1. Avoid until v1.0; opt-in via Phase-5 mutation APIs (#94) after v1.0.
+2. Document: rationale in GH issue, migration guide in CHANGELOG, deprecation warning for one minor version.
+3. Coordinate: notify MADMESHR/ADMESH/ADMESH-Domains before merging.
+4. Major version bump signals breaking changes.
+
 ### Amendments
 
-Constitution amendments require:
-1. **Justification:** Why existing principle fails or is misaligned with project goals
+1. **Justification:** Why existing principle fails or is misaligned with project goals.
 2. **Impact analysis:** Which open issues/PRs affected?
-3. **Ratification:** Maintainer approval (documented in commit + CHANGELOG)
+3. **Ratification:** Maintainer approval (commit + CHANGELOG entry).
 4. **Migration plan:** How do existing code/tests adapt?
 
 ### Enforcement
 
-- **Code review checklist:** All PRs audited against constitution
-- **Release gate:** Release notes must demonstrate compliance
-- **Conflict resolution:** If principle conflicts with deadline, maintain principle; extend timeline
+- **Code review checklist:** All PRs audited against constitution.
+- **Release gate:** Release notes must demonstrate compliance.
+- **Conflict resolution:** If principle conflicts with deadline, maintain principle; extend timeline.
 
-### Living Document
+### Dispute Resolution
 
-This constitution reflects current project maturity (v1.0 finalization). As CHILmesh grows:
-- **v1.0 → v2.0:** Mutation API will add Principle XI (transactional topology edits)
-- **Feedback cycles:** Users discover gaps; amendment proposed + ratified
-- **Versioning:** Constitution version bumped with each amendment
+1. Document both positions in a GH issue with evidence (performance data, scientific rationale, downstream impact).
+2. Seek consensus; iterate.
+3. Escalate to maintainer if unresolved within 1 week.
+4. Maintainer decides with explicit rationale recorded on the issue.
+
+**Revert criteria:** unexpected test failure, performance regression >10% on large fixtures, breaking change not caught, scientific error discovered. Process: open regression issue with reproducer → revert commit → post-mortem → re-implement correctly.
 
 ---
 
-**Version**: 1.0 | **Ratified**: 2026-05-15 | **Last Amended**: 2026-05-15
+## Release Process
+
+### Versioning
+
+`MAJOR.MINOR.PATCH` (semantic versioning).
+
+- **MAJOR:** Reserved for v1.0.0 when API stabilizes.
+- **MINOR:** New features, internal refactoring, performance improvements.
+- **PATCH:** Bug fixes, tests, documentation.
+
+### Release Checklist
+
+- [ ] All tests pass on Python 3.10 / 3.11 / 3.12 × Ubuntu / macOS.
+- [ ] `CHANGELOG.md` updated with user-visible changes.
+- [ ] Version bumped in `pyproject.toml`.
+- [ ] README examples verified.
+- [ ] Performance benchmarks recorded.
+- [ ] GitHub release notes written, including migration guide if needed.
+- [ ] PyPI package built and checked with `twine check`.
+
+### Deprecation Timeline
+
+1. Announce in GH issue (1 week minimum).
+2. Mark with `warnings.warn(..., DeprecationWarning, stacklevel=2)`.
+3. Document in CHANGELOG as "Deprecated in 0.x.y".
+4. Support old API for minimum 2 releases.
+5. Remove in next MINOR version bump.
+
+### Performance Baselines (v0.2.0)
+
+- Annulus adjacency build: <1 ms
+- Donut adjacency build: <10 ms
+- Structured adjacency build: <20 ms
+- Block_O full initialization: ~14 s (targeting further reduction in v0.3.x)
+- Skeletonization: <2× adjacency build time
+- Fort.14 I/O: <1 s on all fixtures
+
+---
+
+## Feature-Specific Principles
+
+### I/O and Data Loading
+
+- **Zero-regression I/O:** Fort.14 reader/writer must preserve mesh through roundtrip (geometry equality on all fixtures).
+- **Atomic format support:** Quad-element support shipped with triangle support; new format readers (SMS 2DM, etc.) route through the existing public API without behavior changes for existing code.
+- **Boundary preservation:** Operations affecting mesh coordinates (ADMESH warm-start, optimization) verify boundary vertices via `np.array_equal()` (bit-exact, not approximate) and document this in their contracts.
+
+### Mesh Smoothing
+
+- Public API `smooth_mesh(method='fem')` signature is stable.
+- All element types supported: pure triangles, pure quads, mixed (padded triangles + quads).
+- Boundary pinning is exact; interior nodes converge toward equilibrium.
+- No element collapse: minimum element quality is preserved across all fixtures.
+- **DOMsmooth hybrid fallback** (issues #95, #100): when FEM assembly on a mixed mesh degrades quality, fall back to (1) split tri-only/quad-only submeshes, (2) FEM-smooth each, (3) recombine, (4) angle-based polish (Zhou & Shimada). The public dispatcher selects FEM vs DOMsmooth automatically based on mesh composition.
+
+### Skeletonization
+
+- **MATLAB fidelity:** Layer separation invariant — a vertex in layer k does not appear in layers k+2 or beyond. Source line references to the MATLAB reference are preserved in comments.
+- **Algorithm stability:** Skeletonization preserves invariants across triangular, quad, and mixed meshes. Tests verify layer disjoint cover and vertex-layer assignment on every fixture.
+
+---
+
+## External Upstream: DomI
+
+`domattioli/DomI` manages foundational skills and policy used by this repo. `.domi-pin` is committed; session start runs `scripts/instructions_on_start.sh`, which invokes `sync-from-domi/check_pin.sh` and HARD STOPs on drift. `/sync-from-domi` unblocks.
+
+CHILmesh-specific rules (branch policy, API stability) take precedence over DomI universal defaults where they conflict. The precedence flows from the documented session-start read order: `.specify/memory/constitution.md` is read before `.claude/CLAUDE.md`, and both override DomI universal defaults.
+
+---
+
+## Living Document
+
+This constitution reflects current project maturity (v1.0 finalization). As CHILmesh grows:
+- **v1.0 → v2.0:** Mutation API will add a new principle (transactional topology edits — see #94).
+- **Feedback cycles:** Users discover gaps; amendment proposed + ratified.
+- **Versioning:** Constitution version bumped with each amendment.
+
+---
+
+## Document Control
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-05-15 | Initial speckit-format constitution: 10 core principles + governance/amendment process. |
+| 1.1 | 2026-05-18 | Consolidated operationally-useful content from `.planning/constitution.md` (decision authority matrix, breaking-change policy, dispute resolution, release process, deprecation timeline, performance baselines, feature-specific principles, DomI section). Resolves #107. |
+
+---
+
+**Version**: 1.1 | **Ratified**: 2026-05-15 | **Last Amended**: 2026-05-18
