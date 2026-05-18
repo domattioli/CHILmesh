@@ -71,8 +71,10 @@ jobs:
           python -m twine check dist/*
 
       - name: Smoke test installed wheel
+        shell: bash
         run: |
-          python -m venv /tmp/smoke
-          /tmp/smoke/bin/pip install --upgrade pip
-          /tmp/smoke/bin/pip install dist/*.whl
-          /tmp/smoke/bin/python -c "import chilmesh; m = chilmesh.examples.annulus(); print('OK', m.n_elems)"
+          python -m venv "$RUNNER_TEMP/smoke"
+          VENV_PY=$(python -c "import os, sys; root = os.environ['RUNNER_TEMP'] + '/smoke'; print(root + ('/Scripts/python.exe' if sys.platform == 'win32' else '/bin/python'))")
+          "$VENV_PY" -m pip install --upgrade pip
+          "$VENV_PY" -m pip install dist/*.whl
+          "$VENV_PY" -c "import chilmesh; m = chilmesh.examples.annulus(); print('OK', m.n_elems)"
