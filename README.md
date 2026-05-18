@@ -254,21 +254,33 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 
 CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor, with `.fort.14` I/O and a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
 
+**Software (Zenodo).** Placeholder until the first Zenodo archive mints a DOI — replace `XXXXXXX` once available:
+
 ```bibtex
-@mastersthesis{mattioli2017quadmesh,
-  author       = {Mattioli, Dominik O.},
-  title        = {{QuADMESH+}: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models},
-  school       = {The Ohio State University},
-  year         = {2017},
-  url          = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
+@software{mattioli_chilmesh,
+  author    = {Mattioli, Dominik O. and Kubatko, Ethan J.},
+  title     = {{CHILmesh}: a fast 2D mesh library for triangular,
+               quadrilateral, and mixed-element grids},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {0.4.1},
+  doi       = {10.5281/zenodo.XXXXXXX},
+  url       = {https://github.com/domattioli/CHILmesh}
 }
 ```
 
----
+**MATLAB source (Mattioli, 2017 thesis).**
 
-## References
-
-- [Source of MATLAB implementation (Mattioli, 2017)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
+```bibtex
+@mastersthesis{mattioli2017quadmesh,
+  author = {Mattioli, Dominik O.},
+  title  = {{QuADMESH+}: A Quadrangular ADvanced Mesh Generator
+            for Hydrodynamic Models},
+  school = {The Ohio State University},
+  year   = {2017},
+  url    = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
+}
+```
 
 ---
 
