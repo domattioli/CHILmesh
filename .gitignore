@@ -53,7 +53,9 @@ Thumbs.db
 *.dll
 
 # Spec-kit runtime state (tooling state — not project artefacts)
-.specify/memory/
+# but keep .specify/memory/constitution.md (versioned project artefact, #107)
+.specify/memory/*
+!.specify/memory/constitution.md
 
 # Local overrides
 *.local
