@@ -3,7 +3,7 @@
 </h1>
 
 <p align="center">
-  <strong>Fast 2D mesh generation and analysis for triangular, quadrilateral, and mixed-element meshes.</strong>
+  <strong>Fast 2D mesh processing, smoothing, and analysis for triangular, quadrilateral, and mixed-element meshes.</strong>
 </p>
 
 <p align="center">
@@ -73,13 +73,13 @@ See [`examples/`](examples/) for more runnable scripts.
 <p align="center">
   <img src="output/mixed_mesh_showcase.png?v=2" alt="Mixed-element mesh: wireframe, layers, quality">
   <br>
-  <sub><em><strong>Figure 2.</strong> Mixed-element support — one quad core stitched to an ADMESH triangle ring threads through wireframe rendering, layer-based skeletonization, and per-element quality on the same mesh object. Reproduce: <code>python scripts/generate_mixed_truss_demo.py</code>.</em></sub>
+  <sub><em><strong>Figure 2.</strong> Mixed-element pipeline — wireframe, skeletonization, and per-element quality on one tri+quad mesh, all via the standard API. Reproduce: <code>python scripts/generate_mixed_truss_demo.py</code>.</em></sub>
 </p>
 
 <p align="center">
   <img src="output/annulus_quickstart.png?v=7" alt="Skeletonization + quality plotting across three smoothing states">
   <br>
-  <sub><em><strong>Figure 3.</strong> Flagship visualisations <code>plot_layer()</code> (centre) and <code>plot_quality()</code> (right) on the same 580-triangle annulus at three smoothing states (raw, ADMESH warm-start truss, FEM smoother). Same API, same fixture, different inputs. Reproduce: <code>python scripts/generate_3row_admesh.py</code>.</em></sub>
+  <sub><em><strong>Figure 3.</strong> Flagship plots <code>plot_layer()</code> and <code>plot_quality()</code> tracking how skeletonization and quality respond to smoothing (raw → truss → FEM). Reproduce: <code>python scripts/generate_3row_admesh.py</code>.</em></sub>
 </p>
 
 ---
@@ -88,7 +88,8 @@ See [`examples/`](examples/) for more runnable scripts.
 
 - **Fast** — full init + quality analysis on a 98,365-element mesh in **~3.3 s** (4.3× faster than v0.2.0). Hash-mapped O(1) edge lookups, vectorised numpy core ops, kd-tree spatial queries at O(log n)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
-- **Smoothing** — angle-based FEM smoother for quality improvement (Zhou & Shimada 2000)
+- **Smoothing** — three algorithms: Zhou-Shimada FEM (direct solve), Zhou-Shimada angle-based (iterative), and ADMESH truss warm-start (force relaxation)
+- **Mesh alterations** — `insert_vertex`, coord-only vertex moves, advancing-front element addition; topology-update primitives via the `MutableMesh` API (full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94))
 - **Analysis** — element quality, interior angles, layer-based skeletonization
 - **I/O** — ADCIRC `.fort.14` and SMS `.2dm` read/write
 - **Spatial queries** — point-in-element, k-nearest vertices, radius search (v0.3.0)
@@ -173,16 +174,21 @@ Full reference in [`docs/API.md`](docs/API.md). Optional ADMESH truss warm-start
 
 ## Mesh Smoothing
 
-Angle-based FEM smoother (Zhou & Shimada 2000) for triangles, quads, and mixed meshes. One API across element types; boundary nodes are pinned, topology preserved, aspect ratio favoured.
+Three smoothing algorithms — pick by use case. Each preserves boundary nodes, leaves topology unchanged, and accepts mixed-element meshes.
+
+| Algorithm | API | Style | When |
+|---|---|---|---|
+| **Zhou-Shimada FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | Direct sparse solve; one shot | Best general-purpose default. Stable on tri / quad / mixed. |
+| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | DOMsmooth hybrid fallback for difficult mixed meshes where FEM stalls. |
+| **ADMESH truss warm-start** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
 
 ```python
-mesh.smooth_mesh(method='fem', acknowledge_change=True)        # any element type
-new_points = mesh.direct_smoother(kinf=1e12)                   # boundary stiffness
+mesh.smooth_mesh(method='fem', acknowledge_change=True)         # default
+mesh.smooth_mesh(method='angle-based', acknowledge_change=True) # fallback
+mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
 ```
 
-Parameters, stiffness assembly details, and the angle-based fallback (`mesh.smooth_mesh(method='angle-based', ...)`) for mixed meshes are documented in [`docs/API.md`](docs/API.md).
-
-**Reference:** Zhou, M., & Shimada, K. (2000). "An angle-based approach to two-dimensional mesh smoothing." *Proc. 9th International Meshing Roundtable*, 373–384.
+Stiffness assembly, convergence parameters, and algorithm details: [`docs/API.md`](docs/API.md). The FEM and angle-based methods follow Zhou & Shimada (2000), *"An angle-based approach to two-dimensional mesh smoothing,"* Proc. 9th IMR, 373–384.
 
 ---
 
@@ -239,6 +245,8 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 
 ## Citation
 
+CHILmesh started as the Python successor to QuADMESH+ (Mattioli, OSU MSc 2017) — a MATLAB mesh generator built for storm-surge / coastal-ocean modelling against ADCIRC. The Python port extracts the reusable layer-based skeletonization, smoothing, and `.fort.14` machinery so downstream projects (MADMESHR, ADMESH, ADMESH-Domains) can share one library across modelling workflows. See [thesis PDF](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf) for the original mathematical formulation.
+
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
   author       = {Mattioli, Dominik O.},
@@ -248,8 +256,6 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
   url          = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
 }
 ```
-
-[Read thesis PDF](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 ---
 

@@ -68,7 +68,9 @@ def main() -> None:
     )
 
     mesh.plot_quality(ax=ax_top)
-    mesh.plot_quality_histogram(bins=args.bins, ax=ax_bot)
+    # auto_norm=True compresses the cmap to the actual quality range so
+    # bar colours separate visually even on narrow distributions.
+    mesh.plot_quality_histogram(bins=args.bins, auto_norm=True, ax=ax_bot)
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
