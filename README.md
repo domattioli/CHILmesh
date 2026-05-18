@@ -180,9 +180,10 @@ Three smoothing algorithms — pick by use case. Each preserves boundary nodes, 
 
 | Algorithm | API | Style | When |
 |---|---|---|---|
-| **Balendran direct FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | One-shot sparse solve | Best general-purpose default. Stable on tri / quad / mixed. Non-iterative. |
-| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | Fallback for difficult mixed meshes where FEM stalls. Iterative.  |
-| **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). Iterative. |
+
+| **Balendran direct FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | One-shot sparse solve | Best general-purpose default. Stable on tri / quad / mixed. |
+| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | Fallback for difficult mixed meshes where FEM stalls. |
+| **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
 
 ```python
 mesh.smooth_mesh(method='fem', acknowledge_change=True)         # default
@@ -252,9 +253,7 @@ Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://git
 
 ## Citation
 
-CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor, with `.fort.14` I/O and a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
-
-**Software (Zenodo).** Placeholder until the first Zenodo archive mints a DOI — replace `XXXXXXX` once available:
+CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor serving as a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
 
 ```bibtex
 @software{mattioli_chilmesh,
