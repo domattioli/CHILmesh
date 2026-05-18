@@ -4,18 +4,27 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] — 2026-05-10 (Vectorization & Benchmark Validation)
+## [0.3.0] — 2026-05-18 (Phase 5 Spatial Indexing + Vectorization Release)
 
 ### ✨ Added
 
-#### New public methods
+#### Phase 5 — Spatial query API (PR #115)
+- `find_element(point)` — locate the element containing a 2D point via centroid kd-tree narrowing + barycentric check; returns `-1` outside the mesh
+- `find_elements_in_radius(point, radius)` — ball-tree query returning all elements within `radius` of a point
+- `nearest_vertices(point, k)` — k-nearest-neighbour vertex lookup
+- `insert_vertex(point)` — vertex insertion primitive (initial mesh-mutation surface; see #94 for the full Phase 5 mutation API)
+- Lazy-built kd-tree on element centroids; bounded `< 0.5s` build on WNAT_Hagen, `< 50μs` per `find_element` call
+
+#### New public methods (vectorization release)
 - `boundary_node_indices()` — returns unique boundary vertex indices (PR #86, closes README API gap)
 - `plot_boundary()` — convenience plot for boundary edges only
 - `plot_interior_edges()` — convenience plot for interior edges only
 
+#### Examples directory
+- `examples/01_quickstart.py`, `02_fort14_roundtrip.py`, `03_smoothing.py`, `04_spatial_queries.py` — runnable consumer scripts against the bundled fixtures; no external mesh files required
+
 #### Reproducible benchmarking
 - `scripts/benchmark_wnat_hagen.py` — measures init/quality/query performance on WNAT_Hagen reference mesh; markdown report + optional `--json` for CI archival (issue #55)
-- `tests/test_plot_utils.py` — full coverage of `CHILmeshPlotMixin` methods
 
 ### ⚡ Performance
 
@@ -31,21 +40,44 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Quality analysis: 6.6s → **0.07s** (94× faster than v0.2.0)
 - `Vert2Edge` lookup: 0.7μs → **0.17μs** per call
 
+### 🧪 Testing
+
+#### Test-suite holistic audit (#110, see `.planning/TEST-AUDIT.md`)
+- **F1** — `tests/test_angle_based_smoother.py` (21 tests) covering the Zhou-Shimada angle-based smoother; `CHILmesh.py` line coverage 73% → 89%
+- **F2** — `tests/test_plot_utils.py` (104 tests) promoted from smoke tests to real assertions (artist counts, axis limits, titles, colormaps)
+- **F4** — `TRI_FIXTURE_NAMES` centralised in `conftest.py`
+- **F5** — `tests/test_copy.py` (65 tests) locks the deep-copy contract the fixture cache relies on
+- **F6** — assertion messages added to numerical comparisons in 5 test files
+- **F7** — `tests/test_2dm_reader.py` migrated to pytest's `tmp_path` fixture
+- **F9** — `slow` marker registered in `pyproject.toml`
+- **F11** — README test badge points at the correct workflow
+- **F14** — defensive-branch `# pragma: no cover` annotations on truly-unreachable guards in `_skeletonize` and `pinch_points`; behavioural lock-in tests added for `pinch_points` semantics
+- Total: 582 tests passing / 13 skipped (was 439 / 9 in the original audit); `CHILmesh.py` line coverage 89% → 90%, total 88% → 89%
+
 ### 🛠 Packaging
 
-- `MANIFEST.in` added: PyPI sdist now excludes `.claude/`, `.planning/`, `.specify/`, `specs/`, `tests/`, `scripts/`, `.github/`, `.domi-pin`. Wheel layout unchanged.
+- `MANIFEST.in` added: PyPI sdist excludes `.claude/`, `.planning/`, `.specify/`, `specs/`, `tests/`, `scripts/`, `.github/`, `.domi-pin`. Wheel layout unchanged.
 
 ### 📚 Documentation
 
-- README: WNAT_Hagen showcase image (quality plot + 100-bin distribution histogram) + simplified perf table with measured numbers
+- README trimmed 288 → 224 lines: install command now visible on first laptop screen; deep content (BENCHMARK, API) lives under `docs/`. All three showcase images preserved in a dedicated Gallery section
+- README ToC added (#106); `Contributing` section resolves previously-stale ToC link
+- `examples/README.md` indexes the runnable scripts
 - `docs/BENCHMARK.md`: appended May 2026 re-run section preserving original April 2026 baselines
 - `docs/API.md`: Visualization section added; `plot_boundary` / `plot_interior_edges` documented
+- `TESTING.md` added: pytest invocation patterns, fixture table, debugging tips
+- Constitution consolidated into `.specify/memory/constitution.md` (#107); `.planning/constitution.md` and `.specify/speckit-constitution.md` retained as redirect stubs
+
+### 🏛 Governance
+
+- CHILmesh Constitution v1.0 → v1.1: Decision Authority table, Breaking Changes policy, Release Process, Feature-Specific Principles (I/O, Mesh Smoothing with DOMsmooth fallback, Skeletonization), External Upstream DomI section
 
 ### 🧹 Internal
 
 - `matplotlib >= 3.10` compat: `axis_chilmesh` aspect-ratio assertions accept both `'equal'` and numeric `1.0`
-- Root directory cleanup: `BENCHMARK.md`, `API.md`, `TEST_COVERAGE_ANALYSIS.md`, `research/` moved to `docs/` or `.planning/` (issue #64)
-- DomI sync contract: `.domi-pin` enforced (issue #81)
+- Repo-root cleanup: 5 audit/plan docs and `docs/introspections/` relocated into `.planning/` for a cleaner GitHub landing-page impression; no packaging change (sdist already pruned `.planning/`)
+- DomI sync contract: `.domi-pin` and `scripts/instructions_on_start.sh` enforce upstream-skill drift detection at session start (#81, #112, #113)
+- HOOKS-AUDIT.md inventoried hook surface and identified upstream-relevant gaps (#112)
 
 ## [0.2.1] — TBD (Bug Fix Release)
 
