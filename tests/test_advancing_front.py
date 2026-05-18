@@ -293,6 +293,51 @@ class TestPinchPoints:
         # Higher threshold should detect more pinch points
         assert len(high_threshold) >= len(low_threshold)
 
+    def test_pinch_points_threshold_zero_returns_empty(self):
+        """At threshold=0, no vertex can satisfy ratio < 0; result is empty."""
+        mesh = CHILmesh.read_from_fort14(
+            Path("src/chilmesh/data/annulus_200pts.fort.14")
+        )
+
+        assert mesh.pinch_points(width_threshold=0.0) == [], (
+            "threshold=0 must return no pinches (ratio is always >= 0)"
+        )
+
+    def test_pinch_points_threshold_above_one_returns_all_eligible(self):
+        """At threshold>1, every interior vertex with a positive max_dist qualifies."""
+        mesh = CHILmesh.read_from_fort14(
+            Path("src/chilmesh/data/annulus_200pts.fort.14")
+        )
+
+        pinches = mesh.pinch_points(width_threshold=2.0)
+        assert len(pinches) > 0, "threshold=2 should mark every eligible vertex"
+        assert all(0 <= v < mesh.n_verts for v in pinches)
+
+    def test_pinch_points_monotone_in_threshold(self):
+        """Result set is monotone non-decreasing as threshold increases."""
+        mesh = CHILmesh.read_from_fort14(
+            Path("src/chilmesh/data/annulus_200pts.fort.14")
+        )
+
+        thresholds = [0.1, 0.3, 0.5, 0.7, 0.9]
+        results = [set(mesh.pinch_points(width_threshold=t)) for t in thresholds]
+        for i in range(len(results) - 1):
+            assert results[i] <= results[i + 1], (
+                f"pinch set at threshold={thresholds[i]} ({len(results[i])}) "
+                f"not contained in set at threshold={thresholds[i+1]} "
+                f"({len(results[i+1])})"
+            )
+
+    @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "structured"])
+    def test_pinch_points_idempotent(self, fixture_name):
+        """Re-running pinch_points on an unchanged mesh yields identical output."""
+        from chilmesh import examples
+
+        mesh = getattr(examples, fixture_name)()
+        first = mesh.pinch_points(width_threshold=0.5)
+        second = mesh.pinch_points(width_threshold=0.5)
+        assert first == second, f"{fixture_name}: pinch_points is not deterministic"
+
 
 class TestAdvancingFrontWorkflow:
     """Test realistic advancing-front generation scenarios."""

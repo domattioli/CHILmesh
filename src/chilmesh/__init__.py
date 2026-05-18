@@ -7,6 +7,8 @@ from .mesh_topology import EdgeMap
 from .mutations import MutableMesh
 from . import examples
 from . import bridge
+from . import layer_paths
+from .layer_paths import paths_on_outer_vertices
 from .admesh_warmstart import optimize_with_admesh_truss, optimize_with_admesh_truss_arrays
 
 try:
@@ -21,6 +23,8 @@ __all__ = [
     "MutableMesh",
     "examples",
     "bridge",
+    "layer_paths",
+    "paths_on_outer_vertices",
     "optimize_with_admesh_truss",
     "optimize_with_admesh_truss_arrays",
 ]

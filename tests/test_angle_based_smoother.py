@@ -1,5 +1,5 @@
 """Regression tests for ``CHILmesh.angle_based_smoother`` and the
-``_ordered_vertex_ring`` helper (TEST-AUDIT.md F1).
+``_ordered_vertex_ring`` helper (.planning/TEST-AUDIT.md F1).
 
 Both functions sat at zero coverage before this file existed. The
 constitution (.specify/memory/constitution.md, "Feature-Specific
