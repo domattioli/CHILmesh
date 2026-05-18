@@ -16,7 +16,7 @@
   <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/badge/OSU_CHIL-ADMESH-66bb33?logo=github&logoColor=ba0c2f&labelColor=ffffff" alt="ADMESH"></a>
   <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white&cacheSeconds=300" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
-  <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.20263854.svg" alt="DOI"></a>
+  <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://zenodo.org/badge/693749657.svg" alt="DOI"></a>
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
