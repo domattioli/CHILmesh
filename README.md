@@ -84,7 +84,7 @@ The two flagship visualisations — layer-based skeletonization (centre) and per
 
 ## Features
 
-- **Fast** — 4,000×+ workflow speedup vs v0.1.1 via hash-mapped adjacencies and vectorised core ops
+- **Fast** — hash-mapped adjacencies and vectorised core ops; large meshes (~100k elements) initialise in seconds, not hours
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — angle-based FEM smoother for quality improvement (Zhou & Shimada 2000)
 - **Analysis** — element quality, interior angles, layer-based skeletonization
@@ -120,15 +120,11 @@ pip install -e .
 
 ---
 
-## Performance (v0.3.0)
+## Performance
 
-WNAT_Hagen workflow (52,774 vertices · 98,365 elements):
+CHILmesh is engineered for fast initialisation, query, and analysis on large unstructured 2D meshes. Hash-mapped edge adjacencies reduce topology build from `O(n²)` to amortised `O(n)`; core operations (`signed_area`, `interior_angles`, `elem_quality`) are fully vectorised over numpy arrays; a centroid kd-tree backs spatial queries (`find_element`, `nearest_vertices`) at `O(log n)` per call.
 
-| Stage | v0.1.1 | v0.3.0 | Speedup |
-|---|---:|---:|---:|
-| **Total workflow** | 13,400 s | **3.33 s** | **4,027×** |
-
-Full breakdown (init, quality, per-query latency) and methodology in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce: `python scripts/benchmark_wnat_hagen.py --json results.json`.
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements) initialises end-to-end in a few seconds on commodity hardware. Full numbers, per-stage breakdown, and reproducibility scripts in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
 
 ---
 
