@@ -16,11 +16,11 @@
   <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white&cacheSeconds=300" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
   <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://zenodo.org/badge/693749657.svg" alt="DOI"></a>
-  <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src="https://img.shields.io/badge/MATLAB-File%20Exchange-orange?logo=mathworks&logoColor=white" alt="MATLAB File Exchange"></a>
+  <a href="[https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh)"><img src="https://img.shields.io/badge/MATLAB-File%20Exchange-orange?logo=mathworks&logoColor=white" alt="MATLAB File Exchange"></a>
 <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>  
 </p>
 
-> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference at [src/@CHILmesh/CHILmesh.m](src/@CHILmesh/CHILmesh.m).
+> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference here on github [src/@CHILmesh/CHILmesh.m](src/@CHILmesh/CHILmesh.m) and on [MathWorks](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh/files/src/@CHILmesh/CHILmesh.m)
 
 ---
 
