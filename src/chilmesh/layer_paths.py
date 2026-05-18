@@ -82,6 +82,11 @@ def _build_outer_vertex_subgraph(
 ) -> Tuple[Dict[int, List[Tuple[int, int]]], Dict[int, Set[int]]]:
     """Build the outer-vertex subgraph for layer ``layer_idx``.
 
+    Per-layer cost: ``O(|OE|+|IE|+|E_layer|)`` -- scans only the layer's
+    elements and their incident edges, not the full mesh. Summed across
+    all layers this is ``O(m)`` because the skeletonization invariant
+    guarantees each element belongs to exactly one layer.
+
     Returns
     -------
     adj
@@ -94,35 +99,57 @@ def _build_outer_vertex_subgraph(
     ov = np.asarray(mesh.layers["OV"][layer_idx], dtype=int)
     if ov.size == 0:
         return {}, {}
-    ov_set: Set[int] = {int(v) for v in ov}
 
     oe = np.asarray(mesh.layers["OE"][layer_idx], dtype=int)
     ie = np.asarray(mesh.layers["IE"][layer_idx], dtype=int)
-    layer_elems: Set[int] = {int(e) for e in np.concatenate([oe, ie])}
+    layer_elems_arr = np.concatenate([oe, ie])
 
     edge2vert = mesh.adjacencies["Edge2Vert"]
     edge2elem = mesh.adjacencies["Edge2Elem"]
 
-    # Vectorised filter: keep edges with both endpoints in OV.
-    both_in_ov = np.isin(edge2vert[:, 0], ov) & np.isin(edge2vert[:, 1], ov)
-    candidate_eids = np.where(both_in_ov)[0]
+    # O(1) membership bitmaps replace set lookups.
+    ov_mask = np.zeros(mesh.n_verts, dtype=bool)
+    ov_mask[ov] = True
+    layer_elem_mask = np.zeros(mesh.n_elems, dtype=bool)
+    layer_elem_mask[layer_elems_arr] = True
+
+    # Step 1: scope candidate edges to those touching a layer element.
+    # Mixed meshes pad triangle rows of Elem2Edge with edge id 0; the
+    # downstream "exactly one layer neighbour" check below filters any
+    # spurious inclusions, so we don't need to scrub padding here.
+    layer_eids = np.unique(mesh.elem2edge(layer_elems_arr).ravel())
+
+    # Step 2: bitmap-filter to edges with BOTH endpoints in OV.
+    e2v_subset = edge2vert[layer_eids]
+    both_in_ov = ov_mask[e2v_subset[:, 0]] & ov_mask[e2v_subset[:, 1]]
+    candidate_eids = layer_eids[both_in_ov]
+    if candidate_eids.size == 0:
+        return {int(v): [] for v in ov}, {}
+
+    # Step 3: vectorised layer-element neighbour count.
+    e2e_subset = edge2elem[candidate_eids]
+    in_layer = np.zeros_like(e2e_subset, dtype=bool)
+    valid = e2e_subset >= 0
+    in_layer[valid] = layer_elem_mask[e2e_subset[valid]]
+    is_layer_boundary = in_layer.sum(axis=1) == 1
+
+    final_eids = candidate_eids[is_layer_boundary]
+    final_e2v = edge2vert[final_eids]
+    # For each kept edge, pick the (unique) layer-element neighbour.
+    final_e2e = e2e_subset[is_layer_boundary]
+    final_in_layer = in_layer[is_layer_boundary]
+    layer_neighbour_ids = final_e2e[
+        np.arange(final_e2e.shape[0]), final_in_layer.argmax(axis=1)
+    ]
 
     adj: Dict[int, List[Tuple[int, int]]] = {int(v): [] for v in ov}
     edge_layer_elems: Dict[int, Set[int]] = {}
-
-    for eid in candidate_eids:
-        eid_int = int(eid)
-        e2e = edge2elem[eid_int]
-        layer_neighbours = {int(x) for x in e2e if x >= 0 and int(x) in layer_elems}
-        # An edge belongs to the layer's boundary iff exactly one of its
-        # incident elements is in this layer (the other is in a different
-        # layer or outside the mesh).
-        if len(layer_neighbours) != 1:
-            continue
-        u, v = int(edge2vert[eid_int, 0]), int(edge2vert[eid_int, 1])
+    for i in range(final_eids.shape[0]):
+        eid_int = int(final_eids[i])
+        u, v = int(final_e2v[i, 0]), int(final_e2v[i, 1])
         adj[u].append((v, eid_int))
         adj[v].append((u, eid_int))
-        edge_layer_elems[eid_int] = layer_neighbours
+        edge_layer_elems[eid_int] = {int(layer_neighbour_ids[i])}
 
     return adj, edge_layer_elems
 
