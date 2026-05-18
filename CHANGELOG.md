@@ -4,9 +4,15 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] — 2026-05-18 (Phase 5 Spatial Indexing + Vectorization Release)
+## [0.4.0] — 2026-05-18 (Phase 5 Spatial Indexing + Layer-Paths Release)
 
 ### ✨ Added
+
+#### Layer-paths feature (PR #118)
+- `chilmesh.layer_paths` module — port of MATLAB `PathsOnOV` vertex-ordering heuristic for outer-vertex traversal
+- `tests/test_layer_paths.py` — regression suite (207 LOC)
+- Scoped subgraph build: `O(L*m)` → `O(m)` per layer
+- Demo visualization: `output/annulus_layer1_paths.png`
 
 #### Phase 5 — Spatial query API (PR #115)
 - `find_element(point)` — locate the element containing a 2D point via centroid kd-tree narrowing + barycentric check; returns `-1` outside the mesh
