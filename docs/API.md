@@ -8,7 +8,7 @@
 
 ## Overview
 
-CHILmesh provides API for 2D mesh manipulation, analysis, and generation. All public methods below are guaranteed stable through v1.0.
+CHILmesh provides an API for 2D mesh processing, smoothing, and analysis on triangular, quadrilateral, and mixed-element meshes (with limited mutation primitives such as `insert_vertex` and the advancing-front addition path). All public methods below are guaranteed stable through v1.0.
 
 **Import:**
 ```python

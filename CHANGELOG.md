@@ -4,6 +4,85 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] — 2026-05-18 (Consumer-Readiness + Zenodo Patch)
+
+Patch release primarily for Zenodo first-archive and consumer-facing
+documentation polish. No public-API breaking changes.
+
+### ✨ Added
+
+- `plot_quality_histogram(bins, cmap, auto_norm, ax)` — 1-D companion to
+  `plot_quality`. Bars are coloured by colormap midpoint so the
+  distribution reads as a horizontal slice of the 2-D quality plot.
+  `auto_norm=True` compresses the colormap to the observed quality range
+  for narrow distributions; default `False` keeps the [0, 1] norm to
+  match `plot_quality` colours pixel-for-pixel.
+- `scripts/generate_wnat_showcase.py` — stacks `plot_quality` over
+  `plot_quality_histogram` to regenerate `output/wnat_hagen_showcase.png`.
+  Falls back to the largest bundled fixture if WNAT_Hagen.14 is not on
+  disk; honours `--mesh` / `WNAT_HAGEN_PATH` env var.
+- `CITATION.cff` at repo root — GitHub renders the "Cite this repository"
+  button. Includes author / affiliation / version metadata; identifiers
+  block ready to fill once Zenodo mints DOIs.
+- `conda/meta.yaml` + `conda/README.md` — conda-forge recipe scaffold +
+  submission workflow.
+- `.planning/ZENODO-SETUP.md` — five-minute one-time auth runbook plus
+  per-release maintenance steps.
+- README Gallery: figures wrapped in centred `<p>` blocks with
+  `<sub><em>` caption styling, figure numbers, and tighter
+  functionality-oriented captions.
+- README Performance: compact v0.2.0 → v0.4.0 comparison table back at
+  the top; full breakdown stays in `docs/BENCHMARK.md`.
+- README badges: Zenodo DOI badge added (repo id 693749657).
+- README "Citation": 1-2 line context paragraph above the bibtex block
+  explaining the QuADMESH+ → CHILmesh lineage.
+- README Installation: snippets for pip, [uv](https://docs.astral.sh/uv/),
+  conda-forge (pending acceptance), and from-source.
+
+### 🛠 Build & CI
+
+- `pyproject.toml`: `pytest-xdist` added to `[dev]` extras.
+- `.github/workflows/python-package.yml`: PR-only fast matrix
+  (`ubuntu-latest × py3.11`, `pytest -n auto -m "not slow"`); push-to-main
+  runs full matrix (Ubuntu+macOS × py3.10/3.11/3.12). Pip cache via
+  `actions/setup-python cache: pip`. Wheel build + twine + smoke install
+  split into `build-and-smoke` job gated on
+  `github.event_name != 'pull_request'`. Expected PR cycle 10 min → 2 min.
+- `scripts/generate_3row_admesh.py`: layer colorbar uses
+  `BoundaryNorm` + integer ticks (was continuous 0–1).
+
+### 🧹 Internal
+
+- Repo-root cleanup: 5 audit/plan docs + `docs/introspections/`
+  relocated to `.planning/`.
+- README trimmed 288 → 224 lines; install command above the fold; deep
+  content lives under `docs/`.
+- `.specify/memory/constitution.md` consolidated as canonical
+  governance; `.planning/constitution.md` retained as redirect stub.
+
+### 📚 Documentation
+
+- "Mesh generation" wording removed from README tagline and
+  `docs/API.md` overview — replaced with "processing, smoothing, and
+  analysis" to accurately scope the library. Advancing-front-related
+  API references retain the "generation" terminology where it applies.
+- Smoothing section rewritten to enumerate the three algorithms
+  (Balendran direct FEM, Zhou-Shimada angle-based, ADMESH Spring-Based
+  Truss Smoother)
+  in a comparison table with selection guidance.
+- `CITATION.cff` keyword `mesh-generation` → `mesh-processing` /
+  `mesh-smoothing`.
+
+### 🏷 Issue label hygiene
+
+- Issues #101, #105 normalised onto the `priority:*` convention
+  (was `low-priority` / `high-priority` legacy form).
+- Issues #94, #93, #110, #111 received explicit `priority:*` labels.
+- Issue #92 (Phase 5 spatial indexing) closed as completed — shipped
+  in v0.4.0.
+
+---
+
 ## [0.4.0] — 2026-05-18 (Phase 5 Spatial Indexing + Layer-Paths Release)
 
 ### ✨ Added
