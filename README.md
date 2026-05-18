@@ -86,13 +86,15 @@ See [`examples/`](examples/) for more runnable scripts.
 
 ## Features
 
-- **Fast** — full init + quality analysis on a 98,365-element mesh in **~3.3 s** (4.3× faster than v0.2.0). Hash-mapped O(1) edge lookups, vectorised numpy core ops, kd-tree spatial queries at O(log n)
+- **Fast** — full init + quality analysis on a 98,365-element mesh in **~3.3 s** (4.3× faster than v0.2.0).
+  - Hash-mapped O(1) edge lookups, vectorised numpy core ops, kd-tree spatial queries at O(log n)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — three algorithms: Balendran direct FEM (one-shot solve), Zhou-Shimada angle-based (iterative), and the ADMESH Spring-Based Truss Smoother (force relaxation)
 - **Mesh alterations** — `insert_vertex`, coord-only vertex moves, advancing-front element addition; topology-update primitives via the `MutableMesh` API (full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94))
 - **Analysis** — element quality, interior angles, layer-based skeletonization
-- **I/O** — ADCIRC `.fort.14` and SMS `.2dm` read/write
-- **Spatial queries** — point-in-element, k-nearest vertices, radius search (v0.3.0)
+- **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS](https://www.aquaveo.com/sms) `.2dm` read/write. ([gmsh](https://gmsh.info/) Coming Soon)
+- **Spatial queries** — point-in-element, k-nearest vertices, radius search.
+- **Mesh traversal algorithms** (in-development)
 - **ADMESH-Domains integration** — `from_admesh_domain()` adapter for catalog meshes
 
 ---
@@ -193,7 +195,7 @@ Stiffness assembly, convergence parameters, and algorithm details: [`docs/API.md
 **References.**
 - FEM smoother: Balendran, B. (1999). *"A direct smoothing method for surface meshes."* Proc. 8th International Meshing Roundtable, pp. 189–193.
 - Angle-based smoother: Zhou, M. & Shimada, K. (2000). *"An angle-based approach to two-dimensional mesh smoothing."* Proc. 9th IMR, pp. 373–384.
-- ADMESH Spring-Based Truss Smoother: Conroy et al., *"ADMESH: An advanced, automatic unstructured mesh generator for shallow water models."* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
+- ADMESH Spring-Based Truss Smoother: Conroy et al. (2012) *"ADMESH: An advanced, automatic unstructured mesh generator for shallow water models."* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
 
 ---
 
@@ -236,9 +238,9 @@ Each subcommand has its own `--help` with an example. Also available as `python 
 
 ## Downstream Projects
 
-[**MADMESHR**](https://github.com/domattioli/MADMESHR) — Advancing-front mesh adaptation built on CHILmesh
-[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized mesh generation and smoothing
-[**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) — Mesh catalog for hydrodynamic applications
+[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized 2D triangular mesh generation for hydrodynamic domains
+[**MADMESHR**](https://github.com/domattioli/MADMESHR) — AI based quad- and mixed element generation for hydrodynamic domains.
+[**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) — Mesh catalog for hydrodynamic domains.
 
 ---
 
@@ -266,10 +268,7 @@ CHILmesh started as the Python successor to QuADMESH+ (Mattioli, OSU MSc 2017) �
 
 ## References
 
-- Balendran, B. (1999). *"A direct smoothing method for surface meshes,"* Proc. 8th IMR, 189–193. (FEM smoother basis.)
-- Zhou, M. & Shimada, K. (2000). *"An angle-based approach to two-dimensional mesh smoothing,"* Proc. 9th IMR, 373–384. [PDF](https://www.andrew.cmu.edu/user/shimada/papers/00-imr-zhou.pdf). (Angle-based smoother.)
-- Conroy et al., *"ADMESH: An advanced, automatic unstructured mesh generator for shallow water models,"* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0). (ADMESH Spring-Based Truss Smoother.)
-- Original MATLAB implementation funded by [Aquaveo](https://aquaveo.com/).
+- [Source of MATLAB implementation (Mattioli, 2017)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 ---
 
