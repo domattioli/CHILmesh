@@ -16,6 +16,7 @@
   <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/badge/OSU_CHIL-ADMESH-66bb33?logo=github&logoColor=ba0c2f&labelColor=ffffff" alt="ADMESH"></a>
   <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
+  <a href="https://zenodo.org/badge/latestdoi/693749657"><img src="https://zenodo.org/badge/693749657.svg" alt="DOI"></a>
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
@@ -63,29 +64,29 @@ See [`examples/`](examples/) for more runnable scripts.
 
 ## Gallery
 
-### WNAT_Hagen — 52,774 vertices · 98,365 elements
+<p align="center">
+  <img src="output/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
+  <br>
+  <sub><em><strong>Figure 1.</strong> Scale demo on WNAT_Hagen (52,774 vertices · 98,365 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_wnat_showcase.py</code>.</em></sub>
+</p>
 
-![WNAT_Hagen quality plot and distribution](output/wnat_hagen_showcase.png?v=2)
+<p align="center">
+  <img src="output/mixed_mesh_showcase.png?v=2" alt="Mixed-element mesh: wireframe, layers, quality">
+  <br>
+  <sub><em><strong>Figure 2.</strong> Mixed-element support — one quad core stitched to an ADMESH triangle ring threads through wireframe rendering, layer-based skeletonization, and per-element quality on the same mesh object. Reproduce: <code>python scripts/generate_mixed_truss_demo.py</code>.</em></sub>
+</p>
 
-Per-element quality (skew, `4√3·area / Σedge²`) and a 100-bin distribution. Median quality 0.797, full init + quality analysis in **~3.3 s** end-to-end. Reproduce: `python scripts/benchmark_wnat_hagen.py`.
-
-### Mixed-element mesh — quads + ADMESH tri ring
-
-![Mixed-element mesh: wireframe, layers, quality](output/mixed_mesh_showcase.png?v=2)
-
-Demonstrates **mixed-element support** end-to-end: a quad core stitched to an ADMESH triangle ring runs through wireframe rendering, layer-based skeletonization, and per-element quality analysis on a single mesh. Reproduce: `python scripts/generate_mixed_truss_demo.py`.
-
-### Skeletonization + quality plotting (3 smoothing states)
-
-![CHILmesh skeletonization layers and quality plot across three smoothing states](output/annulus_quickstart.png?v=6)
-
-Shows the **two flagship visualisations** — `plot_layer()` (centre) and `plot_quality()` (right) — applied to the same annulus at three smoothing states (raw, ADMESH warm-start truss, FEM smoother). Same API, same fixture, different inputs: how skeletonization and quality reads track mesh evolution. Reproduce: `python scripts/generate_3row_admesh.py`.
+<p align="center">
+  <img src="output/annulus_quickstart.png?v=7" alt="Skeletonization + quality plotting across three smoothing states">
+  <br>
+  <sub><em><strong>Figure 3.</strong> Flagship visualisations <code>plot_layer()</code> (centre) and <code>plot_quality()</code> (right) on the same 580-triangle annulus at three smoothing states (raw, ADMESH warm-start truss, FEM smoother). Same API, same fixture, different inputs. Reproduce: <code>python scripts/generate_3row_admesh.py</code>.</em></sub>
+</p>
 
 ---
 
 ## Features
 
-- **Fast** — hash-mapped adjacencies and vectorised core ops; large meshes (~100k elements) initialise in seconds, not hours
+- **Fast** — full init + quality analysis on a 98,365-element mesh in **~3.3 s** (4.3× faster than v0.2.0). Hash-mapped O(1) edge lookups, vectorised numpy core ops, kd-tree spatial queries at O(log n)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — angle-based FEM smoother for quality improvement (Zhou & Shimada 2000)
 - **Analysis** — element quality, interior angles, layer-based skeletonization
@@ -125,7 +126,18 @@ pip install -e .
 
 CHILmesh is engineered for fast initialisation, query, and analysis on large unstructured 2D meshes. Hash-mapped edge adjacencies reduce topology build from `O(n²)` to amortised `O(n)`; core operations (`signed_area`, `interior_angles`, `elem_quality`) are fully vectorised over numpy arrays; a centroid kd-tree backs spatial queries (`find_element`, `nearest_vertices`) at `O(log n)` per call.
 
-Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements) initialises end-to-end in a few seconds on commodity hardware. Full numbers, per-stage breakdown, and reproducibility scripts in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
+
+| Stage | v0.2.0 | v0.4.0 |
+|---|---:|---:|
+| Fast init (no layers) | 3.9 s | **0.44 s** |
+| Full init (with layers) | 7.7 s | **3.26 s** |
+| Quality analysis | 6.6 s | **0.07 s** |
+| **Total workflow** | **14.3 s** | **3.33 s** |
+| `find_element` (per call) | n/a | **< 50 μs** |
+| `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** |
+
+Per-stage breakdown, methodology, and historical baselines in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
 
 ---
 
