@@ -301,7 +301,7 @@ CHILmesh originated in MATLAB as the mixed-element data structure backing a skel
 
 
 
-**MATLAB source (Mattioli, 2017 thesis).**
+**MATLAB source (Mattioli, 2017 thesis).** [Read thesis (PDF)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 
 ```bibtex
