@@ -277,8 +277,9 @@ Resolved in this session (autonomous batch on `daily-issue-fixing`):
 | F1 | ✅ Resolved | `96409f7` | New `tests/test_angle_based_smoother.py` (21 tests). `CHILmesh.py` coverage 73% → 89%. Found one docstring/impl discrepancy: `_ordered_vertex_ring` walks CW around `v`, not CCW as docstring claims (algorithm is direction-agnostic). |
 | F3 | Withdrawn | — | False alarm; seed already set 14 lines upstream of the cited call. |
 | F4 | ✅ Resolved | `63bf016` | `TRI_FIXTURE_NAMES` exported from `conftest.py`; 4 test files now import. |
-| F5 | ✅ Resolved | (this commit) | New `tests/test_copy.py` (13 invariants × 5 fixtures + matrix = 65 tests). Locks the `.copy()` contract the fixture cache relies on. |
-| F7 | ✅ Resolved | (this commit) | `tests/test_2dm_reader.py` migrated to `tmp_path`; 9 `NamedTemporaryFile(delete=False)`/manual-`unlink()` blocks removed. |
+| F5 | ✅ Resolved | `64d5eb7` | New `tests/test_copy.py` (13 invariants × 5 fixtures + matrix = 65 tests). Locks the `.copy()` contract the fixture cache relies on. |
+| F6 | ✅ Resolved | (this commit) | Numerical / structural asserts in `test_fort14_roundtrip.py`, `test_fort14_quad_roundtrip.py`, `test_ccw.py`, `test_signed_area.py`, `test_invariants.py` now carry f-string messages with fixture name and actual-vs-expected. CI failures are diagnosable from the log line. |
+| F7 | ✅ Resolved | `64d5eb7` | `tests/test_2dm_reader.py` migrated to `tmp_path`; 9 `NamedTemporaryFile(delete=False)`/manual-`unlink()` blocks removed. |
 | F9 | ✅ Resolved | `20ac025` | `slow` marker registered in `[tool.pytest.ini_options]`. Warning count 12 → 10. |
 | F11 | ✅ Resolved | `2427103` | README Tests badge points at `python-package.yml`. |
 
