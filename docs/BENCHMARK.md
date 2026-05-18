@@ -8,14 +8,13 @@
 
 ## Executive Summary
 
-v0.4.0 builds on the v0.2.0 hash-mapped adjacency foundation with vectorised core ops, a centroid kd-tree spatial index, and a layer-paths perf pass:
+CHILmesh's performance arc, by tagged release:
 
-- **v0.2.0 — Phases 1–3** — hash-mapped edge / vertex adjacencies; O(n²) → amortised O(n) topology build
-- **v0.3.0 — Vectorisation pass (#75)** — `signed_area`, `interior_angles`, `elem_quality` lifted to numpy array ops
-- **v0.3.0 — Phase 5 (#115)** — `find_element`, `find_elements_in_radius`, `nearest_vertices` backed by lazy centroid kd-tree
-- **v0.4.0 — Layer-paths (#118)** — scoped subgraph build for outer-vertex traversal: `O(L·m)` → `O(m)`
+- **v0.2.0 — Phases 1–3** — hash-mapped edge / vertex adjacencies; O(n²) → amortised O(n) topology build. Headline workflow 14.3 s on WNAT_Hagen.
+- **v0.3.0 — Vectorisation pass (#75, PR #91)** — `signed_area`, `interior_angles`, `elem_quality`, `_plot_polys`, `plot_point` lifted to numpy array ops. Headline workflow 14.3 s → **3.33 s**; quality analysis 6.6 s → 0.07 s; `Vert2Edge` lookup 0.7 μs → 0.17 μs.
+- **v0.4.0 — Phase 5 spatial queries (#115) + layer-paths (#118)** — `find_element`, `find_elements_in_radius`, `nearest_vertices` backed by lazy centroid kd-tree (`< 0.5 s` build, `< 50 μs` per call). Layer-paths outer-vertex traversal scoped to layer elements: `O(L·m)` → `O(m)`. **Workflow timings unchanged from v0.3.0** — these are additive features.
 
-Cumulative result on the WNAT_Hagen reference workload: end-to-end init + quality analysis now runs in **~3.3 s**, with per-query latencies in the sub-microsecond range and bounded kd-tree build (`< 0.5 s`) for the spatial query path.
+The 3.33 s end-to-end figure for init + quality analysis on WNAT_Hagen is therefore a v0.3.0 result that carries through v0.4.0 unchanged.
 
 ---
 
@@ -23,23 +22,25 @@ Cumulative result on the WNAT_Hagen reference workload: end-to-end init + qualit
 
 ### Workflow
 
-| Stage | v0.2.0 | v0.4.0 | Δ |
-|---|---:|---:|---:|
-| Fast init (no layers) | 3.9 s | **0.44 s** | 8.9× |
-| Full init (with layers) | 7.7 s | **3.26 s** | 2.4× |
-| Quality analysis | 6.6 s | **0.07 s** | 94× |
-| Spatial index build (kd-tree) | n/a | **< 0.5 s** | — |
-| **Total workflow** | **14.3 s** | **3.33 s** | **4.3×** |
+| Stage | v0.2.0 | v0.3.0 | v0.4.0 | Δ since v0.2.0 |
+|---|---:|---:|---:|---:|
+| Fast init (no layers) | 3.9 s | **0.44 s** | 0.44 s | 8.9× |
+| Full init (with layers) | 7.7 s | **3.26 s** | 3.26 s | 2.4× |
+| Quality analysis | 6.6 s | **0.07 s** | 0.07 s | 94× |
+| Spatial index build (kd-tree) | n/a | n/a | **< 0.5 s** | — |
+| **Total workflow** | **14.3 s** | **3.33 s** | **3.33 s** | **4.3×** |
+
+Workflow numbers are unchanged from v0.3.0 → v0.4.0; the v0.4.0 release adds new capabilities (spatial query API, layer-paths traversal) rather than further reducing the headline init/quality runtime. The kd-tree build is the only new line item in the workflow timing.
 
 ### Query latency (per call, 5k samples)
 
-| Operation | v0.2.0 | v0.4.0 |
-|---|---:|---:|
-| `elem2edge` | 4.4 μs | **2.08 μs** |
-| `Vert2Edge` lookup | 0.7 μs | **0.17 μs** |
-| `Elem2Edge` bulk (1k samples) | n/a | **0.14 μs** |
-| `find_element` (centroid kd-tree + barycentric check) | n/a | **< 50 μs** |
-| `nearest_vertices` (k=5) | n/a | **< 30 μs** |
+| Operation | v0.2.0 | v0.3.0 | v0.4.0 |
+|---|---:|---:|---:|
+| `elem2edge` | 4.4 μs | 2.08 μs | **2.08 μs** |
+| `Vert2Edge` lookup | 0.7 μs | 0.17 μs | **0.17 μs** |
+| `Elem2Edge` bulk (1k samples) | n/a | 0.14 μs | **0.14 μs** |
+| `find_element` (centroid kd-tree + barycentric check) | n/a | n/a | **< 50 μs** |
+| `nearest_vertices` (k=5) | n/a | n/a | **< 30 μs** |
 
 ### Layer-paths (PR #118)
 
