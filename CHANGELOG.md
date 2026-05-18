@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### 🔧 Fixed
+
+- **Windows portability of fort.14 / 2dm I/O** (#121, partial). The three
+  `open()` sites in `chilmesh.CHILmesh` now pass explicit
+  `encoding='utf-8'` and `newline=` arguments. Reads use
+  `newline=''` (universal-newline translation) so CRLF-terminated files
+  authored on Windows roundtrip identically to LF-terminated files
+  authored on POSIX; writes force `newline='\n'` so the produced bytes
+  are byte-identical across all platforms. Adds
+  `tests/test_io_portability.py` to lock the invariant. The `windows-latest`
+  CI runner and OS-portable `build-and-smoke` venv path remain open
+  under #121.
+
 ## [0.4.1] — 2026-05-18 (Consumer-Readiness + Zenodo Patch)
 
 Patch release primarily for Zenodo first-archive and consumer-facing
