@@ -39,11 +39,11 @@ jobs:
           MPLBACKEND: Agg
         run: python -m pytest -n auto -m "not slow"
 
-      - name: Run pytest (push — full suite, parallel)
+      - name: Run pytest (push — full suite, parallel, coverage-gated)
         if: github.event_name != 'pull_request'
         env:
           MPLBACKEND: Agg
-        run: python -m pytest -n auto -v
+        run: python -m pytest -n auto -v --cov=src/chilmesh --cov-report=term --cov-fail-under=80
 
   build-and-smoke:
     name: build sdist+wheel + smoke install

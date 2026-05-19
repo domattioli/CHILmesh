@@ -284,6 +284,7 @@ Resolved in this session (autonomous batch on `daily-issue-fixing`):
 | F9 | ✅ Resolved | `20ac025` | `slow` marker registered in `[tool.pytest.ini_options]`. Warning count 12 → 10. |
 | F11 | ✅ Resolved | `2427103` | README Tests badge points at `python-package.yml`. |
 | F14 | ✅ Resolved | `3eb5391` | Four uncovered lines in `_skeletonize` and `pinch_points` are defensive guards unreachable on valid meshes — marked with `# pragma: no cover` and inline rationale. Added 4 new behavioral lock-in tests for `pinch_points` (threshold edge cases, monotonicity, idempotency) in `tests/test_advancing_front.py`. `CHILmesh.py` 89% → 90%; total 88% → 89%. |
+| F13 | ✅ Resolved | (this commit) | `--cov-fail-under=80` added to push-to-`main` / `release/**` pytest invocation in `.github/workflows/python-package.yml`. PR runs intentionally skip coverage to keep cycle time low. Local fast-subset measurement: 83 % line coverage (701 passed, 14 skipped). TESTING.md "CI & Release Gates" updated. |
 
 Outstanding backlog (per-finding follow-up tickets pending):
 

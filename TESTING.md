@@ -154,7 +154,7 @@ pytest -vv -s tests/test_smoothing.py::TestTriangleSmoother::test_fem_smoother_t
 ## CI & Release Gates
 
 - **Test gate:** All tests must pass before PR merge
-- **Coverage gate:** Public API ≥90% coverage (smoke test on matplotlib)
+- **Coverage gate:** `--cov-fail-under=80` on push-to-`main` / `release/**`. PR runs skip coverage to keep feedback fast (#122, TEST-AUDIT F13). Floor was set after F1 raised `CHILmesh.py` line coverage from 73 % → 89 % and overall to 83 %.
 - **Performance gate:** No regression in block_o initialization time
 
 ### CI Matrix Policy
