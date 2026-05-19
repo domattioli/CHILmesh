@@ -30,6 +30,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   each worker an independent dict — no shared-state race. Empirically
   confirmed via `pytest -n auto -k "not block_o"` (649 passed,
   deterministic across runs).
+- **Coverage gate** (#122, TEST-AUDIT F13). Push-to-`main` /
+  `release/**` pytest invocation now runs with
+  `--cov=src/chilmesh --cov-report=term --cov-fail-under=80`. PR runs
+  intentionally skip coverage to keep cycle time low. Floor set after
+  F1 raised `CHILmesh.py` line coverage 73 % → 89 % and overall to
+  83 % on the fast subset. TESTING.md "CI & Release Gates" documents
+  the policy.
 
 ## [0.4.1] — 2026-05-18 (Consumer-Readiness + Zenodo Patch)
 
