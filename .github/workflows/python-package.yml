@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         # PR runs: ubuntu × py3.11 only (fast feedback).
-        # Push to main / release branches: full matrix.
-        os: ${{ fromJson(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]') }}
+        # Push to main / release branches: full matrix incl. windows-latest (#121).
+        os: ${{ fromJson(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
         python-version: ${{ fromJson(github.event_name == 'pull_request' && '["3.11"]' || '["3.10","3.11","3.12"]') }}
 
     steps:

@@ -157,6 +157,17 @@ pytest -vv -s tests/test_smoothing.py::TestTriangleSmoother::test_fem_smoother_t
 - **Coverage gate:** Public API ≥90% coverage (smoke test on matplotlib)
 - **Performance gate:** No regression in block_o initialization time
 
+### CI Matrix Policy
+
+| Event | Matrix | Rationale |
+|---|---|---|
+| **Pull request** | `ubuntu-latest × py3.11`, `pytest -n auto -m "not slow"` | Fast feedback (~2 min). Skips `block_o` fixture. |
+| **Push to `main` / `release/**`** | `{ubuntu, macos, windows}-latest × py{3.10, 3.11, 3.12}`, `pytest -n auto -v` | Full portability gate; runs `block_o`. |
+
+Windows is exercised on every merge to `main` (issue #121). PR cycles stay fast — Linux-only — and Windows-specific regressions are caught at the merge gate, not on every push. The `build-and-smoke` job runs ubuntu-only and uses a `$RUNNER_TEMP`-based venv path that is OS-portable (works under any shell).
+
+Platform support claim (constitution §Release Checklist): "All tests pass on Python 3.10 / 3.11 / 3.12 × Ubuntu / macOS / Windows."
+
 ## Troubleshooting
 
 ### "ModuleNotFoundError: No module named 'chilmesh'"
