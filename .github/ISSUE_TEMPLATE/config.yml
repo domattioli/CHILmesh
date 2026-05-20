@@ -1,8 +1,8 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: Documentation
     url: https://github.com/domattioli/CHILmesh/blob/main/README.md
-    about: Read the README and API docs
+    about: Read the README and API docs before filing an issue
   - name: CHIL Lab
     url: https://ceg.osu.edu/computational-hydrodynamics-and-informatics-laboratory
     about: Computational Hydrodynamics & Informatics Lab (OSU)
