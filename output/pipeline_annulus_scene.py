@@ -6,14 +6,11 @@ Four stages from the legacy 4-row README:
   Row 3: FEM smoother (Balendran direct method)
   Row 4: Right-iso smoother (angles -> 45/45/90)
 
-Each stage has its own (potentially different) triangulation; Delaunay
-re-triangulation runs after every smoother to repair flipped tris from
-free-vertex motion. Transitions use fade-out/fade-in instead of
-morphing because topology differs between rows.
-
-Metrics: median element quality (higher better, green bar) and mean
-per-triangle deviation from right-isoceles {45,45,90} angles (lower
-better, orange bar).
+Connectivity differs row-to-row (Delaunay re-triangulation runs after
+each smoother to repair flipped tris), so polygons cross-fade per
+stage. Vertex IDs are stable across stages, so vertex dots morph
+continuously with Transform -- giving a persistent sense of where
+each vertex moves through the pipeline.
 
 Renders 1080p30 mp4.
 """
@@ -33,6 +30,7 @@ from manim import (
     Scene,
     Text,
     VGroup,
+    Dot,
     Write,
     Create,
     FadeIn,
@@ -54,6 +52,7 @@ DATA_PATH = Path("/tmp/readme_pipeline.json")
 
 EDGE_COLOR = "#3a7fbf"
 FILL_COLOR = "#5fb0ff"
+DOT_COLOR  = "#ffd34e"
 ACCENT     = "#ff9f43"
 GOOD       = "#2ecc71"
 DIM        = "#666666"
@@ -69,44 +68,53 @@ class ReadmePipeline(Scene):
         data = _load()
         rows = data["rows"]
         n_stages = len(rows)
+        n_verts = len(rows[0]["points"])
 
-        # Title
         title = Text("CHILmesh annulus pipeline", font_size=44,
                      weight="BOLD").to_edge(UP, buff=0.30)
         subtitle = Text(
-            "Row 1 -> Row 2 -> Row 3 -> Row 4   (legacy README layout)",
+            "Row 1 -> Row 2 -> Row 3 -> Row 4   (vertex IDs persist; edges re-Delaunay per stage)",
             font_size=20, color="#aaaaaa")
         subtitle.next_to(title, DOWN, buff=0.12)
         self.play(Write(title), FadeIn(subtitle), run_time=0.8)
 
-        # Compute common mesh scale across all stages.
+        # Common mesh scale (use Row 1 extent to lock layout).
         all_pts = np.vstack([np.asarray(r["points"]) for r in rows])
         cx, cy = all_pts.mean(axis=0)
         max_extent = max(np.ptp(all_pts[:, 0]), np.ptp(all_pts[:, 1]))
-        mesh_scale = 5.2 / max_extent
-        mesh_center = np.array([-3.5, -0.5, 0.0])
+        mesh_scale = 5.0 / max_extent
+        mesh_center = np.array([-3.6, -0.5, 0.0])
 
-        def make_mesh(pts, elements):
-            pts = np.asarray(pts)
-            def to_scene(i):
-                return np.array([
-                    (pts[i, 0] - cx) * mesh_scale + mesh_center[0],
-                    (pts[i, 1] - cy) * mesh_scale + mesh_center[1],
-                    0.0,
-                ])
+        def vert_to_scene(pts, i):
+            return np.array([
+                (pts[i, 0] - cx) * mesh_scale + mesh_center[0],
+                (pts[i, 1] - cy) * mesh_scale + mesh_center[1],
+                0.0,
+            ])
+
+        def make_polys(row):
+            pts = np.asarray(row["points"])
+            elements = row["elements"]
             polys = VGroup()
             for elem in elements:
                 p = Polygon(
-                    *[to_scene(i) for i in elem],
+                    *[vert_to_scene(pts, i) for i in elem],
                     stroke_color=EDGE_COLOR,
                     stroke_width=0.9,
                     fill_color=FILL_COLOR,
-                    fill_opacity=0.22,
+                    fill_opacity=0.18,
                 )
                 polys.add(p)
             return polys
 
-        # Pipeline progress bar (top-right of mesh area).
+        def make_dots(row):
+            pts = np.asarray(row["points"])
+            return VGroup(*[
+                Dot(vert_to_scene(pts, i), color=DOT_COLOR, radius=0.030)
+                for i in range(n_verts)
+            ])
+
+        # Progress bar.
         bar_w, bar_h = 4.6, 0.45
         bar_origin = np.array([3.6, 2.5, 0.0])
         progress_bg = Rectangle(width=bar_w, height=bar_h,
@@ -116,63 +124,66 @@ class ReadmePipeline(Scene):
         ticks, tick_labels = VGroup(), VGroup()
         for k in range(n_stages):
             x = bar_origin[0] - bar_w / 2 + (k + 0.5) * bar_w / n_stages
-            tick = Line(np.array([x, bar_origin[1] - bar_h/2 - 0.05, 0]),
-                        np.array([x, bar_origin[1] + bar_h/2 + 0.05, 0]),
-                        color=DIM, stroke_width=1.5)
-            ticks.add(tick)
+            t = Line(np.array([x, bar_origin[1] - bar_h/2 - 0.05, 0]),
+                     np.array([x, bar_origin[1] + bar_h/2 + 0.05, 0]),
+                     color=DIM, stroke_width=1.5)
+            ticks.add(t)
             lbl = Text(rows[k]["stage"], font_size=16, color="#aaaaaa")
-            lbl.next_to(tick, UP, buff=0.10)
+            lbl.next_to(t, UP, buff=0.10)
             tick_labels.add(lbl)
         self.play(Create(progress_bg), FadeIn(ticks), FadeIn(tick_labels), run_time=0.6)
 
         stage_name_pos = np.array([3.6, 1.6, 0.0])
-        algo_pos = np.array([3.6, 1.2, 0.0])
+        algo_pos      = np.array([3.6, 1.2, 0.0])
         stage_name = Text("", font_size=28, color=ACCENT, weight="BOLD").move_to(stage_name_pos)
-        algo_text = Text("", font_size=20, color="#cccccc").move_to(algo_pos)
+        algo_text  = Text("", font_size=20, color="#cccccc").move_to(algo_pos)
         self.add(stage_name, algo_text)
 
         # Metric bars.
-        q_axis_origin = np.array([2.6, -0.4, 0.0])
+        q_origin = np.array([2.6, -0.4, 0.0])
         bar_max = 4.0
         q_label = Text("median quality (-> 1.0 better)", font_size=18, color="#cccccc")
-        q_label.move_to(q_axis_origin + np.array([0, 0.45, 0])).align_to(q_axis_origin, LEFT)
+        q_label.move_to(q_origin + np.array([0, 0.45, 0])).align_to(q_origin, LEFT)
         q_track = Rectangle(width=bar_max, height=0.30,
                              stroke_color=DIM, stroke_width=1.2,
                              fill_color=BG_TILE, fill_opacity=1.0)
-        q_track.move_to(q_axis_origin + np.array([bar_max/2, 0, 0]))
+        q_track.move_to(q_origin + np.array([bar_max/2, 0, 0]))
 
-        iso_axis_origin = np.array([2.6, -1.4, 0.0])
+        iso_origin = np.array([2.6, -1.4, 0.0])
         iso_label = Text("right-iso angle deviation (<- lower better)",
                           font_size=18, color="#cccccc")
-        iso_label.move_to(iso_axis_origin + np.array([0, 0.45, 0])).align_to(iso_axis_origin, LEFT)
+        iso_label.move_to(iso_origin + np.array([0, 0.45, 0])).align_to(iso_origin, LEFT)
         iso_track = Rectangle(width=bar_max, height=0.30,
                                stroke_color=DIM, stroke_width=1.2,
                                fill_color=BG_TILE, fill_opacity=1.0)
-        iso_track.move_to(iso_axis_origin + np.array([bar_max/2, 0, 0]))
+        iso_track.move_to(iso_origin + np.array([bar_max/2, 0, 0]))
 
         self.play(FadeIn(q_label), FadeIn(q_track),
                   FadeIn(iso_label), FadeIn(iso_track), run_time=0.5)
 
-        def q_bar_for(value):
-            w = max(0.02, value) * bar_max
+        def q_bar_for(v):
+            w = max(0.02, v) * bar_max
             r = Rectangle(width=w, height=0.30, stroke_width=0,
                           fill_color=GOOD, fill_opacity=0.95)
-            r.move_to(q_axis_origin + np.array([w/2, 0, 0]))
+            r.move_to(q_origin + np.array([w/2, 0, 0]))
             return r
 
-        def iso_bar_for(dev):
-            frac = 1.0 - min(1.0, dev / 45.0)
+        def iso_bar_for(d):
+            frac = 1.0 - min(1.0, d / 45.0)
             w = max(0.02, frac) * bar_max
             r = Rectangle(width=w, height=0.30, stroke_width=0,
                           fill_color=ACCENT, fill_opacity=0.95)
-            r.move_to(iso_axis_origin + np.array([w/2, 0, 0]))
+            r.move_to(iso_origin + np.array([w/2, 0, 0]))
             return r
 
-        # Show Row 1.
-        mesh = make_mesh(rows[0]["points"], rows[0]["elements"])
-        self.play(Create(mesh, lag_ratio=0.003), run_time=2.0)
+        # Row 1 init: edges + persistent dots.
+        polys = make_polys(rows[0])
+        dots  = make_dots(rows[0])
+        self.play(Create(polys, lag_ratio=0.003), run_time=1.6)
+        self.play(Create(dots,  lag_ratio=0.002), run_time=1.0)
+
         new_stage = Text(rows[0]["name"], font_size=28, color=ACCENT, weight="BOLD").move_to(stage_name_pos)
-        new_algo = Text(rows[0]["algo"], font_size=20, color="#cccccc").move_to(algo_pos)
+        new_algo  = Text(rows[0]["algo"], font_size=20, color="#cccccc").move_to(algo_pos)
         self.play(Transform(stage_name, new_stage), Transform(algo_text, new_algo), run_time=0.4)
 
         q_bar = q_bar_for(rows[0]["q_med"])
@@ -186,44 +197,48 @@ class ReadmePipeline(Scene):
 
         progress_marker = ticks[0].copy().set_color(ACCENT).set_stroke(width=3.5)
         self.add(progress_marker)
-        self.wait(1.4)
+        self.wait(1.2)
 
         # Walk through remaining stages.
         for k in range(1, n_stages):
-            new_mesh = make_mesh(rows[k]["points"], rows[k]["elements"])
+            new_polys = make_polys(rows[k])
+            new_dots  = make_dots(rows[k])
             new_q_bar = q_bar_for(rows[k]["q_med"])
             new_iso_bar = iso_bar_for(rows[k]["iso_dev"])
             new_q_readout = Text(f"med Q = {rows[k]['q_med']:.3f}", font_size=22, color=GOOD)
             new_q_readout.next_to(q_track, RIGHT, buff=0.20)
             new_iso_readout = Text(f"dev = {rows[k]['iso_dev']:.1f} deg", font_size=22, color=ACCENT)
             new_iso_readout.next_to(iso_track, RIGHT, buff=0.20)
-            new_stage = Text(rows[k]["name"], font_size=28, color=ACCENT, weight="BOLD").move_to(stage_name_pos)
-            new_algo = Text(rows[k]["algo"], font_size=20, color="#cccccc").move_to(algo_pos)
+            new_stage_label = Text(rows[k]["name"], font_size=28, color=ACCENT, weight="BOLD").move_to(stage_name_pos)
+            new_algo_label  = Text(rows[k]["algo"], font_size=20, color="#cccccc").move_to(algo_pos)
             new_marker = ticks[k].copy().set_color(ACCENT).set_stroke(width=3.5)
 
-            # Fade out old mesh, fade in new (topology may differ).
-            self.play(FadeOut(mesh), run_time=0.35)
+            # Step 1: fade old edges. Dots stay.
+            self.play(FadeOut(polys), run_time=0.30)
+
+            # Step 2: morph dots to new positions while metrics update.
             self.play(
-                FadeIn(new_mesh),
+                Transform(dots, new_dots),
                 Transform(q_bar, new_q_bar),
                 Transform(iso_bar, new_iso_bar),
                 Transform(q_readout, new_q_readout),
                 Transform(iso_readout, new_iso_readout),
-                Transform(stage_name, new_stage),
-                Transform(algo_text, new_algo),
+                Transform(stage_name, new_stage_label),
+                Transform(algo_text, new_algo_label),
                 Transform(progress_marker, new_marker),
-                run_time=1.0,
+                run_time=1.4,
             )
-            mesh = new_mesh
-            self.wait(1.5)
+            # Step 3: fade in new edges (now consistent with dot positions).
+            self.play(FadeIn(new_polys), run_time=0.50)
+            polys = new_polys
+            self.wait(1.3)
 
-        delta_q = rows[2]["q_med"] - rows[0]["q_med"]
         delta_iso = rows[0]["iso_dev"] - rows[-1]["iso_dev"]
         caption = Text(
-            f"truss + FEM lift Q from {rows[0]['q_med']:.2f} -> {rows[2]['q_med']:.2f}   |   "
+            f"truss + FEM lift Q {rows[0]['q_med']:.2f} -> {rows[2]['q_med']:.2f}   |   "
             f"right-iso prep cuts angle dev by {delta_iso:.1f} deg",
             font_size=18, color="#cccccc"
         )
         caption.to_edge(DOWN, buff=0.3)
         self.play(FadeIn(caption), run_time=0.6)
-        self.wait(2.5)
+        self.wait(2.4)
