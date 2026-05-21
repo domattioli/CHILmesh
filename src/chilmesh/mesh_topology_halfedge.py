@@ -211,13 +211,17 @@ def build_halfedge_from_connectivity(elem2vert: np.ndarray, n_verts: int) -> Hal
     Returns:
         HalfEdgeTopology instance
     """
-    from chilmesh.CHILmesh import CHILmesh
-
     elem2vert = elem2vert.copy()
     n_elems = elem2vert.shape[0]
     elem_cols = elem2vert.shape[1]
 
-    elem_type = CHILmesh._elem_type(elem2vert)
+    # Determine element types: triangles have padded slot (v[3] == v[0])
+    elem_type = np.zeros(n_elems, dtype=np.int32)
+    for i in range(n_elems):
+        if elem_cols == 3:
+            elem_type[i] = 3
+        else:  # elem_cols == 4
+            elem_type[i] = 4 if elem2vert[i, 3] != elem2vert[i, 0] else 3
 
     half_edges_list = []
     edge_to_he_idx = {}

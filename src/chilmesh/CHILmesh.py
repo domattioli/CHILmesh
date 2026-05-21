@@ -1260,7 +1260,7 @@ class CHILmesh(CHILmeshPlotMixin):
         }
 
     @staticmethod
-    def read_from_fort14(full_file_name: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
+    def read_from_fort14(full_file_name: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, topology_backend: Opt[str] = None) -> "CHILmesh":
         """
         Load a mesh from a FORT.14 file.
 
@@ -1273,6 +1273,7 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies: See ``CHILmesh.__init__``. If None (default), tracks
                 ``compute_layers``. Pass True with ``compute_layers=False`` for fast
                 load with adjacencies but no layer sweep (#134).
+            topology_backend: Topology backend ('edgemap' or 'halfedge'). Defaults to None.
 
         Returns:
             A CHILmesh object
@@ -1330,6 +1331,7 @@ class CHILmesh(CHILmeshPlotMixin):
             grid_name=header,
             compute_layers=compute_layers,
             compute_adjacencies=compute_adjacencies,
+            topology_backend=topology_backend,
         )
 
     @classmethod

@@ -32,7 +32,11 @@ _MESH_CACHE: dict = {}
 def _make_cached(name):
     original = getattr(_examples, name)
 
-    def cached():
+    def cached(**kwargs):
+        if kwargs:
+            # If kwargs provided, create a fresh mesh with those kwargs
+            return original(**kwargs)
+        # Otherwise use cached version
         if name not in _MESH_CACHE:
             _MESH_CACHE[name] = original()
         return _MESH_CACHE[name]
