@@ -61,20 +61,23 @@ class HalfEdgeTopology:
 
         Returns unique undirected edges in canonical form (min_vert, max_vert),
         sorted lexicographically to match EdgeMap output.
+
+        Built from element connectivity to avoid half-edge traversal complexity.
         """
         edges_set = set()
-        for i in range(len(self.half_edges)):
-            origin = int(self.half_edges[i, 0])
-            twin_idx = int(self.half_edges[i, 1])
-            if twin_idx >= 0:
-                dest = int(self.half_edges[twin_idx, 0])
+        elem_cols = self.elem2vert.shape[1]
+        for elem_idx in range(self.n_elems):
+            elem_verts = self.elem2vert[elem_idx]
+            if elem_cols == 3:
+                elem_type = 3
             else:
-                # Boundary half-edge: compute destination from next half-edge
-                next_idx = int(self.half_edges[i, 2])
-                dest = int(self.half_edges[next_idx, 0])
+                elem_type = 3 if elem_verts[3] == elem_verts[0] else 4
 
-            edge = tuple(sorted([origin, dest]))
-            edges_set.add(edge)
+            for i in range(elem_type):
+                v0 = int(elem_verts[i])
+                v1 = int(elem_verts[(i + 1) % elem_type])
+                edge = tuple(sorted([v0, v1]))
+                edges_set.add(edge)
 
         edges_list = sorted(edges_set)
         return np.array(edges_list, dtype=np.int32)
@@ -182,17 +185,19 @@ class HalfEdgeTopology:
         sorted lexicographically to match EdgeMap.to_list() output.
         """
         edges_set = set()
-        for i in range(len(self.half_edges)):
-            origin = int(self.half_edges[i, 0])
-            twin_idx = int(self.half_edges[i, 1])
-            if twin_idx >= 0:
-                dest = int(self.half_edges[twin_idx, 0])
+        elem_cols = self.elem2vert.shape[1]
+        for elem_idx in range(self.n_elems):
+            elem_verts = self.elem2vert[elem_idx]
+            if elem_cols == 3:
+                elem_type = 3
             else:
-                next_idx = int(self.half_edges[i, 2])
-                dest = int(self.half_edges[next_idx, 0])
+                elem_type = 3 if elem_verts[3] == elem_verts[0] else 4
 
-            edge = tuple(sorted([origin, dest]))
-            edges_set.add(edge)
+            for i in range(elem_type):
+                v0 = int(elem_verts[i])
+                v1 = int(elem_verts[(i + 1) % elem_type])
+                edge = tuple(sorted([v0, v1]))
+                edges_set.add(edge)
 
         return sorted(edges_set)
 
