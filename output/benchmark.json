@@ -9,16 +9,16 @@
       "backend_name": "EdgeMap",
       "operations": {
         "fast_init": {
-          "median_seconds": 3.3987,
-          "std_seconds": 0.0454
+          "median_seconds": 3.59,
+          "std_seconds": 0.0101
         },
         "full_init": {
-          "median_seconds": 3.788,
-          "std_seconds": 0.0551
+          "median_seconds": 3.9656,
+          "std_seconds": 0.0651
         },
         "quality_analysis": {
-          "median_seconds": 0.0075,
-          "std_seconds": 0.0002
+          "median_seconds": 0.0074,
+          "std_seconds": 0.0005
         },
         "query_latency": {
           "median_seconds": 0.0,
