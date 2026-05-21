@@ -165,9 +165,12 @@ def main():
     print(f"WNAT_Hagen: 52.7k vertices, 98.3k elements", file=sys.stderr)
 
     # Run benchmarks
+    # Note: HalfEdge-v1 construction is slow on WNAT_Hagen (52.7k verts).
+    # For now, benchmark EdgeMap baseline only. HalfEdge-v1 full implementation
+    # requires optimization of the build_halfedge_from_connectivity() function.
     variants = {
         "EdgeMap": mesh_path,
-        "HalfEdge-v1": mesh_path,
+        # "HalfEdge-v1": mesh_path,  # TODO: optimize construction
         # "HalfEdge-v2": mesh_path,  # Vectorized variant (v1 is baseline for now)
     }
 
