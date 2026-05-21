@@ -94,52 +94,47 @@ class QuadEdgeTopology:
 
         Returns ndarray[n_edges, 2] with element indices (-1 for boundary).
 
-        Walks the quad-edge structure to determine face ownership:
-        - For each edge direction, find which face (element) owns it
-        - Pair opposite-face information using opposite_idx pointer
+        Extracts element ownership from the stored quad-edge structure,
+        building a directed-edge-to-element mapping first for O(n) lookup.
         """
         # Build undirected edge list (canonical form)
         edges = self._to_canonical_edge_list()
-        edge_to_elems = {}
+        edge_to_elems = {tuple(e): [-1, -1] for e in edges}
 
-        # Walk all quad-edges to determine face ownership
+        # Build directed-edge-to-element map (which element owns each directed edge)
+        elem_cols = self.elem2vert.shape[1]
+        directed_edge_to_elem = {}
+        for elem_idx in range(self.n_elems):
+            elem_verts = self.elem2vert[elem_idx]
+            elem_type = 3 if (elem_cols == 3 or elem_verts[3] == elem_verts[0]) else 4
+
+            for i in range(elem_type):
+                v1 = int(elem_verts[i])
+                v2 = int(elem_verts[(i + 1) % elem_type])
+                directed_edge_to_elem[(v1, v2)] = elem_idx
+
+        # Walk quad-edges to populate edge_to_elems
         for edge_idx in range(len(self.edges)):
             origin = int(self.edges[edge_idx, 0])
             next_cw = int(self.edges[edge_idx, 1])
-            opposite_idx = int(self.edges[edge_idx, 3])
 
             # Determine destination vertex via next_cw traversal
             if next_cw >= 0:
                 dest = int(self.edges[next_cw, 0])
-            else:
-                # Boundary edge; skip
-                continue
+                undirected_edge = tuple(sorted([origin, dest]))
 
-            edge = tuple(sorted([origin, dest]))
-
-            if edge not in edge_to_elems:
-                edge_to_elems[edge] = [-1, -1]
-
-            # Find which element owns this edge (brute-force: check all elements)
-            for elem_idx in range(self.n_elems):
-                elem_verts = self.elem2vert[elem_idx]
-                elem_cols = self.elem2vert.shape[1]
-                elem_type = 3 if (elem_cols == 3 or elem_verts[3] == elem_verts[0]) else 4
-
-                for i in range(elem_type):
-                    v1 = int(elem_verts[i])
-                    v2 = int(elem_verts[(i + 1) % elem_type])
-                    if origin == v1 and dest == v2:
-                        # This edge (origin->dest) belongs to elem_idx
-                        edge_to_elems[edge][0] = elem_idx
-                    elif dest == v1 and origin == v2:
-                        # This edge (dest->origin) belongs to elem_idx
-                        edge_to_elems[edge][1] = elem_idx
+                # Look up which element owns this directed edge
+                if (origin, dest) in directed_edge_to_elem:
+                    elem_idx = directed_edge_to_elem[(origin, dest)]
+                    if origin < dest:
+                        edge_to_elems[undirected_edge][0] = elem_idx
+                    else:
+                        edge_to_elems[undirected_edge][1] = elem_idx
 
         result = []
         for edge in edges:
             edge_tuple = tuple(edge)
-            result.append(edge_to_elems.get(edge_tuple, [-1, -1]))
+            result.append(edge_to_elems[edge_tuple])
 
         return np.array(result, dtype=np.int32)
 
