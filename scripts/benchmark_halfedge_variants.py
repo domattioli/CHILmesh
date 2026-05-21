@@ -167,11 +167,11 @@ def main():
     # Run benchmarks
     # Note: HalfEdge-v1 construction is slow on WNAT_Hagen (52.7k verts).
     # For now, benchmark EdgeMap baseline only. HalfEdge-v1 full implementation
-    # requires optimization of the build_halfedge_from_connectivity() function.
+    # All variants now working with optimized O(n) construction
     variants = {
         "EdgeMap": mesh_path,
-        # "HalfEdge-v1": mesh_path,  # TODO: optimize construction
-        # "HalfEdge-v2": mesh_path,  # Vectorized variant (v1 is baseline for now)
+        "HalfEdge-v1": mesh_path,
+        "HalfEdge-v2": mesh_path,  # Vectorized variant
     }
 
     all_results = {}

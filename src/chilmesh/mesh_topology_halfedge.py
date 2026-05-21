@@ -225,9 +225,10 @@ class HalfEdgeTopology:
 def build_halfedge_from_connectivity(elem2vert: np.ndarray, n_verts: int) -> HalfEdgeTopology:
     """Construct HalfEdgeTopology from element-to-vertex connectivity.
 
-    Runs _ensure_ccw_orientation first to handle degenerate quads (F-1).
-    Reuses _elem_type mask to skip padded triangle slot (F-4).
-    Sets boundary half-edges with twin_idx == -1 (C-1).
+    O(n) algorithm:
+    1. Create HE per element edge in iteration order
+    2. Hash-table lookup to pair twins
+    3. Single pass to assign next_idx within each face
 
     Args:
         elem2vert: ndarray[n_elems, 3|4] — element connectivity
@@ -240,68 +241,64 @@ def build_halfedge_from_connectivity(elem2vert: np.ndarray, n_verts: int) -> Hal
     n_elems = elem2vert.shape[0]
     elem_cols = elem2vert.shape[1]
 
-    # Determine element types: triangles have padded slot (v[3] == v[0])
+    # Determine element types
     elem_type = np.zeros(n_elems, dtype=np.int32)
     for i in range(n_elems):
         if elem_cols == 3:
             elem_type[i] = 3
-        else:  # elem_cols == 4
+        else:
             elem_type[i] = 4 if elem2vert[i, 3] != elem2vert[i, 0] else 3
 
+    # Phase 1: Create all half-edges in element order
     half_edges_list = []
-    edge_to_he_idx = {}
+    he_map = {}  # (origin, dest) -> [he_idx, ...]
+
+    he_idx_counter = 0
+    elem_to_first_he = {}  # elem_idx -> first HE index for this element
 
     for elem_idx in range(n_elems):
         elem_verts = elem2vert[elem_idx]
-        is_tri = elem_type[elem_idx] == 3
-        n_verts_in_elem = 3 if is_tri else 4
+        n_verts_in_elem = int(elem_type[elem_idx])
+
+        elem_to_first_he[elem_idx] = he_idx_counter
 
         for i in range(n_verts_in_elem):
             v_origin = int(elem_verts[i])
-            v_next = int(elem_verts[(i + 1) % n_verts_in_elem])
+            v_dest = int(elem_verts[(i + 1) % n_verts_in_elem])
 
-            he_idx = len(half_edges_list)
-            half_edges_list.append([v_origin, -1, -1, elem_idx])
+            he = [v_origin, -1, -1, elem_idx]  # origin, twin_idx, next_idx, face_idx
+            half_edges_list.append(he)
 
-            edge = (min(v_origin, v_next), max(v_origin, v_next))
-            if edge not in edge_to_he_idx:
-                edge_to_he_idx[edge] = []
-            edge_to_he_idx[edge].append((he_idx, v_origin == edge[0]))
+            # Record HE for twin pairing: use (min, max, origin) to identify twin direction
+            directed_edge = (v_origin, v_dest)
+            if directed_edge not in he_map:
+                he_map[directed_edge] = []
+            he_map[directed_edge].append(he_idx_counter)
+
+            he_idx_counter += 1
 
     half_edges_array = np.array(half_edges_list, dtype=np.int32)
 
-    for edge, he_indices in edge_to_he_idx.items():
-        if len(he_indices) == 2:
-            he_idx1, is_forward1 = he_indices[0]
-            he_idx2, is_forward2 = he_indices[1]
+    # Phase 2: Pair twins using reverse-edge lookup
+    for (v_origin, v_dest), he_indices in he_map.items():
+        reverse_edge = (v_dest, v_origin)
+        if reverse_edge in he_map:
+            reverse_indices = he_map[reverse_edge]
+            # Pair: HE(origin->dest) with HE(dest->origin)
+            if len(he_indices) == 1 and len(reverse_indices) == 1:
+                he_idx = he_indices[0]
+                rev_idx = reverse_indices[0]
+                half_edges_array[he_idx, 1] = rev_idx
+                half_edges_array[rev_idx, 1] = he_idx
 
-            if is_forward1 and not is_forward2:
-                half_edges_array[he_idx1, 1] = he_idx2
-                half_edges_array[he_idx2, 1] = he_idx1
-
+    # Phase 3: Assign next_idx within each element's face
     for elem_idx in range(n_elems):
-        is_tri = elem_type[elem_idx] == 3
-        n_verts_in_elem = 3 if is_tri else 4
+        n_verts_in_elem = int(elem_type[elem_idx])
+        first_he_idx = elem_to_first_he[elem_idx]
 
         for i in range(n_verts_in_elem):
-            he_start_idx = None
-            for idx in range(len(half_edges_array)):
-                if (half_edges_array[idx, 3] == elem_idx and
-                    half_edges_array[idx, 0] == elem2vert[elem_idx, i]):
-                    he_start_idx = idx
-                    break
-
-            if he_start_idx is not None:
-                he_idx = he_start_idx
-                for j in range(n_verts_in_elem):
-                    next_local = (i + 1) % n_verts_in_elem
-                    v_next = int(elem2vert[elem_idx, next_local])
-
-                    for idx in range(len(half_edges_array)):
-                        if (half_edges_array[idx, 3] == elem_idx and
-                            half_edges_array[idx, 0] == v_next):
-                            half_edges_array[he_idx, 2] = idx
-                            he_idx = idx
-                            break
+            curr_he_idx = first_he_idx + i
+            next_he_idx = first_he_idx + ((i + 1) % n_verts_in_elem)
+            half_edges_array[curr_he_idx, 2] = next_he_idx
 
     return HalfEdgeTopology(half_edges_array, n_verts, elem2vert)
