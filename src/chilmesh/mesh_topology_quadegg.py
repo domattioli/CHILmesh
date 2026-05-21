@@ -210,6 +210,14 @@ class QuadEdgeTopology:
 
         return vert2elem
 
+    def to_edgemap_list(self) -> List[Tuple[int, int]]:
+        """Extract edge list in canonical form (sorted tuples).
+
+        Returns list of unique undirected edges as (min_vert, max_vert) tuples,
+        sorted lexicographically to match EdgeMap.to_list() output.
+        """
+        return self._to_canonical_edge_list()
+
     def _to_canonical_edge_list(self) -> List[Tuple[int, int]]:
         """Extract edge list in canonical form (sorted tuples).
 
