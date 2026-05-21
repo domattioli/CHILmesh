@@ -95,7 +95,7 @@ A maintainer adds the new suite to `pytest -v` and to CI. It runs in seconds on 
 
 #### Suite entry point
 
-- **FR-001**: A single function `validate_mesh_elements(mesh: CHILmesh, *, tol: float = 1e-12) -> MeshValidityReport` MUST be exposed from `chilmesh.validate` (new module). It MUST NOT mutate the mesh.
+- **FR-001**: A single function `validate_mesh_elements(mesh: CHILmesh, *, tol: float | None = None) -> MeshValidityReport` MUST exist as a **test-suite-internal helper** under `tests/_validity/` (NOT a public `chilmesh.*` module). It MUST NOT mutate the mesh. Long-term promotion to `chilmesh.validate` is tracked in the discussion issue referenced in **Clarifications Q6**; the spec deliberately does NOT introduce a new public API surface at this stage. **(Updated per Clarify Q6.)**
 - **FR-002**: `MeshValidityReport` MUST expose at minimum: `ok: bool`, `violations: list[Violation]`, `notes: list[InformationalNote]`, `n_elems_checked: int`, `runtime_s: float`. Each `Violation` MUST include `category: str`, `element_ids: tuple[int, ...]`, `edge_ids: tuple[int, ...] | None`, `detail: str`.
 
 #### Element-type composition
@@ -104,7 +104,7 @@ A maintainer adds the new suite to `pytest -v` and to CI. It runs in seconds on 
 - **FR-004**: For each `QUAD`, the four vertex IDs MUST be pairwise distinct. A quad with a duplicate-but-non-padding vertex (i.e., not in the padded-triangle encoding) is `DEGENERATE_QUAD_DUPLICATE_VERTEX` — recorded as an informational note, NOT a violation (matches existing `test_degeneracy.py` behavior).
 - **FR-005**: For each `TRI`, the three distinct vertex IDs MUST be pairwise distinct.
 - **FR-006**: Every `TRI` MUST have at least one vertex that is a member of `mesh.boundary_vertices()`. A triangle with zero boundary vertices raises `INTERIOR_TRIANGLE_FORBIDDEN`.
-- **FR-007**: Cross-check against skeletonization: every `TRI` MUST belong to **layer 0** (the outermost layer) per `mesh.layers["OE"][0]`. A triangle in `layers["OE"][k]` or `layers["IE"][k]` for any `k ≥ 1` raises `INTERIOR_LAYER_TRIANGLE_FORBIDDEN`. (Per user clarification: "by definition of the chilmesh layers triangles may only exist in the boundary layer.")
+- **FR-007**: Cross-check against skeletonization: every `TRI` MUST belong to **layer 0** (the outermost layer) per `mesh.layers["OE"][0]`. A triangle in `layers["OE"][k]` or `layers["IE"][k]` for any `k ≥ 1` raises `INTERIOR_LAYER_TRIANGLE_FORBIDDEN`. (Per user clarification: "by definition of the chilmesh layers triangles may only exist in the boundary layer.") If `mesh.layers` has not yet been computed, the validator MUST trigger `_skeletonize()` once and rely on the existing layer cache on `mesh` (no re-computation per call). **(Clarified per Clarify Q8.)**
 
 #### Planarity (2D)
 
@@ -122,16 +122,17 @@ A maintainer adds the new suite to `pytest -v` and to CI. It runs in seconds on 
 
 #### Tolerances & numerics
 
-- **FR-013**: All geometric predicates MUST accept an explicit `tol` parameter. Defaults: `tol = 1e-12` (segment-crossing parameter `t` strictness), and the point-in-polygon test MUST use a robust orientation predicate (signed-area sign with `tol`-aware tie-breaking). Shared-endpoint detection MUST treat two endpoints as identical when their L2 distance is `≤ tol * max(bbox_diag, 1.0)`. Tolerances MUST be documented in the function docstring.
+- **FR-013**: All geometric predicates MUST accept an explicit `tol` parameter. **Default behavior is coordinate-system-agnostic**: when the caller passes `tol=None` (the default), the validator computes `bbox_diag = ||(max_x - min_x, max_y - min_y)||_2` and uses `tol_effective = 1e-12 * bbox_diag` (with a floor of `1e-15` to avoid zero on degenerate empty bboxes). Callers may override with an absolute `tol` if they need stricter or coord-specific behavior. The point-in-polygon test MUST use a robust orientation predicate (signed-area sign with `tol_effective`-aware tie-breaking). Shared-endpoint detection MUST treat two endpoints as identical when their L2 distance is `≤ tol_effective`. Tolerances and the bbox-relative formula MUST be documented in the function docstring. **(Clarified per Clarify Q7; aligns with constitution principle V — coordinate-system agnosticism.)**
 - **FR-014**: Degenerate quads (collinear vertices, near-zero signed area) MUST NOT be reported as violations. They MAY be reported as `DEGENERATE_ZERO_AREA` informational notes for downstream consumers.
 
 #### Synthetic fixtures (for negative tests)
 
-- **FR-015**: The test suite MUST ship synthetic fixtures, each constructed in-test via direct `CHILmesh` constructor calls (no on-disk artifacts required), that plant exactly one violation per fixture: `bowtie_quad_mesh`, `interior_triangle_mesh`, `pentagon_mesh`, `overlapping_quads_mesh`, `edge_crossing_mesh`. Each fixture MUST be small (≤ 20 elements) so failure messages are easy to read.
+- **FR-015**: The test suite MUST ship synthetic fixtures, each constructed in-test, that plant exactly one violation per fixture: `bowtie_quad_mesh`, `interior_triangle_mesh`, `pentagon_mesh`, `overlapping_quads_mesh`, `edge_crossing_mesh`. Each fixture MUST be small (≤ 20 elements) so failure messages are easy to read. Because the `CHILmesh` constructor performs its own degeneracy fallback (see `tests/test_degeneracy.py`) which may silently repair some of the planted violations, fixtures that depend on bypassing constructor validation MUST build the `CHILmesh` instance, then **post-mutate** `connectivity_list` (and any cached adjacencies) directly to inject the violation. The mutation helper lives next to the fixtures in `tests/_validity/` and is not part of the public API.
 
 #### Reporting
 
-- **FR-016**: On test failure, the pytest assertion message MUST list at most the first 10 violations per category (to bound output), with each entry containing element IDs, edge IDs (where applicable), and a one-line `detail` string. The full violation list MUST be accessible programmatically via the returned `MeshValidityReport` for users invoking `validate_mesh_elements` directly.
+- **FR-016**: On test failure, the pytest assertion message MUST list at most the first 10 violations per category (to bound output), with each entry containing element IDs, edge IDs (where applicable), and a one-line `detail` string. The full violation list MUST be accessible programmatically via the returned `MeshValidityReport` for callers invoking `validate_mesh_elements` directly.
+- **FR-017**: Pytest test shape — **one test per fixture** that asserts `report.ok`. The failure message MUST aggregate all violation categories triggered on that fixture (not just the first) so a maintainer sees the full picture from a single failing test. Parametrization is over the four built-in fixtures plus the five synthetic negative fixtures from FR-015. **(Clarified per Clarify Q9.)**
 
 ### Key Entities
 
@@ -160,12 +161,12 @@ A maintainer adds the new suite to `pytest -v` and to CI. It runs in seconds on 
 
 - **SC-001**: All four built-in fixtures (`annulus`, `donut`, `block_o`, `structured`) pass `validate_mesh_elements(mesh).ok == True` with zero violations. Informational notes are permitted (and expected on fixtures known to contain degenerate-quad triangle encodings).
 - **SC-002**: All five synthetic negative fixtures (FR-015) FAIL the suite with the expected violation category and at least the offending element ID(s) present in the report.
-- **SC-003**: The new suite is added as `tests/test_mesh_element_validity.py` and runs as part of the default `pytest -v` invocation. CI passes.
+- **SC-003**: The new suite is added as `tests/test_mesh_element_validity.py` (with helpers in `tests/_validity/`) and runs as part of the default `pytest -v` invocation. CI passes. **No new files under `src/chilmesh/`** (per Clarify Q6 — no public API change at this stage).
 - **SC-004**: Wall-clock budget: total runtime across all four fixtures is ≤ 60 s on a developer laptop. Block_o alone is ≤ 45 s; each of the other three is ≤ 5 s. Reported in pytest output via `pytest --durations=10`.
 - **SC-005**: The existing 288-test suite (and in particular `tests/test_degeneracy.py`, `tests/test_invariants.py`, `tests/test_signed_area.py`, `tests/test_skeletonization_invariant.py`) continues to pass without modification.
 - **SC-006**: A planted bowtie quad injected into the `annulus` fixture causes the suite to fail with `SELF_INTERSECTING_QUAD` and the failure message names the offending element ID, the two crossing edges, and the four vertex coordinates. Verified by a parametrized "negative path" test inside `test_mesh_element_validity.py`.
 - **SC-007**: On `block_o` (≈5,200 elements), pair-enumeration broadphase reduces narrowphase calls by at least 100× compared to literal `O(n²)`. Measured via an internal counter exposed only in `DEBUG` builds or via a `--validate-stats` opt-in flag; not asserted in regular CI but documented in `plan.md`.
-- **SC-008**: The `chilmesh.validate.validate_mesh_elements` public function is documented in the API section of `README.md` with a one-screen example, and added to `CHANGELOG.md` as a new feature.
+- **SC-008**: A GitHub discussion issue is opened on `domattioli/CHILmesh` referencing this spec and asking whether the validator should be promoted from `tests/_validity/` into a public `chilmesh.validate` module after the QuADMesh dev cycle settles. Tracked at **#142** (labels: `enhancement`, `priority:low`, `status:voting`, `type:decision`). No README / CHANGELOG entry at this stage (no public API change). **(Updated per Clarify Q6.)**
 
 ## Clarifications
 
@@ -177,7 +178,19 @@ A maintainer adds the new suite to `pytest -v` and to CI. It runs in seconds on 
 
 **Q4** (resolved by spec): Pair-enumeration scaling → Broadphase mandated for meshes above ~5,000 elements; `O(n²)` acceptable below that threshold to keep the implementation simple on small fixtures.
 
-**Q5** (resolved by spec): Tolerance policy → Single explicit `tol` parameter on the entry point, with documented per-predicate behavior. No silent floating-point thresholds.
+**Q5** (resolved by spec): Tolerance policy → Single explicit `tol` parameter on the entry point, with documented per-predicate behavior. No silent floating-point thresholds. *(Superseded by Q7 — default is now bbox-relative.)*
+
+---
+
+### Clarify pass (2026-05-21)
+
+**Q6 — Module placement / public-API status**: This is a **short-term test-suite-only helper** to guide QuADMesh development; long-term promotion to `chilmesh.validate` is undecided. **Resolution:** Live under `tests/_validity/` (NOT `src/chilmesh/`). No public API change at this stage. A discussion issue is open at **#142** (labels: `enhancement`, `priority:low`, `status:voting`, `type:decision`) for the maintainer + downstream consumers to vote on promotion.
+
+**Q7 — Tolerance default vs coord-system-agnostic constitution**: Default `tol` is now **relative to mesh bbox diagonal** (`1e-12 * bbox_diag`, floored at `1e-15`). Callers may override with an absolute value. Updates FR-013 and aligns with constitution principle V.
+
+**Q8 — FR-007 layer cross-check when skeletonization not yet computed**: Validator **auto-triggers `_skeletonize()` once** and relies on the existing `mesh.layers` cache for subsequent calls. No per-call recomputation. Updates FR-007.
+
+**Q9 — Pytest UX**: **One test per fixture** asserting `report.ok`; failure message aggregates all violation categories triggered. Parametrized over the four built-in fixtures plus the five synthetic negative fixtures from FR-015. Adds FR-017.
 
 ## Assumptions
 
