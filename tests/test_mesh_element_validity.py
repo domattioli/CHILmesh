@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 import chilmesh
+from chilmesh.tri2quad import tri_to_quad
 from tests._validity import validate_mesh_elements
 from tests._validity.fixtures import (
     bowtie_quad_mesh,
@@ -19,7 +20,6 @@ from tests._validity.fixtures import (
 from tests._validity.validator import format_failures
 
 BUILTIN_FIXTURES = ["annulus", "donut", "structured"]
-SLOW_FIXTURES = ["block_o"]
 
 RUNTIME_BUDGET_S = {
     "annulus": 10.0,
@@ -30,17 +30,19 @@ RUNTIME_BUDGET_S = {
 
 
 @pytest.fixture(scope="module", params=BUILTIN_FIXTURES)
-def builtin_mesh(request):
-    return getattr(chilmesh.examples, request.param)(), request.param
+def quadified_builtin(request):
+    raw = getattr(chilmesh.examples, request.param)()
+    return tri_to_quad(raw), request.param
 
 
 @pytest.fixture(scope="module")
-def block_o_mesh():
-    return chilmesh.examples.block_o()
+def quadified_block_o():
+    raw = chilmesh.examples.block_o()
+    return tri_to_quad(raw)
 
 
-def test_builtin_fixtures_pass(builtin_mesh):
-    mesh, name = builtin_mesh
+def test_builtin_fixtures_pass(quadified_builtin):
+    mesh, name = quadified_builtin
     report = validate_mesh_elements(mesh)
     assert report.ok, format_failures(report)
     assert report.runtime_s < RUNTIME_BUDGET_S[name], (
@@ -49,8 +51,8 @@ def test_builtin_fixtures_pass(builtin_mesh):
 
 
 @pytest.mark.slow
-def test_block_o_passes(block_o_mesh):
-    report = validate_mesh_elements(block_o_mesh)
+def test_block_o_passes(quadified_block_o):
+    report = validate_mesh_elements(quadified_block_o)
     assert report.ok, format_failures(report)
     assert report.runtime_s < RUNTIME_BUDGET_S["block_o"], (
         f"block_o: validator took {report.runtime_s:.2f}s (budget {RUNTIME_BUDGET_S['block_o']}s)"

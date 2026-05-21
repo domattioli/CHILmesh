@@ -117,26 +117,37 @@ def signed_area_polygon(poly_xy: np.ndarray) -> float:
 
 
 def point_strictly_in_polygon(p: np.ndarray, poly_xy: np.ndarray, tol: float) -> bool:
-    """Winding-number test. Strict interior — on-edge → False."""
+    """Ray-casting PIP. Strict interior — on-edge → False.
+
+    Horizontal edges are skipped (they don't contribute to a horizontal-ray
+    crossing-number test). Bbox pre-test cheaply rejects obvious misses.
+    """
     n = poly_xy.shape[0]
     if n < 3:
+        return False
+    xmin = poly_xy[:, 0].min()
+    xmax = poly_xy[:, 0].max()
+    ymin = poly_xy[:, 1].min()
+    ymax = poly_xy[:, 1].max()
+    if p[0] < xmin - tol or p[0] > xmax + tol or p[1] < ymin - tol or p[1] > ymax + tol:
         return False
     for i in range(n):
         a = poly_xy[i]
         b = poly_xy[(i + 1) % n]
         if _point_on_segment(p, a, b, tol):
             return False
-    wn = 0
+    inside = False
     for i in range(n):
         a = poly_xy[i]
         b = poly_xy[(i + 1) % n]
-        if a[1] <= p[1]:
-            if b[1] > p[1] and _orient(a[0], a[1], b[0], b[1], p[0], p[1], tol) > 0:
-                wn += 1
-        else:
-            if b[1] <= p[1] and _orient(a[0], a[1], b[0], b[1], p[0], p[1], tol) < 0:
-                wn -= 1
-    return wn != 0
+        dy = b[1] - a[1]
+        if abs(dy) <= tol:
+            continue
+        if (a[1] > p[1]) != (b[1] > p[1]):
+            x_int = a[0] + (p[1] - a[1]) * (b[0] - a[0]) / dy
+            if x_int > p[0] + tol:
+                inside = not inside
+    return inside
 
 
 def _point_on_segment(p: np.ndarray, a: np.ndarray, b: np.ndarray, tol: float) -> bool:
