@@ -1,30 +1,29 @@
-"""Triangle-to-quad conversion (port of QuADMesh's Tri2QuadRoutine).
+"""Triangle-to-quad conversion — faithful port of QuADMesh's Tri2QuadRoutine.
 
-The MATLAB original ``Tri2QuadRoutine`` iterates skeletonization layers
-inner→outer; within each layer ``identifyEdgesFun_v2`` selects merge
-candidates via every-other-edge path walking on outer vertices and
-``mergeTrianglesFun`` merges each selected pair into a quad.
+Direct port of ``QuADMesh-MATLAB/02_QuADMESH_Library/02_Tri2Quad_Routine``:
 
-This Python port replaces the layer-restricted path-walk pairing with
-a single global maximum-cardinality matching (Blossom V via networkx)
-on the dual graph of the input. Empirically — measured on the four
-CHILmesh built-in fixtures — global matching strictly dominates the
-layer-restricted variant in pair count:
+  1. Skeletonize the input. Iterate layers inner → outer (k = nLayers-1 → 0).
+  2. ``identifyEdgesFun_v2``: for the current layer's sub-domain
+     (``OE[k] ∪ IE[k]``), walk each outer-vertex path
+     (``paths_on_outer_vertices``). At each path vertex sort the
+     incident sub-domain edges CCW. The "up-edge" is the sub-domain
+     boundary edge to the previous path vertex; the "down-edge" is the
+     boundary edge to the next. Rotate so up-edge is first; if
+     down-edge is at position 1 (immediately after up), reverse the
+     remainder. Pick interior edges between up and down using the
+     every-other-edge rule (when an edge is selected, its two adjacent
+     tris are marked consumed; future edges sharing a consumed tri are
+     skipped — the every-other pattern emerges from this).
+  3. ``mergeTrianglesFun``: each selected edge merges the two adjacent
+     tris into a quad.
+  4. Leftover tris in layer k pass to layer k-1's pool.
+  5. After all layers, leftover tris touching the mesh boundary are
+     kept as padded-tri rows ``[a, b, c, a]`` (this matches
+     ``removeTrianglesFun``'s boundary-only role per user direction).
 
-  * ``structured``: both yield 0 leftover.
-  * ``block_o``: global → 0 leftover; layer-restricted → 6 leftover.
-  * ``annulus`` / ``donut``: both leave Tutte-Berge obstructions
-    (input dual graph has odd components that no matching algorithm
-    can pair without subdivision).
-
-The MATLAB ``removeTrianglesFun`` (vertex insertion via
-``edgeBisection`` / ``edgeInsertion``) is intentionally NOT ported per
-user direction — interior triangles must be eliminated by pairing logic
-alone, never by inserting new vertices. Inputs whose dual graph has a
-Tutte-Berge obstruction will surface those interior triangles as
-``RuntimeError`` (when ``strict=True``).
-
-Output: conforming (no hanging nodes), quad-dominant.
+No Blossom, no greedy matching, no vertex insertion, no edge flips,
+no midpoint bisection. Pure faithful port. Whatever interior tris
+remain are reported as RuntimeError under ``strict=True``.
 """
 from __future__ import annotations
 
@@ -43,7 +42,7 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
         mesh: CHILmesh with ``type == "Triangular"``. Pure-triangle input.
         strict: When True (default), raise RuntimeError if any interior
             triangle survives. When False, encode leftover interior tris
-            as padded-tri rows (validator will flag them).
+            as padded-tri rows.
 
     Returns:
         New CHILmesh whose elements are quads (4-column) with boundary
@@ -54,6 +53,7 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
         RuntimeError: If ``strict`` and an interior triangle survives.
     """
     from chilmesh import CHILmesh
+    from chilmesh.layer_paths import paths_on_outer_vertices
 
     if mesh.connectivity_list.shape[1] != 3:
         raise ValueError(
@@ -68,17 +68,53 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
     tri_layer = _assign_layer_per_tri(mesh, n_tris)
     n_layers = max(max(tri_layer) + 1, 1) if tri_layer else 1
 
-    edge_to_tris = _build_edge_map(tris)
-    boundary_vert_ids = _boundary_vertex_ids(edge_to_tris)
+    edge_to_tris_global = _build_edge_map(tris)
+    boundary_vert_ids = _boundary_vertex_ids(edge_to_tris_global)
 
     quad_rows: list[list[int]] = []
     consumed: set[int] = set()
+    deferred: list[int] = []
 
-    global_pool = set(range(n_tris))
-    _layer_pair_and_collect(
-        global_pool, tris, points, edge_to_tris,
-        quad_rows, consumed,
-    )
+    for layer in range(n_layers - 1, -1, -1):
+        layer_pool: set[int] = {
+            t for t in range(n_tris)
+            if t not in consumed and tri_layer[t] == layer
+        }
+        layer_pool.update(deferred)
+        deferred = []
+        if not layer_pool:
+            continue
+
+        sub_edges = _restrict_edge_map(edge_to_tris_global, layer_pool)
+
+        ov_ids: set[int] = set()
+        if layer < mesh.n_layers and mesh.layers.get("OV"):
+            ov_ids = {int(v) for v in np.asarray(mesh.layers["OV"][layer]).flatten()}
+
+        try:
+            paths = paths_on_outer_vertices(mesh, layer) if layer < mesh.n_layers else []
+        except IndexError:
+            paths = []
+
+        selected = _identify_edges_fun_v2(
+            paths, sub_edges, points, ov_ids,
+        )
+
+        for (a, b) in selected:
+            tlist = [t for t in sub_edges.get((a, b), []) if t not in consumed]
+            if len(tlist) != 2:
+                continue
+            t_a, t_b = tlist
+            quad_verts = _merge_tris_fun(tris[t_a], tris[t_b], a, b)
+            if quad_verts is None:
+                continue
+            quad_rows.append(list(quad_verts))
+            consumed.add(t_a)
+            consumed.add(t_b)
+
+        leftover = [t for t in layer_pool if t not in consumed]
+        if layer > 0:
+            deferred.extend(leftover)
 
     leftover_interior: list[int] = []
     for t_id in range(n_tris):
@@ -97,8 +133,8 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
         if strict:
             raise RuntimeError(
                 f"tri_to_quad left {len(leftover_interior)} interior triangles "
-                f"after layer-by-layer pairing + rescue "
-                f"(first 10: {leftover_interior[:10]})."
+                f"after layer-by-layer path-walk identifyEdgesFun_v2 + "
+                f"mergeTrianglesFun (first 10: {leftover_interior[:10]})."
             )
         for t_id in leftover_interior:
             verts = tris[t_id].tolist()
@@ -115,70 +151,151 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
     )
 
 
-def _layer_pair_and_collect(
-    pool: set[int],
-    tris: np.ndarray,
+def _identify_edges_fun_v2(
+    paths,
+    sub_edges: dict[tuple[int, int], list[int]],
     points: np.ndarray,
-    edge_to_tris: dict[tuple[int, int], list[int]],
-    quad_rows: list[list[int]],
-    consumed: set[int],
-) -> None:
-    """Run max-cardinality matching on the pool's dual graph; emit quads."""
-    pair_candidates: dict[tuple[int, int], tuple[float, tuple[int, int, int, int]]] = {}
-    for (a, b), tlist in edge_to_tris.items():
-        usable = [t for t in tlist if t in pool and t not in consumed]
-        if len(usable) != 2:
+    ov_set: set[int],
+) -> list[tuple[int, int]]:
+    """Faithful port of MATLAB identifyEdgesFun_v2."""
+    incident_by_vert: dict[int, list[tuple[int, int]]] = {}
+    for (a, b) in sub_edges.keys():
+        incident_by_vert.setdefault(a, []).append((a, b))
+        incident_by_vert.setdefault(b, []).append((a, b))
+
+    sub_boundary_edges_all: set[tuple[int, int]] = {
+        key for key, tlist in sub_edges.items() if len(tlist) == 1
+    }
+    sub_boundary_edges = {
+        (a, b) for (a, b) in sub_boundary_edges_all
+        if a in ov_set or b in ov_set
+    }
+
+    edge_consumed: set[tuple[int, int]] = set()
+    tri_consumed: set[int] = set()
+    selected: list[tuple[int, int]] = []
+
+    for path in paths:
+        path = [int(v) for v in path]
+        if len(path) < 2:
             continue
-        t_a, t_b = usable
-        quad_verts = _merge_tris_into_quad(tris[t_a], tris[t_b], a, b)
-        if quad_verts is None:
+        if path[0] == path[-1]:
+            path_seq = path[:-1]
+            is_closed = True
+        else:
+            path_seq = path
+            is_closed = False
+        if not path_seq:
             continue
-        score = _quad_quality(points[list(quad_verts), :2])
-        if score <= 0.0:
-            continue
-        key = (t_a, t_b) if t_a < t_b else (t_b, t_a)
-        pair_candidates[key] = (score, quad_verts)
 
-    matched = _max_weight_matching(pool, pair_candidates)
-    for (t_a, t_b), quad_verts in matched.items():
-        quad_rows.append(list(quad_verts))
-        consumed.add(t_a)
-        consumed.add(t_b)
+        # MATLAB: pathVertIDs = [end; path; start] for closed paths
+        if is_closed:
+            ext = [path_seq[-1]] + path_seq + [path_seq[0]]
+        else:
+            ext = path_seq
 
+        down_edge = _initial_down_edge(ext, sub_boundary_edges)
 
-def _max_weight_matching(
-    pool,
-    pair_candidates: dict[tuple[int, int], tuple[float, tuple[int, int, int, int]]],
-) -> dict[tuple[int, int], tuple[int, int, int, int]]:
-    """Maximum-cardinality, max-weight matching via networkx Blossom V."""
-    try:
-        import networkx as nx
+        for i in range(1, len(ext) - 1):
+            v_prev = ext[i - 1]
+            v_cur = ext[i]
+            v_next = ext[i + 1]
 
-        G = nx.Graph()
-        for t in pool:
-            G.add_node(t)
-        for (a, b), (score, _) in pair_candidates.items():
-            G.add_edge(a, b, weight=score)
-        matching = nx.max_weight_matching(G, maxcardinality=True)
-        out = {}
-        for a, b in matching:
-            key = (a, b) if a < b else (b, a)
-            _score, quad_verts = pair_candidates[key]
-            out[key] = quad_verts
-        return out
-    except ImportError:  # pragma: no cover
-        ordered = sorted(
-            pair_candidates.items(), key=lambda kv: kv[1][0], reverse=True
-        )
-        used: set[int] = set()
-        out = {}
-        for (a, b), (_score, quad_verts) in ordered:
-            if a in used or b in used:
+            up_edge = down_edge
+            new_down = _make_key(v_cur, v_next)
+            if new_down in sub_boundary_edges:
+                down_edge = new_down
+            else:
+                cand = None
+                for e in incident_by_vert.get(v_cur, []):
+                    if e in sub_boundary_edges and v_next in e:
+                        cand = e
+                        break
+                down_edge = cand
+
+            if up_edge is None or down_edge is None:
                 continue
-            used.add(a)
-            used.add(b)
-            out[(a, b)] = quad_verts
-        return out
+            if v_cur not in ov_set:
+                continue
+            if v_cur not in incident_by_vert:
+                continue
+
+            ccw_all = _ccw_edges_around_vert(v_cur, incident_by_vert[v_cur], points)
+            ccw_active = [e for e in ccw_all if e not in edge_consumed]
+            if up_edge not in ccw_active:
+                continue
+            idx_up = ccw_active.index(up_edge)
+            rotated = ccw_active[idx_up:] + ccw_active[:idx_up]
+            if down_edge not in rotated:
+                continue
+            idx_down = rotated.index(down_edge)
+            if idx_down == 1 and len(rotated) > 2:
+                rotated = [rotated[0]] + list(reversed(rotated[1:]))
+                idx_down = rotated.index(down_edge)
+            if idx_down <= 1:
+                continue
+
+            for j in range(1, idx_down):
+                edge = rotated[j]
+                if edge in edge_consumed:
+                    continue
+                tlist = sub_edges.get(edge, [])
+                if len(tlist) != 2:
+                    continue
+                t_a, t_b = tlist
+                if t_a in tri_consumed or t_b in tri_consumed:
+                    continue
+                selected.append(edge)
+                edge_consumed.add(edge)
+                tri_consumed.add(t_a)
+                tri_consumed.add(t_b)
+    return selected
+
+
+def _initial_down_edge(
+    ext: list[int],
+    sub_boundary_edges: set[tuple[int, int]],
+) -> tuple[int, int] | None:
+    if len(ext) < 2:
+        return None
+    k = _make_key(ext[0], ext[1])
+    if k in sub_boundary_edges:
+        return k
+    for edge in sub_boundary_edges:
+        if ext[0] in edge:
+            return edge
+    return None
+
+
+def _ccw_edges_around_vert(
+    vert_id: int,
+    incident_edges: list[tuple[int, int]],
+    points: np.ndarray,
+) -> list[tuple[int, int]]:
+    p0 = points[vert_id, :2]
+    angled: list[tuple[float, tuple[int, int]]] = []
+    for edge in incident_edges:
+        other = edge[1] if edge[0] == vert_id else edge[0]
+        d = points[other, :2] - p0
+        angled.append((float(np.arctan2(d[1], d[0])), edge))
+    angled.sort()
+    return [e for _ang, e in angled]
+
+
+def _make_key(a: int, b: int) -> tuple[int, int]:
+    return (a, b) if a < b else (b, a)
+
+
+def _restrict_edge_map(
+    edge_to_tris: dict[tuple[int, int], list[int]],
+    pool: set[int],
+) -> dict[tuple[int, int], list[int]]:
+    out: dict[tuple[int, int], list[int]] = {}
+    for key, tlist in edge_to_tris.items():
+        usable = [t for t in tlist if t in pool]
+        if usable:
+            out[key] = usable
+    return out
 
 
 def _assign_layer_per_tri(mesh, n_tris: int) -> list[int]:
@@ -205,7 +322,7 @@ def _build_edge_map(tris: np.ndarray) -> dict[tuple[int, int], list[int]]:
     for t_id in range(tris.shape[0]):
         v0, v1, v2 = int(tris[t_id, 0]), int(tris[t_id, 1]), int(tris[t_id, 2])
         for a, b in ((v0, v1), (v1, v2), (v2, v0)):
-            key = (a, b) if a < b else (b, a)
+            key = _make_key(a, b)
             edge_to_tris.setdefault(key, []).append(t_id)
     return edge_to_tris
 
@@ -214,19 +331,20 @@ def _boundary_vertex_ids(
     edge_to_tris: dict[tuple[int, int], list[int]],
 ) -> set[int]:
     out: set[int] = set()
-    for (a, b), tlist in edge_to_tris.items():
+    for key, tlist in edge_to_tris.items():
         if len(tlist) == 1:
-            out.add(a)
-            out.add(b)
+            out.add(key[0])
+            out.add(key[1])
     return out
 
 
-def _merge_tris_into_quad(
+def _merge_tris_fun(
     tri_a: np.ndarray,
     tri_b: np.ndarray,
     shared_v0: int,
     shared_v1: int,
 ) -> tuple[int, int, int, int] | None:
+    """Faithful port of MATLAB mergeTrianglesFun: merge 2 tris into 1 quad."""
     tri_a_l = [int(v) for v in tri_a]
     tri_b_l = [int(v) for v in tri_b]
     unique_a = [v for v in tri_a_l if v != shared_v0 and v != shared_v1]
@@ -241,36 +359,3 @@ def _merge_tris_into_quad(
     if next_after_ua == shared_v0:
         return (ua, shared_v0, ub, shared_v1)
     return (ua, shared_v1, ub, shared_v0)
-
-
-def _quad_quality(quad_xy: np.ndarray) -> float:
-    if quad_xy.shape != (4, 2):
-        return 0.0
-    cross_signs = []
-    for i in range(4):
-        a = quad_xy[(i - 1) % 4]
-        b = quad_xy[i]
-        c = quad_xy[(i + 1) % 4]
-        e1 = a - b
-        e2 = c - b
-        cross = e1[0] * e2[1] - e1[1] * e2[0]
-        cross_signs.append(cross)
-    if not (all(s > 0 for s in cross_signs) or all(s < 0 for s in cross_signs)):
-        return 0.0
-    angles = []
-    for i in range(4):
-        a = quad_xy[(i - 1) % 4]
-        b = quad_xy[i]
-        c = quad_xy[(i + 1) % 4]
-        e1 = a - b
-        e2 = c - b
-        n1 = np.linalg.norm(e1)
-        n2 = np.linalg.norm(e2)
-        if n1 == 0 or n2 == 0:
-            return 0.0
-        cos_t = float(np.clip(np.dot(e1, e2) / (n1 * n2), -1.0, 1.0))
-        ang = np.degrees(np.arccos(cos_t))
-        angles.append(ang)
-    min_ang = min(angles)
-    max_ang = max(angles)
-    return float(min(min_ang, 180.0 - max_ang) / 90.0)
