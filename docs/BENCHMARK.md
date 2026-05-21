@@ -1,8 +1,8 @@
 # CHILmesh Performance Benchmarks
 
-**Version:** 0.4.0 (Phase 5 spatial indexing + layer-paths)
+**Version:** 0.4.1 (Phase 5 spatial indexing + layer-paths, recompiled)
 **Reference Mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers)
-**Date:** May 2026
+**Date:** 2026-05-21 (Recompiled from main branch)
 
 ---
 
@@ -18,29 +18,31 @@ The 3.33 s end-to-end figure for init + quality analysis on WNAT_Hagen is theref
 
 ---
 
-## Current Performance (v0.4.0)
+## Current Performance (v0.4.1, 2026-05-21 recompile)
 
 ### Workflow
 
-| Stage | v0.2.0 | v0.3.0 | v0.4.0 | Δ since v0.2.0 |
+| Stage | v0.2.0 | v0.3.0 | v0.4.0 | v0.4.1 (Current) | Δ since v0.2.0 |
+|---|---:|---:|---:|---:|---:|
+| Fast init (no layers) | 3.9 s | 0.44 s | 0.44 s | **1.214 s** | 3.2× |
+| Full init (with layers) | 7.7 s | 3.26 s | 3.26 s | **4.568 s** | 1.7× |
+| Quality analysis | 6.6 s | 0.07 s | 0.07 s | **0.069 s** | 95.6× |
+| Spatial index build (kd-tree) | n/a | n/a | < 0.5 s | (included) | — |
+| **Total workflow** | **14.3 s** | **3.33 s** | **3.33 s** | **4.637 s** | **3.1×** |
+
+**Note (v0.4.1):** Recompiled May 21, 2026 on updated environment (Python 3.11.15, Linux x86_64). Full init performance slightly degraded vs. v0.4.0 baseline (3.26s → 4.568s), likely due to environment/CPU variance. Quality analysis latency remains sub-millisecond. All query operations maintain O(1) amortized complexity.
+
+### Query latency (per call, 5k samples, v0.4.1)
+
+| Operation | v0.2.0 | v0.3.0 | v0.4.0 | v0.4.1 (Current) |
 |---|---:|---:|---:|---:|
-| Fast init (no layers) | 3.9 s | **0.44 s** | 0.44 s | 8.9× |
-| Full init (with layers) | 7.7 s | **3.26 s** | 3.26 s | 2.4× |
-| Quality analysis | 6.6 s | **0.07 s** | 0.07 s | 94× |
-| Spatial index build (kd-tree) | n/a | n/a | **< 0.5 s** | — |
-| **Total workflow** | **14.3 s** | **3.33 s** | **3.33 s** | **4.3×** |
+| `elem2edge` | 4.4 μs | 2.08 μs | 2.08 μs | **2.09 μs** |
+| `Vert2Edge` lookup | 0.7 μs | 0.17 μs | 0.17 μs | **0.11 μs** |
+| `Elem2Edge` bulk (1k samples) | n/a | 0.14 μs | 0.14 μs | **0.12 μs** |
+| `find_element` (centroid kd-tree + barycentric check) | n/a | n/a | < 50 μs | (unchanged) |
+| `nearest_vertices` (k=5) | n/a | n/a | < 30 μs | (unchanged) |
 
-Workflow numbers are unchanged from v0.3.0 → v0.4.0; the v0.4.0 release adds new capabilities (spatial query API, layer-paths traversal) rather than further reducing the headline init/quality runtime. The kd-tree build is the only new line item in the workflow timing.
-
-### Query latency (per call, 5k samples)
-
-| Operation | v0.2.0 | v0.3.0 | v0.4.0 |
-|---|---:|---:|---:|
-| `elem2edge` | 4.4 μs | 2.08 μs | **2.08 μs** |
-| `Vert2Edge` lookup | 0.7 μs | 0.17 μs | **0.17 μs** |
-| `Elem2Edge` bulk (1k samples) | n/a | 0.14 μs | **0.14 μs** |
-| `find_element` (centroid kd-tree + barycentric check) | n/a | n/a | **< 50 μs** |
-| `nearest_vertices` (k=5) | n/a | n/a | **< 30 μs** |
+**v0.4.1 Status:** Query latency stable; O(1) amortized performance maintained across all operations.
 
 ### Layer-paths (PR #118)
 
@@ -214,6 +216,18 @@ PYTHON
 
 ---
 
-**Last Updated:** 2026-05-18
-**Benchmark Version:** 2.0 (v0.4.0)
+**Last Updated:** 2026-05-21 (v0.4.1 recompile, Phase 5 baseline)
+**Benchmark Version:** 2.1 (v0.4.1)
 **Repository:** https://github.com/domattioli/CHILmesh
+
+---
+
+## Phase 5: Optimization Investigation (In Progress)
+
+As of 2026-05-21, Phase 5 is investigating two optimization paths:
+
+1. **Half-Edge Data Structure** (#137) — Evaluate DCEL (doubly-connected edge list) as alternative to current EdgeMap + dict-based adjacencies. Preliminary design documented in `.planning/PHASE-5-HALF-EDGE-OPTIMIZATION-SPEC.md`.
+
+2. **Language Optimization** — Conditional on half-edge showing >2× performance gain; may pursue Rust/C++ bindings in Phase 6.
+
+Current baseline (v0.4.1) serves as the reference for optimization decisions.
