@@ -87,6 +87,12 @@ See [`examples/`](examples/) for more runnable scripts.
   <sub><em><strong>Figure 3.</strong> Flagship plots <code>plot_layer()</code> and <code>plot_quality()</code> tracking how skeletonization and quality respond to smoothing (raw → truss → FEM). Reproduce: <code>python scripts/generate_3row_admesh.py</code>.</em></sub>
 </p>
 
+<p align="center">
+  <img src="output/readme_pipeline_annulus.gif" alt="Animated 4-stage CHILmesh annulus pipeline: Raw → ADMESH truss → FEM smoother → right-iso">
+  <br>
+  <sub><em><strong>Figure 4.</strong> Same Figure 3 pipeline as a Manim animation. Vertex IDs persist across stages and morph continuously between snapshots; polygon edges cross-fade per stage because Delaunay re-triangulation runs after every smoother that moves vertices freely. Higher-fidelity 1080p mp4 at <a href="output/readme_pipeline_annulus.mp4"><code>output/readme_pipeline_annulus.mp4</code></a>; scene script at <a href="output/pipeline_annulus_scene.py"><code>output/pipeline_annulus_scene.py</code></a>.</em></sub>
+</p>
+
 ---
 
 ## Features
