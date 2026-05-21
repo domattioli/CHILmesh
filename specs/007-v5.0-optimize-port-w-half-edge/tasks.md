@@ -133,6 +133,8 @@ Single-project library layout: `src/chilmesh/`, `tests/`, `scripts/`, `docs/`, `
 
 ### Implementation for User Story 3
 
+- [ ] **T016** [US3] Implement half-edge v2 vectorized walk in `mesh_topology_halfedge.py` (extends T004's module). Add internal `_walk_face_vectorized()` method. Document in module docstring that v2 is selected via an internal flag, NOT exposed in the public kwarg (the kwarg only switches edgemap ↔ halfedge; v1 vs v2 is internal benchmark plumbing).
+
 - [ ] **T015** [US3] Write `scripts/benchmark_halfedge_variants.py`. ~200 LOC:
   - Imports CHILmesh, runs all three variants on WNAT_Hagen.
   - Variant 1 = current EdgeMap (baseline).
@@ -141,8 +143,6 @@ Single-project library layout: `src/chilmesh/`, `tests/`, `scripts/`, `docs/`, `
   - Median-of-3 protocol per clarify F-3 to bound NFR-003 variance.
   - Outputs: stdout markdown table + `output/benchmark.json` update (additive fields per Q-2).
   - WNAT_Hagen SHA-256 verified at start; exits non-zero on mismatch (calls `scripts/verify_mesh_pin.py` from T002).
-
-- [ ] **T016** [US3] Implement half-edge v2 vectorized walk in `mesh_topology_halfedge.py` (extends T004's module). Add internal `_walk_face_vectorized()` method. Document in module docstring that v2 is selected via an internal flag, NOT exposed in the public kwarg (the kwarg only switches edgemap ↔ halfedge; v1 vs v2 is internal benchmark plumbing).
 
 - [ ] **T017** [US3] Run T015. Capture the markdown table. Insert it into `docs/BENCHMARK.md` under a new "Half-Edge Variants (3-Way Comparison)" section. Add a footnote describing the median-of-3 + tracemalloc methodology.
 
@@ -177,7 +177,7 @@ T002 ──┼─→ T003 ──→ T004 ──→ T005 ──→ T006, T007 ─
                                                                                   ↓
                                                                     T012 ──→ T013, T014
                                                                                   ↓
-                                                                    T015, T016 ──→ T017 ──→ T018
+                                                                    T016 ──→ T015 ──→ T017 ──→ T018
                                                                                                 ↓
                                                                                   T019, T020, T021
                                                                                                 ↓
@@ -186,7 +186,6 @@ T002 ──┼─→ T003 ──→ T004 ──→ T005 ──→ T006, T007 ─
 
 Parallelism opportunities:
 - T013 + T014 (different files)
-- T015 + T016 (different files; T015 imports T016 — actually T016 must precede T015 — adjust)
 - T019 + T020 + T021 (different files)
 
 Effort estimates (T-shirt):
