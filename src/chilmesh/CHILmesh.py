@@ -168,8 +168,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 queries (``get_vertex_edges``, ``edge2vert``, ``boundary_edges`` etc.)
                 but no layer sweep — useful when downstream consumers need topology
                 without paying the skeletonization cost (#134).
-            topology_backend: Topology backend selection ('edgemap' or 'halfedge'). Defaults
-                to 'edgemap'. Can be overridden by CHILMESH_TOPOLOGY_BACKEND env var.
+            topology_backend: Topology backend selection ('edgemap', 'halfedge', or 'quadegg').
+                Defaults to 'edgemap'. Can be overridden by CHILMESH_TOPOLOGY_BACKEND env var.
 
         Attributes set during initialization:
             layers (dict): Skeletonization result with keys:
@@ -419,24 +419,27 @@ class CHILmesh(CHILmeshPlotMixin):
     def _build_adjacencies( self, topology_backend: Opt[str] = None ) -> None:
         """Build adjacency lists for the mesh.
 
-        Dispatches to appropriate backend: EdgeMap (default) or half-edge (DCEL).
+        Dispatches to appropriate backend: EdgeMap (default), half-edge (DCEL), or quad-edge.
         Backend selected via kwarg > env var > default 'edgemap'.
         """
         import os
         from chilmesh.mesh_topology_halfedge import build_halfedge_from_connectivity
+        from chilmesh.mesh_topology_quadegg import build_quadegg_from_connectivity
 
         backend = topology_backend
         if backend is None:
             backend = os.environ.get("CHILMESH_TOPOLOGY_BACKEND", "edgemap")
 
-        if backend not in ("edgemap", "halfedge"):
+        if backend not in ("edgemap", "halfedge", "quadegg"):
             raise ValueError(
                 f"Unknown CHILMESH_TOPOLOGY_BACKEND: {backend!r}. "
-                f"Must be 'edgemap' or 'halfedge'."
+                f"Must be 'edgemap', 'halfedge', or 'quadegg'."
             )
 
         if backend == "halfedge":
             self._build_adjacencies_halfedge(build_halfedge_from_connectivity)
+        elif backend == "quadegg":
+            self._build_adjacencies_quadegg(build_quadegg_from_connectivity)
         else:
             self._build_adjacencies_edgemap()
 
@@ -501,6 +504,39 @@ class CHILmesh(CHILmeshPlotMixin):
         vert2edge = he_topo.to_vert2edge()
         vert2elem = he_topo.to_vert2elem()
         edgemap_list = he_topo.to_edgemap_list()
+
+        self.n_edges = len(edge2vert)
+
+        # Build EdgeMap from list (compatible with existing code)
+        edge_map = {tuple(e): i for i, e in enumerate(edgemap_list)}
+
+        # Store adjacencies (same keys as EdgeMap backend)
+        self.adjacencies = {
+            "Elem2Vert": self.connectivity_list,
+            "Edge2Vert": edge2vert,
+            "EdgeMap": edge_map,
+            "Elem2Edge": elem2edge,
+            "Vert2Edge": vert2edge,
+            "Vert2Elem": vert2elem,
+            "Edge2Elem": edge2elem
+        }
+        self._validate_adjacencies()
+
+    def _build_adjacencies_quadegg(self, build_quadegg_fn) -> None:
+        """Build adjacency lists using quad-edge (4-connected) backend.
+
+        Constructs QuadEdgeTopology from element connectivity, then converts
+        to standard adjacency format (same dict keys as EdgeMap backend).
+        """
+        qe_topo = build_quadegg_fn(self.connectivity_list, self.n_verts)
+
+        # Convert quad-edge to standard adjacency format
+        edge2vert = qe_topo.to_edge2vert()
+        edge2elem = qe_topo.to_edge2elem()
+        elem2edge = qe_topo.to_elem2edge()
+        vert2edge = qe_topo.to_vert2edge()
+        vert2elem = qe_topo.to_vert2elem()
+        edgemap_list = qe_topo.to_edgemap_list()
 
         self.n_edges = len(edge2vert)
 
