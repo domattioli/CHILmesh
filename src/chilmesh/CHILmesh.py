@@ -150,7 +150,7 @@ class CHILmesh(CHILmeshPlotMixin):
         elif new_points.shape[1] == 3:  self.points = new_points
         else:                           raise ValueError("new_points must have 2 or 3 columns")
 
-    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None ) -> None:
+    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, topology_backend: Opt[str] = None ) -> None:
         """
         Initialize a CHILmesh object.
 
@@ -168,6 +168,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 queries (``get_vertex_edges``, ``edge2vert``, ``boundary_edges`` etc.)
                 but no layer sweep — useful when downstream consumers need topology
                 without paying the skeletonization cost (#134).
+            topology_backend: Topology backend selection ('edgemap' or 'halfedge'). Defaults
+                to 'edgemap'. Can be overridden by CHILMESH_TOPOLOGY_BACKEND env var.
 
         Attributes set during initialization:
             layers (dict): Skeletonization result with keys:
@@ -192,6 +194,7 @@ class CHILmesh(CHILmeshPlotMixin):
         self.n_layers: int = 0
         self.layers: Dict[str, List] = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
         self.type: Opt[str] = None
+        self.topology_backend = topology_backend
 
         # If no inputs are provided, create a random Delaunay triangulation
         if connectivity is None and points is None:
@@ -209,6 +212,7 @@ class CHILmesh(CHILmeshPlotMixin):
         self._initialize_mesh(
             compute_layers=compute_layers,
             compute_adjacencies=compute_adjacencies,
+            topology_backend=topology_backend,
         )
     
     def _create_random_triangulation( self ) -> None:
@@ -222,7 +226,7 @@ class CHILmesh(CHILmeshPlotMixin):
         self.connectivity_list = tri.simplices
         self.grid_name = "Random Delaunay"
 
-    def _initialize_mesh( self, compute_layers: bool = True, compute_adjacencies: bool = True ) -> None:
+    def _initialize_mesh( self, compute_layers: bool = True, compute_adjacencies: bool = True, topology_backend: Opt[str] = None ) -> None:
         """Initialize the mesh properties.
 
         Parameters:
@@ -230,6 +234,7 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies: If False, skip adjacency dict construction (default: True).
                 Cannot be False when ``compute_layers`` is True — caller is responsible
                 for that consistency (enforced in ``__init__``).
+            topology_backend: Topology backend ('edgemap' or 'halfedge'). Overrides env var.
         """
         if self.points is not None and self.connectivity_list is not None:
             self.n_verts = self.points.shape[0]
@@ -252,7 +257,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 self.type = "Mixed-Element"
 
             if compute_adjacencies:
-                self._build_adjacencies()
+                self._build_adjacencies(topology_backend=topology_backend)
             if compute_layers:
                 self._skeletonize()
 
@@ -411,8 +416,32 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return tri_elems, quad_elems
     
-    def _build_adjacencies( self ) -> None:
-        """Build adjacency lists for the mesh"""
+    def _build_adjacencies( self, topology_backend: Opt[str] = None ) -> None:
+        """Build adjacency lists for the mesh.
+
+        Dispatches to appropriate backend: EdgeMap (default) or half-edge (DCEL).
+        Backend selected via kwarg > env var > default 'edgemap'.
+        """
+        import os
+        from chilmesh.mesh_topology_halfedge import build_halfedge_from_connectivity
+
+        backend = topology_backend
+        if backend is None:
+            backend = os.environ.get("CHILMESH_TOPOLOGY_BACKEND", "edgemap")
+
+        if backend not in ("edgemap", "halfedge"):
+            raise ValueError(
+                f"Unknown CHILMESH_TOPOLOGY_BACKEND: {backend!r}. "
+                f"Must be 'edgemap' or 'halfedge'."
+            )
+
+        if backend == "halfedge":
+            self._build_adjacencies_halfedge(build_halfedge_from_connectivity)
+        else:
+            self._build_adjacencies_edgemap()
+
+    def _build_adjacencies_edgemap( self ) -> None:
+        """Build adjacency lists using EdgeMap backend (original implementation)."""
         # Identify triangular and quadrilateral elements
         tri_elems, quad_elems = self._elem_type()
         
@@ -446,6 +475,39 @@ class CHILmesh(CHILmeshPlotMixin):
         edge2elem = self._build_edge2elem( edge2vert, edge_map )
 
         # Store adjacencies
+        self.adjacencies = {
+            "Elem2Vert": self.connectivity_list,
+            "Edge2Vert": edge2vert,
+            "EdgeMap": edge_map,
+            "Elem2Edge": elem2edge,
+            "Vert2Edge": vert2edge,
+            "Vert2Elem": vert2elem,
+            "Edge2Elem": edge2elem
+        }
+        self._validate_adjacencies()
+
+    def _build_adjacencies_halfedge(self, build_halfedge_fn) -> None:
+        """Build adjacency lists using half-edge (DCEL) backend.
+
+        Constructs HalfEdgeTopology from element connectivity, then converts
+        to standard adjacency format (same dict keys as EdgeMap backend).
+        """
+        he_topo = build_halfedge_fn(self.connectivity_list, self.n_verts)
+
+        # Convert half-edge to standard adjacency format
+        edge2vert = he_topo.to_edge2vert()
+        edge2elem = he_topo.to_edge2elem()
+        elem2edge = he_topo.to_elem2edge()
+        vert2edge = he_topo.to_vert2edge()
+        vert2elem = he_topo.to_vert2elem()
+        edgemap_list = he_topo.to_edgemap_list()
+
+        self.n_edges = len(edge2vert)
+
+        # Build EdgeMap from list (compatible with existing code)
+        edge_map = {tuple(e): i for i, e in enumerate(edgemap_list)}
+
+        # Store adjacencies (same keys as EdgeMap backend)
         self.adjacencies = {
             "Elem2Vert": self.connectivity_list,
             "Edge2Vert": edge2vert,

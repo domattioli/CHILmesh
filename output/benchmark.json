@@ -1,24 +1,8 @@
 {
-  "chilmesh_version": "0.4.1",
-  "python": "3.11.15",
-  "os": "Linux x86_64",
-  "mesh": "/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14",
-  "init": {
-    "fast_init_s": 1.2139215900000409,
-    "full_init_s": 4.567989638999961,
-    "quality_s": 0.06891363199997613,
-    "total_s": 4.636903270999937,
-    "n_verts": 52774,
-    "n_elems": 98365,
-    "n_edges": 151248,
-    "n_layers": 30
+  "metadata": {
+    "mesh_sha256": "a53a6c8a016fa026f896988e565dcab8988ad8969c9becc2eee293792edad959",
+    "mesh_path": "/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14",
+    "mesh_name": "WNAT_Hagen"
   },
-  "query": {
-    "elem2edge_total_s": 0.010435151000024234,
-    "elem2edge_us": 2.087030200004847,
-    "vert2edge_total_s": 0.0005600369999001487,
-    "vert2edge_us": 0.11200739998002973,
-    "elem2edge_bulk_total_s": 0.00012390200004119833,
-    "elem2edge_bulk_us": 0.12390200004119832
-  }
+  "backend_variants": []
 }

@@ -66,3 +66,23 @@ def fresh_mesh(request):
 def fixture_name(request):
     """Yield the bare fixture name for tests that want to load it lazily."""
     return request.param
+
+
+@pytest.fixture(params=[None, "halfedge"])
+def topology_backend_env(request, monkeypatch):
+    """Monkeypatch CHILMESH_TOPOLOGY_BACKEND for backend switching tests.
+
+    Parametrized over [None, 'halfedge']. None = unset env var (uses default
+    EdgeMap). 'halfedge' = switch to half-edge backend. Monkeypatch ensures
+    cleanup on teardown to prevent env-var leakage between tests.
+
+    Used by test_halfedge_basic.py and test_halfedge_equivalence.py to verify
+    both backends produce identical results without modifying test code.
+    """
+    backend = request.param
+    if backend is None:
+        # Ensure env var is not set
+        monkeypatch.delenv("CHILMESH_TOPOLOGY_BACKEND", raising=False)
+    else:
+        monkeypatch.setenv("CHILMESH_TOPOLOGY_BACKEND", backend)
+    return backend
