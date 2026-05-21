@@ -9,16 +9,58 @@
       "backend_name": "EdgeMap",
       "operations": {
         "fast_init": {
-          "median_seconds": 3.59,
-          "std_seconds": 0.0101
+          "median_seconds": 2.8899,
+          "std_seconds": 0.7314
         },
         "full_init": {
-          "median_seconds": 3.9656,
-          "std_seconds": 0.0651
+          "median_seconds": 3.1936,
+          "std_seconds": 0.0238
         },
         "quality_analysis": {
-          "median_seconds": 0.0074,
-          "std_seconds": 0.0005
+          "median_seconds": 0.006,
+          "std_seconds": 0.0003
+        },
+        "query_latency": {
+          "median_seconds": 0.0,
+          "std_seconds": 0.0
+        }
+      }
+    },
+    {
+      "backend_name": "HalfEdge-v1",
+      "operations": {
+        "fast_init": {
+          "median_seconds": 5.263,
+          "std_seconds": 0.0341
+        },
+        "full_init": {
+          "median_seconds": 5.6382,
+          "std_seconds": 0.0293
+        },
+        "quality_analysis": {
+          "median_seconds": 0.0059,
+          "std_seconds": 0.0003
+        },
+        "query_latency": {
+          "median_seconds": 0.0,
+          "std_seconds": 0.0
+        }
+      }
+    },
+    {
+      "backend_name": "HalfEdge-v2",
+      "operations": {
+        "fast_init": {
+          "median_seconds": 5.21,
+          "std_seconds": 0.0802
+        },
+        "full_init": {
+          "median_seconds": 5.6808,
+          "std_seconds": 0.0812
+        },
+        "quality_analysis": {
+          "median_seconds": 0.0059,
+          "std_seconds": 0.0003
         },
         "query_latency": {
           "median_seconds": 0.0,
