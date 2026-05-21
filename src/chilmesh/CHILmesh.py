@@ -137,6 +137,85 @@ class CHILmesh(CHILmeshPlotMixin):
         inner = self.layers["IE"][layer_idx]
         return np.sort(np.concatenate([outer, inner]).astype(int))
 
+    def submesh(
+        self,
+        elem_ids: Union[np.ndarray, List[int], Tuple[int, ...]],
+        compute_layers: bool = True,
+        compute_adjacencies: Opt[bool] = None,
+    ) -> "CHILmesh":
+        """
+        Return a new :class:`CHILmesh` restricted to the given element indices (#138).
+
+        The sub-mesh holds a compact copy of the selected elements: vertex indices
+        are renumbered into [0, k) where k is the number of distinct vertices the
+        selection references, and ``points`` is sliced accordingly. The original
+        mesh is unchanged.
+
+        Parameters:
+            elem_ids: Indices of elements to include. May contain duplicates; the
+                method deduplicates internally. Must be non-empty.
+            compute_layers: Whether to skeletonize the sub-mesh (default: True).
+                Forwarded to :class:`CHILmesh` constructor.
+            compute_adjacencies: Whether to build adjacency dicts on the sub-mesh.
+                ``None`` tracks ``compute_layers``. See :meth:`__init__`.
+
+        Returns:
+            A new :class:`CHILmesh` containing only the selected elements, with
+            vertex indices remapped to a compact local numbering. ``grid_name`` is
+            suffixed with ``"_submesh"`` when the parent grid had a name.
+
+        Raises:
+            ValueError: If ``elem_ids`` is empty or contains out-of-range indices.
+
+        Notes:
+            * Element ordering in the sub-mesh follows the **sorted** order of the
+              unique input indices, not the input order. This keeps the operation
+              deterministic regardless of caller iteration order.
+            * For 4-column (quad or mixed) connectivity, padded triangle rows
+              ``[v0, v1, v2, v0]`` remain padded after remapping (duplicates are
+              preserved bit-for-bit through ``np.unique`` + dict lookup).
+            * Boundary detection is recomputed from the sub-mesh topology: edges
+              that were interior in the parent may become boundary edges in the
+              sub-mesh when their partner element falls outside the selection.
+
+        Example:
+            >>> # Extract the outermost skeletonization layer as its own mesh.
+            >>> outer = mesh.submesh(mesh.elements_in_layer(0))
+            >>> outer.n_elems
+            42
+        """
+        elem_ids = np.asarray(elem_ids, dtype=np.int64).ravel()
+        if elem_ids.size == 0:
+            raise ValueError("submesh requires at least one element id")
+        if elem_ids.min() < 0 or elem_ids.max() >= self.n_elems:
+            raise ValueError(
+                f"elem_ids out of range [0, {self.n_elems}): "
+                f"got min={int(elem_ids.min())}, max={int(elem_ids.max())}"
+            )
+
+        # Deduplicate and sort — np.unique gives both in one pass.
+        unique_elems = np.unique(elem_ids)
+        sub_conn = self.connectivity_list[unique_elems].copy()
+
+        # Build a remap from old vertex ids to compact [0, k). np.unique returns
+        # sorted unique values; searchsorted vectorises the lookup.
+        unique_verts = np.unique(sub_conn)
+        remap = np.searchsorted(unique_verts, sub_conn)
+
+        sub_points = self.points[unique_verts].copy()
+
+        sub_grid_name = (
+            f"{self.grid_name}_submesh" if self.grid_name is not None else None
+        )
+
+        return CHILmesh(
+            connectivity=remap,
+            points=sub_points,
+            grid_name=sub_grid_name,
+            compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
+        )
+
     def change_points(self, new_points, acknowledge_change=False):
         """
         Change the mesh's (x,y,z) locations of its points.

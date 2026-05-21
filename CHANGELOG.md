@@ -8,6 +8,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### ✨ Added
 
+- **`CHILmesh.submesh(elem_ids) -> CHILmesh`** (#138) — a public sub-mesh
+  factory that returns a new `CHILmesh` restricted to the given element
+  indices, with vertex indices remapped to a compact `[0, k)` numbering
+  and `points` sliced to the referenced vertices only. Forwards
+  `compute_layers` / `compute_adjacencies` to the constructor.
+  Deduplicates input and sorts by element id for deterministic output.
+  Padded-triangle rows are preserved bit-for-bit through the remap.
+  Boundary detection runs fresh on the sub-mesh topology, so edges that
+  were interior in the parent become boundary edges in the sub-mesh
+  when their partner falls outside the selection — the contract
+  downstream `two_part_smoother`-style routines need to apply
+  region-differential smoothing without calling private APIs. Covered
+  by `tests/test_submesh.py` (91 tests across all five built-in
+  fixtures: input validation, vertex remap correctness, geometry
+  preservation, signed-area parity, boundary-flag propagation, and
+  outer-layer extraction round-trip).
 - **`CHILmesh(compute_adjacencies=...)`** keyword on the constructor and on
   `read_from_fort14` / `read_from_2dm` / `from_admesh_domain` (#134).
   Defaults to `None`, in which case it tracks `compute_layers` so existing
