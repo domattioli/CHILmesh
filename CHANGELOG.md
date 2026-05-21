@@ -6,6 +6,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### ✨ Added
+
+- **`CHILmesh(compute_adjacencies=...)`** keyword on the constructor and on
+  `read_from_fort14` / `read_from_2dm` / `from_admesh_domain` (#134).
+  Defaults to `None`, in which case it tracks `compute_layers` so existing
+  callers see byte-identical behaviour. Passing
+  `compute_layers=False, compute_adjacencies=True` builds the full
+  adjacency dict bundle (`Vert2Edge`, `Vert2Elem`, `Edge2Vert`,
+  `Edge2Elem`, `Elem2Edge`, `EdgeMap`) without paying the layer-sweep
+  cost — needed by downstream consumers (quadmesh-matlab, MADMESHR) that
+  previously had to call the private `_build_adjacencies()` method to
+  exercise the public adjacency API. Layer-sweep still implicitly forces
+  adjacency construction (it depends on it), so
+  `compute_layers=True, compute_adjacencies=False` is silently coerced
+  to `True/True`. Covered by `tests/test_compute_adjacencies_flag.py`.
+- **`CHILmesh.ccw_edges_around_vert(vert_id) -> list[int]`** (#133) — the
+  edges incident to a vertex returned in counterclockwise order
+  (`atan2(dy, dx)` from the vertex to its other endpoint, ascending; ties
+  broken by edge id for determinism). Lets downstream packages delete the
+  private CCW walks they currently maintain (see e.g. quadmesh-matlab's
+  `python/quadmesh/_topology.py:ccw_edges_around_vert`). Raises
+  `ValueError` for out-of-range vertices and `RuntimeError` when
+  adjacencies were not built. Covered across all four built-in fixtures
+  plus a hand-checkable synthetic case in
+  `tests/test_ccw_edges_around_vert.py`.
+
 ### 🔧 Fixed
 
 - **Windows portability of fort.14 / 2dm I/O** (#121, partial). The three
