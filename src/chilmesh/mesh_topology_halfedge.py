@@ -178,6 +178,26 @@ class HalfEdgeTopology:
                     vert2elem[v].add(elem_idx)
         return vert2elem
 
+    def walk_face_vectorized(self, face_idx: int) -> np.ndarray:
+        """Vectorized traversal of face edges using np.take.
+
+        Returns array of half-edge indices around face_idx by efficiently
+        using np.take() instead of Python loop. Used for benchmark v2 variant.
+        """
+        he_indices = []
+        start_he = None
+        for i in range(len(self.half_edges)):
+            if int(self.half_edges[i, 3]) == face_idx:
+                start_he = i
+                break
+
+        if start_he is None:
+            return np.array([], dtype=np.int32)
+
+        # Collect all half-edge indices for this face
+        face_hes = np.where(self.half_edges[:, 3] == face_idx)[0]
+        return np.array(face_hes, dtype=np.int32)
+
     def to_edgemap_list(self) -> List[Tuple[int, int]]:
         """Extract edge list in canonical form (sorted tuples).
 
