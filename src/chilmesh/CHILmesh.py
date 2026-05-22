@@ -150,7 +150,7 @@ class CHILmesh(CHILmeshPlotMixin):
         elif new_points.shape[1] == 3:  self.points = new_points
         else:                           raise ValueError("new_points must have 2 or 3 columns")
 
-    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, topology_backend: Opt[str] = None ) -> None:
+    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, topology_backend: Opt[str] = None, use_rust_backend: bool = False ) -> None:
         """
         Initialize a CHILmesh object.
 
@@ -170,6 +170,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 without paying the skeletonization cost (#134).
             topology_backend: Topology backend selection ('edgemap', 'halfedge', or 'quadegg').
                 Defaults to 'edgemap'. Can be overridden by CHILMESH_TOPOLOGY_BACKEND env var.
+            use_rust_backend: If True, use Rust backend (RustMesh) for mesh operations.
+                Delegates adjacency computation and skeletonization to Rust. (default: False)
 
         Attributes set during initialization:
             layers (dict): Skeletonization result with keys:
@@ -195,6 +197,12 @@ class CHILmesh(CHILmeshPlotMixin):
         self.layers: Dict[str, List] = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
         self.type: Opt[str] = None
         self.topology_backend = topology_backend
+        self._rust_mesh: Opt[Any] = None  # Rust backend handle (optional)
+        self._use_rust_backend = use_rust_backend
+
+        # Initialize Rust backend if requested
+        if use_rust_backend:
+            self._initialize_rust_backend()
 
         # If no inputs are provided, create a random Delaunay triangulation
         if connectivity is None and points is None:
@@ -214,7 +222,49 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies=compute_adjacencies,
             topology_backend=topology_backend,
         )
-    
+
+    def _initialize_rust_backend(self) -> None:
+        """Initialize the Rust backend (RustMesh) for mesh operations.
+
+        This is called when use_rust_backend=True to set up the _rust_mesh handle.
+        Actual mesh data is copied to Rust lazily during _initialize_mesh.
+        """
+        try:
+            from chilmesh_core import RustMesh
+            self._rust_mesh = RustMesh()
+        except ImportError as e:
+            raise ImportError(
+                "Could not import chilmesh_core (Rust backend). "
+                "Ensure the Rust extension is built: cargo build --lib -C src/chilmesh_core"
+            ) from e
+
+    def _sync_to_rust_mesh(self) -> None:
+        """Synchronize Python mesh data to the Rust backend.
+
+        Copies points and connectivity to _rust_mesh for Rust-based operations.
+        Called during _initialize_mesh when use_rust_backend is True.
+        """
+        if self._rust_mesh is None:
+            return
+
+        # Convert points to [n_verts, 2] for Rust (drop z-coordinate)
+        points_2d = self.points[:, :2].copy()
+
+        # Convert connectivity to proper format
+        connectivity = self.connectivity_list.copy()
+
+        # Ensure connectivity is 4-column for proper Rust handling
+        if connectivity.shape[1] == 3:
+            # Pad triangles: add repeated last vertex
+            connectivity = np.column_stack([
+                connectivity,
+                connectivity[:, 2]  # Pad with repeated v2
+            ])
+
+        # Set data in Rust mesh via numpy arrays
+        self._rust_mesh.set_points(points_2d)
+        self._rust_mesh.set_connectivity(connectivity.astype(np.int32))
+
     def _create_random_triangulation( self ) -> None:
         """Create a random Delaunay triangulation for testing"""
         # Generate random points in a 10x10 domain
@@ -255,6 +305,10 @@ class CHILmesh(CHILmeshPlotMixin):
                 self.type = "Quadrilateral"
             else:
                 self.type = "Mixed-Element"
+
+            # Sync to Rust backend if enabled
+            if self._use_rust_backend and self._rust_mesh is not None:
+                self._sync_to_rust_mesh()
 
             if compute_adjacencies:
                 self._build_adjacencies(topology_backend=topology_backend)
@@ -311,14 +365,26 @@ class CHILmesh(CHILmeshPlotMixin):
     def signed_area( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
         Calculate the signed area of elements.
-        
+
+        If use_rust_backend is True, delegates to RustMesh for computation.
+
         Parameters:
             elem_ids: Indices of elements to evaluate.
                 If None, all elements are evaluated.
-        
+
         Returns:
             Signed areas of elements
         """
+        # Delegate to Rust if enabled
+        if self._use_rust_backend and self._rust_mesh is not None:
+            self._rust_mesh.compute_quality()
+            areas = self._rust_mesh.get_signed_areas()
+            # If specific elements requested, filter; otherwise return all
+            if elem_ids is not None:
+                elem_ids = np.asarray(elem_ids)
+                return areas[elem_ids]
+            return areas
+
         if elem_ids is None:
             elem_ids = np.arange( self.n_elems )
         if np.isscalar( elem_ids ):
@@ -420,8 +486,14 @@ class CHILmesh(CHILmeshPlotMixin):
         """Build adjacency lists for the mesh.
 
         Dispatches to appropriate backend: EdgeMap (default), half-edge (DCEL), or quad-edge.
+        If use_rust_backend is True, delegates to Rust implementation.
         Backend selected via kwarg > env var > default 'edgemap'.
         """
+        # Delegate to Rust if enabled
+        if self._use_rust_backend and self._rust_mesh is not None:
+            self._build_adjacencies_rust()
+            return
+
         import os
         from chilmesh.mesh_topology_halfedge import build_halfedge_from_connectivity
         from chilmesh.mesh_topology_quadegg import build_quadegg_from_connectivity
@@ -442,6 +514,46 @@ class CHILmesh(CHILmeshPlotMixin):
             self._build_adjacencies_quadegg(build_quadegg_from_connectivity)
         else:
             self._build_adjacencies_edgemap()
+
+    def _build_adjacencies_rust(self) -> None:
+        """Build adjacency lists using Rust backend.
+
+        Delegates to RustMesh for all adjacency computation, then converts
+        Rust data structures to Python dicts for compatibility with existing code.
+        """
+        # Call Rust backend to compute adjacencies
+        self._rust_mesh.build_adjacencies()
+
+        # Extract adjacency data from Rust
+        edge2vert = self._rust_mesh.get_edge2vert()
+        elem2edge = self._rust_mesh.get_elem2edge()
+        edge2elem = self._rust_mesh.get_edge2elem()
+        vert2edge = self._rust_mesh.get_vert2edge()
+        vert2elem = self._rust_mesh.get_vert2elem()
+        elem2vert = self._rust_mesh.get_elem2vert()
+
+        # Build EdgeMap from edge2vert
+        edge_map = {tuple(edge): idx for idx, edge in enumerate(edge2vert)}
+
+        # Convert Rust lists to Python dicts for compatibility
+        vert2edge_dict = {i: set(edges) for i, edges in enumerate(vert2edge)}
+        vert2elem_dict = {i: set(elems) for i, elems in enumerate(vert2elem)}
+
+        self.n_edges = len(edge2vert)
+
+        # Store adjacencies in Python format
+        self.adjacencies = {
+            "Elem2Vert": elem2vert,
+            "Edge2Vert": edge2vert,
+            "EdgeMap": edge_map,
+            "Elem2Edge": elem2edge,
+            "Vert2Edge": vert2edge_dict,
+            "Vert2Elem": vert2elem_dict,
+            "Edge2Elem": edge2elem
+        }
+
+        # Validate adjacencies
+        self._validate_adjacencies()
 
     def _build_adjacencies_edgemap( self ) -> None:
         """Build adjacency lists using EdgeMap backend (original implementation)."""
@@ -1128,9 +1240,37 @@ class CHILmesh(CHILmeshPlotMixin):
             return np.array([elem_ids], dtype=int)
         return np.array(elem_ids, dtype=int)
 
+    def _skeletonize_rust(self) -> None:
+        """Skeletonize the mesh using Rust backend.
+
+        Delegates to RustMesh.skeletonize() for layer-by-layer boundary removal,
+        then converts Rust layer data (list of dicts) to Python format.
+        """
+        # Call Rust backend to compute skeletonization layers
+        self._rust_mesh.skeletonize(quality_threshold=None)
+
+        # Get all layers from Rust as list of dicts
+        rust_layers = self._rust_mesh.get_all_layers()
+
+        # Convert Rust layer dicts to Python layer structure
+        self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
+
+        for layer_dict in rust_layers:
+            # Convert each Rust layer dict to numpy arrays
+            self.layers["OE"].append(np.array(layer_dict['OE'], dtype=int))
+            self.layers["IE"].append(np.array(layer_dict['IE'], dtype=int))
+            self.layers["OV"].append(np.array(layer_dict['OV'], dtype=int))
+            self.layers["IV"].append(np.array(layer_dict['IV'], dtype=int))
+            self.layers["bEdgeIDs"].append(np.array(layer_dict['bEdgeIDs'], dtype=int))
+
+        self.n_layers = len(rust_layers)
+
     def _skeletonize(self) -> None:
         """
         Skeletonize the mesh by iteratively peeling concentric layers inward.
+
+        If use_rust_backend is True, delegates to RustMesh.skeletonize() for
+        layer-by-layer boundary removal. Otherwise, uses the Python implementation.
 
         Faithful Python port of the MATLAB ``meshLayers`` function.  Each
         iteration of layer ``iL`` produces:
@@ -1149,6 +1289,11 @@ class CHILmesh(CHILmeshPlotMixin):
         Indexing: layers are 0-indexed; ``-1`` is the sentinel for consumed
         vertices/elements in the working copies of Edge2Vert/Edge2Elem.
         """
+        # Delegate to Rust if enabled
+        if self._use_rust_backend and self._rust_mesh is not None:
+            self._skeletonize_rust()
+            return
+
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
 
         edge2vert_work = self.adjacencies["Edge2Vert"].copy()

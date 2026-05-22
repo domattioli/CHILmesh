@@ -3,6 +3,7 @@ pub mod io;
 pub mod adjacency;
 pub mod queries;
 pub mod skeletonization;
+pub mod mutation;
 
 use pyo3::prelude::*;
 use ndarray::{Array1, Array2};
@@ -49,6 +50,16 @@ impl RustMesh {
 
     fn write_fort14(&self, path: &str) -> PyResult<()> {
         io::write_fort14(self, path)?;
+        Ok(())
+    }
+
+    fn read_from_2dm(&mut self, path: &str) -> PyResult<()> {
+        let mesh = io::parse_2dm(path)?;
+        self.points = mesh.points;
+        self.connectivity = mesh.connectivity;
+        self.elem_type = mesh.elem_type;
+        self.num_verts = mesh.num_verts;
+        self.num_elems = mesh.num_elems;
         Ok(())
     }
 
@@ -267,6 +278,38 @@ impl RustMesh {
                 "Layers not computed. Call skeletonize() first.",
             )),
         }
+    }
+
+    /// Add a new element to the mesh
+    ///
+    /// Validates vertex bounds, element type, and geometric constraints.
+    /// Returns the new element ID.
+    ///
+    /// # Arguments
+    /// * `verts` - Vertex indices [v0, v1, v2] or [v0, v1, v2, v3]
+    /// * `elem_type_new` - Element type (3 for triangle, 4 for quad)
+    fn add_element(&self, verts: Vec<i32>, elem_type_new: u32) -> PyResult<usize> {
+        let result = mutation::add_element(
+            &self.connectivity,
+            &self.points,
+            self.num_verts,
+            self.num_elems,
+            &self.elem_type,
+            &verts,
+            elem_type_new,
+        )?;
+        Ok(result)
+    }
+
+    /// Remove an element from the mesh
+    ///
+    /// Validates element bounds and checks for orphaned vertices.
+    ///
+    /// # Arguments
+    /// * `elem_id` - Element ID to remove (0-indexed)
+    fn remove_element(&self, elem_id: usize) -> PyResult<()> {
+        mutation::remove_element(&self.connectivity, self.num_elems, elem_id)?;
+        Ok(())
     }
 }
 

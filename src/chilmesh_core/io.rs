@@ -367,3 +367,170 @@ pub fn write_fort14(mesh: &RustMesh, path: &str) -> Result<(), RustMeshError> {
     fs::write(path, output).map_err(|e| RustMeshError::IOError(e.to_string()))?;
     Ok(())
 }
+
+/// Parse 2dm (SMS Aquaveo format) mesh file
+pub fn parse_2dm(path: &str) -> Result<RustMesh, RustMeshError> {
+    let content = fs::read_to_string(path).map_err(|e| RustMeshError::IOError(e.to_string()))?;
+    let lines: Vec<&str> = content.lines().map(|l| l.trim()).collect();
+
+    let mut elements = Vec::new();
+    let mut vertices = Vec::new();
+    let mut elem_types = Vec::new();
+
+    // Parse 2dm format: lines starting with "E" (elements) and "ND" (nodes)
+    for (line_num, line) in lines.iter().enumerate() {
+        if line.is_empty() || line.starts_with("MESH") || line.starts_with("BEGMESH") || line.starts_with("ENDMESH") {
+            // Skip metadata lines
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.is_empty() {
+            continue;
+        }
+
+        match parts[0] {
+            "E" => {
+                // Element line: E ITYPE V1 V2 V3 [V4] [attrs...]
+                if parts.len() < 5 {
+                    return Err(RustMeshError::ParseError {
+                        line: line_num,
+                        reason: format!("Invalid element line (expected E ITYPE V1 V2 V3 [V4]): {}", line),
+                    });
+                }
+
+                let itype: u32 = parts[1].parse().map_err(|_| RustMeshError::ParseError {
+                    line: line_num,
+                    reason: format!("Invalid element type: {}", parts[1]),
+                })?;
+
+                if itype != 3 && itype != 4 {
+                    return Err(RustMeshError::InvalidElement {
+                        elem_id: elements.len(),
+                        reason: format!("Invalid element type {} (expected 3 or 4)", itype),
+                    });
+                }
+
+                let v0: i32 = (parts[2].parse::<i32>().map_err(|_| RustMeshError::ParseError {
+                    line: line_num,
+                    reason: format!("Invalid vertex ID: {}", parts[2]),
+                })?) - 1; // Convert to 0-indexed
+
+                let v1: i32 = (parts[3].parse::<i32>().map_err(|_| RustMeshError::ParseError {
+                    line: line_num,
+                    reason: format!("Invalid vertex ID: {}", parts[3]),
+                })?) - 1;
+
+                let v2: i32 = (parts[4].parse::<i32>().map_err(|_| RustMeshError::ParseError {
+                    line: line_num,
+                    reason: format!("Invalid vertex ID: {}", parts[4]),
+                })?) - 1;
+
+                if itype == 3 {
+                    // Triangle
+                    elements.push((v0, v1, v2, v2)); // Padded with v2
+                    elem_types.push(3);
+                } else {
+                    // Quad
+                    if parts.len() < 6 {
+                        return Err(RustMeshError::ParseError {
+                            line: line_num,
+                            reason: "Quad element missing V4".to_string(),
+                        });
+                    }
+
+                    let v3: i32 = (parts[5].parse::<i32>().map_err(|_| RustMeshError::ParseError {
+                        line: line_num,
+                        reason: format!("Invalid vertex ID: {}", parts[5]),
+                    })?) - 1;
+
+                    elements.push((v0, v1, v2, v3));
+                    elem_types.push(4);
+                }
+            }
+            "ND" => {
+                // Node line: ND ID X Y [Z]
+                if parts.len() < 4 {
+                    return Err(RustMeshError::ParseError {
+                        line: line_num,
+                        reason: format!("Invalid node line (expected ND ID X Y): {}", line),
+                    });
+                }
+
+                let _id: i32 = parts[1].parse().map_err(|_| RustMeshError::ParseError {
+                    line: line_num,
+                    reason: format!("Invalid node ID: {}", parts[1]),
+                })?;
+
+                let x: f64 = parts[2].parse().map_err(|_| RustMeshError::ParseError {
+                    line: line_num,
+                    reason: format!("Invalid X coordinate: {}", parts[2]),
+                })?;
+
+                let y: f64 = parts[3].parse().map_err(|_| RustMeshError::ParseError {
+                    line: line_num,
+                    reason: format!("Invalid Y coordinate: {}", parts[3]),
+                })?;
+
+                // Validate coordinates are finite
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(RustMeshError::InvalidGeometry(format!(
+                        "Non-finite coordinate: ({}, {})",
+                        x, y
+                    )));
+                }
+
+                vertices.push((x, y));
+            }
+            _ => {
+                // Skip unknown line types
+            }
+        }
+    }
+
+    if elements.is_empty() || vertices.is_empty() {
+        return Err(RustMeshError::ParseError {
+            line: 0,
+            reason: "No elements or vertices found in 2dm file".to_string(),
+        });
+    }
+
+    let n_elems = elements.len();
+    let n_verts = vertices.len();
+
+    // Build connectivity array
+    let mut connectivity = Array2::zeros((n_elems, 4));
+    for (idx, (v0, v1, v2, v3)) in elements.iter().enumerate() {
+        // Validate vertex bounds
+        for &v in &[*v0, *v1, *v2, *v3] {
+            if v < 0 || v >= n_verts as i32 {
+                return Err(RustMeshError::VertexOutOfBounds {
+                    vertex_id: v + 1,
+                    max_vertices: n_verts,
+                });
+            }
+        }
+        connectivity[[idx, 0]] = *v0;
+        connectivity[[idx, 1]] = *v1;
+        connectivity[[idx, 2]] = *v2;
+        connectivity[[idx, 3]] = *v3;
+    }
+
+    // Build points array
+    let mut points = Array2::zeros((n_verts, 2));
+    for (idx, (x, y)) in vertices.iter().enumerate() {
+        points[[idx, 0]] = *x;
+        points[[idx, 1]] = *y;
+    }
+
+    Ok(RustMesh {
+        points,
+        connectivity,
+        elem_type: elem_types,
+        num_verts: n_verts,
+        num_elems: n_elems,
+        edges: None,
+        areas: None,
+        layers: None,
+    })
+}
