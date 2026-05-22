@@ -226,7 +226,10 @@ def tri_to_quad_full(
 
     if convert_boundary_tris:
         conn, pts = _insert_boundary_tri_midpoint(conn, pts)
-        conn, pts = _pentagon_split_interior_tris(conn, pts)
+        # Pentagon-split removed per user direction "there should never be
+        # pentagons". Interior tris (padded rows lacking a mesh-boundary edge)
+        # should be eliminated upstream — improved doublet / QVM / swap
+        # passes below absorb them into neighbouring quads.
 
     for _ in range(doublet_passes):
         new_conn = _doublet_collapse(conn, pts)
@@ -254,6 +257,9 @@ def tri_to_quad_full(
     )
 
     if smooth:
+        from chilmesh import CHILmesh as _CM
+
+        # Smoothing pass 1: angle-based (FEM optional).
         pre_pts = np.asarray(out.points).copy()
         try:
             out.smooth_mesh(method=smooth_method, acknowledge_change=True)
@@ -262,20 +268,59 @@ def tri_to_quad_full(
         except Exception:
             out.change_points(pre_pts, acknowledge_change=True)
             out.smooth_mesh(method="angle-based", acknowledge_change=True)
-
         lap_pts = _laplacian_smooth(out, n_iter=smooth_iters, omega=0.7)
         out.change_points(lap_pts, acknowledge_change=True)
 
-        # Topological cleanup interleaved with smoothing — edge-swap +
-        # doublet/QVM are size-function-respecting operations (no new verts,
-        # no boundary motion). Verify validity after each pass.
-        from chilmesh import CHILmesh as _CM
-        from tests._validity.validator import validate_mesh_elements as _v
+        # Topology cleanup with validator-guarded acceptance: per
+        # iteration, snapshot the mesh, apply swap + doublet + QVM, then
+        # validate. If any new violation appears, discard the iteration
+        # and exit. Imported lazily so the module is importable outside
+        # the test environment.
+        try:
+            from tests._validity.validator import (
+                validate_mesh_elements as _v,
+            )
+            _have_validator = True
+        except ImportError:
+            _have_validator = False
+
+        def _viol_count(mesh: "CHILmesh") -> int:
+            if not _have_validator:
+                return -1
+            try:
+                return len(_v(mesh).violations)
+            except Exception:
+                return -1
+
+        baseline_viol = _viol_count(out)
+
+        class _SwapValidator:
+            """Callable wrapper that runs the mesh validator on a connectivity
+            snapshot and returns the violation count. Caches a ``baseline``
+            attribute so the swap loop can compare against the last-known-good
+            violation count."""
+
+            def __init__(self, baseline: int):
+                self.baseline = baseline
+
+            def __call__(self, conn_arr: np.ndarray, pts_arr: np.ndarray):
+                if not _have_validator:
+                    return None
+                try:
+                    snapshot = _CM(connectivity=conn_arr, points=pts_arr,
+                                    grid_name=out.grid_name,
+                                    compute_layers=True)
+                    return len(_v(snapshot).violations)
+                except Exception:
+                    return None
+
         for _ in range(8):
             c = np.asarray(out.connectivity_list, dtype=int).copy()
             p = np.asarray(out.points, dtype=float).copy()
+            sv = _SwapValidator(baseline=baseline_viol)
             c_new = _quad_pair_edge_swap(c, p, quality_threshold=0.5,
-                                          min_improvement=0.02)
+                                          min_improvement=0.02,
+                                          validator=sv)
             n_swap = int(np.sum(np.any(c != c_new, axis=1)))
             c_new = _doublet_collapse(c_new, p)
             c_new = _quad_vertex_merge(c_new, p)
@@ -284,14 +329,28 @@ def tri_to_quad_full(
                 break
             candidate = _CM(connectivity=c_new, points=p,
                              grid_name=out.grid_name, compute_layers=True)
-            try:
-                report = _v(candidate)
-                if not report.ok:
-                    break
-            except Exception:
+            new_viol = _viol_count(candidate)
+            if _have_validator and new_viol > baseline_viol:
                 break
             out = candidate
-            lap_pts = _laplacian_smooth(out, n_iter=smooth_iters, omega=0.7)
+            baseline_viol = new_viol if _have_validator else 0
+
+        # Final smoothing pass on the topology-cleaned mesh. Skip Laplacian
+        # inside the loop because post-doublet/QVM relabeling expands some
+        # vertex 1-rings into shapes Laplacian cannot smooth without
+        # crossing adjacent quads.
+        pre_pts = np.asarray(out.points).copy()
+        try:
+            out.smooth_mesh(method="angle-based", acknowledge_change=True)
+        except Exception:
+            out.change_points(pre_pts, acknowledge_change=True)
+        lap_pts = _laplacian_smooth(out, n_iter=smooth_iters, omega=0.5)
+        # Only accept Laplacian update if it doesn't break validity.
+        candidate2 = _CM(connectivity=out.connectivity_list,
+                          points=lap_pts, grid_name=out.grid_name,
+                          compute_layers=True)
+        final_viol = _viol_count(candidate2)
+        if not _have_validator or final_viol <= baseline_viol:
             out.change_points(lap_pts, acknowledge_change=True)
 
     return out
@@ -302,13 +361,15 @@ def _laplacian_smooth(
     n_iter: int = 100,
     omega: float = 0.7,
 ) -> np.ndarray:
-    """Constrained Laplacian smoothing: each interior vertex moves toward the
-    centroid of its 1-ring neighbours, blended by ``omega``. Boundary
-    vertices are held fixed (deliberate — per project direction, smoother
-    additions need a clear advantage over FEM / angle-based and must
-    respect input mesh-size constraints; boundary motion violates both).
+    """Guarded Laplacian smoothing: each interior vertex moves toward the
+    centroid of its 1-ring neighbours, blended by ``omega``. Each move is
+    accepted only if it preserves the signed-area sign of every incident
+    element (i.e., no element flips orientation or collapses). Boundary
+    vertices are held fixed.
 
-    Returns a new points array; does not mutate the mesh.
+    The guard prevents edge crossings in concave regions where the
+    centroid-pull would otherwise drag a vertex into an adjacent element's
+    footprint. Returns a new points array; does not mutate the mesh.
     """
     conn = np.asarray(mesh.connectivity_list, dtype=int)
     pts = np.asarray(mesh.points, dtype=float).copy()
@@ -318,7 +379,9 @@ def _laplacian_smooth(
 
     n_verts = pts.shape[0]
     nbrs: list[set[int]] = [set() for _ in range(n_verts)]
-    for row in conn:
+    vert_elems: list[list[int]] = [[] for _ in range(n_verts)]
+    for ei in range(conn.shape[0]):
+        row = conn[ei]
         if row[0] == row[3]:
             verts = [int(row[k]) for k in range(3)]
         else:
@@ -328,6 +391,25 @@ def _laplacian_smooth(
             a, b = verts[k], verts[(k + 1) % n]
             nbrs[a].add(b)
             nbrs[b].add(a)
+        for v in verts:
+            vert_elems[v].append(ei)
+
+    def _elem_signed(ei: int, pts_arr: np.ndarray) -> float:
+        row = conn[ei]
+        if row[0] == row[3]:
+            poly = pts_arr[[int(row[0]), int(row[1]), int(row[2])], :2]
+        else:
+            poly = pts_arr[[int(row[k]) for k in range(4)], :2]
+        x = poly[:, 0]
+        y = poly[:, 1]
+        return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+    # Cache reference signed-area sign for each element from the initial
+    # mesh — every Laplacian move must keep the same sign.
+    ref_signs = np.array(
+        [1 if _elem_signed(ei, pts) > 0 else -1 for ei in range(conn.shape[0])],
+        dtype=int,
+    )
 
     for _ in range(n_iter):
         new_pts = pts.copy()
@@ -335,7 +417,30 @@ def _laplacian_smooth(
             if v in boundary_verts or not nbrs[v]:
                 continue
             avg = np.mean([pts[u, :2] for u in nbrs[v]], axis=0)
-            new_pts[v, :2] = (1.0 - omega) * pts[v, :2] + omega * avg
+            new_xy = (1.0 - omega) * pts[v, :2] + omega * avg
+            # Cap step magnitude at 25% of the shortest incident edge.
+            min_edge = min(
+                float(np.linalg.norm(pts[u, :2] - pts[v, :2])) for u in nbrs[v]
+            )
+            delta = new_xy - pts[v, :2]
+            d_norm = float(np.linalg.norm(delta))
+            cap = 0.25 * min_edge
+            if d_norm > cap and d_norm > 1e-14:
+                new_xy = pts[v, :2] + delta * (cap / d_norm)
+            saved = pts[v, :2].copy()
+            pts[v, :2] = new_xy
+            ok = True
+            for ei in vert_elems[v]:
+                sa = _elem_signed(ei, pts)
+                if sa * ref_signs[ei] <= 0:
+                    ok = False
+                    break
+                if abs(sa) < 1e-14:
+                    ok = False
+                    break
+            if ok:
+                new_pts[v, :2] = new_xy
+            pts[v, :2] = saved
         pts = new_pts
     return pts
 
@@ -529,21 +634,73 @@ def _pentagon_split_interior_tris(
         new_pts.append(np.array([m_xy[0], m_xy[1], z]))
         next_vid += 1
 
-        # Split hexagon along diagonal s_a → q_far2 (or equivalent). The
-        # cleanest split that gives two quads:
-        #   quad1 = [s_a, q_far1, M, ???]
-        # Pentagon split via M and the diagonal from B to M:
-        # Hexagon CCW: s_a, q_far1, M, q_far2, s_b, B.
-        # Diagonals from M: M–s_a, M–q_far2 (adjacent edges, no), M–s_b
-        # (non-adj), M–B (non-adj).
-        # Two quads via diagonal M–B:
-        #   quad1 = [B, s_a, q_far1, M] (CCW)
-        #   quad2 = [B, M, q_far2, s_b] (CCW)
-        # Check: quad1 verts {B, s_a, q_far1, M} — 4 distinct ✓
-        #         quad2 verts {B, M, q_far2, s_b} — 4 distinct ✓
+        # Hexagon CCW: [s_a, q_far1, M, q_far2, s_b, B] (indices 0..5).
+        # Three "main diagonal" splits each yield a pair of quads:
+        #   (0, 3) = (s_a, q_far2)  → [s_a, q_far1, M, q_far2] + [s_a, q_far2, s_b, B]
+        #   (1, 4) = (q_far1, s_b)  → [q_far1, M, q_far2, s_b] + [q_far1, s_b, B, s_a]
+        #   (2, 5) = (M, B)         → [M, q_far2, s_b, B]     + [M, B, s_a, q_far1]
+        # Pick whichever maximises the minimum element skew quality.
         B = third
-        quad1 = [B, s_a, q_far1, m_vid]
-        quad2 = [B, m_vid, q_far2, s_b]
+        hexa = [s_a, q_far1, m_vid, q_far2, s_b, B]
+        # Build temporary points array with M position appended (m_vid points
+        # to it once we vstack at end).
+        pts_with_m = np.vstack([pts[:, :2], np.array([m_xy])])
+
+        def _q_skew(idx_list: list[int]) -> float:
+            poly = pts_with_m[idx_list]
+            angs = []
+            for k in range(4):
+                a = poly[(k - 1) % 4] - poly[k]
+                b = poly[(k + 1) % 4] - poly[k]
+                na = float(np.linalg.norm(a))
+                nb = float(np.linalg.norm(b))
+                if na < 1e-12 or nb < 1e-12:
+                    return 0.0
+                cos = float(np.dot(a, b) / (na * nb))
+                cos = max(-1.0, min(1.0, cos))
+                angs.append(np.degrees(np.arccos(cos)))
+            return max(0.0, 1.0 - max(abs(a - 90.0) for a in angs) / 90.0)
+
+        def _signed(idx_list: list[int]) -> float:
+            poly = pts_with_m[idx_list]
+            x = poly[:, 0]
+            y = poly[:, 1]
+            return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+        # Hexa vert ids in the temporary index space (m_vid → index = pts.shape[0]):
+        m_local = pts.shape[0]
+        H = [s_a, q_far1, m_local, q_far2, s_b, B]
+
+        candidates = [
+            ([H[0], H[1], H[2], H[3]], [H[0], H[3], H[4], H[5]]),  # diag (s_a, q_far2)
+            ([H[1], H[2], H[3], H[4]], [H[1], H[4], H[5], H[0]]),  # diag (q_far1, s_b)
+            ([H[2], H[3], H[4], H[5]], [H[2], H[5], H[0], H[1]]),  # diag (M, B) — original
+        ]
+        # Concrete-vertex variants for writing back into conn (replace m_local
+        # with m_vid which is the real id once we vstack new_pts later).
+        candidates_real = [
+            ([hexa[0], hexa[1], hexa[2], hexa[3]], [hexa[0], hexa[3], hexa[4], hexa[5]]),
+            ([hexa[1], hexa[2], hexa[3], hexa[4]], [hexa[1], hexa[4], hexa[5], hexa[0]]),
+            ([hexa[2], hexa[3], hexa[4], hexa[5]], [hexa[2], hexa[5], hexa[0], hexa[1]]),
+        ]
+        best_score = -1.0
+        best_pair: tuple[list[int], list[int]] | None = None
+        for (qa_idx, qb_idx), (qa_real, qb_real) in zip(candidates, candidates_real):
+            sa = _signed(qa_idx)
+            sb = _signed(qb_idx)
+            if sa * sb <= 0:
+                continue
+            if abs(sa) < 1e-12 or abs(sb) < 1e-12:
+                continue
+            score = min(_q_skew(qa_idx), _q_skew(qb_idx))
+            if score > best_score:
+                best_score = score
+                best_pair = (qa_real, qb_real)
+        if best_pair is None:
+            # Fall back to original diag (M, B) split to keep the algorithm
+            # producing a valid pair even if scoring rejected all (rare).
+            best_pair = candidates_real[2]
+        quad1, quad2 = best_pair
         conn[tri_eid] = np.array(quad1, dtype=int)
         conn[chosen_neighbor] = np.array(quad2, dtype=int)
         # Refresh edge map (cheap since small).
@@ -559,6 +716,7 @@ def _quad_pair_edge_swap(
     pts: np.ndarray,
     quality_threshold: float = 0.2,
     min_improvement: float = 0.05,
+    validator: "object | None" = None,
 ) -> np.ndarray:
     """Diagonal swap between adjacent quad pairs to fix slivery quads.
 
@@ -677,15 +835,92 @@ def _quad_pair_edge_swap(
                 ([a, b, e, f], [b, c, d, e]),  # diagonal (b, e)
                 ([a, b, c, f], [c, d, e, f]),  # diagonal (c, f)
             ]
+            # Reject swaps whose new diagonal exits the hexagon perimeter
+            # (i.e., the hexagon is non-convex and the diagonal would cross
+            # an outer edge). Check by verifying the diagonal's midpoint
+            # lies strictly inside the hexagon polygon.
+            hexa_poly = pts[[a, b, c, d, e, f], :2]
+
+            def _hex_signed() -> float:
+                x = hexa_poly[:, 0]
+                y = hexa_poly[:, 1]
+                return 0.5 * float(
+                    np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y)
+                )
+
+            hex_sa = _hex_signed()
+            if abs(hex_sa) < 1e-12:
+                continue
+
+            def _point_in_hex(p_xy: np.ndarray) -> bool:
+                # Ray-casting test.
+                inside = False
+                n = hexa_poly.shape[0]
+                for j in range(n):
+                    p1 = hexa_poly[j]
+                    p2 = hexa_poly[(j + 1) % n]
+                    if (p1[1] > p_xy[1]) != (p2[1] > p_xy[1]):
+                        x_int = p1[0] + (p_xy[1] - p1[1]) * (p2[0] - p1[0]) / (
+                            p2[1] - p1[1] + 1e-30
+                        )
+                        if x_int > p_xy[0]:
+                            inside = not inside
+                return inside
+
+            # Build hexagon edge list (each edge as a vertex id pair) so we
+            # can reject diagonals that cross any hexagon perimeter edge.
+            hex_verts = [a, b, c, d, e, f]
+
+            def _seg_cross(p1: np.ndarray, p2: np.ndarray,
+                            p3: np.ndarray, p4: np.ndarray) -> bool:
+                def _ori(pa, pb, pc):
+                    v = (pb[0] - pa[0]) * (pc[1] - pa[1]) - (
+                        pb[1] - pa[1]
+                    ) * (pc[0] - pa[0])
+                    if v > 1e-12:
+                        return 1
+                    if v < -1e-12:
+                        return -1
+                    return 0
+
+                o1 = _ori(p1, p2, p3)
+                o2 = _ori(p1, p2, p4)
+                o3 = _ori(p3, p4, p1)
+                o4 = _ori(p3, p4, p2)
+                if o1 == 0 or o2 == 0 or o3 == 0 or o4 == 0:
+                    return False
+                return o1 != o2 and o3 != o4
+
             best_local = None
             for cand_idx, (qa, qb) in enumerate(candidates):
                 sa = _signed_area(qa)
                 sb = _signed_area(qb)
-                # Both must have same sign (both CCW or both CW); else they
-                # cross or are inverted.
-                if sa * sb <= 0:
+                if sa * hex_sa <= 0 or sb * hex_sa <= 0:
                     continue
                 if abs(sa) < 1e-12 or abs(sb) < 1e-12:
+                    continue
+                diag = set(qa) & set(qb)
+                if len(diag) != 2:
+                    continue
+                d_a, d_b = list(diag)
+                p_a = pts[d_a, :2]
+                p_b = pts[d_b, :2]
+                # Reject diagonals that intersect any hexagon perimeter edge
+                # (i.e., the hexagon is non-convex and the diagonal exits
+                # the polygon).
+                crosses_perim = False
+                for hi in range(6):
+                    ha = hex_verts[hi]
+                    hb = hex_verts[(hi + 1) % 6]
+                    if ha in (d_a, d_b) or hb in (d_a, d_b):
+                        continue  # shares an endpoint
+                    if _seg_cross(p_a, p_b, pts[ha, :2], pts[hb, :2]):
+                        crosses_perim = True
+                        break
+                if crosses_perim:
+                    continue
+                mid = 0.5 * (p_a + p_b)
+                if not _point_in_hex(mid):
                     continue
                 q1q = _quad_skew_quality(qa)
                 q2q = _quad_skew_quality(qb)
@@ -707,8 +942,27 @@ def _quad_pair_edge_swap(
         if best_swap is None:
             continue
         nei, qa, qb, _ = best_swap
-        conn[ei] = np.array(qa, dtype=int)
-        conn[nei] = np.array(qb, dtype=int)
+        # Apply swap tentatively. If a validator is supplied, verify the
+        # swap doesn't add any violation beyond the baseline.
+        if validator is not None:
+            saved_ei = conn[ei].copy()
+            saved_nei = conn[nei].copy()
+            conn[ei] = np.array(qa, dtype=int)
+            conn[nei] = np.array(qb, dtype=int)
+            try:
+                rep = validator(conn, pts)
+                if rep is not None and rep > validator.baseline:
+                    conn[ei] = saved_ei
+                    conn[nei] = saved_nei
+                    continue
+                validator.baseline = rep if rep is not None else validator.baseline
+            except Exception:
+                conn[ei] = saved_ei
+                conn[nei] = saved_nei
+                continue
+        else:
+            conn[ei] = np.array(qa, dtype=int)
+            conn[nei] = np.array(qb, dtype=int)
         used[ei] = True
         used[nei] = True
         # Refresh edge map for subsequent quads.
