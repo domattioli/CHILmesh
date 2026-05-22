@@ -972,6 +972,43 @@ class CHILmesh(CHILmeshPlotMixin):
         order = np.lexsort((np.asarray(edge_ids), angles))
         return [int(edge_ids[i]) for i in order]
 
+    def rebuild_adjacencies(self, rebuild_spatial_indices: bool = True) -> None:
+        """Force a full rebuild of the adjacency cache from current connectivity.
+
+        Use after a mid-sweep mutation of ``connectivity_list`` (or ``points``)
+        where the cached adjacency dicts (``Edge2Vert``, ``Edge2Elem``,
+        ``Vert2Edge``, ``Vert2Elem``, ``Elem2Edge``, ``EdgeMap``) are now stale.
+        This is the public, non-private alternative to constructing a fresh
+        ``CHILmesh(connectivity, points)`` and is the supported entry point for
+        downstream consumers that mutate topology between adjacency queries.
+
+        Parameters:
+            rebuild_spatial_indices: When True (default), also rebuild the
+                vertex / centroid KD-trees, which become stale when ``points``
+                or ``connectivity_list`` change. Set False if only adjacency
+                metadata changed without geometry shifts.
+
+        Notes:
+            - Does NOT recompute skeletonization layers. If the topology
+              change altered the peel structure, also call ``_skeletonize()``
+              or invalidate layers separately.
+            - Preserves ``grid_name``, ``type``, and other metadata.
+        """
+        self._build_adjacencies()
+        if rebuild_spatial_indices:
+            self._build_spatial_indices()
+
+    def invalidate_adjacencies(self) -> None:
+        """Drop the cached adjacency dicts.
+
+        Clears ``self.adjacencies`` so that subsequent adjacency-dependent
+        accesses raise rather than return stale data. Call ``rebuild_adjacencies()``
+        before any further adjacency queries. Spatial indices and layer caches
+        are left untouched — invalidate them separately if needed.
+        """
+        self.adjacencies = {}
+        self.n_edges = 0
+
     def _build_spatial_indices(self) -> None:
         """Build KD-trees for fast spatial queries on vertices and element centroids."""
         self._vertex_tree = cKDTree(self.points[:, :2])
