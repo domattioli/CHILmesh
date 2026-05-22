@@ -61,8 +61,8 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
             f"connectivity has {mesh.connectivity_list.shape[1]} columns"
         )
 
-    tris = np.asarray(mesh.connectivity_list, dtype=int)
-    points = np.asarray(mesh.points, dtype=float)
+    tris = np.asarray(mesh.connectivity_list, dtype=int).copy()
+    points = np.asarray(mesh.points, dtype=float).copy()
     n_tris = tris.shape[0]
 
     tri_layer = _assign_layer_per_tri(mesh, n_tris)
@@ -113,8 +113,48 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
             consumed.add(t_b)
 
         leftover = [t for t in layer_pool if t not in consumed]
+
+        leftover_flipped = []
+        any_flipped = False
+        for t_id in leftover:
+            tri = tris[t_id]
+            tri_verts = [int(v) for v in tri]
+            flipped = False
+
+            for v_a, v_b in [
+                (tri_verts[0], tri_verts[1]),
+                (tri_verts[1], tri_verts[2]),
+                (tri_verts[2], tri_verts[0]),
+            ]:
+                key = _make_key(v_a, v_b)
+                tlist = edge_to_tris_global.get(key, [])
+
+                if len(tlist) == 2 and t_id in tlist:
+                    t_neighbor = tlist[0] if tlist[1] == t_id else tlist[1]
+                    if t_neighbor in consumed:
+                        continue
+
+                    neighbor = tris[t_neighbor]
+                    result = _flip_shared_edge(tri, neighbor, v_a, v_b)
+                    if result is not None:
+                        tri_new, neighbor_new = result
+                        tris[t_id] = np.array(tri_new, dtype=int)
+                        tris[t_neighbor] = np.array(neighbor_new, dtype=int)
+                        consumed.add(t_id)
+                        consumed.add(t_neighbor)
+                        leftover_flipped.extend([t_id, t_neighbor])
+                        flipped = True
+                        any_flipped = True
+                        break
+
+            if not flipped:
+                leftover_flipped.append(t_id)
+
+        if any_flipped:
+            edge_to_tris_global = _build_edge_map(tris)
+
         if layer > 0:
-            deferred.extend(leftover)
+            deferred.extend(leftover_flipped)
 
     leftover_interior: list[int] = []
     for t_id in range(n_tris):
@@ -135,11 +175,16 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
         )
 
     if leftover_interior:
+        leftover_interior, points = _apply_edge_insertion(
+            leftover_interior, tris, points, quad_rows, edge_to_tris_global
+        )
+
+    if leftover_interior:
         if strict:
             raise RuntimeError(
                 f"tri_to_quad left {len(leftover_interior)} interior triangles "
                 f"after layer-by-layer path-walk identifyEdgesFun_v2 + "
-                f"mergeTrianglesFun + removeTrianglesFun (first 10: {leftover_interior[:10]})."
+                f"mergeTrianglesFun + edge flips + edge insertion (first 10: {leftover_interior[:10]})."
             )
         for t_id in leftover_interior:
             verts = tris[t_id].tolist()
@@ -418,6 +463,78 @@ def _flip_shared_edge(
     ub = unique_b[0]
 
     return ((shared_v0, ub, ua), (shared_v1, ua, ub))
+
+
+def _apply_edge_insertion(
+    interior_tri_ids: list[int],
+    tris: np.ndarray,
+    points: np.ndarray,
+    quad_rows: list,
+    edge_to_tris: dict[tuple[int, int], list[int]],
+) -> tuple[list[int], np.ndarray]:
+    """Apply edge insertion (vertex split) to interior tris.
+
+    For each interior tri with an edge shared with a neighbor:
+    - Insert new vertex at 1/3 distance along shared edge
+    - Convert tri → quad via inserted vertex
+    - Add quad to output and new point to points array
+
+    Returns:
+        (remaining_tri_ids, updated_points_array)
+    """
+    if not interior_tri_ids:
+        return [], points
+
+    remaining = []
+    next_vert_id = len(points)
+    new_points_list = []
+
+    for t_id in interior_tri_ids:
+        tri = tris[t_id]
+        tri_verts = [int(v) for v in tri]
+
+        handled = False
+
+        for v_a, v_b in [
+            (tri_verts[0], tri_verts[1]),
+            (tri_verts[1], tri_verts[2]),
+            (tri_verts[2], tri_verts[0]),
+        ]:
+            edge_key = _make_key(v_a, v_b)
+            tlist = edge_to_tris.get(edge_key, [])
+            if len(tlist) >= 2:
+                p_a = points[v_a, :2]
+                p_b = points[v_b, :2]
+                new_pt_2d = (1.0 - 1.0/3.0) * p_a + (1.0/3.0) * p_b
+                new_pt_3d = np.array([new_pt_2d[0], new_pt_2d[1], points[v_a, 2]])
+
+                quad_v = [
+                    int(tri_verts[0]) if tri_verts[0] not in (v_a, v_b) else None,
+                    int(tri_verts[1]) if tri_verts[1] not in (v_a, v_b) else None,
+                    int(tri_verts[2]) if tri_verts[2] not in (v_a, v_b) else None,
+                ]
+                quad_v = [v for v in quad_v if v is not None]
+
+                if len(quad_v) == 1:
+                    quad_verts = [
+                        int(v_a),
+                        quad_v[0],
+                        int(v_b),
+                        next_vert_id,
+                    ]
+                    quad_rows.append(quad_verts)
+                    new_points_list.append(new_pt_3d)
+                    next_vert_id += 1
+                    handled = True
+                    break
+
+        if not handled:
+            remaining.append(t_id)
+
+    if new_points_list:
+        points = np.vstack([points, np.array(new_points_list)])
+
+    return remaining, points
 
 
 def _remove_interior_triangles(
