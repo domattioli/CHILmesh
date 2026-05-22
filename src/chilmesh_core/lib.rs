@@ -10,8 +10,8 @@ pub struct RustMesh {
     pub points: Array2<f64>,         // [n_verts, 2] — vertex coordinates
     pub connectivity: Array2<i32>,   // [n_elems, 3|4] — element vertex IDs
     pub elem_type: Vec<u32>,         // Element types (3=triangle, 4=quad)
-    pub n_verts: usize,
-    pub n_elems: usize,
+    pub num_verts: usize,
+    pub num_elems: usize,
 }
 
 #[pymethods]
@@ -22,8 +22,8 @@ impl RustMesh {
             points: Array2::zeros((0, 2)),
             connectivity: Array2::zeros((0, 4)),
             elem_type: Vec::new(),
-            n_verts: 0,
-            n_elems: 0,
+            num_verts: 0,
+            num_elems: 0,
         }
     }
 
@@ -32,8 +32,8 @@ impl RustMesh {
         self.points = mesh.points;
         self.connectivity = mesh.connectivity;
         self.elem_type = mesh.elem_type;
-        self.n_verts = mesh.n_verts;
-        self.n_elems = mesh.n_elems;
+        self.num_verts = mesh.num_verts;
+        self.num_elems = mesh.num_elems;
         Ok(())
     }
 
@@ -44,12 +44,12 @@ impl RustMesh {
 
     #[getter]
     fn n_verts(&self) -> usize {
-        self.n_verts
+        self.num_verts
     }
 
     #[getter]
     fn n_elems(&self) -> usize {
-        self.n_elems
+        self.num_elems
     }
 }
 
