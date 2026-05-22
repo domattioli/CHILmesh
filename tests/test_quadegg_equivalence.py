@@ -1,7 +1,12 @@
-"""Equivalence tests: verify quad-edge produces same outputs as EdgeMap.
+"""Equivalence tests: Quad-edge adjacency outputs vs. EdgeMap (canonical form).
 
-Uses canonical-form comparison for edge lists (handles different edge ID ordering
-between backends). Tests all 5 adjacency types on all 4 test fixtures.
+These tests validate that QuadEdgeTopology produces bit-identical adjacency
+outputs compared to the EdgeMap backend when using canonical-form comparison
+(edges sorted by min_vert, max_vert).
+
+Strategy: Build the same mesh with both edgemap and quadegg backends, then
+compare adjacency structures using canonical-form sorting for edge-ordering
+independence.
 """
 
 import pytest
@@ -9,146 +14,219 @@ import numpy as np
 from chilmesh.examples import annulus, donut, block_o, structured
 
 
-def canonical_edge_list(edge2vert):
-    """Convert edge list to canonical form (sorted by (min, max))."""
-    sorted_edges = np.sort(edge2vert, axis=1)
-    return tuple(sorted(map(tuple, sorted_edges)))
+FIXTURES = [
+    ('annulus', annulus),
+    ('donut', donut),
+    ('block_o', block_o),
+    ('structured', structured),
+]
 
 
-def compare_adjacency_canonical(em_adj, qe_adj, adj_name):
-    """Compare two adjacencies in canonical form (handles edge ID ordering)."""
-    em_canonical = canonical_edge_list(em_adj)
-    qe_canonical = canonical_edge_list(qe_adj)
-    
-    assert em_canonical == qe_canonical, \
-        f"{adj_name}: canonical forms differ"
+def _canonical_edge_set(edge2vert):
+    """Convert edge2vert array to canonical set of (min_v, max_v) tuples.
+
+    Handles different edge orderings between backends by normalizing each
+    edge to (min_vert, max_vert) form before comparison.
+    """
+    canonical = set()
+    for edge in edge2vert:
+        min_v, max_v = min(edge[0], edge[1]), max(edge[0], edge[1])
+        canonical.add((int(min_v), int(max_v)))
+    return canonical
 
 
-class TestQuadEdgeEquivalence:
-    """Test quad-edge equivalence with EdgeMap baseline."""
-    
-    FIXTURES = [annulus, donut, block_o, structured]
-    FIXTURE_NAMES = ['annulus', 'donut', 'block_o', 'structured']
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', zip(FIXTURES, FIXTURE_NAMES))
-    def test_edge2vert_equivalence(self, fixture_fn, fixture_name):
-        """Quad-edge Edge2Vert matches EdgeMap (canonical form)."""
+class TestQuadEdgeEquivalenceEdge2Vert:
+    """Validate Edge2Vert (edge endpoint list) equivalence."""
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_edge2vert_equivalence(self, fixture_name, fixture_fn):
+        """Quad-edge Edge2Vert matches EdgeMap in canonical form."""
+        # Build meshes with both backends
         mesh_em = fixture_fn(topology_backend='edgemap')
         mesh_qe = fixture_fn(topology_backend='quadegg')
-        
-        edge2vert_em = mesh_em.adjacencies['Edge2Vert']
-        edge2vert_qe = mesh_qe.adjacencies['Edge2Vert']
-        
-        compare_adjacency_canonical(edge2vert_em, edge2vert_qe, 
-                                   f'{fixture_name} Edge2Vert')
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', zip(FIXTURES, FIXTURE_NAMES))
-    def test_elem2edge_shape_consistency(self, fixture_fn, fixture_name):
-        """Quad-edge Elem2Edge shape matches EdgeMap."""
-        mesh_em = fixture_fn(topology_backend='edgemap')
-        mesh_qe = fixture_fn(topology_backend='quadegg')
-        
-        elem2edge_em = mesh_em.adjacencies['Elem2Edge']
-        elem2edge_qe = mesh_qe.adjacencies['Elem2Edge']
-        
-        assert elem2edge_em.shape == elem2edge_qe.shape, \
-            f'{fixture_name}: Elem2Edge shape mismatch'
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', zip(FIXTURES, FIXTURE_NAMES))
-    def test_vert2edge_count_consistency(self, fixture_fn, fixture_name):
-        """Quad-edge Vert2Edge reports same incident counts as EdgeMap."""
-        mesh_em = fixture_fn(topology_backend='edgemap')
-        mesh_qe = fixture_fn(topology_backend='quadegg')
-        
-        vert2edge_em = mesh_em.adjacencies['Vert2Edge']
-        vert2edge_qe = mesh_qe.adjacencies['Vert2Edge']
-        
-        assert len(vert2edge_em) == len(vert2edge_qe), \
-            f'{fixture_name}: Vert2Edge dict size mismatch'
-        
-        # Check incident edge counts per vertex
-        for v in range(len(vert2edge_em)):
-            em_count = len(vert2edge_em[v])
-            qe_count = len(vert2edge_qe[v])
-            assert em_count == qe_count, \
-                f'{fixture_name} vertex {v}: incident edge count mismatch'
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', zip(FIXTURES, FIXTURE_NAMES))
-    def test_vert2elem_count_consistency(self, fixture_fn, fixture_name):
-        """Quad-edge Vert2Elem reports same incident counts as EdgeMap."""
-        mesh_em = fixture_fn(topology_backend='edgemap')
-        mesh_qe = fixture_fn(topology_backend='quadegg')
-        
-        vert2elem_em = mesh_em.adjacencies['Vert2Elem']
-        vert2elem_qe = mesh_qe.adjacencies['Vert2Elem']
-        
-        assert len(vert2elem_em) == len(vert2elem_qe), \
-            f'{fixture_name}: Vert2Elem dict size mismatch'
-        
-        # Check incident element counts per vertex
-        for v in range(len(vert2elem_em)):
-            em_count = len(vert2elem_em[v])
-            qe_count = len(vert2elem_qe[v])
-            assert em_count == qe_count, \
-                f'{fixture_name} vertex {v}: incident element count mismatch'
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', zip(FIXTURES[:2], FIXTURE_NAMES[:2]))
-    def test_edge2elem_shape_consistency(self, fixture_fn, fixture_name):
-        """Quad-edge Edge2Elem shape matches EdgeMap."""
-        mesh_em = fixture_fn(topology_backend='edgemap')
-        mesh_qe = fixture_fn(topology_backend='quadegg')
-        
-        edge2elem_em = mesh_em.adjacencies['Edge2Elem']
-        edge2elem_qe = mesh_qe.adjacencies['Edge2Elem']
-        
-        assert edge2elem_em.shape == edge2elem_qe.shape, \
-            f'{fixture_name}: Edge2Elem shape mismatch'
-        
-        # Check boundary edge sentinels (-1 for boundary)
-        em_boundary_count = np.sum(edge2elem_em == -1)
-        qe_boundary_count = np.sum(edge2elem_qe == -1)
-        assert em_boundary_count == qe_boundary_count, \
-            f'{fixture_name}: boundary edge count mismatch'
+
+        # Extract Edge2Vert
+        e2v_em = mesh_em.adjacencies['Edge2Vert']
+        e2v_qe = mesh_qe.adjacencies['Edge2Vert']
+
+        # Convert to canonical sets
+        edges_em = _canonical_edge_set(e2v_em)
+        edges_qe = _canonical_edge_set(e2v_qe)
+
+        # Compare
+        assert edges_em == edges_qe, (
+            f"Edge2Vert mismatch on {fixture_name}: "
+            f"EdgeMap has {len(edges_em)} edges, quad-edge has {len(edges_qe)} edges"
+        )
 
 
-class TestQuadEdgeConsistency:
-    """Test consistency of adjacency conversions (internal logic)."""
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', 
-                            zip([annulus, donut], ['annulus', 'donut']))
-    def test_elem2edge_references_valid_edges(self, fixture_fn, fixture_name):
-        """Verify Elem2Edge references only valid edge IDs."""
+class TestQuadEdgeEquivalenceElem2Edge:
+    """Validate Elem2Edge (element edge list) equivalence."""
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_elem2edge_edge_sets(self, fixture_name, fixture_fn):
+        """Quad-edge Elem2Edge has same edges per element as EdgeMap (set comparison)."""
+        mesh_em = fixture_fn(topology_backend='edgemap')
         mesh_qe = fixture_fn(topology_backend='quadegg')
-        elem2edge = mesh_qe.adjacencies['Elem2Edge']
-        n_edges = mesh_qe.n_edges
-        
-        # All non-padding edge IDs should be in range [0, n_edges)
-        valid_mask = (elem2edge >= -1) & (elem2edge < n_edges)
-        assert np.all(valid_mask), \
-            f'{fixture_name}: invalid edge IDs in Elem2Edge'
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', 
-                            zip([annulus, donut], ['annulus', 'donut']))
-    def test_vert2edge_references_valid_edges(self, fixture_fn, fixture_name):
-        """Verify Vert2Edge references only valid edge IDs."""
+
+        e2v_em = mesh_em.adjacencies['Edge2Vert']
+        e2v_qe = mesh_qe.adjacencies['Edge2Vert']
+        e2e_em = mesh_em.adjacencies['Elem2Edge']
+        e2e_qe = mesh_qe.adjacencies['Elem2Edge']
+
+        # Map from EdgeMap edge ID to canonical edge tuple
+        edges_em_list = [tuple(sorted(e)) for e in e2v_em]
+        edges_qe_list = [tuple(sorted(e)) for e in e2v_qe]
+
+        # For each element, collect incident edges in canonical form
+        for elem_idx in range(mesh_em.n_elems):
+            # EdgeMap edges
+            edge_ids_em = e2e_em[elem_idx]
+            edge_ids_em = edge_ids_em[edge_ids_em >= 0]  # Filter out padding
+            edges_in_elem_em = set(edges_em_list[eid] for eid in edge_ids_em)
+
+            # Quad-edge edges
+            edge_ids_qe = e2e_qe[elem_idx]
+            edge_ids_qe = edge_ids_qe[edge_ids_qe >= 0]  # Filter out padding
+            edges_in_elem_qe = set(edges_qe_list[eid] for eid in edge_ids_qe)
+
+            assert edges_in_elem_em == edges_in_elem_qe, (
+                f"Elem2Edge mismatch for {fixture_name} element {elem_idx}: "
+                f"EdgeMap edges {edges_in_elem_em} vs quad-edge edges {edges_in_elem_qe}"
+            )
+
+
+class TestQuadEdgeEquivalenceVert2Edge:
+    """Validate Vert2Edge (vertex incident edge list) equivalence."""
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_vert2edge_incident_edges(self, fixture_name, fixture_fn):
+        """Quad-edge Vert2Edge has same incident edges per vertex as EdgeMap."""
+        mesh_em = fixture_fn(topology_backend='edgemap')
         mesh_qe = fixture_fn(topology_backend='quadegg')
-        vert2edge = mesh_qe.adjacencies['Vert2Edge']
-        n_edges = mesh_qe.n_edges
-        
-        for v, edge_ids in vert2edge.items():
-            for edge_id in edge_ids:
-                assert 0 <= edge_id < n_edges, \
-                    f'{fixture_name} vertex {v}: invalid edge ID {edge_id}'
-    
-    @pytest.mark.parametrize('fixture_fn,fixture_name', 
-                            zip([annulus, donut], ['annulus', 'donut']))
-    def test_vert2elem_references_valid_elems(self, fixture_fn, fixture_name):
-        """Verify Vert2Elem references only valid element IDs."""
+
+        e2v_em = mesh_em.adjacencies['Edge2Vert']
+        e2v_qe = mesh_qe.adjacencies['Edge2Vert']
+        v2e_em = mesh_em.adjacencies['Vert2Edge']
+        v2e_qe = mesh_qe.adjacencies['Vert2Edge']
+
+        # Map from edge IDs to canonical edge tuples
+        edges_em_list = [tuple(sorted(e)) for e in e2v_em]
+        edges_qe_list = [tuple(sorted(e)) for e in e2v_qe]
+
+        # For each vertex, check incident edges
+        for vert_idx in range(mesh_em.n_verts):
+            # EdgeMap incident edges (in canonical form)
+            edge_ids_em = v2e_em.get(vert_idx, set())
+            incident_em = set(edges_em_list[eid] for eid in edge_ids_em)
+
+            # Quad-edge incident edges (in canonical form)
+            edge_ids_qe = v2e_qe.get(vert_idx, set())
+            incident_qe = set(edges_qe_list[eid] for eid in edge_ids_qe)
+
+            assert incident_em == incident_qe, (
+                f"Vert2Edge mismatch for {fixture_name} vertex {vert_idx}: "
+                f"EdgeMap incident {incident_em} vs quad-edge incident {incident_qe}"
+            )
+
+
+class TestQuadEdgeEquivalenceVert2Elem:
+    """Validate Vert2Elem (vertex incident element list) equivalence."""
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_vert2elem_incident_elements(self, fixture_name, fixture_fn):
+        """Quad-edge Vert2Elem has same incident elements per vertex as EdgeMap."""
+        mesh_em = fixture_fn(topology_backend='edgemap')
         mesh_qe = fixture_fn(topology_backend='quadegg')
-        vert2elem = mesh_qe.adjacencies['Vert2Elem']
-        n_elems = mesh_qe.n_elems
-        
-        for v, elem_ids in vert2elem.items():
-            for elem_id in elem_ids:
-                assert 0 <= elem_id < n_elems, \
-                    f'{fixture_name} vertex {v}: invalid element ID {elem_id}'
+
+        v2m_em = mesh_em.adjacencies['Vert2Elem']
+        v2m_qe = mesh_qe.adjacencies['Vert2Elem']
+
+        # For each vertex, check incident elements
+        for vert_idx in range(mesh_em.n_verts):
+            elems_em = v2m_em.get(vert_idx, set())
+            elems_qe = v2m_qe.get(vert_idx, set())
+
+            assert elems_em == elems_qe, (
+                f"Vert2Elem mismatch for {fixture_name} vertex {vert_idx}: "
+                f"EdgeMap incident {elems_em} vs quad-edge incident {elems_qe}"
+            )
+
+
+class TestQuadEdgeEquivalenceEdge2Elem:
+    """Validate Edge2Elem (edge adjacent element list) equivalence."""
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_edge2elem_adjacent_elements(self, fixture_name, fixture_fn):
+        """Quad-edge Edge2Elem has same adjacent elements per edge as EdgeMap."""
+        mesh_em = fixture_fn(topology_backend='edgemap')
+        mesh_qe = fixture_fn(topology_backend='quadegg')
+
+        e2v_em = mesh_em.adjacencies['Edge2Vert']
+        e2v_qe = mesh_qe.adjacencies['Edge2Vert']
+        e2m_em = mesh_em.adjacencies['Edge2Elem']
+        e2m_qe = mesh_qe.adjacencies['Edge2Elem']
+
+        # Map edges by their canonical form (min_v, max_v) since ordering may differ
+        assert len(e2v_em) == len(e2v_qe), (
+            f"Edge count mismatch for {fixture_name}"
+        )
+
+        # Build canonical edge -> (adjacent elements) mapping for EdgeMap
+        edge_to_elems_em = {}
+        for edge_idx in range(len(e2v_em)):
+            edge_verts = tuple(sorted(e2v_em[edge_idx]))
+            elems = tuple(sorted(int(e) for e in e2m_em[edge_idx] if e >= 0))
+            edge_to_elems_em[edge_verts] = set(elems)
+
+        # Build canonical edge -> (adjacent elements) mapping for quad-edge
+        edge_to_elems_qe = {}
+        for edge_idx in range(len(e2v_qe)):
+            edge_verts = tuple(sorted(e2v_qe[edge_idx]))
+            elems = tuple(sorted(int(e) for e in e2m_qe[edge_idx] if e >= 0))
+            edge_to_elems_qe[edge_verts] = set(elems)
+
+        # Compare all edges
+        for edge_verts in edge_to_elems_em:
+            assert edge_verts in edge_to_elems_qe, (
+                f"Edge2Elem: Edge {edge_verts} missing in quad-edge for {fixture_name}"
+            )
+            assert edge_to_elems_em[edge_verts] == edge_to_elems_qe[edge_verts], (
+                f"Edge2Elem mismatch for {fixture_name} edge {edge_verts}: "
+                f"EdgeMap {edge_to_elems_em[edge_verts]} vs quad-edge {edge_to_elems_qe[edge_verts]}"
+            )
+
+
+class TestQuadEdgeEquivalenceOverallCount:
+    """High-level equivalence checks (mesh size invariants)."""
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_vertex_count_unchanged(self, fixture_name, fixture_fn):
+        """Vertex count unchanged across backends."""
+        mesh_em = fixture_fn(topology_backend='edgemap')
+        mesh_qe = fixture_fn(topology_backend='quadegg')
+
+        assert mesh_em.n_verts == mesh_qe.n_verts, (
+            f"Vertex count mismatch for {fixture_name}"
+        )
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_element_count_unchanged(self, fixture_name, fixture_fn):
+        """Element count unchanged across backends."""
+        mesh_em = fixture_fn(topology_backend='edgemap')
+        mesh_qe = fixture_fn(topology_backend='quadegg')
+
+        assert mesh_em.n_elems == mesh_qe.n_elems, (
+            f"Element count mismatch for {fixture_name}"
+        )
+
+    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
+    def test_edge_count_unchanged(self, fixture_name, fixture_fn):
+        """Edge count unchanged across backends."""
+        mesh_em = fixture_fn(topology_backend='edgemap')
+        mesh_qe = fixture_fn(topology_backend='quadegg')
+
+        assert mesh_em.n_edges == mesh_qe.n_edges, (
+            f"Edge count mismatch for {fixture_name}: "
+            f"EdgeMap {mesh_em.n_edges} vs quad-edge {mesh_qe.n_edges}"
+        )

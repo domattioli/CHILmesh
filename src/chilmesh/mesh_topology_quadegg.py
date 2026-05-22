@@ -94,12 +94,12 @@ class QuadEdgeTopology:
 
         Returns ndarray[n_edges, 2] with element indices (-1 for boundary).
 
-        Extracts element ownership from the stored quad-edge structure,
-        building a directed-edge-to-element mapping first for O(n) lookup.
+        Builds mapping from element connectivity directly, independent of
+        quad-edge traversal (which may be expensive or error-prone).
         """
-        # Build undirected edge list (canonical form)
+        # Build canonical edge list (same order as to_edge2vert)
         edges = self._to_canonical_edge_list()
-        edge_to_elems = {tuple(e): [-1, -1] for e in edges}
+        edge_to_id = {tuple(e): i for i, e in enumerate(edges)}
 
         # Build directed-edge-to-element map (which element owns each directed edge)
         elem_cols = self.elem2vert.shape[1]
@@ -113,23 +113,18 @@ class QuadEdgeTopology:
                 v2 = int(elem_verts[(i + 1) % elem_type])
                 directed_edge_to_elem[(v1, v2)] = elem_idx
 
-        # Walk quad-edges to populate edge_to_elems
-        for edge_idx in range(len(self.edges)):
-            origin = int(self.edges[edge_idx, 0])
-            next_cw = int(self.edges[edge_idx, 1])
+        # Map each undirected edge to its adjacent elements
+        edge_to_elems = {tuple(e): [-1, -1] for e in edges}
 
-            # Determine destination vertex via next_cw traversal
-            if next_cw >= 0:
-                dest = int(self.edges[next_cw, 0])
-                undirected_edge = tuple(sorted([origin, dest]))
+        for directed_edge, elem_idx in directed_edge_to_elem.items():
+            v1, v2 = directed_edge
+            undirected_edge = tuple(sorted([v1, v2]))
 
-                # Look up which element owns this directed edge
-                if (origin, dest) in directed_edge_to_elem:
-                    elem_idx = directed_edge_to_elem[(origin, dest)]
-                    if origin < dest:
-                        edge_to_elems[undirected_edge][0] = elem_idx
-                    else:
-                        edge_to_elems[undirected_edge][1] = elem_idx
+            # Assign to position based on vertex ordering
+            if v1 < v2:
+                edge_to_elems[undirected_edge][0] = elem_idx
+            else:
+                edge_to_elems[undirected_edge][1] = elem_idx
 
         result = []
         for edge in edges:
