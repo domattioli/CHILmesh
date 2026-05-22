@@ -234,6 +234,18 @@ def tri_to_quad_full(
             break
         conn = new_conn
 
+    for _ in range(doublet_passes):
+        new_conn = _quad_vertex_merge(conn, pts)
+        if new_conn.shape[0] == conn.shape[0]:
+            break
+        conn = new_conn
+        # Doublet pass after QVM since the merge can create new valence-2 verts.
+        for _ in range(doublet_passes):
+            new_conn = _doublet_collapse(conn, pts)
+            if new_conn.shape[0] == conn.shape[0]:
+                break
+            conn = new_conn
+
     out = CHILmesh(
         connectivity=conn,
         points=pts,
@@ -466,6 +478,81 @@ def _pentagon_split_interior_tris(
     if new_pts:
         pts = np.vstack([pts, np.asarray(new_pts, dtype=float)])
     return conn, pts
+
+
+def _quad_vertex_merge(
+    conn: np.ndarray,
+    pts: np.ndarray,
+) -> np.ndarray:
+    """Port of QuADMesh ``QuadVertexMerge_v2``.
+
+    For each interior quad whose two diagonally-opposite vertices are both
+    interior valence-3 vertices, collapse the diagonal: keep one vertex
+    (``v_a``), drop the other (``v_b``), relabel all incident elements'
+    references from ``v_b`` to ``v_a``. The center quad becomes degenerate
+    (two of its corners now equal ``v_a``) and is dropped; the four
+    neighbor quads share ``v_a`` going from 5 elems → 4 elems covering
+    the same union (no coverage loss).
+
+    Mutual exclusivity: each QVM operation touches 5 quads (center + 4
+    neighbors). Greedily skip overlapping clusters within a single pass.
+    """
+    n_elems = conn.shape[0]
+    if n_elems == 0:
+        return conn
+
+    edge_to_elems = _build_full_edge_map(conn)
+    boundary_verts: set[int] = set()
+    for key, elems in edge_to_elems.items():
+        if len(elems) == 1:
+            boundary_verts.add(key[0])
+            boundary_verts.add(key[1])
+
+    vert_to_elems: dict[int, list[int]] = {}
+    for ei in range(n_elems):
+        row = conn[ei]
+        if row[0] == row[3]:
+            verts = {int(row[k]) for k in range(3)}
+        else:
+            verts = {int(row[k]) for k in range(4)}
+        for v in verts:
+            vert_to_elems.setdefault(v, []).append(ei)
+
+    keep = np.ones(n_elems, dtype=bool)
+    locked: set[int] = set()  # elem ids participating in a QVM this pass.
+
+    for ei in range(n_elems):
+        if not keep[ei] or ei in locked:
+            continue
+        row = conn[ei]
+        if row[0] == row[3]:
+            continue  # tri
+        # Two diagonals.
+        for da, db in ((0, 2), (1, 3)):
+            v_a, v_b = int(row[da]), int(row[db])
+            if v_a in boundary_verts or v_b in boundary_verts:
+                continue
+            if len(vert_to_elems.get(v_a, [])) != 3 or len(vert_to_elems.get(v_b, [])) != 3:
+                continue
+            cluster = set(vert_to_elems[v_a]) | set(vert_to_elems[v_b])
+            if any(c in locked for c in cluster):
+                continue
+            if any(not keep[c] for c in cluster):
+                continue
+            if len(cluster) != 5:
+                continue  # diagonals must be distinct topologically; sanity check.
+
+            # Collapse v_b → v_a in all of v_b's incident elements (other than
+            # center, which dies entirely).
+            for nei in vert_to_elems[v_b]:
+                if nei == ei:
+                    continue
+                conn[nei] = np.where(conn[nei] == v_b, v_a, conn[nei])
+            keep[ei] = False
+            locked.update(cluster)
+            break
+
+    return conn[keep]
 
 
 def _doublet_collapse(
