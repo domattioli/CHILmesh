@@ -52,6 +52,11 @@ Thumbs.db
 *.dylib
 *.dll
 
+# Cargo (Rust)
+Cargo.lock
+target/
+*.rlib
+
 # Spec-kit runtime state (tooling state — not project artefacts)
 # but keep .specify/memory/constitution.md (versioned project artefact, #107)
 .specify/memory/*
