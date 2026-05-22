@@ -332,22 +332,38 @@ fn parse_element_line(
     Ok(())
 }
 
-/// Write RustMesh to Fort.14 format
+/// Write RustMesh to Fort.14 (ADCIRC ASCII) format.
+///
+/// Produces a file compatible with CHILmesh.read_from_fort14:
+///   Line 0: grid name (title)
+///   Line 1: NE NP (element count, node count)
+///   Lines 2 .. 2+NP-1: node lines "ID X Y Z"  (Z=0)
+///   Lines 2+NP .. end: element lines "ID ITYPE V1 V2 V3 [V4]"  (1-indexed)
 pub fn write_fort14(mesh: &RustMesh, path: &str) -> Result<(), RustMeshError> {
     let mut output = String::new();
 
-    // Write header
+    // Line 0: title header (grid name)
+    output.push_str("RustMesh export\n");
+
+    // Line 1: NE NP
     output.push_str(&format!("{} {}\n", mesh.num_elems, mesh.num_verts));
 
-    // Write elements
+    // Node lines: ID X Y Z  (vertices first, per standard fort.14 layout)
+    for vert_idx in 0..mesh.num_verts {
+        let x = mesh.points[[vert_idx, 0]];
+        let y = mesh.points[[vert_idx, 1]];
+        output.push_str(&format!("{} {:.10e} {:.10e} 0.0000000000e+00\n", vert_idx + 1, x, y));
+    }
+
+    // Element lines: ID ITYPE V1 V2 V3 [V4]  (1-indexed vertices)
     for elem_idx in 0..mesh.num_elems {
         let itype = mesh.elem_type[elem_idx];
-        let v0 = mesh.connectivity[[elem_idx, 0]] + 1; // Convert to 1-indexed
+        let v0 = mesh.connectivity[[elem_idx, 0]] + 1;
         let v1 = mesh.connectivity[[elem_idx, 1]] + 1;
         let v2 = mesh.connectivity[[elem_idx, 2]] + 1;
 
         if itype == 3 {
-            // Triangle: write v0, v1, v2 (v3 is redundant)
+            // Triangle: write v0, v1, v2 (v3 padding is internal only)
             output.push_str(&format!("{} {} {} {} {}\n", elem_idx + 1, itype, v0, v1, v2));
         } else {
             // Quad: write all four vertices
@@ -356,14 +372,6 @@ pub fn write_fort14(mesh: &RustMesh, path: &str) -> Result<(), RustMeshError> {
         }
     }
 
-    // Write coordinates
-    for vert_idx in 0..mesh.num_verts {
-        let x = mesh.points[[vert_idx, 0]];
-        let y = mesh.points[[vert_idx, 1]];
-        output.push_str(&format!("{:.8e} {:.8e}\n", x, y));
-    }
-
-    // Write to file
     fs::write(path, output).map_err(|e| RustMeshError::IOError(e.to_string()))?;
     Ok(())
 }
