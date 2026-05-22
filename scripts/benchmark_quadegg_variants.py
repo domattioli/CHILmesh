@@ -23,7 +23,7 @@ import numpy as np
 from chilmesh import CHILmesh
 
 BACKENDS = ['edgemap', 'halfedge', 'quadegg']
-OPERATIONS = ['fast_init', 'full_init']
+OPERATIONS = ['fast_init', 'full_init', 'quality_analysis', 'query_latency']
 WNAT_HAGEN_PATH = "/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14"
 
 
@@ -68,6 +68,7 @@ def benchmark_backend(backend_name: str, mesh_path: str) -> Dict[str, Tuple[floa
         mesh = CHILmesh.read_from_fort14(
             mesh_path,
             compute_layers=False,
+            compute_adjacencies=True,
             topology_backend=backend_name
         )
     
@@ -84,9 +85,31 @@ def benchmark_backend(backend_name: str, mesh_path: str) -> Dict[str, Tuple[floa
     
     median, std, peak_mem = measure_operation('full_init', full_init, n_trials=2)
     results['full_init'] = (median, std, peak_mem)
-    
+
+    # Load mesh for quality analysis and query latency
+    mesh = CHILmesh.read_from_fort14(
+        mesh_path,
+        compute_layers=True,
+        topology_backend=backend_name
+    )
+
+    # Operation 3: Quality analysis (compute signed areas)
+    def quality_analysis():
+        _ = mesh.signed_area()
+
+    median, std, peak_mem = measure_operation('quality_analysis', quality_analysis, n_trials=2)
+    results['quality_analysis'] = (median, std, peak_mem)
+
+    # Operation 4: Query latency (vertex edge lookup)
+    def query_latency():
+        for v_idx in range(0, mesh.n_verts, max(1, mesh.n_verts // 10)):
+            _ = mesh.get_vertex_edges(v_idx)
+
+    median, std, peak_mem = measure_operation('query_latency', query_latency, n_trials=2)
+    results['query_latency'] = (median, std, peak_mem)
+
     print(f"✓", file=sys.stderr)
-    
+
     return results
 
 
