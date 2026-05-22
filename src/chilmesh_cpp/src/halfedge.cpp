@@ -269,20 +269,12 @@ void HalfEdgeMesh::skeletonize() {
             }
         }
 
-        // IE: inner elements = elements not in to_peel that share a vertex with to_peel
-        // (simplified: use remaining active elements adjacent to peel zone)
+        // IE: inner elements = active, not-peeled elements that share an OV vertex
+        // (Python parity: IE is adjacent to OV only, NOT to every OE vertex)
         std::vector<bool> is_peel_elem(n_elems, false);
         for (int e : to_peel) is_peel_elem[e] = true;
-        std::vector<bool> is_peeled_vert2(n_verts, false);
-        for (int e : to_peel) {
-            int k = max_vpe;
-            while (k > 3 && connectivity[e * max_vpe + k - 1] == -1) --k;
-            for (int i = 0; i < k; ++i) {
-                int32_t v = connectivity[e * max_vpe + i];
-                if (v >= 0) is_peeled_vert2[v] = true;
-            }
-        }
-        // IE: active, not peeled, share vertex with peeled
+        std::vector<bool> is_ov_vert(n_verts, false);
+        for (int32_t v : ld.OV) is_ov_vert[v] = true;
         for (int e = 0; e < n_elems; ++e) {
             if (!active_elem[e] || is_peel_elem[e]) continue;
             int k = max_vpe;
@@ -290,15 +282,23 @@ void HalfEdgeMesh::skeletonize() {
             bool adjacent = false;
             for (int i = 0; i < k && !adjacent; ++i) {
                 int32_t v = connectivity[e * max_vpe + i];
-                if (v >= 0 && is_peeled_vert2[v]) adjacent = true;
+                if (v >= 0 && is_ov_vert[v]) adjacent = true;
             }
             if (adjacent) ld.IE.push_back(e);
         }
 
+        // Python parity: each skeletonization iteration consumes BOTH the outer
+        // ring (OE) and the inner vertex-adjacent ring (IE). Build a single
+        // peel list combining both, then update inactive state once.
+        std::vector<int32_t> to_consume;
+        to_consume.reserve(ld.OE.size() + ld.IE.size());
+        for (int32_t e : ld.OE) to_consume.push_back(e);
+        for (int32_t e : ld.IE) to_consume.push_back(e);
+
         layers.push_back(std::move(ld));
 
-        // Mark peeled elements inactive, update boundary counts
-        for (int e : to_peel) {
+        // Mark all consumed elements inactive, update boundary counts
+        for (int e : to_consume) {
             active_elem[e] = false;
             elem_layer[e] = layer_idx;
             remaining--;
