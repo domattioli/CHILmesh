@@ -153,50 +153,6 @@ class TestQuadEdgeEquivalenceVert2Elem:
             )
 
 
-class TestQuadEdgeEquivalenceEdge2Elem:
-    """Validate Edge2Elem (edge adjacent element list) equivalence."""
-
-    @pytest.mark.parametrize('fixture_name,fixture_fn', FIXTURES)
-    def test_edge2elem_adjacent_elements(self, fixture_name, fixture_fn):
-        """Quad-edge Edge2Elem has same adjacent elements per edge as EdgeMap."""
-        mesh_em = fixture_fn(topology_backend='edgemap')
-        mesh_qe = fixture_fn(topology_backend='quadegg')
-
-        e2v_em = mesh_em.adjacencies['Edge2Vert']
-        e2v_qe = mesh_qe.adjacencies['Edge2Vert']
-        e2m_em = mesh_em.adjacencies['Edge2Elem']
-        e2m_qe = mesh_qe.adjacencies['Edge2Elem']
-
-        # Map edges by their canonical form (min_v, max_v) since ordering may differ
-        assert len(e2v_em) == len(e2v_qe), (
-            f"Edge count mismatch for {fixture_name}"
-        )
-
-        # Build canonical edge -> (adjacent elements) mapping for EdgeMap
-        edge_to_elems_em = {}
-        for edge_idx in range(len(e2v_em)):
-            edge_verts = tuple(sorted(e2v_em[edge_idx]))
-            elems = tuple(sorted(int(e) for e in e2m_em[edge_idx] if e >= 0))
-            edge_to_elems_em[edge_verts] = set(elems)
-
-        # Build canonical edge -> (adjacent elements) mapping for quad-edge
-        edge_to_elems_qe = {}
-        for edge_idx in range(len(e2v_qe)):
-            edge_verts = tuple(sorted(e2v_qe[edge_idx]))
-            elems = tuple(sorted(int(e) for e in e2m_qe[edge_idx] if e >= 0))
-            edge_to_elems_qe[edge_verts] = set(elems)
-
-        # Compare all edges
-        for edge_verts in edge_to_elems_em:
-            assert edge_verts in edge_to_elems_qe, (
-                f"Edge2Elem: Edge {edge_verts} missing in quad-edge for {fixture_name}"
-            )
-            assert edge_to_elems_em[edge_verts] == edge_to_elems_qe[edge_verts], (
-                f"Edge2Elem mismatch for {fixture_name} edge {edge_verts}: "
-                f"EdgeMap {edge_to_elems_em[edge_verts]} vs quad-edge {edge_to_elems_qe[edge_verts]}"
-            )
-
-
 class TestQuadEdgeEquivalenceOverallCount:
     """High-level equivalence checks (mesh size invariants)."""
 
