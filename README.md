@@ -154,15 +154,14 @@ CHILmesh is engineered for fast initialisation, query, and analysis on large uns
 
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 
-| Stage | v0.2.0 ※ | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † | v0.6.0-dev (C++) § |
-|---|---:|---:|---:|---:|
-| **Full init (with layers)** | **7.7 s** | **2.90 s** | *(pending)* | **0.11 s** (0.04×) |
-| Quality analysis | 6.6 s | **48 ms** | *(pending)* | **< 1 ms** |
-| **Total workflow** | **14.3 s** | **~3.0 s** | *(pending)* | **~0.11 s** |
+| Stage | v0.2.0 ※ | v0.4.0 (EdgeMap) | v0.6.0-dev (C++) † |
+|---|---:|---:|---:|
+| **Full init (with layers)** | **7.7 s** | **2.83 s** | **0.11 s** (0.04×) |
+| Quality analysis | 6.6 s | **48 ms** | **< 1 ms** |
+| **Total workflow** | **14.3 s** | **~3.0 s** | **~0.11 s** |
 
-※ v0.2.0 = MATLAB baseline (original CHILmesh thesis, 2017); direct Python port before any optimization.  
-† Rust backend (quad-edge) measurements pending. Issue #145 tracking skeletonization regression (0.59s on WNAT_Hagen vs 0.19s EdgeMap).  
-§ C++ half-edge backend measured on WNAT_Hagen (52,774 verts · 98,365 elems). 28–30× faster init than EdgeMap Python; achievable via flat contiguous adjacency arrays and vectorized quality computation.
+※ v0.2.0 = MATLAB baseline (original CHILmesh thesis, 2017); direct Python port before optimization.  
+† C++ half-edge backend measured on WNAT_Hagen (52,774 verts · 98,365 elems). **26× faster** full init via flat contiguous adjacency arrays + vectorized quality ops. Rust backend (quad-edge) exists but PyO3 FFI layer needs debugging; deferred to Phase 010 after #145 investigation.
 
 Per-stage breakdown, methodology, and historical baselines in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_cpp.py --json results.json`.
 
