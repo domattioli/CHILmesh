@@ -2,6 +2,7 @@ pub mod errors;
 pub mod io;
 pub mod adjacency;
 pub mod queries;
+pub mod skeletonization;
 
 use pyo3::prelude::*;
 use ndarray::{Array1, Array2};
@@ -17,6 +18,7 @@ pub struct RustMesh {
     pub num_elems: usize,
     pub edges: Option<Array2<i32>>,  // Quad-edge topology: [n_edges, 4]
     pub areas: Option<Array1<f64>>,  // Signed areas: [n_elems] (computed on demand)
+    pub layers: Option<Vec<skeletonization::Layer>>, // Skeletonization layers (computed on demand)
 }
 
 #[pymethods]
@@ -31,6 +33,7 @@ impl RustMesh {
             num_elems: 0,
             edges: None,
             areas: None,
+            layers: None,
         }
     }
 
@@ -187,6 +190,127 @@ impl RustMesh {
         let result = queries::get_element_vertices(e, &self.connectivity);
         Ok(PyArray1::from_owned_array(py, result).to_owned())
     }
+
+    /// Skeletonize the mesh by layer-by-layer boundary removal
+    fn skeletonize(&mut self, quality_threshold: Option<f64>) -> PyResult<()> {
+        let layers = skeletonization::skeletonize_medial_axis(
+            &self.connectivity,
+            &self.points,
+            quality_threshold,
+        ).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+
+        validate_layers(&layers, self.num_elems)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+
+        self.layers = Some(layers);
+        Ok(())
+    }
+
+    /// Get number of layers (must call skeletonize first)
+    fn get_num_layers(&self) -> PyResult<usize> {
+        match &self.layers {
+            Some(layers) => Ok(layers.len()),
+            None => Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Layers not computed. Call skeletonize() first.",
+            )),
+        }
+    }
+
+    /// Get a specific layer as a Python dict
+    fn get_layer<'py>(&self, py: Python<'py>, layer_idx: usize) -> PyResult<Py<pyo3::types::PyDict>> {
+        match &self.layers {
+            Some(layers) => {
+                if layer_idx >= layers.len() {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        format!("Layer index {} out of range [0, {}]", layer_idx, layers.len() - 1)
+                    ));
+                }
+
+                let layer = &layers[layer_idx];
+
+                // Create a Python dict with the layer data
+                let dict = pyo3::types::PyDict::new_bound(py);
+
+                // Convert Vec<usize> to PyList
+                let oe: Vec<usize> = layer.oe.clone();
+                let ie: Vec<usize> = layer.ie.clone();
+                let ov: Vec<usize> = layer.ov.clone();
+                let iv: Vec<usize> = layer.iv.clone();
+                let b_edge_ids: Vec<usize> = layer.b_edge_ids.clone();
+
+                dict.set_item("OE", oe)?;
+                dict.set_item("IE", ie)?;
+                dict.set_item("OV", ov)?;
+                dict.set_item("IV", iv)?;
+                dict.set_item("bEdgeIDs", b_edge_ids)?;
+
+                Ok(dict.unbind())
+            }
+            None => Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Layers not computed. Call skeletonize() first.",
+            )),
+        }
+    }
+
+    /// Get all layers as a list of dicts
+    fn get_all_layers<'py>(&self, py: Python<'py>) -> PyResult<Vec<Py<pyo3::types::PyDict>>> {
+        match &self.layers {
+            Some(layers) => {
+                let mut result = Vec::new();
+                for (layer_idx, _layer) in layers.iter().enumerate() {
+                    // Use get_layer to construct each layer dict
+                    result.push(self.get_layer(py, layer_idx)?);
+                }
+                Ok(result)
+            }
+            None => Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Layers not computed. Call skeletonize() first.",
+            )),
+        }
+    }
+}
+
+/// Validate layer invariants
+fn validate_layers(layers: &[skeletonization::Layer], total_elems: usize) -> Result<(), String> {
+    let mut elem_count = 0;
+    let mut all_elems = std::collections::HashSet::new();
+
+    for (layer_idx, layer) in layers.iter().enumerate() {
+        // Check disjoint OE/IE
+        let oe_set: std::collections::HashSet<_> = layer.oe.iter().copied().collect();
+        let ie_set: std::collections::HashSet<_> = layer.ie.iter().copied().collect();
+
+        let overlap: Vec<_> = oe_set.intersection(&ie_set).copied().collect();
+        if !overlap.is_empty() {
+            return Err(format!(
+                "Layer {}: OE/IE overlap detected: {:?}",
+                layer_idx, overlap
+            ));
+        }
+
+        // Check coverage
+        elem_count += layer.oe.len() + layer.ie.len();
+
+        // Check no duplicate elements across layers
+        for &elem in layer.oe.iter().chain(layer.ie.iter()) {
+            if !all_elems.insert(elem) {
+                return Err(format!(
+                    "Element {} appears in multiple layers",
+                    elem
+                ));
+            }
+        }
+    }
+
+    // Verify total coverage
+    if elem_count != total_elems {
+        return Err(format!(
+            "Coverage invariant violated: {} elements classified, {} total",
+            elem_count, total_elems
+        ));
+    }
+
+    Ok(())
 }
 
 #[pymodule]
