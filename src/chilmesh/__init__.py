@@ -16,6 +16,12 @@ try:
 except metadata.PackageNotFoundError:  # pragma: no cover - package not installed
     __version__ = "0.0.0"
 
+try:
+    import chilmesh_core as _rust_core  # noqa: F401
+    __backend__ = "rust"
+except ImportError:
+    __backend__ = "python"
+
 __all__ = [
     "CHILmesh",
     "write_fort14",

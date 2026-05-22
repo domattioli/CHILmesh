@@ -45,6 +45,60 @@ jobs:
           MPLBACKEND: Agg
         run: python -m pytest -n auto -v --cov=src/chilmesh --cov-report=term --cov-fail-under=80
 
+  rust-build:
+    name: Rust build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo build (release)
+        run: cargo build --release --manifest-path src/chilmesh_core/Cargo.toml
+
+      - name: Verify binary size
+        shell: bash
+        run: |
+          SO=$(find src/chilmesh_core/target/release -name "*.so" -o -name "*.dylib" -o -name "*.dll" 2>/dev/null | head -1)
+          if [ -n "$SO" ]; then
+            SIZE=$(wc -c < "$SO")
+            echo "Binary size: $SIZE bytes"
+            [ "$SIZE" -lt 52428800 ] && echo "PASS: < 50 MB" || (echo "FAIL: >= 50 MB"; exit 1)
+          fi
+
+      - name: maturin build (wheel)
+        run: |
+          pip install maturin
+          maturin build --release --manifest-path src/chilmesh_core/Cargo.toml
+
+  pyo3-smoke:
+    name: PyO3 smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build and install Rust wheel
+        run: |
+          pip install maturin
+          maturin build --release --manifest-path src/chilmesh_core/Cargo.toml
+          pip install src/chilmesh_core/target/wheels/chilmesh_core-*.whl
+
+      - name: Verify RustMesh import
+        run: python -c "from chilmesh_core import RustMesh; print('RustMesh OK')"
+
   build-and-smoke:
     name: build sdist+wheel + smoke install
     if: github.event_name != 'pull_request'
