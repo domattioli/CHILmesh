@@ -161,7 +161,7 @@ Any change requiring downstream code modification. Policy:
 
 ### Release Checklist
 
-- [ ] All tests pass on Python 3.10 / 3.11 / 3.12 × Ubuntu / macOS.
+- [ ] All tests pass on Python 3.10 / 3.11 / 3.12 × Ubuntu / macOS / Windows.
 - [ ] `CHANGELOG.md` updated with user-visible changes.
 - [ ] Version bumped in `pyproject.toml`.
 - [ ] README examples verified.

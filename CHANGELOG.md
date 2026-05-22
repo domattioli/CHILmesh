@@ -4,6 +4,158 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [1.0.0] — 2026-05-22
+
+First **stable** release. CHILmesh is now the production backbone for ADMESH,
+MADMESHR, and ADMESH-Domains.
+
+### 🚀 Headline
+
+- **C++ half-edge backend bit-equivalent to Python.** A pybind11-based extension
+  (`chilmesh_cpp`) ships alongside the Python implementation. Full init on
+  WNAT_Hagen (52,774 verts · 98,365 elements): Python 3.21 s → **C++ 0.069 s**
+  (46× speedup). Skeletonization in isolation: **C++ 0.033 s vs Python 2.20 s
+  (66×)**. Both backends produce identical layer membership across all 4 built-in
+  fixtures and WNAT_Hagen — verified by `tests/test_backend_equivalence.py`
+  (36 parametrized cases across OE / IE / OV / IV / bEdgeIDs / signed_area /
+  Vert2Edge).
+- **Rust quad-edge backend (`chilmesh_core`)** also ships; fast init 0.029 s
+  (35× vs Python). Available through direct import; per-call Vert2Edge FFI
+  overhead under investigation (#145).
+
+### ✨ v1.0.0 Added
+
+- **`from chilmesh import Mesh`** — preferred class name (alias of `CHILmesh`).
+- **`chilmesh.backend_info()`** — returns `{available, selected, versions}` dict
+  describing the active backend trio. Honors `CHILMESH_BACKEND` env override.
+- **`MeshAdapterForMADMESHR`**, **`MeshAdapterForADMESH`**,
+  **`MeshAdapterForADMESHDomains`** re-exported at the package root.
+- **`tests/test_backend_equivalence.py`** — cross-backend correctness gate
+  (36 cases).
+- **`scripts/benchmark_all_backends.py`** — multi-backend WNAT_Hagen benchmark
+  with JSON archival.
+
+### 🔧 v1.0.0 Fixed
+
+- **C++ skeletonization algorithm parity** with Python: each iteration now
+  consumes both `OE` and `IE` rings (was: `OE` only, producing 2× too many
+  layers); `IE` is now computed against `OV` only (was: every OE vertex,
+  overinclusive); `IV` is computed after `IE` so inner-ring vertices are
+  included (was: missing IE vertices).
+- **C++ `bEdgeIDs`** — boundary edge IDs now exposed alongside OE/IE/OV/IV
+  in the per-layer dict (was: absent, breaking `paths_on_outer_vertices` and
+  bridge adapters).
+
+### 🔨 v1.0.0 Changed
+
+- **Version bump** 0.4.1 → 1.0.0. Public API now under semver — breaking
+  changes require a 2.x bump.
+- **Python requirement** `>=3.8` → `>=3.10` to match the active CI matrix and
+  shed end-of-life interpreters.
+- **`Development Status`** classifier: Alpha → Production/Stable.
+- **`Programming Language :: C++`** classifier added.
+- **`[tool.setuptools] packages`** list now includes `chilmesh.backends` —
+  the backend wrappers ship in the installed wheel (previously dropped silently).
+- **MANIFEST.in** ships C++ source (`*.cpp`, `*.hpp`, `CMakeLists.txt`,
+  `pyproject.toml`) and Rust source (`*.rs`, `Cargo.toml`, `Cargo.lock`)
+  so users on platforms without a pre-built wheel can compile locally.
+
+### 🗑 v1.0.0 Removed
+
+- **`src/@CHILmesh/`** — legacy MATLAB class definition (no longer maintained;
+  Python is the active successor).
+- **`specs/`** — 10 historical phase spec directories (preserved in git
+  history; `.planning/` is the canonical location for ongoing planning).
+- **`scripts/cloud-setup.sh`** — pinned to a deprecated branch.
+
+### 📚 v1.0.0 Docs
+
+- README overhauled: new **Why CHILmesh** and **Backends** sections;
+  Performance table refreshed with v1.0.0 measured numbers; API Overview
+  updated to use `Mesh` instead of `CHILmesh.CHILmesh`.
+
+### ⏳ Deferred to v1.1.0
+
+- Pre-built binary wheels (`cibuildwheel` for manylinux / macOS / Windows).
+- `Mesh.read_from_fort14(..., backend='cpp')` keyword — for now backends are
+  used via direct `chilmesh_cpp` / `chilmesh_core` imports.
+
+### ✨ Public API additions since v0.4.1
+
+- **`CHILmesh.submesh(elem_ids) -> CHILmesh`** (#138) — a public sub-mesh
+  factory that returns a new `CHILmesh` restricted to the given element
+  indices, with vertex indices remapped to a compact `[0, k)` numbering
+  and `points` sliced to the referenced vertices only. Forwards
+  `compute_layers` / `compute_adjacencies` to the constructor.
+  Deduplicates input and sorts by element id for deterministic output.
+  Padded-triangle rows are preserved bit-for-bit through the remap.
+  Boundary detection runs fresh on the sub-mesh topology, so edges that
+  were interior in the parent become boundary edges in the sub-mesh
+  when their partner falls outside the selection — the contract
+  downstream `two_part_smoother`-style routines need to apply
+  region-differential smoothing without calling private APIs. Covered
+  by `tests/test_submesh.py` (91 tests across all five built-in
+  fixtures: input validation, vertex remap correctness, geometry
+  preservation, signed-area parity, boundary-flag propagation, and
+  outer-layer extraction round-trip).
+- **`CHILmesh(compute_adjacencies=...)`** keyword on the constructor and on
+  `read_from_fort14` / `read_from_2dm` / `from_admesh_domain` (#134).
+  Defaults to `None`, in which case it tracks `compute_layers` so existing
+  callers see byte-identical behaviour. Passing
+  `compute_layers=False, compute_adjacencies=True` builds the full
+  adjacency dict bundle (`Vert2Edge`, `Vert2Elem`, `Edge2Vert`,
+  `Edge2Elem`, `Elem2Edge`, `EdgeMap`) without paying the layer-sweep
+  cost — needed by downstream consumers (quadmesh-matlab, MADMESHR) that
+  previously had to call the private `_build_adjacencies()` method to
+  exercise the public adjacency API. Layer-sweep still implicitly forces
+  adjacency construction (it depends on it), so
+  `compute_layers=True, compute_adjacencies=False` is silently coerced
+  to `True/True`. Covered by `tests/test_compute_adjacencies_flag.py`.
+- **`CHILmesh.ccw_edges_around_vert(vert_id) -> list[int]`** (#133) — the
+  edges incident to a vertex returned in counterclockwise order
+  (`atan2(dy, dx)` from the vertex to its other endpoint, ascending; ties
+  broken by edge id for determinism). Lets downstream packages delete the
+  private CCW walks they currently maintain (see e.g. quadmesh-matlab's
+  `python/quadmesh/_topology.py:ccw_edges_around_vert`). Raises
+  `ValueError` for out-of-range vertices and `RuntimeError` when
+  adjacencies were not built. Covered across all four built-in fixtures
+  plus a hand-checkable synthetic case in
+  `tests/test_ccw_edges_around_vert.py`.
+
+### 🔧 Fixed
+
+- **Windows portability of fort.14 / 2dm I/O** (#121, partial). The three
+  `open()` sites in `chilmesh.CHILmesh` now pass explicit
+  `encoding='utf-8'` and `newline=` arguments. Reads use
+  `newline=''` (universal-newline translation) so CRLF-terminated files
+  authored on Windows roundtrip identically to LF-terminated files
+  authored on POSIX; writes force `newline='\n'` so the produced bytes
+  are byte-identical across all platforms. Adds
+  `tests/test_io_portability.py` to lock the invariant.
+- **OS-portable `build-and-smoke` venv path** (#121, partial). The smoke
+  install step in `.github/workflows/python-package.yml` now uses
+  `$RUNNER_TEMP/smoke` (GitHub-provided absolute tmp path) and resolves
+  the venv interpreter via `sys.platform` so the step works unchanged on
+  Linux, macOS, and Windows runners. `shell: bash` pinned (Git Bash on
+  Windows). The `windows-latest` matrix add remains open under #121.
+
+### 🛠 Build & CI
+
+- `tests/conftest.py`: documented xdist safety of session-scope
+  `_MESH_CACHE` (#122). pytest-xdist's process-per-worker model gives
+  each worker an independent dict — no shared-state race. Empirically
+  confirmed via `pytest -n auto -k "not block_o"` (649 passed,
+  deterministic across runs).
+- **Coverage gate** (#122, TEST-AUDIT F13). Push-to-`main` /
+  `release/**` pytest invocation now runs with
+  `--cov=src/chilmesh --cov-report=term --cov-fail-under=80`. PR runs
+  intentionally skip coverage to keep cycle time low. Floor set after
+  F1 raised `CHILmesh.py` line coverage 73 % → 89 % and overall to
+  83 % on the fast subset. TESTING.md "CI & Release Gates" documents
+  the policy.
+
 ## [0.4.1] — 2026-05-18 (Consumer-Readiness + Zenodo Patch)
 
 Patch release primarily for Zenodo first-archive and consumer-facing

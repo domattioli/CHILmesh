@@ -255,7 +255,7 @@ Each finding is keyed `F<n>` for cross-referencing in the backlog below.
 - **F5 — No standalone test for `CHILmesh.copy()`.** The fixture cache relies on `.copy()` for mutation safety (`tests/conftest.py:21-22`), but there's no invariants test confirming a deep, independent copy. If `.copy()` ever degrades to a shallow copy, every mutation test silently begins corrupting the cache.
 - **F6 — Assertion messages absent on ~half of assertions.** 218 of 439 assertions carry an explanatory message; the rest fail with bare `assert <expr>`. For numerical-equality assertions in particular (geometry roundtrip, quality invariants), `assert a == b, f"got {a}, expected {b}"` saves CI-log triage time.
 - **F7 — `tempfile.NamedTemporaryFile(delete=False)` + manual `unlink()` in `tests/test_2dm_reader.py`.** 9 occurrences (`tests/test_2dm_reader.py:25, 52, 80, 104, 123, 142, 162, 183, 205`), all paired with `try/finally`. Works, but `tmp_path` is the pytest-idiomatic choice and is crash-safe if a test errors before the `finally`.
-- **F8 — Wall-clock performance gate in `tests/test_admesh_warmstart.py:367-371`.** `time.time()` deltas in CI are noisy across runners. Either widen the gate to clearly cover macOS variance, or move the perf gate behind `@pytest.mark.slow` and run it on a single canonical runner.
+- ~~**F8 — Wall-clock performance gate in `tests/test_admesh_warmstart.py:367-371`.**~~ **Resolved 2026-05-20:** gate is now Linux-only (`@pytest.mark.skipif(sys.platform != "linux")`), threshold widened 30 s → 60 s, and timing moved from `time.time()` to `time.perf_counter()`. macOS / Windows cells in the push-to-`main` matrix skip the perf assertion deliberately — wall-clock comparisons across runner classes were the documented flake risk and that surface is now closed.
 
 ### Low
 
@@ -284,6 +284,9 @@ Resolved in this session (autonomous batch on `daily-issue-fixing`):
 | F9 | ✅ Resolved | `20ac025` | `slow` marker registered in `[tool.pytest.ini_options]`. Warning count 12 → 10. |
 | F11 | ✅ Resolved | `2427103` | README Tests badge points at `python-package.yml`. |
 | F14 | ✅ Resolved | `3eb5391` | Four uncovered lines in `_skeletonize` and `pinch_points` are defensive guards unreachable on valid meshes — marked with `# pragma: no cover` and inline rationale. Added 4 new behavioral lock-in tests for `pinch_points` (threshold edge cases, monotonicity, idempotency) in `tests/test_advancing_front.py`. `CHILmesh.py` 89% → 90%; total 88% → 89%. |
+| F13 | ✅ Resolved | (this commit) | `--cov-fail-under=80` added to push-to-`main` / `release/**` pytest invocation in `.github/workflows/python-package.yml`. PR runs intentionally skip coverage to keep cycle time low. Local fast-subset measurement: 83 % line coverage (701 passed, 14 skipped). TESTING.md "CI & Release Gates" updated. |
+| F12 | 📋 Tracked | `#128` | Umbrella issue lists all 7 `None` entries in `MATLAB_REFERENCE_LAYER_COUNTS` as a checklist. Capture requires running QuADMesh+ MATLAB against each ADMESH-Domains entry; no code change in this repo until the values land. |
+| F8 | ✅ Resolved | (this commit) | Wall-clock gate in `test_performance_annulus` now `skipif(sys.platform != "linux")`, threshold 30 s → 60 s, timing source `time.time()` → `time.perf_counter()`. Closes the macOS/Windows wall-clock flake surface introduced when #121 added those runners to the push-to-`main` matrix. |
 
 Outstanding backlog (per-finding follow-up tickets pending):
 

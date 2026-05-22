@@ -75,5 +75,13 @@ output/annulus_layer2_boundary.*
 output/annulus_layers.png
 output/annulus_smoothed_retri.png
 output/layer2_debug.png
+
 # Manim intermediate render artefacts (regenerable from output/*_scene.py)
 output/media/
+
+# Rust build artifacts
+src/chilmesh_core/target/
+
+# C++ build artifacts
+src/chilmesh_cpp/build/
+src/chilmesh_cpp/build_local/

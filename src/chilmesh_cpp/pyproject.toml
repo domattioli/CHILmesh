@@ -1,0 +1,13 @@
+[build-system]
+requires = ["scikit-build-core>=0.3", "pybind11>=2.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "chilmesh-cpp"
+version = "0.6.0.dev0"
+description = "C++ half-edge backend for CHILmesh"
+requires-python = ">=3.9"
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = []

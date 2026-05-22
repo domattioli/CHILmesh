@@ -137,6 +137,88 @@ class CHILmesh(CHILmeshPlotMixin):
         inner = self.layers["IE"][layer_idx]
         return np.sort(np.concatenate([outer, inner]).astype(int))
 
+    def submesh(
+        self,
+        elem_ids: Union[np.ndarray, List[int], Tuple[int, ...]],
+        compute_layers: bool = True,
+        compute_adjacencies: Opt[bool] = None,
+    ) -> "CHILmesh":
+        """
+        Return a new :class:`CHILmesh` restricted to the given element indices (#138).
+
+        The sub-mesh holds a compact copy of the selected elements: vertex indices
+        are renumbered into [0, k) where k is the number of distinct vertices the
+        selection references, and ``points`` is sliced accordingly. The original
+        mesh is unchanged.
+
+        Parameters:
+            elem_ids: Indices of elements to include. May contain duplicates; the
+                method deduplicates internally. Must be non-empty.
+            compute_layers: Whether to skeletonize the sub-mesh (default: True).
+                Forwarded to :class:`CHILmesh` constructor.
+            compute_adjacencies: Whether to build adjacency dicts on the sub-mesh.
+                ``None`` tracks ``compute_layers``. See :meth:`__init__`.
+
+        Returns:
+            A new :class:`CHILmesh` containing only the selected elements, with
+            vertex indices remapped to a compact local numbering. ``grid_name`` is
+            suffixed with ``"_submesh"`` when the parent grid had a name.
+
+        Raises:
+            ValueError: If ``elem_ids`` is empty or contains out-of-range indices.
+
+        Notes:
+            * Element ordering in the sub-mesh follows the **sorted** order of the
+              unique input indices, not the input order. This keeps the operation
+              deterministic regardless of caller iteration order.
+            * For 4-column (quad or mixed) connectivity, padded triangle rows
+              ``[v0, v1, v2, v0]`` remain padded after remapping (duplicates are
+              preserved bit-for-bit through ``np.unique`` + dict lookup).
+            * Boundary detection is recomputed from the sub-mesh topology: edges
+              that were interior in the parent may become boundary edges in the
+              sub-mesh when their partner element falls outside the selection.
+
+        Example:
+            >>> # Extract the outermost skeletonization layer as its own mesh.
+            >>> outer = mesh.submesh(mesh.elements_in_layer(0))
+            >>> outer.n_elems
+            42
+        """
+        elem_ids = np.asarray(elem_ids, dtype=np.int64).ravel()
+        if elem_ids.size == 0:
+            raise ValueError("submesh requires at least one element id")
+        if elem_ids.min() < 0 or elem_ids.max() >= self.n_elems:
+            raise ValueError(
+                f"elem_ids out of range [0, {self.n_elems}): "
+                f"got min={int(elem_ids.min())}, max={int(elem_ids.max())}"
+            )
+
+        # Deduplicate and sort — np.unique gives both in one pass.
+        unique_elems = np.unique(elem_ids)
+        sub_conn = self.connectivity_list[unique_elems].copy()
+
+        # -1 is the sentinel for triangle padding in 4-column mixed meshes.
+        # Exclude it from the vertex remap; points[-1] is a real vertex and
+        # must not be pulled into sub_points.
+        valid_mask = sub_conn >= 0
+        unique_verts = np.unique(sub_conn[valid_mask])
+        remap_table = np.searchsorted(unique_verts, sub_conn)
+        remap = np.where(valid_mask, remap_table, -1)
+
+        sub_points = self.points[unique_verts].copy()
+
+        sub_grid_name = (
+            f"{self.grid_name}_submesh" if self.grid_name is not None else None
+        )
+
+        return CHILmesh(
+            connectivity=remap,
+            points=sub_points,
+            grid_name=sub_grid_name,
+            compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
+        )
+
     def change_points(self, new_points, acknowledge_change=False):
         """
         Change the mesh's (x,y,z) locations of its points.
@@ -150,7 +232,7 @@ class CHILmesh(CHILmeshPlotMixin):
         elif new_points.shape[1] == 3:  self.points = new_points
         else:                           raise ValueError("new_points must have 2 or 3 columns")
 
-    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True ) -> None:
+    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None ) -> None:
         """
         Initialize a CHILmesh object.
 
@@ -158,7 +240,16 @@ class CHILmesh(CHILmeshPlotMixin):
             connectivity: Element connectivity list (n_elems × 3 for triangles, n_elems × 4 for quads/mixed)
             points: Vertex coordinates (n_verts × 3, with z=0 for 2D meshes)
             grid_name: Name of the mesh
-            compute_layers: If False, skip skeletonization for fast init (default: True)
+            compute_layers: If False, skip skeletonization for fast init (default: True).
+                Skeletonization requires adjacencies, so when True, adjacencies are
+                always built regardless of ``compute_adjacencies``.
+            compute_adjacencies: Whether to build adjacency dicts (Vert2Edge, Vert2Elem,
+                Edge2Vert, Edge2Elem, Elem2Edge, EdgeMap). If None (default), tracks
+                ``compute_layers`` for backward compatibility. Set explicitly to True
+                with ``compute_layers=False`` to obtain a mesh with usable adjacency
+                queries (``get_vertex_edges``, ``edge2vert``, ``boundary_edges`` etc.)
+                but no layer sweep — useful when downstream consumers need topology
+                without paying the skeletonization cost (#134).
 
         Attributes set during initialization:
             layers (dict): Skeletonization result with keys:
@@ -188,8 +279,19 @@ class CHILmesh(CHILmeshPlotMixin):
         if connectivity is None and points is None:
             self._create_random_triangulation()
 
+        # Default compute_adjacencies follows compute_layers so old callers see
+        # identical behavior; layer sweep cannot run without adjacencies, so
+        # force-enable when layers are requested.
+        if compute_adjacencies is None:
+            compute_adjacencies = compute_layers
+        if compute_layers:
+            compute_adjacencies = True
+
         # Initialize the mesh
-        self._initialize_mesh(compute_layers=compute_layers)
+        self._initialize_mesh(
+            compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
+        )
     
     def _create_random_triangulation( self ) -> None:
         """Create a random Delaunay triangulation for testing"""
@@ -202,11 +304,14 @@ class CHILmesh(CHILmeshPlotMixin):
         self.connectivity_list = tri.simplices
         self.grid_name = "Random Delaunay"
 
-    def _initialize_mesh( self, compute_layers: bool = True ) -> None:
+    def _initialize_mesh( self, compute_layers: bool = True, compute_adjacencies: bool = True ) -> None:
         """Initialize the mesh properties.
 
         Parameters:
-            compute_layers: If False, skip adjacency building and skeletonization (default: True)
+            compute_layers: If False, skip skeletonization (default: True)
+            compute_adjacencies: If False, skip adjacency dict construction (default: True).
+                Cannot be False when ``compute_layers`` is True — caller is responsible
+                for that consistency (enforced in ``__init__``).
         """
         if self.points is not None and self.connectivity_list is not None:
             self.n_verts = self.points.shape[0]
@@ -228,9 +333,9 @@ class CHILmesh(CHILmeshPlotMixin):
             else:
                 self.type = "Mixed-Element"
 
-            # Build adjacency lists and compute layers only if requested
-            if compute_layers:
+            if compute_adjacencies:
                 self._build_adjacencies()
+            if compute_layers:
                 self._skeletonize()
 
             # Build spatial indices (always, regardless of compute_layers)
@@ -295,7 +400,7 @@ class CHILmesh(CHILmeshPlotMixin):
             elem_ids = np.arange( self.n_elems )
         if np.isscalar( elem_ids ):
             elem_ids = np.array( [elem_ids] )
-        elem_ids = np.asarray(elem_ids)
+        elem_ids = np.asarray(elem_ids, dtype=np.intp)
 
         if self.connectivity_list.shape[1] == 3:
             # Pure triangular mesh — single vectorised path
@@ -818,6 +923,95 @@ class CHILmesh(CHILmeshPlotMixin):
             raise ValueError(f"Vertex {vert_id} out of range [0, {self.n_verts})")
         return self.adjacencies['Vert2Elem'][vert_id].copy()
 
+    def ccw_edges_around_vert(self, vert_id: int) -> List[int]:
+        """
+        Return the edge IDs incident to ``vert_id`` in counterclockwise order.
+
+        Order is the geometric one in the XY plane: each incident edge is parameterised
+        by ``atan2(dy, dx)`` from ``vert_id`` to its other endpoint, then sorted ascending
+        (CCW from the positive x-axis). For a vertex with no incident edges this returns
+        an empty list. Stable across runs given the same mesh (ties broken by edge ID).
+
+        Parameters:
+            vert_id: Vertex index [0, n_verts)
+
+        Returns:
+            List of edge IDs in CCW order around the vertex.
+
+        Raises:
+            ValueError: If vert_id is out of range
+            RuntimeError: If adjacencies were not built (initialise with
+                ``compute_adjacencies=True`` or ``compute_layers=True``)
+
+        Complexity:
+            Time: O(k log k) where k = degree of the vertex
+            Space: O(k)
+
+        Example:
+            >>> # Walk neighbors of vertex 5 in CCW order
+            >>> for edge_id in mesh.ccw_edges_around_vert(5):
+            ...     v0, v1 = mesh.edge2vert(edge_id)
+            ...     other = v1 if v0 == 5 else v0
+        """
+        if not 0 <= vert_id < self.n_verts:
+            raise ValueError(f"Vertex {vert_id} out of range [0, {self.n_verts})")
+        if "Vert2Edge" not in self.adjacencies or "Edge2Vert" not in self.adjacencies:
+            raise RuntimeError(
+                "Adjacencies not built. Re-initialise with compute_adjacencies=True "
+                "(or compute_layers=True)."
+            )
+
+        edge_ids = list(self.adjacencies["Vert2Edge"][vert_id])
+        if not edge_ids:
+            return []
+
+        edge2vert = self.adjacencies["Edge2Vert"]
+        endpoints = edge2vert[edge_ids]
+        # Pick the "other" endpoint per edge in one vectorised step.
+        other = np.where(endpoints[:, 0] == vert_id, endpoints[:, 1], endpoints[:, 0])
+        origin = self.points[vert_id, :2]
+        deltas = self.points[other, :2] - origin
+        angles = np.arctan2(deltas[:, 1], deltas[:, 0])
+        order = np.lexsort((np.asarray(edge_ids), angles))
+        return [int(edge_ids[i]) for i in order]
+
+    def rebuild_adjacencies(self, rebuild_spatial_indices: bool = True) -> None:
+        """Force a full rebuild of the adjacency cache from current connectivity.
+
+        Use after a mid-sweep mutation of ``connectivity_list`` (or ``points``)
+        where the cached adjacency dicts (``Edge2Vert``, ``Edge2Elem``,
+        ``Vert2Edge``, ``Vert2Elem``, ``Elem2Edge``, ``EdgeMap``) are now stale.
+        This is the public, non-private alternative to constructing a fresh
+        ``CHILmesh(connectivity, points)`` and is the supported entry point for
+        downstream consumers that mutate topology between adjacency queries.
+
+        Parameters:
+            rebuild_spatial_indices: When True (default), also rebuild the
+                vertex / centroid KD-trees, which become stale when ``points``
+                or ``connectivity_list`` change. Set False if only adjacency
+                metadata changed without geometry shifts.
+
+        Notes:
+            - Does NOT recompute skeletonization layers. If the topology
+              change altered the peel structure, also call ``_skeletonize()``
+              or invalidate layers separately.
+            - Preserves ``grid_name``, ``type``, and other metadata.
+        """
+        self._build_adjacencies()
+        if rebuild_spatial_indices:
+            self._build_spatial_indices()
+
+    def invalidate_adjacencies(self) -> None:
+        """Drop the cached adjacency dicts.
+
+        Clears ``self.adjacencies`` so that subsequent adjacency-dependent
+        accesses raise rather than return stale data. Call ``rebuild_adjacencies()``
+        before any further adjacency queries. Spatial indices and layer caches
+        are left untouched — invalidate them separately if needed.
+        """
+        self.adjacencies = {}
+        self.n_edges = 0
+
     def _build_spatial_indices(self) -> None:
         """Build KD-trees for fast spatial queries on vertices and element centroids."""
         self._vertex_tree = cKDTree(self.points[:, :2])
@@ -1123,7 +1317,7 @@ class CHILmesh(CHILmeshPlotMixin):
         }
 
     @staticmethod
-    def read_from_fort14(full_file_name: Path, compute_layers: bool = True) -> "CHILmesh":
+    def read_from_fort14(full_file_name: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
         Load a mesh from a FORT.14 file.
 
@@ -1133,11 +1327,14 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             full_file_name: Path object pointing to the FORT.14 file
             compute_layers: If False, skip skeletonization for fast init (default: True)
+            compute_adjacencies: See ``CHILmesh.__init__``. If None (default), tracks
+                ``compute_layers``. Pass True with ``compute_layers=False`` for fast
+                load with adjacencies but no layer sweep (#134).
 
         Returns:
             A CHILmesh object
         """
-        with open(full_file_name, 'r') as f:
+        with open(full_file_name, 'r', encoding='utf-8', newline='') as f:
             # Read header
             header = f.readline().strip()
 
@@ -1189,10 +1386,11 @@ class CHILmesh(CHILmeshPlotMixin):
             points=points,
             grid_name=header,
             compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
         )
 
     @classmethod
-    def from_admesh_domain(cls, record, compute_layers: bool = True) -> "CHILmesh":
+    def from_admesh_domain(cls, record, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
         Load a mesh from an ADMESH-Domains catalog record.
 
@@ -1205,6 +1403,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 - `type` (str, optional): Format hint - "ADCIRC", "SMS_2DM", "ADCIRC_GRD", or other
                 - `kind` (str, optional): Ignored by CHILmesh
             compute_layers: If False, skip skeletonization for fast init (default: True)
+            compute_adjacencies: See ``CHILmesh.__init__``; forwarded to the underlying reader.
 
         Returns:
             A CHILmesh object
@@ -1229,7 +1428,11 @@ class CHILmesh(CHILmeshPlotMixin):
         mesh_type = getattr(record, "type", None)
 
         if mesh_type == "SMS_2DM":
-            return cls.read_from_2dm(filepath, compute_layers=compute_layers)
+            return cls.read_from_2dm(
+                filepath,
+                compute_layers=compute_layers,
+                compute_adjacencies=compute_adjacencies,
+            )
         else:
             # Route all other types (ADCIRC, ADCIRC_GRD, None, unknown) to ADCIRC reader
             if mesh_type and mesh_type not in ("ADCIRC", "ADCIRC_GRD"):
@@ -1238,10 +1441,14 @@ class CHILmesh(CHILmeshPlotMixin):
                     UserWarning,
                     stacklevel=2,
                 )
-            return cls.read_from_fort14(filepath, compute_layers=compute_layers)
+            return cls.read_from_fort14(
+                filepath,
+                compute_layers=compute_layers,
+                compute_adjacencies=compute_adjacencies,
+            )
 
     @staticmethod
-    def read_from_2dm(full_file_name: Path, compute_layers: bool = True) -> "CHILmesh":
+    def read_from_2dm(full_file_name: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
         Load a mesh from an SMS .2dm file.
 
@@ -1251,6 +1458,8 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             full_file_name: Path object pointing to the .2dm file
             compute_layers: If False, skip skeletonization for fast init (default: True)
+            compute_adjacencies: See ``CHILmesh.__init__``. If None (default), tracks
+                ``compute_layers``.
 
         Returns:
             A CHILmesh object
@@ -1258,7 +1467,7 @@ class CHILmesh(CHILmeshPlotMixin):
         nodes = {}  # node_id -> [x, y, z]
         elements = []  # list of (type, vertices)
 
-        with open(full_file_name, 'r') as f:
+        with open(full_file_name, 'r', encoding='utf-8', newline='') as f:
             for line in f:
                 line = line.strip()
 
@@ -1333,6 +1542,7 @@ class CHILmesh(CHILmeshPlotMixin):
             points=points,
             grid_name="SMS_2DM",
             compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
         )
 
     def write_to_fort14( self, filename: str, grid_name: Opt[str] = "CHILmesh Grid") -> bool:
@@ -2259,7 +2469,7 @@ def write_fort14( filename: Path, points: np.ndarray, elements: np.ndarray, grid
         grid_name: Header string
     """
     try:
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8', newline='\n') as f:
             f.write(f"{grid_name}\n")
             f.write(f"{len(elements)} {len(points)}\n")
 
