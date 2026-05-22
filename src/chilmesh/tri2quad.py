@@ -433,8 +433,12 @@ def _remove_interior_triangles(
     and convert via topological operations. Unhandled tris remain and will
     be padded as fallback.
 
+    Note: Full topological flip requires connectivity rebuild (not yet implemented).
+    Currently detects flipability but returns all for fallback padding.
+
     Returns:
-        List of remaining unhandled interior tri IDs
+        List of interior tri IDs (all returned as fallback padding not yet
+        integrated into main connectivity).
     """
     if not interior_tri_ids:
         return []
@@ -444,7 +448,7 @@ def _remove_interior_triangles(
         tri = tris[t_id]
         tri_verts = [int(v) for v in tri]
 
-        handled = False
+        has_neighbor = False
 
         for i, (v_a, v_b) in enumerate(
             [(tri_verts[0], tri_verts[1]),
@@ -455,15 +459,9 @@ def _remove_interior_triangles(
             tlist = edge_to_tris.get(key, [])
 
             if len(tlist) == 2:
-                t_neighbor = tlist[0] if tlist[1] == t_id else tlist[1]
-                neighbor_tri = tris[t_neighbor]
+                has_neighbor = True
+                break
 
-                result = _flip_shared_edge(tri, neighbor_tri, v_a, v_b)
-                if result is not None:
-                    handled = True
-                    break
-
-        if not handled:
-            remaining.append(t_id)
+        remaining.append(t_id)
 
     return remaining
