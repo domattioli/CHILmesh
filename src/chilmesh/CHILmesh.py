@@ -197,10 +197,13 @@ class CHILmesh(CHILmeshPlotMixin):
         unique_elems = np.unique(elem_ids)
         sub_conn = self.connectivity_list[unique_elems].copy()
 
-        # Build a remap from old vertex ids to compact [0, k). np.unique returns
-        # sorted unique values; searchsorted vectorises the lookup.
-        unique_verts = np.unique(sub_conn)
-        remap = np.searchsorted(unique_verts, sub_conn)
+        # -1 is the sentinel for triangle padding in 4-column mixed meshes.
+        # Exclude it from the vertex remap; points[-1] is a real vertex and
+        # must not be pulled into sub_points.
+        valid_mask = sub_conn >= 0
+        unique_verts = np.unique(sub_conn[valid_mask])
+        remap_table = np.searchsorted(unique_verts, sub_conn)
+        remap = np.where(valid_mask, remap_table, -1)
 
         sub_points = self.points[unique_verts].copy()
 

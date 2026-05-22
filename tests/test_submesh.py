@@ -167,7 +167,35 @@ class TestSubmeshLayerExtraction:
         sub = mesh.submesh(outer_layer_elems)
         assert sub.n_elems == outer_layer_elems.size
         # Vertex count must equal the number of distinct vertices on the layer.
-        expected_n_verts = np.unique(
-            mesh.connectivity_list[outer_layer_elems]
-        ).size
+        raw = mesh.connectivity_list[outer_layer_elems]
+        expected_n_verts = np.unique(raw[raw >= 0]).size  # exclude -1 sentinels
         assert sub.n_verts == expected_n_verts
+
+
+class TestSubmeshMixedMesh:
+    """Regression for mixed tri+quad meshes using -1 sentinel padding.
+
+    np.unique(sub_conn) must NOT include -1; including it causes self.points[-1]
+    to enter sub_points and all -1 padding to remap to index 0 (wrong vertex).
+    """
+
+    def test_sentinel_not_included_in_vertex_remap(self):
+        """submesh() on a padded-triangle row must preserve -1 as -1."""
+        from chilmesh import CHILmesh
+
+        # 4 vertices forming 2 triangles expressed in 4-column mixed format.
+        #   Tri 0: [0, 1, 2, -1]
+        #   Tri 1: [0, 2, 3, -1]
+        points = np.array([[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.]])
+        conn = np.array([[0, 1, 2, -1], [0, 2, 3, -1]], dtype=np.intp)
+        mesh = CHILmesh(connectivity=conn, points=points, compute_layers=False,
+                        compute_adjacencies=False)
+
+        sub = mesh.submesh([0], compute_layers=False, compute_adjacencies=False)
+
+        # sub must have exactly 3 vertices (v0, v1, v2), NOT 4 (not pulling in last pt)
+        assert sub.n_verts == 3, f"expected 3 verts, got {sub.n_verts}"
+        # -1 sentinel must be preserved in sub_conn
+        assert -1 in sub.connectivity_list, "-1 sentinel lost in submesh connectivity"
+        # n_elems must be 1
+        assert sub.n_elems == 1
