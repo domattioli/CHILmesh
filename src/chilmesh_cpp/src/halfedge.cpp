@@ -266,13 +266,6 @@ void HalfEdgeMesh::skeletonize() {
         for (auto& [v, _] : ov_set) ld.OV.push_back(v);
         for (auto& [eid, _] : bedge_set) ld.bEdgeIDs.push_back(eid);
 
-        // IV: vertices of peeled elems not in OV
-        for (int v = 0; v < n_verts; ++v) {
-            if (is_peeled_vert[v] && ov_set.find(v) == ov_set.end()) {
-                ld.IV.push_back(v);
-            }
-        }
-
         // IE: inner elements = active, not-peeled elements that share an OV vertex
         // (Python parity: IE is adjacent to OV only, NOT to every OE vertex)
         std::vector<bool> is_peel_elem(n_elems, false);
@@ -289,6 +282,22 @@ void HalfEdgeMesh::skeletonize() {
                 if (v >= 0 && is_ov_vert[v]) adjacent = true;
             }
             if (adjacent) ld.IE.push_back(e);
+        }
+
+        // IV: vertices of (OE ∪ IE) not in OV (Python parity — IE vertices count).
+        // Must run AFTER IE so vertices from inner elements are included.
+        for (int e : ld.IE) {
+            int k = max_vpe;
+            while (k > 3 && connectivity[e * max_vpe + k - 1] == -1) --k;
+            for (int i = 0; i < k; ++i) {
+                int32_t v = connectivity[e * max_vpe + i];
+                if (v >= 0) is_peeled_vert[v] = true;
+            }
+        }
+        for (int v = 0; v < n_verts; ++v) {
+            if (is_peeled_vert[v] && ov_set.find(v) == ov_set.end()) {
+                ld.IV.push_back(v);
+            }
         }
 
         // Python parity: each skeletonization iteration consumes BOTH the outer
