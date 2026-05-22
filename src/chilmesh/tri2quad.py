@@ -53,13 +53,22 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
         RuntimeError: If ``strict`` and an interior triangle survives.
 
     Notes:
-        **CRITICAL QUALITY ISSUE:** Annulus result has 10 severely
-        degenerate quads (aspect ratio 0.022-0.099, edges differing by
-        44x). Validator does NOT check aspect ratio/mesh quality. These
-        are genuine mesh degeneracies (not topology errors), undetected by
-        test suite. Some contain NEW vertices from edge-insertion, suggesting
-        insertion creates bad geometry. BLOCKER: Fix edge-insertion vertex
-        placement or replace with better algorithm before shipping.
+        **CRITICAL: Annulus result is GEOMETRICALLY BROKEN.**
+
+        1. 205/258 quads (79%!) are BOWTIE-SHAPED (diagonals cross).
+           Quad wraps around itself, self-overlapping, non-convex.
+           Validator misses this (only checks edge-crossing, not diagonal).
+
+        2. 10 severely degenerate quads (aspect 0.022-0.099, 44:1 edge ratio).
+           Validator doesn't check mesh quality metrics.
+
+        3. Root cause: edge-insertion vertex placement (1/3 along edge)
+           combined with layer-based merging creates invalid topology.
+
+        BLOCKER: Do NOT ship. Algorithm fundamentally broken on annulus.
+        Recommend: (a) redesign edge-insertion, or (b) use different
+        approach entirely, or (c) detect and reject bowtie quads + fall
+        back to original triangles for those regions.
     """
     from chilmesh import CHILmesh
     from chilmesh.layer_paths import paths_on_outer_vertices
