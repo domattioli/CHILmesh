@@ -154,7 +154,7 @@ CHILmesh is engineered for fast initialisation, query, and analysis on large uns
 
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 
-| Stage | v0.2.0 | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † |
+| Stage | v0.2.0 ※ | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † |
 |---|---:|---:|---:|
 | Fast init (no layers) | 3.9 s | **0.44 s** | **0.31 s** (0.70×) |
 | Full init (with layers) | 7.7 s | **3.26 s** | **2.35 s** (0.72×) |
@@ -167,6 +167,8 @@ Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 | Skeletonization per layer | — | ~5 ms/layer | ~15 ms/layer ‡ |
 
 † **Preliminary data — working branch ([`009-rust-backend-port`](https://github.com/domattioli/CHILmesh/tree/009-rust-backend-port)).** Rust backend is functional and all 1,131 tests pass, but benchmarking criteria require further investigation before these numbers are considered release-quality. See [issue #145](https://github.com/domattioli/CHILmesh/issues/145) for the full benchmarking agenda.
+
+※ v0.2.0 is the direct Python port of the original MATLAB implementation ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)) — these numbers reflect parity with the MATLAB baseline before any Python optimisation.
 
 ‡ Rust skeletonization is currently slower than EdgeMap Python (~3× regression on WNAT_Hagen) due to per-layer adjacency recomputation overhead across the FFI boundary. Under investigation.
 
