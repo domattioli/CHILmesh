@@ -154,18 +154,23 @@ CHILmesh is engineered for fast initialisation, query, and analysis on large uns
 
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 
-| Stage | v0.2.0 | v0.4.0 (EdgeMap) | v0.3.0 (Rust backend) |
+| Stage | v0.2.0 | v0.4.0 (EdgeMap) | v0.3.0 (Rust) † |
 |---|---:|---:|---:|
 | Fast init (no layers) | 3.9 s | **0.44 s** | **0.31 s** (0.70×) |
 | Full init (with layers) | 7.7 s | **3.26 s** | **2.35 s** (0.72×) |
+| — Adjacency build only | — | ~3.07 s | **~0.12 s** |
+| — Skeletonization only | — | ~0.19 s | ~0.59 s ‡ |
 | Quality analysis | 6.6 s | **0.07 s** | **< 1 ms** (0.08×) |
 | **Total workflow** | **14.3 s** | **3.33 s** | **~2.36 s** |
 | `find_element` (per call) | n/a | **< 50 μs** | **< 50 μs** |
 | `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** | **~0.17 μs** |
+| Skeletonization per layer | — | ~5 ms/layer | ~15 ms/layer ‡ |
 
-Rust backend (Phase 009): 28% faster full init, 12-16× faster quality analysis, 14% lower peak
-memory vs EdgeMap. All 1,131 tests pass unmodified. See [`docs/RUST_PERFORMANCE.md`](docs/RUST_PERFORMANCE.md)
-for full benchmark data and methodology.
+† **Preliminary data — working branch ([`009-rust-backend-port`](https://github.com/domattioli/CHILmesh/tree/009-rust-backend-port)).** Rust backend is functional and all 1,131 tests pass, but benchmarking criteria require further investigation before these numbers are considered release-quality. See [issue #145](https://github.com/domattioli/CHILmesh/issues/145) for the full benchmarking agenda.
+
+‡ Rust skeletonization is currently slower than EdgeMap Python (~3× regression on WNAT_Hagen) due to per-layer adjacency recomputation overhead across the FFI boundary. Under investigation.
+
+See [`docs/RUST_PERFORMANCE.md`](docs/RUST_PERFORMANCE.md) for full methodology and raw data.
 
 Per-stage breakdown, methodology, and historical baselines in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
 
