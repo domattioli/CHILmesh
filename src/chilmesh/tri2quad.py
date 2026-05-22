@@ -263,7 +263,55 @@ def tri_to_quad_full(
             out.change_points(pre_pts, acknowledge_change=True)
             out.smooth_mesh(method="angle-based", acknowledge_change=True)
 
+        # FEM / angle-based both struggle on slivery quads inherited from the
+        # path-walk merge (interior angles approaching 180° pin Q=0 elements).
+        # Laplacian relaxation has no Hessian / singular-matrix failure mode
+        # and reliably lifts the long-tail of bad quads.
+        lap_pts = _laplacian_smooth(out, n_iter=smooth_iters, omega=0.7)
+        out.change_points(lap_pts, acknowledge_change=True)
+
     return out
+
+
+def _laplacian_smooth(
+    mesh: "CHILmesh",
+    n_iter: int = 100,
+    omega: float = 0.7,
+) -> np.ndarray:
+    """Constrained Laplacian smoothing: each interior vertex moves toward the
+    centroid of its 1-ring neighbours, blended by ``omega``.
+
+    Boundary vertices are held fixed (per CHILmesh.boundary_node_indices).
+    Returns a new points array; does not mutate the mesh.
+    """
+    conn = np.asarray(mesh.connectivity_list, dtype=int)
+    pts = np.asarray(mesh.points, dtype=float).copy()
+    boundary_verts = {
+        int(x) for x in np.asarray(mesh.boundary_node_indices()).flatten()
+    }
+
+    n_verts = pts.shape[0]
+    nbrs: list[set[int]] = [set() for _ in range(n_verts)]
+    for row in conn:
+        if row[0] == row[3]:
+            verts = [int(row[k]) for k in range(3)]
+        else:
+            verts = [int(row[k]) for k in range(4)]
+        n = len(verts)
+        for k in range(n):
+            a, b = verts[k], verts[(k + 1) % n]
+            nbrs[a].add(b)
+            nbrs[b].add(a)
+
+    for _ in range(n_iter):
+        new_pts = pts.copy()
+        for v in range(n_verts):
+            if v in boundary_verts or not nbrs[v]:
+                continue
+            avg = np.mean([pts[u, :2] for u in nbrs[v]], axis=0)
+            new_pts[v, :2] = (1.0 - omega) * pts[v, :2] + omega * avg
+        pts = new_pts
+    return pts
 
 
 def _build_full_edge_map(conn: np.ndarray) -> dict[tuple[int, int], list[int]]:
