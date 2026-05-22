@@ -1,0 +1,65 @@
+name: Research / Task
+description: Audit, investigation, documentation, or research task (no immediate code change required)
+title: "task: "
+labels: ["type:research"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for audits, investigations, documentation work, or any task that does not fit Bug Report or Feature Request. Routine Claude Code sessions can pick these up if labeled `claude-routine-sessions`.
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Context — what prompted this task, what is already known.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope. Be explicit about what is NOT in scope.
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks / checklist
+      description: Concrete, checkable subtasks.
+      placeholder: |
+        - [ ] Read X
+        - [ ] Measure Y
+        - [ ] Produce report at Z
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How will completion be verified?
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "priority:low"
+        - "priority:medium"
+        - "priority:high"
+        - "priority:critical"
+      default: 0
+    validations:
+      required: true
+  - type: checkboxes
+    id: routine-eligible
+    attributes:
+      label: Routine session eligibility
+      description: If checked, the `claude-routine-sessions` label will be added (see CLAUDE.md routine workflow).
+      options:
+        - label: This task is suitable for autonomous Claude Code routine sessions
+  - type: textarea
+    id: related
+    attributes:
+      label: Related issues, docs, or external references
+      placeholder: "e.g. #111, .planning/TEST-AUDIT.md, .specify/memory/constitution.md §X"

@@ -10,6 +10,15 @@ include requirements.txt
 recursive-include src/chilmesh *.py
 recursive-include src/chilmesh/data *.14 *.fort.14
 
+# C++ extension source (so users can rebuild on unsupported platforms)
+recursive-include src/chilmesh_cpp *.cpp *.hpp *.h CMakeLists.txt pyproject.toml
+
+# Rust extension source (so users can rebuild on unsupported platforms)
+include src/chilmesh_core/Cargo.toml
+include src/chilmesh_core/Cargo.lock
+recursive-include src/chilmesh_core *.rs
+prune src/chilmesh_core/target
+
 # Internal / dev-only paths — exclude from sdist
 prune .claude
 prune .planning
@@ -20,13 +29,16 @@ prune docs
 prune scripts
 prune .github
 prune output
+prune src/chilmesh_cpp/build_local
+prune src/chilmesh_cpp/build
 exclude .domi-pin
 exclude .gitignore
 
 # README image assets must be re-included after `prune output`
 include output/annulus_quickstart.png
 include output/wnat_hagen_showcase.png
-include output/mixed_mesh_fem_final.png
+include output/mixed_mesh_showcase.png
+include output/readme_pipeline_annulus.gif
 
 global-exclude __pycache__
 global-exclude *.py[co]

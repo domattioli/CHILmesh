@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         # PR runs: ubuntu × py3.11 only (fast feedback).
-        # Push to main / release branches: full matrix.
-        os: ${{ fromJson(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]') }}
+        # Push to main / release branches: full matrix incl. windows-latest (#121).
+        os: ${{ fromJson(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
         python-version: ${{ fromJson(github.event_name == 'pull_request' && '["3.11"]' || '["3.10","3.11","3.12"]') }}
 
     steps:
@@ -39,11 +39,11 @@ jobs:
           MPLBACKEND: Agg
         run: python -m pytest -n auto -m "not slow"
 
-      - name: Run pytest (push — full suite, parallel)
+      - name: Run pytest (push — full suite, parallel, coverage-gated)
         if: github.event_name != 'pull_request'
         env:
           MPLBACKEND: Agg
-        run: python -m pytest -n auto -v
+        run: python -m pytest -n auto -v --cov=src/chilmesh --cov-report=term --cov-fail-under=80
 
   build-and-smoke:
     name: build sdist+wheel + smoke install
@@ -71,8 +71,10 @@ jobs:
           python -m twine check dist/*
 
       - name: Smoke test installed wheel
+        shell: bash
         run: |
-          python -m venv /tmp/smoke
-          /tmp/smoke/bin/pip install --upgrade pip
-          /tmp/smoke/bin/pip install dist/*.whl
-          /tmp/smoke/bin/python -c "import chilmesh; m = chilmesh.examples.annulus(); print('OK', m.n_elems)"
+          python -m venv "$RUNNER_TEMP/smoke"
+          VENV_PY=$(python -c "import os, sys; root = os.environ['RUNNER_TEMP'] + '/smoke'; print(root + ('/Scripts/python.exe' if sys.platform == 'win32' else '/bin/python'))")
+          "$VENV_PY" -m pip install --upgrade pip
+          "$VENV_PY" -m pip install dist/*.whl
+          "$VENV_PY" -c "import chilmesh; m = chilmesh.examples.annulus(); print('OK', m.n_elems)"

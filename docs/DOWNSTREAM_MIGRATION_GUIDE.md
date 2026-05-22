@@ -1,40 +1,60 @@
 # Downstream Project Integration Guide
 
-**Version:** 1.0
-**CHILmesh Version:** 0.2.0+
+**Version:** 2.0 (revised for CHILmesh v1.0.0)
+**CHILmesh Version:** 1.0.0+
 **Target Projects:** MADMESHR, ADMESH, ADMESH-Domains
 
 ---
 
 ## Overview
 
-Guide for developers of downstream research projects integrating with CHILmesh 0.2.0+.
+Guide for developers of downstream research projects integrating with CHILmesh v1.0.0+.
 
-**TL;DR:** Your code probably still works. CHILmesh 0.2.0 is backward compatible. New bridge adapters make common operations clearer.
+**TL;DR:** Existing code keeps working — `CHILmesh` is still importable. The new `Mesh` alias is the v1.0.0 preferred idiom; adopt it when convenient. Optional C++ backend gives 46× speedup with bit-identical output.
 
 ---
 
-## What Changed in 0.2.0?
+## What's New in v1.0.0?
 
-### Performance
-- **1.5x+ faster** on large meshes (block_o: 30s → ~20s initialization)
-- O(1) edge lookups instead of O(n) searches
-- More efficient adjacency structures
+### Preferred Idiom (recommended for new code)
+```python
+from chilmesh import Mesh
 
-### Architecture
-- Adjacency structures modernized (internal implementation)
-- **Public API unchanged** — your code still works
-- New bridge adapters provide convenient shortcuts
+mesh = Mesh.read_from_fort14("ocean.14")
+```
 
-### API Additions
-- New public methods: `get_vertex_edges()`, `get_vertex_elements()`
-- New bridge adapters for domain-specific operations
-- Stable API contract via CAI (CHILmesh Access Interface)
+`Mesh` is an alias for `CHILmesh` — no behaviour change. Existing imports continue to work through the v1.x series. A `DeprecationWarning` lands in v1.1.0; removal no earlier than v2.0.0.
+
+### Optional C++ Acceleration
+Heavy initialization workloads can opt into the bundled C++ half-edge extension. Output is bit-identical to Python (verified by `tests/test_backend_equivalence.py`, 36 parametrized cases).
+
+```python
+import chilmesh
+chilmesh.backend_info()
+# {'available': ['cpp', 'rust', 'python'], 'selected': 'cpp', ...}
+```
+
+On WNAT_Hagen (52,774 verts · 98,365 elements):
+- Python full init: 3.21 s
+- C++ full init: **0.069 s** (46×)
+- C++ skeletonization in isolation: **0.033 s vs Python 2.20 s (66×)**
+
+Force a specific backend with the `CHILMESH_BACKEND` environment variable
+(`python`, `cpp`, or `rust`).
+
+### New Public Surface (cumulative since v0.4.1)
+- `MeshAdapterForMADMESHR`, `MeshAdapterForADMESH`, `MeshAdapterForADMESHDomains` re-exported at package root.
+- `CHILmesh.submesh(elem_ids)` — public sub-mesh factory (#138).
+- `CHILmesh.rebuild_adjacencies()` / `invalidate_adjacencies()` — for mid-sweep mutation flows (#143).
+- `CHILmesh.ccw_edges_around_vert(vert_id)` — counter-clockwise edge walk (#133).
+- `compute_adjacencies` kwarg on the constructor and `read_from_fort14` / `read_from_2dm` / `from_admesh_domain` (#134).
+- `chilmesh.backend_info()` — runtime backend introspection.
 
 ### Guarantees
-- Backward compatible (no breaking changes)
-- Stable through v1.0 (method signatures guaranteed)
-- Clear path for future evolution
+- **Public API frozen under semver.** Breaking changes require a v2.x bump.
+- `CHILmesh` import preserved through v1.x; DeprecationWarning in v1.1, earliest removal v2.0.
+- C++ / Rust backends produce bit-identical output to Python on the official fixture set.
+- Python `>=3.10` (3.8 / 3.9 dropped — EOL).
 
 ---
 
@@ -209,7 +229,7 @@ print(f"Boundary vertices: {len(boundary_verts)}")
 
 ### Phase 1: Update CHILmesh (1 hour)
 ```bash
-pip install --upgrade 'chilmesh>=0.2.0'
+pip install --upgrade 'chilmesh>=1.0.0'
 ```
 
 ### Phase 2: Test Compatibility (30 minutes)
@@ -304,20 +324,20 @@ boundary_verts = boundaries[0]
 
 ### Error: "AttributeError: CHILmesh has no attribute 'get_vertex_edges'"
 
-**Cause:** Using CHILmesh < 0.2.0
+**Cause:** Using CHILmesh < 1.0.0
 
 **Fix:**
 ```bash
-pip install --upgrade 'chilmesh>=0.2.0'
+pip install --upgrade 'chilmesh>=1.0.0'
 ```
 
 ### Error: "ModuleNotFoundError: No module named 'chilmesh.bridge'"
 
-**Cause:** Using CHILmesh < 0.2.0, or bridge module not found
+**Cause:** Using CHILmesh < 1.0.0, or bridge module not found
 
 **Fix:**
 ```bash
-pip install --upgrade 'chilmesh>=0.2.0'
+pip install --upgrade 'chilmesh>=1.0.0'
 python -c "from chilmesh.bridge import MeshAdapterForMADMESHR; print('OK')"
 ```
 

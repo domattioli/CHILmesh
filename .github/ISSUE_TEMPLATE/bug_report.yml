@@ -1,0 +1,96 @@
+name: Bug Report
+description: Report a defect or unexpected behavior in CHILmesh
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill out the sections below so the issue can be reproduced and triaged.
+  - type: input
+    id: affected-component
+    attributes:
+      label: Affected module or file
+      description: Which file, class, or method is implicated?
+      placeholder: "e.g. src/chilmesh/CHILmesh.py::_skeletonize, plot_utils.plot_layer"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug. Paste full tracebacks or error messages verbatim.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Smallest code snippet (or test command) that triggers the bug.
+      render: python
+      placeholder: |
+        from chilmesh import CHILmesh
+        mesh = CHILmesh(...)
+        mesh.skeletonize()
+    validations:
+      required: true
+  - type: checkboxes
+    id: fixtures
+    attributes:
+      label: Affected built-in fixtures
+      description: Which fixtures reproduce the bug? (See `tests/conftest.py`.)
+      options:
+        - label: annulus
+        - label: donut
+        - label: block_o
+        - label: structured
+        - label: other / user-supplied mesh
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "e.g. 3.11.7"
+    validations:
+      required: true
+  - type: input
+    id: chilmesh-version
+    attributes:
+      label: CHILmesh version
+      description: Output of `python -c "import chilmesh; print(chilmesh.__version__)"` or the git SHA.
+      placeholder: "e.g. 0.2.0 or 9e99f01"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "priority:low"
+        - "priority:medium"
+        - "priority:high"
+        - "priority:critical"
+      default: 1
+    validations:
+      required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: Related issues, PRs, or code references
+      placeholder: "e.g. #93, src/chilmesh/CHILmesh.py:142-180"
