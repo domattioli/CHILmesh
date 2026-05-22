@@ -132,47 +132,8 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
 
         leftover = [t for t in layer_pool if t not in consumed]
 
-        leftover_flipped = []
-        any_flipped = False
-        for t_id in leftover:
-            tri = tris[t_id]
-            tri_verts = [int(v) for v in tri]
-            flipped = False
-
-            for v_a, v_b in [
-                (tri_verts[0], tri_verts[1]),
-                (tri_verts[1], tri_verts[2]),
-                (tri_verts[2], tri_verts[0]),
-            ]:
-                key = _make_key(v_a, v_b)
-                tlist = edge_to_tris_global.get(key, [])
-
-                if len(tlist) == 2 and t_id in tlist:
-                    t_neighbor = tlist[0] if tlist[1] == t_id else tlist[1]
-                    if t_neighbor in consumed:
-                        continue
-
-                    neighbor = tris[t_neighbor]
-                    result = _flip_shared_edge(tri, neighbor, v_a, v_b)
-                    if result is not None:
-                        tri_new, neighbor_new = result
-                        tris[t_id] = np.array(tri_new, dtype=int)
-                        tris[t_neighbor] = np.array(neighbor_new, dtype=int)
-                        consumed.add(t_id)
-                        consumed.add(t_neighbor)
-                        leftover_flipped.extend([t_id, t_neighbor])
-                        flipped = True
-                        any_flipped = True
-                        break
-
-            if not flipped:
-                leftover_flipped.append(t_id)
-
-        if any_flipped:
-            edge_to_tris_global = _build_edge_map(tris)
-
         if layer > 0:
-            deferred.extend(leftover_flipped)
+            deferred.extend(leftover)
 
     leftover_interior: list[int] = []
     for t_id in range(n_tris):
