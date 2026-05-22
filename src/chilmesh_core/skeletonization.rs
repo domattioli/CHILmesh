@@ -66,9 +66,15 @@ pub fn skeletonize_medial_axis(
         if boundary_edge_ids.is_empty() {
             // All remaining elements form a single core (no boundary)
             // Classify them all as OE
-            let core_elems: Vec<usize> = remaining_elems.iter().copied().collect();
+            let mut core_elems: Vec<usize> = remaining_elems.iter().copied().collect();
+            core_elems.sort();
             if !core_elems.is_empty() {
-                let (core_ov, core_iv) = classify_vertices(&core_elems, connectivity, &remaining_verts);
+                let (core_ov, core_iv) = classify_vertices_for_layer(
+                    &[],  // No boundary edges for the core
+                    &edge2vert,
+                    &core_elems,
+                    connectivity,
+                );
                 layers.push(Layer {
                     oe: core_elems,
                     ie: Vec::new(),
@@ -98,11 +104,19 @@ pub fn skeletonize_medial_axis(
             &remaining_elems,
         );
 
-        // Step 1f: Identify inner vertices
-        let (layer_ov, layer_iv) = classify_vertices(
-            &oe_elems,
+        // Step 1f: Identify outer and inner vertices for this layer
+        // Outer vertices = vertices on boundary edges (from Step 1c)
+        // Inner vertices = vertices of (OE ∪ IE) that are not OV
+        let all_layer_elems: Vec<usize> = oe_elems
+            .iter()
+            .chain(ie_elems.iter())
+            .copied()
+            .collect();
+        let (layer_ov, layer_iv) = classify_vertices_for_layer(
+            &boundary_edge_ids,
+            &edge2vert,
+            &all_layer_elems,
             connectivity,
-            &remaining_verts,
         );
 
         // Step 1g: Remove OE and IE from remaining_elems
@@ -288,6 +302,47 @@ fn identify_boundary_edges(
     boundary
 }
 
+/// Classify vertices: OV from boundary edges, IV from all layer elements minus OV
+fn classify_vertices_for_layer(
+    boundary_edge_ids: &[usize],
+    edge2vert: &[(i32, i32)],
+    layer_elems: &[usize],
+    connectivity: &Array2<i32>,
+) -> (Vec<usize>, Vec<usize>) {
+    // Outer vertices: vertices on boundary edges
+    let mut ov_set = HashSet::new();
+    for &edge_id in boundary_edge_ids {
+        if edge_id < edge2vert.len() {
+            let (v1, v2) = edge2vert[edge_id];
+            ov_set.insert(v1 as usize);
+            ov_set.insert(v2 as usize);
+        }
+    }
+
+    // Collect all vertices from layer elements
+    let mut layer_verts = HashSet::new();
+    for &elem in layer_elems {
+        if elem < connectivity.shape()[0] {
+            let row = connectivity.row(elem);
+            for &v in row.iter() {
+                if v >= 0 {
+                    layer_verts.insert(v as usize);
+                }
+            }
+        }
+    }
+
+    // IV = all layer vertices - OV
+    let mut iv_set: HashSet<_> = layer_verts.difference(&ov_set).copied().collect();
+
+    let mut ov: Vec<_> = ov_set.into_iter().collect();
+    let mut iv: Vec<_> = iv_set.into_iter().collect();
+    ov.sort();
+    iv.sort();
+
+    (ov, iv)
+}
+
 /// Classify boundary elements: elements adjacent to boundary edges
 fn classify_boundary_elements(
     boundary_edge_ids: &[usize],
@@ -367,36 +422,6 @@ fn classify_inner_elements(
     ie
 }
 
-/// Classify vertices for a layer: OV and IV
-fn classify_vertices(
-    layer_elems: &[usize],
-    connectivity: &Array2<i32>,
-    remaining_verts: &HashSet<usize>,
-) -> (Vec<usize>, Vec<usize>) {
-    let mut layer_verts = HashSet::new();
-
-    // Collect all vertices from layer elements
-    for &elem in layer_elems {
-        if elem < connectivity.shape()[0] {
-            let row = connectivity.row(elem);
-            for &v in row.iter() {
-                if v >= 0 && remaining_verts.contains(&(v as usize)) {
-                    layer_verts.insert(v as usize);
-                }
-            }
-        }
-    }
-
-    // OV and IV will be determined by the layer extraction logic
-    // For now, all vertices in layer elements are potential OV/IV
-    // This classification is refined during the main loop
-    let mut verts: Vec<_> = layer_verts.into_iter().collect();
-    verts.sort();
-
-    // Placeholder: actual OV/IV separation handled in main loop
-    // Return all layer verts as OV, empty IV
-    (verts.clone(), Vec::new())
-}
 
 /// Validate layer invariants: coverage, disjoint sets
 fn validate_layers(layers: &[Layer], total_elems: usize) -> Result<(), String> {
