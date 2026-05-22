@@ -2,12 +2,23 @@
 
 Verifies that EdgeMap-based edge lookups provide 1.5x+ speedup
 on large meshes compared to baseline linear search.
+
+Note: Tests in this file require the EdgeMap backend and will skip
+when running with alternate topology backends (halfedge, quadegg).
 """
 
+import os
 import time
 import pytest
 import numpy as np
 from chilmesh import CHILmesh, examples
+
+# Check if we're running with the default edgemap backend
+BACKEND = os.environ.get("CHILMESH_TOPOLOGY_BACKEND", "edgemap")
+SKIP_IF_NOT_EDGEMAP = pytest.mark.skipif(
+    BACKEND != "edgemap",
+    reason=f"EdgeMap performance tests only run with edgemap backend, not {BACKEND}"
+)
 
 
 class TestEdgeBuildingPerformance:
@@ -36,6 +47,7 @@ class TestEdgeBuildingPerformance:
         assert len(edge_map) == mesh.n_edges
         assert len(edge_map) > 0
 
+    @SKIP_IF_NOT_EDGEMAP
     def test_edge_map_consistency(self):
         """EdgeMap IDs should match Edge2Vert indices."""
         mesh = examples.donut()
@@ -51,6 +63,7 @@ class TestEdgeBuildingPerformance:
             assert found_id == edge_id, \
                 f"Edge {edge_id}: ({v1}, {v2}) lookup returned {found_id}"
 
+    @SKIP_IF_NOT_EDGEMAP
     def test_edge_map_lookup_O1(self):
         """EdgeMap.find_edge should be O(1) amortized."""
         mesh = examples.structured()

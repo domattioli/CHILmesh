@@ -93,17 +93,20 @@ class QuadEdgeTopology:
         """Extract Edge2Elem: edge to adjacent elements.
 
         Returns ndarray[n_edges, 2] with element indices (-1 for boundary).
+        Convention: [elem1, elem2] where elem1 comes first in iteration order.
 
         Builds mapping from element connectivity directly, independent of
         quad-edge traversal (which may be expensive or error-prone).
         """
         # Build canonical edge list (same order as to_edge2vert)
         edges = self._to_canonical_edge_list()
-        edge_to_id = {tuple(e): i for i, e in enumerate(edges)}
 
-        # Build directed-edge-to-element map (which element owns each directed edge)
+        # Build undirected-edge-to-elements map
+        # Use list to preserve order: first element encountered goes to position 0
+        edge_to_elems_dict = {tuple(e): [] for e in edges}
+
+        # Iterate elements to build mapping (preserves order)
         elem_cols = self.elem2vert.shape[1]
-        directed_edge_to_elem = {}
         for elem_idx in range(self.n_elems):
             elem_verts = self.elem2vert[elem_idx]
             elem_type = 3 if (elem_cols == 3 or elem_verts[3] == elem_verts[0]) else 4
@@ -111,25 +114,20 @@ class QuadEdgeTopology:
             for i in range(elem_type):
                 v1 = int(elem_verts[i])
                 v2 = int(elem_verts[(i + 1) % elem_type])
-                directed_edge_to_elem[(v1, v2)] = elem_idx
+                undirected_edge = tuple(sorted([v1, v2]))
 
-        # Map each undirected edge to its adjacent elements
-        edge_to_elems = {tuple(e): [-1, -1] for e in edges}
+                if undirected_edge in edge_to_elems_dict:
+                    if len(edge_to_elems_dict[undirected_edge]) < 2:
+                        edge_to_elems_dict[undirected_edge].append(elem_idx)
 
-        for directed_edge, elem_idx in directed_edge_to_elem.items():
-            v1, v2 = directed_edge
-            undirected_edge = tuple(sorted([v1, v2]))
-
-            # Assign to position based on vertex ordering
-            if v1 < v2:
-                edge_to_elems[undirected_edge][0] = elem_idx
-            else:
-                edge_to_elems[undirected_edge][1] = elem_idx
-
+        # Convert to result array with padding for boundary edges
         result = []
         for edge in edges:
-            edge_tuple = tuple(edge)
-            result.append(edge_to_elems[edge_tuple])
+            elems = edge_to_elems_dict[edge]
+            # Pad with -1 to get 2 elements
+            while len(elems) < 2:
+                elems.append(-1)
+            result.append(elems[:2])
 
         return np.array(result, dtype=np.int32)
 
