@@ -186,53 +186,360 @@ def tri_to_quad_full(
     smooth: bool = True,
     smooth_method: str = "fem",
     smooth_iters: int = 50,
+    doublet_passes: int = 6,
+    convert_boundary_tris: bool = True,
 ) -> "CHILmesh":
-    """tri_to_quad followed by element-count-preserving smoothing.
-
-    Per user direction: never drop elements. Only operations that move
-    vertex coordinates are applied here; topology stays exactly as
-    ``tri_to_quad`` produced it (no DoubletCollapse, no edgeRemoval,
-    no QuadVertexMerge).
+    """Full pipeline: tri_to_quad → boundary-tri → quad via edge-insertion → DoubletCollapse → smooth.
 
     Pipeline:
       1. ``tri_to_quad`` — layer-by-layer path-walk merge.
-      2. Smoothing — ``CHILmesh.smooth_mesh``. Tries the FEM (direct)
-         smoother first; falls back to ``angle-based`` if the sparse
-         solve returns non-finite coordinates (FEM K can go singular
-         on mixed-element topologies, and ``spsolve`` issues a warning
-         but does not raise).
+      2. ``_insert_boundary_tri_midpoint`` — for each padded triangle with
+         a mesh-boundary edge, insert a midpoint on that edge and convert
+         the tri into a quad. Adds 1 vertex per converted tri; element
+         count unchanged; area unchanged (midpoint lies on the boundary
+         edge being replaced).
+      3. ``_doublet_collapse`` — interior valence-2 vertex shared by
+         exactly two quads → merge into a single quad covering the same
+         union. Each collapse drops one row but the surviving quad covers
+         the combined area of both originals (no coverage loss). Iterates
+         up to ``doublet_passes`` rounds.
+      4. ``CHILmesh.smooth_mesh`` — FEM first, fall back to angle-based
+         if FEM returns non-finite coords.
 
     Args:
         mesh: Pure-triangle input.
         smooth: Apply smoother as final step.
         smooth_method: ``"fem"`` (direct) or ``"angle-based"``.
         smooth_iters: Passed to angle-based smoother (ignored for FEM).
+        doublet_passes: Max DoubletCollapse iterations.
+        convert_boundary_tris: Edge-insert midpoint on each padded tri's
+            boundary edge to convert it into a quad.
 
     Returns:
-        New CHILmesh with same element count as ``tri_to_quad`` output.
-
-    Not yet ported (future work — each must be evaluated for "never
-    drop elements" compliance before landing):
-      - ``edgeRemoval`` / ``edgeBisection`` / ``edgeInsertion`` —
-        ``removeTrianglesFun`` cases that change element count.
-      - ``DoubletCollapse`` — 2 quads → 1 quad, same coverage but
-        topologically drops a row.
-      - ``QuadVertexMerge_v2``, ``CleanupBoundaryQuads_v2``, ``MCSmooth``.
+        New CHILmesh.
     """
-    out = tri_to_quad(mesh, strict=False)
-    if not smooth:
-        return out
+    from chilmesh import CHILmesh
 
-    pre_pts = np.asarray(out.points).copy()
-    try:
-        out.smooth_mesh(method=smooth_method, acknowledge_change=True)
-        if not np.isfinite(out.points).all():
-            raise RuntimeError("smoother produced non-finite coordinates")
-    except Exception:
-        out.change_points(pre_pts, acknowledge_change=True)
-        out.smooth_mesh(method="angle-based", acknowledge_change=True)
+    q = tri_to_quad(mesh, strict=False)
+    conn = np.asarray(q.connectivity_list, dtype=int).copy()
+    pts = np.asarray(q.points, dtype=float).copy()
+
+    if convert_boundary_tris:
+        conn, pts = _insert_boundary_tri_midpoint(conn, pts)
+        conn, pts = _pentagon_split_interior_tris(conn, pts)
+
+    for _ in range(doublet_passes):
+        new_conn = _doublet_collapse(conn, pts)
+        if new_conn.shape[0] == conn.shape[0]:
+            break
+        conn = new_conn
+
+    out = CHILmesh(
+        connectivity=conn,
+        points=pts,
+        grid_name=mesh.grid_name,
+        compute_layers=True,
+    )
+
+    if smooth:
+        pre_pts = np.asarray(out.points).copy()
+        try:
+            out.smooth_mesh(method=smooth_method, acknowledge_change=True)
+            if not np.isfinite(out.points).all():
+                raise RuntimeError("smoother produced non-finite coordinates")
+        except Exception:
+            out.change_points(pre_pts, acknowledge_change=True)
+            out.smooth_mesh(method="angle-based", acknowledge_change=True)
 
     return out
+
+
+def _build_full_edge_map(conn: np.ndarray) -> dict[tuple[int, int], list[int]]:
+    """Edge → element list for a mixed-element (3 or 4 col) connectivity table."""
+    out: dict[tuple[int, int], list[int]] = {}
+    for ei in range(conn.shape[0]):
+        row = conn[ei]
+        if row[0] == row[3]:
+            verts = [int(row[k]) for k in range(3)]
+        else:
+            verts = [int(row[k]) for k in range(4)]
+        n = len(verts)
+        for k in range(n):
+            a, b = verts[k], verts[(k + 1) % n]
+            key = (a, b) if a < b else (b, a)
+            out.setdefault(key, []).append(ei)
+    return out
+
+
+def _insert_boundary_tri_midpoint(
+    conn: np.ndarray,
+    pts: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Convert each padded boundary triangle ``[a,b,c,a]`` to a quad by
+    inserting a midpoint on its mesh-boundary edge.
+
+    For a padded triangle with one edge ``(va, vb)`` on the mesh boundary
+    (i.e., shared with no other element), the result is a quad
+    ``[va, m, vb, vc]`` where ``m`` is the midpoint of ``(va, vb)`` and
+    ``vc`` is the tri's third vertex. The original tri row is overwritten
+    with the new quad (no element drop, no area change — ``m`` lies on the
+    boundary edge being split).
+    """
+    edge_to_elems = _build_full_edge_map(conn)
+    new_pts: list[np.ndarray] = []
+    next_vid = pts.shape[0]
+
+    for ei in range(conn.shape[0]):
+        row = conn[ei]
+        if row[0] != row[3]:
+            continue
+        verts = [int(row[k]) for k in range(3)]
+        # Find a mesh-boundary edge (length-1 in edge_to_elems).
+        chosen_edge: tuple[int, int] | None = None
+        chosen_other_vert: int | None = None
+        for k in range(3):
+            a, b = verts[k], verts[(k + 1) % 3]
+            key = (a, b) if a < b else (b, a)
+            if len(edge_to_elems.get(key, [])) == 1:
+                chosen_edge = (a, b)
+                chosen_other_vert = verts[(k + 2) % 3]
+                break
+        if chosen_edge is None:
+            # Padded tri has no mesh-boundary edge (interior-layer tri);
+            # midpoint insertion would break neighboring quad topology
+            # (would force a 5-vert pentagon). Leave as-is.
+            continue
+        va, vb = chosen_edge
+        vc = chosen_other_vert
+        m_xy = 0.5 * (pts[va, :2] + pts[vb, :2])
+        z = pts[va, 2] if pts.shape[1] >= 3 else 0.0
+        new_pts.append(np.array([m_xy[0], m_xy[1], z]))
+        # New quad row [va, m, vb, vc] in CCW order (preserves tri orientation).
+        conn[ei] = np.array([va, next_vid, vb, vc], dtype=int)
+        next_vid += 1
+
+    if new_pts:
+        pts = np.vstack([pts, np.asarray(new_pts, dtype=float)])
+    return conn, pts
+
+
+def _pentagon_split_interior_tris(
+    conn: np.ndarray,
+    pts: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Convert every padded tri lacking a mesh-boundary edge into two quads
+    by inserting a midpoint on a neighboring quad's far edge.
+
+    Setup: tri ``ABC`` (CCW) shares one edge — say ``CA`` — with a
+    neighboring quad ``CAEF`` (CCW). The union forms a pentagon
+    ``A → B → C → E → F → A``. Bisect the quad's "far edge" ``EF`` at
+    ``M`` and split the union into two quads:
+
+      - new quad replacing tri: ``[A, B, C, M]``... wait this has 5 verts
+        if M not on AC. Re-derive:
+
+    Actual split: pentagon ``A, B, C, E, F`` (5 verts). Bisect edge
+    ``EF`` to get ``M``. Hexagon ``A, B, C, E, M, F`` (6 verts). Split
+    along diagonal ``B–M`` (or any reasonable diagonal) into two quads:
+      - ``[A, B, M, F]`` (left half)
+      - ``[B, C, E, M]`` (right half)
+
+    Both quads are convex if pentagon is convex; orientation matches
+    pentagon CCW. Net: 1 tri + 1 quad → 2 quads (count preserved). Area
+    preserved (M lies on EF).
+
+    A padded tri is processed only if it has a quad neighbor on some
+    edge; tris adjacent only to other padded tris are left as-is.
+    """
+    edge_to_elems = _build_full_edge_map(conn)
+    next_vid = pts.shape[0]
+    new_pts: list[np.ndarray] = []
+
+    pad_ids = list(np.where(conn[:, 0] == conn[:, 3])[0])
+
+    for tri_eid in pad_ids:
+        row_tri = conn[tri_eid]
+        tri_verts = [int(row_tri[k]) for k in range(3)]
+
+        chosen_neighbor: int | None = None
+        shared_edge: tuple[int, int] | None = None
+        for k in range(3):
+            a, b = tri_verts[k], tri_verts[(k + 1) % 3]
+            key = (a, b) if a < b else (b, a)
+            elems = edge_to_elems.get(key, [])
+            for ne in elems:
+                if ne == tri_eid:
+                    continue
+                if conn[ne, 0] == conn[ne, 3]:
+                    continue  # neighbor is also a tri; skip
+                chosen_neighbor = ne
+                shared_edge = (a, b)
+                break
+            if chosen_neighbor is not None:
+                break
+        if chosen_neighbor is None:
+            continue
+
+        # Build pentagon CCW. Tri CCW is [A, B, C] = tri_verts.
+        # Identify which edge of tri is shared with neighbor.
+        a, b = shared_edge
+        idx_a = tri_verts.index(a)
+        idx_b = tri_verts.index(b)
+        # Tri's third vert.
+        third = [v for v in tri_verts if v not in (a, b)][0]
+
+        # Rotate tri so the shared edge is the last edge (tri verts: [B, third, ...]?).
+        # Simpler: name tri vertices V0=third, V1, V2 where (V1,V2) is shared edge.
+        # Pentagon must be CCW. Tri CCW is [tri_verts[0], tri_verts[1], tri_verts[2]].
+        # Walk tri CCW: edge indices 0→1, 1→2, 2→0. The shared edge between consecutive verts.
+        # Find ordered shared edge as (tri[k], tri[(k+1)%3]).
+        shared_k = None
+        for k in range(3):
+            if {tri_verts[k], tri_verts[(k + 1) % 3]} == {a, b}:
+                shared_k = k
+                break
+        assert shared_k is not None
+        # CCW oriented shared edge: tri side (s_a, s_b) = (tri[k], tri[k+1]).
+        s_a = tri_verts[shared_k]
+        s_b = tri_verts[(shared_k + 1) % 3]
+        # Tri's "B" (the non-shared vert), with CCW order [s_b, B, s_a]? No:
+        # Tri CCW: [tri[k], tri[k+1], tri[k+2]] = [s_a, s_b, B] where B = third.
+        # So pentagon traversal: start at B (third), then s_a, s_b, then quad's
+        # far verts in CCW.
+        # Quad CCW with edge s_b → s_a (opposite direction of tri's shared
+        # edge): quad row contains s_a and s_b. Find their order in quad.
+        quad_verts = [int(conn[chosen_neighbor, k]) for k in range(4)]
+        try:
+            i_sa_q = quad_verts.index(s_a)
+        except ValueError:
+            continue
+        try:
+            i_sb_q = quad_verts.index(s_b)
+        except ValueError:
+            continue
+        # In the quad, the shared edge runs s_b → s_a (opposite of tri's CCW
+        # direction). Walk quad CCW starting from s_a → next CCW vert (skip s_b).
+        # Rotate quad so it starts at s_a:
+        rot = [quad_verts[(i_sa_q + k) % 4] for k in range(4)]
+        # rot = [s_a, q1, q2, q3]. Confirm rot[3] == s_b (i.e., previous CCW is s_b).
+        if rot[3] != s_b:
+            # Quad orientation puts s_b at rot[1] (= going s_a → s_b CCW). This
+            # means our assumed shared-edge direction was wrong; skip rather
+            # than mis-split.
+            continue
+        q_far1 = rot[1]
+        q_far2 = rot[2]
+        # Pentagon CCW: [third(B), s_a, q_far1, q_far2, s_b]? Let's verify.
+        # Tri CCW: [s_a, s_b, B] (rotation invariance).
+        # After removing shared edge s_a–s_b, tri contributes vert B.
+        # Quad CCW: [s_a, q_far1, q_far2, s_b]. After removing shared edge,
+        # quad contributes q_far1 and q_far2.
+        # Union polygon CCW (with shared edge removed): s_a, q_far1, q_far2, s_b, B.
+        # Hexagon after bisecting q_far1–q_far2 with M:
+        # s_a, q_far1, M, q_far2, s_b, B → 6 verts.
+        m_xy = 0.5 * (pts[q_far1, :2] + pts[q_far2, :2])
+        z = pts[q_far1, 2] if pts.shape[1] >= 3 else 0.0
+        m_vid = next_vid
+        new_pts.append(np.array([m_xy[0], m_xy[1], z]))
+        next_vid += 1
+
+        # Split hexagon along diagonal s_a → q_far2 (or equivalent). The
+        # cleanest split that gives two quads:
+        #   quad1 = [s_a, q_far1, M, ???]
+        # Pentagon split via M and the diagonal from B to M:
+        # Hexagon CCW: s_a, q_far1, M, q_far2, s_b, B.
+        # Diagonals from M: M–s_a, M–q_far2 (adjacent edges, no), M–s_b
+        # (non-adj), M–B (non-adj).
+        # Two quads via diagonal M–B:
+        #   quad1 = [B, s_a, q_far1, M] (CCW)
+        #   quad2 = [B, M, q_far2, s_b] (CCW)
+        # Check: quad1 verts {B, s_a, q_far1, M} — 4 distinct ✓
+        #         quad2 verts {B, M, q_far2, s_b} — 4 distinct ✓
+        B = third
+        quad1 = [B, s_a, q_far1, m_vid]
+        quad2 = [B, m_vid, q_far2, s_b]
+        conn[tri_eid] = np.array(quad1, dtype=int)
+        conn[chosen_neighbor] = np.array(quad2, dtype=int)
+        # Refresh edge map (cheap since small).
+        edge_to_elems = _build_full_edge_map(conn)
+
+    if new_pts:
+        pts = np.vstack([pts, np.asarray(new_pts, dtype=float)])
+    return conn, pts
+
+
+def _doublet_collapse(
+    conn: np.ndarray,
+    pts: np.ndarray,
+) -> np.ndarray:
+    """Port of QuADMesh ``DoubletCollapse``.
+
+    A "doublet" is an interior vertex ``V`` with valence 2 whose two
+    incident elements are both quads that share exactly 3 vertices
+    (``V`` plus the two verts on either side of ``V`` in each quad). The
+    collapse merges them into one quad by replacing ``V`` in the first
+    quad with the second quad's unique (non-shared) vertex, then drops
+    the second quad's row. The surviving quad covers the union of the
+    original pair — no coverage loss.
+
+    Invariants enforced:
+      - Both incident elements must be 4-vert quads (no padded tris).
+      - Vertex must be interior (no boundary-edge incidence).
+      - The two quads must share exactly 3 vertices.
+      - The replacement vertex must not already appear in the surviving
+        quad (otherwise the merge produces a degenerate row).
+    """
+    n_elems = conn.shape[0]
+    if n_elems == 0:
+        return conn
+
+    edge_to_elems = _build_full_edge_map(conn)
+    boundary_verts: set[int] = set()
+    for key, elems in edge_to_elems.items():
+        if len(elems) == 1:
+            boundary_verts.add(key[0])
+            boundary_verts.add(key[1])
+
+    vert_to_elems: dict[int, list[int]] = {}
+    for ei in range(n_elems):
+        row = conn[ei]
+        if row[0] == row[3]:
+            verts = {int(row[k]) for k in range(3)}
+        else:
+            verts = {int(row[k]) for k in range(4)}
+        for v in verts:
+            vert_to_elems.setdefault(v, []).append(ei)
+
+    keep = np.ones(n_elems, dtype=bool)
+
+    for v, adj in vert_to_elems.items():
+        if v in boundary_verts:
+            continue
+        if len(adj) != 2:
+            continue
+        e1, e2 = adj
+        if not (keep[e1] and keep[e2]):
+            continue
+        if conn[e1, 0] == conn[e1, 3] or conn[e2, 0] == conn[e2, 3]:
+            continue
+        verts1 = [int(conn[e1, k]) for k in range(4)]
+        verts2 = [int(conn[e2, k]) for k in range(4)]
+        shared = set(verts1) & set(verts2)
+        if len(shared) != 3:
+            continue
+        unique_v2 = [u for u in verts2 if u not in verts1]
+        if len(unique_v2) != 1:
+            continue
+        u = unique_v2[0]
+        if u in verts1:
+            continue
+        new_row = [u if x == v else x for x in verts1]
+        if len(set(new_row)) != 4:
+            continue
+        conn[e1] = np.array(new_row, dtype=int)
+        keep[e2] = False
+
+    return conn[keep]
 
 
 
