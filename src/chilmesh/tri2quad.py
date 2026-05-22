@@ -263,12 +263,36 @@ def tri_to_quad_full(
             out.change_points(pre_pts, acknowledge_change=True)
             out.smooth_mesh(method="angle-based", acknowledge_change=True)
 
-        # FEM / angle-based both struggle on slivery quads inherited from the
-        # path-walk merge (interior angles approaching 180° pin Q=0 elements).
-        # Laplacian relaxation has no Hessian / singular-matrix failure mode
-        # and reliably lifts the long-tail of bad quads.
         lap_pts = _laplacian_smooth(out, n_iter=smooth_iters, omega=0.7)
         out.change_points(lap_pts, acknowledge_change=True)
+
+        # Topological cleanup interleaved with smoothing — edge-swap +
+        # doublet/QVM are size-function-respecting operations (no new verts,
+        # no boundary motion). Verify validity after each pass.
+        from chilmesh import CHILmesh as _CM
+        from tests._validity.validator import validate_mesh_elements as _v
+        for _ in range(8):
+            c = np.asarray(out.connectivity_list, dtype=int).copy()
+            p = np.asarray(out.points, dtype=float).copy()
+            c_new = _quad_pair_edge_swap(c, p, quality_threshold=0.5,
+                                          min_improvement=0.02)
+            n_swap = int(np.sum(np.any(c != c_new, axis=1)))
+            c_new = _doublet_collapse(c_new, p)
+            c_new = _quad_vertex_merge(c_new, p)
+            n_drop = c.shape[0] - c_new.shape[0]
+            if n_swap == 0 and n_drop == 0:
+                break
+            candidate = _CM(connectivity=c_new, points=p,
+                             grid_name=out.grid_name, compute_layers=True)
+            try:
+                report = _v(candidate)
+                if not report.ok:
+                    break
+            except Exception:
+                break
+            out = candidate
+            lap_pts = _laplacian_smooth(out, n_iter=smooth_iters, omega=0.7)
+            out.change_points(lap_pts, acknowledge_change=True)
 
     return out
 
@@ -279,9 +303,11 @@ def _laplacian_smooth(
     omega: float = 0.7,
 ) -> np.ndarray:
     """Constrained Laplacian smoothing: each interior vertex moves toward the
-    centroid of its 1-ring neighbours, blended by ``omega``.
+    centroid of its 1-ring neighbours, blended by ``omega``. Boundary
+    vertices are held fixed (deliberate — per project direction, smoother
+    additions need a clear advantage over FEM / angle-based and must
+    respect input mesh-size constraints; boundary motion violates both).
 
-    Boundary vertices are held fixed (per CHILmesh.boundary_node_indices).
     Returns a new points array; does not mutate the mesh.
     """
     conn = np.asarray(mesh.connectivity_list, dtype=int)
@@ -526,6 +552,171 @@ def _pentagon_split_interior_tris(
     if new_pts:
         pts = np.vstack([pts, np.asarray(new_pts, dtype=float)])
     return conn, pts
+
+
+def _quad_pair_edge_swap(
+    conn: np.ndarray,
+    pts: np.ndarray,
+    quality_threshold: float = 0.2,
+    min_improvement: float = 0.05,
+) -> np.ndarray:
+    """Diagonal swap between adjacent quad pairs to fix slivery quads.
+
+    For each quad with element quality below ``quality_threshold``, attempt
+    a topological swap with each neighbor sharing an edge:
+
+      Q1 = [a, b, c, d], Q2 = [a, d, e, f] sharing edge (a, d)
+      Hexagon CCW: a, b, c, d, e, f
+
+    Three possible quad-pair splits via 3 diagonals:
+      (a, d) — original
+      (b, e) — Q3 = [a, b, e, f], Q4 = [b, c, d, e]
+      (c, f) — Q5 = [a, b, c, f], Q6 = [c, d, e, f]
+
+    Pick whichever maximises the minimum element quality of the pair, and
+    accept if it improves over the original by at least ``min_improvement``.
+    Element count preserved. Coverage preserved (the hexagon footprint is
+    unchanged). No vertex add or drop.
+    """
+    n_elems = conn.shape[0]
+    if n_elems == 0:
+        return conn
+
+    edge_to_elems = _build_full_edge_map(conn)
+
+    def _quad_skew_quality(verts: list[int]) -> float:
+        if len(set(verts)) != 4:
+            return 0.0
+        poly = pts[verts, :2]
+        # Skew quality: 1 - max(|θ_i - 90°|) / 90°, clipped to [0, 1].
+        angs = []
+        for k in range(4):
+            v_prev = poly[(k - 1) % 4]
+            v_cur = poly[k]
+            v_next = poly[(k + 1) % 4]
+            a = v_prev - v_cur
+            b = v_next - v_cur
+            na = float(np.linalg.norm(a))
+            nb = float(np.linalg.norm(b))
+            if na < 1e-12 or nb < 1e-12:
+                return 0.0
+            cos = float(np.dot(a, b) / (na * nb))
+            cos = max(-1.0, min(1.0, cos))
+            angs.append(np.degrees(np.arccos(cos)))
+        max_dev = max(abs(a - 90.0) for a in angs)
+        return max(0.0, 1.0 - max_dev / 90.0)
+
+    def _signed_area(verts: list[int]) -> float:
+        poly = pts[verts, :2]
+        x = poly[:, 0]
+        y = poly[:, 1]
+        return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+    used = np.zeros(n_elems, dtype=bool)
+
+    # Score current quads.
+    quality = np.zeros(n_elems)
+    for ei in range(n_elems):
+        row = conn[ei]
+        if row[0] == row[3]:
+            quality[ei] = 0.0
+            continue
+        quality[ei] = _quad_skew_quality([int(row[k]) for k in range(4)])
+
+    order = np.argsort(quality)  # process worst-first.
+
+    for ei in order:
+        if used[ei]:
+            continue
+        if quality[ei] >= quality_threshold:
+            break
+        row = conn[ei]
+        if row[0] == row[3]:
+            continue
+        verts1 = [int(row[k]) for k in range(4)]
+
+        best_swap: tuple[int, list[int], list[int], float] | None = None
+
+        for k in range(4):
+            # Shared edge in Q1: a → d going CCW. So a = verts1[k], d = verts1[(k+1)%4].
+            a = verts1[k]
+            d = verts1[(k + 1) % 4]
+            # Hexagon CCW around the union goes a → b → c → d → e → f → a.
+            # b, c come from Q1's other two verts traversed *backwards* from a
+            # (i.e., CW around Q1).
+            b = verts1[(k + 3) % 4]
+            c = verts1[(k + 2) % 4]
+            shared_key = (a, d) if a < d else (d, a)
+            neighbors = [n for n in edge_to_elems.get(shared_key, []) if n != ei]
+            if len(neighbors) != 1:
+                continue
+            nei = neighbors[0]
+            if used[nei]:
+                continue
+            if conn[nei, 0] == conn[nei, 3]:
+                continue
+            verts2 = [int(conn[nei, j]) for j in range(4)]
+            if a not in verts2 or d not in verts2:
+                continue
+            # In Q2's CCW listing, the shared edge runs d → a (opposite of Q1).
+            # So if idx_d = position of d in verts2, then idx_a = (idx_d + 1) % 4.
+            idx_d = verts2.index(d)
+            if verts2[(idx_d + 1) % 4] != a:
+                continue
+            # e, f are Q2's non-shared verts, traversed backwards from d
+            # (which equals CCW around the union after d).
+            e = verts2[(idx_d + 3) % 4]
+            f = verts2[(idx_d + 2) % 4]
+            # Hexagon CCW: a, b, c, d, e, f.
+            hexa = [a, b, c, d, e, f]
+            if len(set(hexa)) != 6:
+                continue
+            # Candidate splits.
+            candidates = [
+                ([a, b, c, d], [d, e, f, a]),  # original (a, d) diagonal
+                ([a, b, e, f], [b, c, d, e]),  # diagonal (b, e)
+                ([a, b, c, f], [c, d, e, f]),  # diagonal (c, f)
+            ]
+            best_local = None
+            for cand_idx, (qa, qb) in enumerate(candidates):
+                sa = _signed_area(qa)
+                sb = _signed_area(qb)
+                # Both must have same sign (both CCW or both CW); else they
+                # cross or are inverted.
+                if sa * sb <= 0:
+                    continue
+                if abs(sa) < 1e-12 or abs(sb) < 1e-12:
+                    continue
+                q1q = _quad_skew_quality(qa)
+                q2q = _quad_skew_quality(qb)
+                mn = min(q1q, q2q)
+                if best_local is None or mn > best_local[0]:
+                    best_local = (mn, cand_idx, qa, qb)
+            if best_local is None:
+                continue
+            mn, cand_idx, qa, qb = best_local
+            # Original split's min-quality:
+            orig_mn = min(quality[ei], quality[nei])
+            if cand_idx == 0:  # picking original is a no-op
+                continue
+            if mn < orig_mn + min_improvement:
+                continue
+            if best_swap is None or mn > best_swap[3]:
+                best_swap = (nei, qa, qb, mn)
+
+        if best_swap is None:
+            continue
+        nei, qa, qb, _ = best_swap
+        conn[ei] = np.array(qa, dtype=int)
+        conn[nei] = np.array(qb, dtype=int)
+        used[ei] = True
+        used[nei] = True
+        # Refresh edge map for subsequent quads.
+        edge_to_elems = _build_full_edge_map(conn)
+        quality[ei] = _quad_skew_quality(qa)
+        quality[nei] = _quad_skew_quality(qb)
+
+    return conn
 
 
 def _quad_vertex_merge(
