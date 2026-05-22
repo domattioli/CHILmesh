@@ -397,7 +397,7 @@ class CHILmesh(CHILmeshPlotMixin):
             elem_ids = np.arange( self.n_elems )
         if np.isscalar( elem_ids ):
             elem_ids = np.array( [elem_ids] )
-        elem_ids = np.asarray(elem_ids)
+        elem_ids = np.asarray(elem_ids, dtype=np.intp)
 
         if self.connectivity_list.shape[1] == 3:
             # Pure triangular mesh — single vectorised path

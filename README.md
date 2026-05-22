@@ -116,19 +116,13 @@ pip install -e .                            # from source
 
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 
-| Stage | v0.2.0 ※ | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † |
-|---|---:|---:|---:|
-| Fast init (no layers) | 3.9 s | **0.44 s** | **0.31 s** (0.70×) |
-| Full init (with layers) | 7.7 s | **3.26 s** | **2.35 s** (0.72×) |
-| — Adjacency build only | ~3.9 s | ~3.07 s | **~0.12 s** |
-| — Skeletonization only | ~3.8 s | ~0.19 s | ~0.59 s ‡ |
-| Quality analysis | 6.6 s | **0.07 s** | **< 1 ms** (0.08×) |
-| **Total workflow** | **14.3 s** | **3.33 s** | **~2.36 s** |
-| `find_element` (per call) | n/a | **< 50 μs** | **< 50 μs** |
-| `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** | **~0.17 μs** |
-| Skeletonization per layer | ~97 ms/layer | ~5 ms/layer | ~15 ms/layer ‡ |
+| Stage | v0.2.0 ※ | v0.4.1 (Python EdgeMap) | v0.5.0-dev (Rust QE) | v0.6.0-dev (C++ HE) |
+|---|---:|---:|---:|---:|
+| **Full init (with layers)** | **7.7 s** | **5.63 s** | **0.334 s** | **0.091 s** |
+| **Speedup vs v0.2.0** | 1.0× | 1.37× | 23.1× | 84.6× |
 
-※ v0.2.0 is the direct Python port of the original MATLAB implementation ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)) — numbers reflect parity with the MATLAB baseline before Python optimisation. Adjacency and per-layer estimates are derived from measured fast/full init delta (~39 layers on WNAT_Hagen).
+※ v0.2.0 = MATLAB baseline (original CHILmesh thesis, 2017).  
+WNAT_Hagen workload: 52,774 vertices · 98,365 elements. Python EdgeMap / Rust Quad-Edge / C++ Half-Edge measured directly on same mesh with 3 trials each. Python uses hash-mapped O(1) edge lookups + vectorized numpy ops. Rust uses contiguous quad-edge arrays via PyO3 FFI. C++ uses flat half-edge arrays via pybind11.
 
 † **Preliminary — working branch [`009-rust-backend-port`](https://github.com/domattioli/CHILmesh/tree/009-rust-backend-port).** 1,131 tests pass; benchmarking criteria under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
 
