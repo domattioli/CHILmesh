@@ -3,12 +3,22 @@
 Implements canonical-form comparator per clarify C-4:
 - Edge2Vert: sorted lexicographically
 - Edge2Elem, Elem2Edge: row-by-row set comparison (order-agnostic)
-- Vert2Edge, Vert2Elem: as dicts, set values compared
+- Vert2Edge, Vert2Elem: as dicts, set values compared (by edge tuples, not IDs)
 """
 
 import pytest
 import numpy as np
 from chilmesh.examples import annulus, donut, block_o, structured
+
+
+def _edge_sort_order(e2v):
+    """Return argsort indices mapping sorted-edge-index → original edge index."""
+    return sorted(range(len(e2v)), key=lambda i: tuple(sorted(e2v[i])))
+
+
+def _normalized_edge_set(e2v, edge_ids):
+    """Convert a set of edge IDs to a set of normalized (min,max) edge tuples."""
+    return {tuple(sorted(e2v[eid])) for eid in edge_ids}
 
 
 @pytest.mark.parametrize(
@@ -38,23 +48,32 @@ def test_edge2vert_equivalence(fixture_fn):
     ids=["annulus", "donut", "block_o", "structured"]
 )
 def test_edge2elem_equivalence(fixture_fn):
-    """Edge2Elem matches between backends (same adjacency list)."""
+    """Edge2Elem matches between backends (same adjacency list).
+
+    Edges are identified by their normalized vertex-pair tuple, not their
+    local edge-ID (which differs between backends).
+    """
     mesh_edgemap = fixture_fn()
     mesh_halfedge = fixture_fn(topology_backend="halfedge")
 
-    e2m_edgemap = mesh_edgemap.adjacencies["Edge2Elem"]
-    e2m_halfedge = mesh_halfedge.adjacencies["Edge2Elem"]
+    e2v_em = mesh_edgemap.adjacencies["Edge2Vert"]
+    e2v_he = mesh_halfedge.adjacencies["Edge2Vert"]
+    e2m_em = mesh_edgemap.adjacencies["Edge2Elem"]
+    e2m_he = mesh_halfedge.adjacencies["Edge2Elem"]
 
-    assert e2m_edgemap.shape == e2m_halfedge.shape, "Edge2Elem shape mismatch"
+    assert e2m_em.shape == e2m_he.shape, "Edge2Elem shape mismatch"
 
-    edgemap_list = sorted(map(tuple, mesh_edgemap.adjacencies["Edge2Vert"]))
-    halfedge_list = sorted(map(tuple, mesh_halfedge.adjacencies["Edge2Vert"]))
+    # Build mapping from normalized edge tuple → element set for each backend
+    em_map = {tuple(sorted(e2v_em[i])): set(e2m_em[i]) for i in range(len(e2v_em))}
+    he_map = {tuple(sorted(e2v_he[i])): set(e2m_he[i]) for i in range(len(e2v_he))}
 
-    for i, (edge_em, edge_he) in enumerate(zip(edgemap_list, halfedge_list)):
-        assert edge_em == edge_he, f"Edge {i} mismatch"
-        em_adj = set(e2m_edgemap[i])
-        he_adj = set(e2m_halfedge[i])
-        assert em_adj == he_adj, f"Edge2Elem adjacency mismatch for edge {edge_em}"
+    assert set(em_map.keys()) == set(he_map.keys()), "Edge sets differ"
+
+    for edge_key in em_map:
+        assert em_map[edge_key] == he_map[edge_key], (
+            f"Edge2Elem adjacency mismatch for edge {edge_key}: "
+            f"edgemap={em_map[edge_key]} halfedge={he_map[edge_key]}"
+        )
 
 
 @pytest.mark.parametrize(
@@ -63,21 +82,33 @@ def test_edge2elem_equivalence(fixture_fn):
     ids=["annulus", "donut", "block_o", "structured"]
 )
 def test_elem2edge_equivalence(fixture_fn):
-    """Elem2Edge matches between backends (set comparison per element)."""
+    """Elem2Edge matches between backends (set comparison per element).
+
+    Edges are identified by their normalized vertex-pair tuple so that
+    differing edge-ID numbering schemes do not cause false failures.
+    """
     mesh_edgemap = fixture_fn()
     mesh_halfedge = fixture_fn(topology_backend="halfedge")
 
-    e2e_edgemap = mesh_edgemap.adjacencies["Elem2Edge"]
-    e2e_halfedge = mesh_halfedge.adjacencies["Elem2Edge"]
+    e2v_em = mesh_edgemap.adjacencies["Edge2Vert"]
+    e2v_he = mesh_halfedge.adjacencies["Edge2Vert"]
+    e2e_em = mesh_edgemap.adjacencies["Elem2Edge"]
+    e2e_he = mesh_halfedge.adjacencies["Elem2Edge"]
 
-    assert e2e_edgemap.shape[0] == e2e_halfedge.shape[0], "Element count mismatch"
+    assert e2e_em.shape[0] == e2e_he.shape[0], "Element count mismatch"
 
-    for elem_idx in range(len(e2e_edgemap)):
-        em_edges = set(e2e_edgemap[elem_idx])
-        em_edges.discard(-1)
-        he_edges = set(e2e_halfedge[elem_idx])
-        he_edges.discard(-1)
-        assert em_edges == he_edges, f"Elem2Edge mismatch for element {elem_idx}"
+    for elem_idx in range(len(e2e_em)):
+        # Convert edge IDs to normalized edge tuples for comparison
+        em_edge_ids = [eid for eid in e2e_em[elem_idx] if eid != -1]
+        he_edge_ids = [eid for eid in e2e_he[elem_idx] if eid != -1]
+
+        em_edges = _normalized_edge_set(e2v_em, em_edge_ids)
+        he_edges = _normalized_edge_set(e2v_he, he_edge_ids)
+
+        assert em_edges == he_edges, (
+            f"Elem2Edge mismatch for element {elem_idx}: "
+            f"edgemap={em_edges} halfedge={he_edges}"
+        )
 
 
 @pytest.mark.parametrize(
@@ -86,19 +117,28 @@ def test_elem2edge_equivalence(fixture_fn):
     ids=["annulus", "donut", "block_o", "structured"]
 )
 def test_vert2edge_equivalence(fixture_fn):
-    """Vert2Edge matches between backends (set of edge IDs per vertex)."""
+    """Vert2Edge matches between backends.
+
+    Comparison is by normalized edge tuples (min_v, max_v) rather than
+    raw edge IDs, which differ between backends.
+    """
     mesh_edgemap = fixture_fn()
     mesh_halfedge = fixture_fn(topology_backend="halfedge")
 
-    v2e_edgemap = mesh_edgemap.adjacencies["Vert2Edge"]
-    v2e_halfedge = mesh_halfedge.adjacencies["Vert2Edge"]
+    e2v_em = mesh_edgemap.adjacencies["Edge2Vert"]
+    e2v_he = mesh_halfedge.adjacencies["Edge2Vert"]
+    v2e_em = mesh_edgemap.adjacencies["Vert2Edge"]
+    v2e_he = mesh_halfedge.adjacencies["Vert2Edge"]
 
-    assert len(v2e_edgemap) == len(v2e_halfedge), "Vertex count mismatch"
+    assert len(v2e_em) == len(v2e_he), "Vertex count mismatch"
 
-    for vert_idx in range(len(v2e_edgemap)):
-        em_edges = v2e_edgemap[vert_idx]
-        he_edges = v2e_halfedge[vert_idx]
-        assert em_edges == he_edges, f"Vert2Edge mismatch for vertex {vert_idx}"
+    for vert_idx in range(len(v2e_em)):
+        em_edges = _normalized_edge_set(e2v_em, v2e_em[vert_idx])
+        he_edges = _normalized_edge_set(e2v_he, v2e_he[vert_idx])
+        assert em_edges == he_edges, (
+            f"Vert2Edge mismatch for vertex {vert_idx}: "
+            f"edgemap={em_edges} halfedge={he_edges}"
+        )
 
 
 @pytest.mark.parametrize(

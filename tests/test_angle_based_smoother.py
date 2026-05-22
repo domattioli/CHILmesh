@@ -164,10 +164,15 @@ def test_smooth_mesh_dispatches_to_angle_based():
     mesh = chilmesh.examples.annulus()
     before = mesh.points.copy()
 
-    out = mesh.smooth_mesh('angle-based', acknowledge_change=True)
+    # Save and restore to avoid polluting the shared cached mesh object
+    saved = mesh.points.copy()
+    try:
+        out = mesh.smooth_mesh('angle-based', acknowledge_change=True)
 
-    assert out.shape == before.shape
-    np.testing.assert_array_equal(mesh.points, out)
+        assert out.shape == before.shape
+        np.testing.assert_array_equal(mesh.points, out)
+    finally:
+        mesh.points = saved
 
 
 def test_smooth_mesh_angle_based_requires_acknowledge_change():
