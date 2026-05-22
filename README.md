@@ -114,21 +114,21 @@ pip install -e .                            # from source
 
 ## Performance
 
-Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3 trials.
 
-| Stage | v0.2.0 ※ | v0.4.1 (Python EdgeMap) | v0.5.0-dev (Rust QE) | v0.6.0-dev (C++ HE) |
+| Metric | v0.2.0 MATLAB ※ | v0.4.1 Python | v0.5.0-dev Rust † | v0.6.0-dev C++ |
 |---|---:|---:|---:|---:|
-| **Full init (with layers)** | **7.7 s** | **5.63 s** | **0.334 s** | **0.091 s** |
-| **Speedup vs v0.2.0** | 1.0× | 1.37× | 23.1× | 84.6× |
+| Fast init (adj, no skeletonization) | ~3.9 s | 3.36 s | 0.21 s | **0.075 s** |
+| Skeletonization only | ~3.8 s | 0.39 s | 0.32 s | **0.062 s** |
+| Full init (adj + skeletonization) | 7.7 s | 3.76 s | 0.53 s | **0.136 s** |
+| Quality analysis | 6.6 s | 72 ms | **0.75 ms** | 1.19 ms |
+| Vertex-edge lookup (per call) | ~700 μs | **0.52 μs** | 40,000 μs ‡ | 0.80 μs |
 
-※ v0.2.0 = MATLAB baseline (original CHILmesh thesis, 2017).  
-WNAT_Hagen workload: 52,774 vertices · 98,365 elements. Python EdgeMap / Rust Quad-Edge / C++ Half-Edge measured directly on same mesh with 3 trials each. Python uses hash-mapped O(1) edge lookups + vectorized numpy ops. Rust uses contiguous quad-edge arrays via PyO3 FFI. C++ uses flat half-edge arrays via pybind11.
+※ MATLAB v0.2.0 = direct Python port of original MATLAB implementation ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)). Adjacency/skeletonization split derived from measured fast/full init delta.  
+† Rust fast init includes fort.14 file I/O; Python and C++ receive raw arrays.  
+‡ Rust vertex-edge lookup = per-call adjacency array traversal across PyO3 FFI; under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
 
-† **Preliminary — working branch [`009-rust-backend-port`](https://github.com/domattioli/CHILmesh/tree/009-rust-backend-port).** 1,131 tests pass; benchmarking criteria under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
-
-‡ Rust skeletonization currently ~3× slower than EdgeMap on WNAT_Hagen — per-layer adjacency recomputation across the FFI boundary. Under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
-
-Full methodology and raw data: [`docs/RUST_PERFORMANCE.md`](docs/RUST_PERFORMANCE.md) · [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+Full methodology and raw data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
 ---
 
