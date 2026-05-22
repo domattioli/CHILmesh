@@ -81,3 +81,7 @@ output/media/
 
 # Rust build artifacts
 src/chilmesh_core/target/
+
+# C++ build artifacts
+src/chilmesh_cpp/build/
+src/chilmesh_cpp/build_local/
