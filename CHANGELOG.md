@@ -4,9 +4,83 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0] — 2026-05-22
 
-### ✨ Added
+First **stable** release. CHILmesh is now the production backbone for ADMESH,
+MADMESHR, and ADMESH-Domains.
+
+### 🚀 Headline
+
+- **C++ half-edge backend bit-equivalent to Python.** A pybind11-based extension
+  (`chilmesh_cpp`) ships alongside the Python implementation. Full init on
+  WNAT_Hagen (52,774 verts · 98,365 elements): Python 3.21 s → **C++ 0.069 s**
+  (46× speedup). Skeletonization in isolation: **C++ 0.033 s vs Python 2.20 s
+  (66×)**. Both backends produce identical layer membership across all 4 built-in
+  fixtures and WNAT_Hagen — verified by `tests/test_backend_equivalence.py`
+  (36 parametrized cases across OE / IE / OV / IV / bEdgeIDs / signed_area /
+  Vert2Edge).
+- **Rust quad-edge backend (`chilmesh_core`)** also ships; fast init 0.029 s
+  (35× vs Python). Available through direct import; per-call Vert2Edge FFI
+  overhead under investigation (#145).
+
+### ✨ v1.0.0 Added
+
+- **`from chilmesh import Mesh`** — preferred class name (alias of `CHILmesh`).
+- **`chilmesh.backend_info()`** — returns `{available, selected, versions}` dict
+  describing the active backend trio. Honors `CHILMESH_BACKEND` env override.
+- **`MeshAdapterForMADMESHR`**, **`MeshAdapterForADMESH`**,
+  **`MeshAdapterForADMESHDomains`** re-exported at the package root.
+- **`tests/test_backend_equivalence.py`** — cross-backend correctness gate
+  (36 cases).
+- **`scripts/benchmark_all_backends.py`** — multi-backend WNAT_Hagen benchmark
+  with JSON archival.
+
+### 🔧 v1.0.0 Fixed
+
+- **C++ skeletonization algorithm parity** with Python: each iteration now
+  consumes both `OE` and `IE` rings (was: `OE` only, producing 2× too many
+  layers); `IE` is now computed against `OV` only (was: every OE vertex,
+  overinclusive); `IV` is computed after `IE` so inner-ring vertices are
+  included (was: missing IE vertices).
+- **C++ `bEdgeIDs`** — boundary edge IDs now exposed alongside OE/IE/OV/IV
+  in the per-layer dict (was: absent, breaking `paths_on_outer_vertices` and
+  bridge adapters).
+
+### 🔨 v1.0.0 Changed
+
+- **Version bump** 0.4.1 → 1.0.0. Public API now under semver — breaking
+  changes require a 2.x bump.
+- **Python requirement** `>=3.8` → `>=3.10` to match the active CI matrix and
+  shed end-of-life interpreters.
+- **`Development Status`** classifier: Alpha → Production/Stable.
+- **`Programming Language :: C++`** classifier added.
+- **`[tool.setuptools] packages`** list now includes `chilmesh.backends` —
+  the backend wrappers ship in the installed wheel (previously dropped silently).
+- **MANIFEST.in** ships C++ source (`*.cpp`, `*.hpp`, `CMakeLists.txt`,
+  `pyproject.toml`) so users on platforms without a pre-built wheel can
+  compile locally.
+
+### 🗑 v1.0.0 Removed
+
+- **`src/@CHILmesh/`** — legacy MATLAB class definition (no longer maintained;
+  Python is the active successor).
+- **`specs/`** — 10 historical phase spec directories (preserved in git
+  history; `.planning/` is the canonical location for ongoing planning).
+- **`scripts/cloud-setup.sh`** — pinned to a deprecated branch.
+
+### 📚 v1.0.0 Docs
+
+- README overhauled: new **Why CHILmesh** and **Backends** sections;
+  Performance table refreshed with v1.0.0 measured numbers; API Overview
+  updated to use `Mesh` instead of `CHILmesh.CHILmesh`.
+
+### ⏳ Deferred to v1.1.0
+
+- Pre-built binary wheels (`cibuildwheel` for manylinux / macOS / Windows).
+- `Mesh.read_from_fort14(..., backend='cpp')` keyword — for now backends are
+  used via direct `chilmesh_cpp` / `chilmesh_core` imports.
+
+### ✨ Public API additions since v0.4.1
 
 - **`CHILmesh.submesh(elem_ids) -> CHILmesh`** (#138) — a public sub-mesh
   factory that returns a new `CHILmesh` restricted to the given element
