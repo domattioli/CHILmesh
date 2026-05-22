@@ -154,7 +154,7 @@ CHILmesh is engineered for fast initialisation, query, and analysis on large uns
 
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 
-| Stage | v0.2.0 | v0.4.0 (EdgeMap) | v0.3.0 (Rust) † |
+| Stage | v0.2.0 | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † |
 |---|---:|---:|---:|
 | Fast init (no layers) | 3.9 s | **0.44 s** | **0.31 s** (0.70×) |
 | Full init (with layers) | 7.7 s | **3.26 s** | **2.35 s** (0.72×) |
