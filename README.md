@@ -114,27 +114,21 @@ pip install -e .                            # from source
 
 ## Performance
 
-Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3 trials.
 
-| Stage | v0.2.0 ※ | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † |
-|---|---:|---:|---:|
-| Fast init (no layers) | 3.9 s | **0.44 s** | **0.31 s** (0.70×) |
-| Full init (with layers) | 7.7 s | **3.26 s** | **2.35 s** (0.72×) |
-| — Adjacency build only | ~3.9 s | ~3.07 s | **~0.12 s** |
-| — Skeletonization only | ~3.8 s | ~0.19 s | ~0.59 s ‡ |
-| Quality analysis | 6.6 s | **0.07 s** | **< 1 ms** (0.08×) |
-| **Total workflow** | **14.3 s** | **3.33 s** | **~2.36 s** |
-| `find_element` (per call) | n/a | **< 50 μs** | **< 50 μs** |
-| `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** | **~0.17 μs** |
-| Skeletonization per layer | ~97 ms/layer | ~5 ms/layer | ~15 ms/layer ‡ |
+| Metric | v0.2.0 MATLAB ※ | v0.4.1 Python | v0.5.0-dev Rust † | v0.6.0-dev C++ |
+|---|---:|---:|---:|---:|
+| Fast init (adj, no skeletonization) | ~3.9 s | 3.36 s | 0.21 s | **0.075 s** |
+| Skeletonization only | ~3.8 s | 0.39 s | 0.32 s | **0.062 s** |
+| Full init (adj + skeletonization) | 7.7 s | 3.76 s | 0.53 s | **0.136 s** |
+| Quality analysis | 6.6 s | 72 ms | **0.75 ms** | 1.19 ms |
+| Vertex-edge lookup (per call) | ~700 μs | **0.52 μs** | 40,000 μs ‡ | 0.80 μs |
 
-※ v0.2.0 is the direct Python port of the original MATLAB implementation ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)) — numbers reflect parity with the MATLAB baseline before Python optimisation. Adjacency and per-layer estimates are derived from measured fast/full init delta (~39 layers on WNAT_Hagen).
+※ MATLAB v0.2.0 = direct Python port of original MATLAB implementation ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)). Adjacency/skeletonization split derived from measured fast/full init delta.  
+† Rust fast init includes fort.14 file I/O; Python and C++ receive raw arrays.  
+‡ Rust vertex-edge lookup = per-call adjacency array traversal across PyO3 FFI; under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
 
-† **Preliminary — working branch [`009-rust-backend-port`](https://github.com/domattioli/CHILmesh/tree/009-rust-backend-port).** 1,131 tests pass; benchmarking criteria under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
-
-‡ Rust skeletonization currently ~3× slower than EdgeMap on WNAT_Hagen — per-layer adjacency recomputation across the FFI boundary. Under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
-
-Full methodology and raw data: [`docs/RUST_PERFORMANCE.md`](docs/RUST_PERFORMANCE.md) · [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+Full methodology and raw data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
 ---
 
