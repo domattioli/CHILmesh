@@ -185,6 +185,7 @@ pub fn parse_fort14(path: &str) -> Result<RustMesh, RustMeshError> {
         num_verts: n_verts,
         num_elems: n_elems,
         edges: None,
+        areas: None,
     })
 }
 
