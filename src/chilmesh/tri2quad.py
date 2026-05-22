@@ -54,11 +54,13 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
 
     Notes:
         Annulus fixture produces 13 boundary-touching triangles after
-        conversion. These are encoded as padded [v0,v1,v2,v0] rows and
-        pass validation (logged as DEGENERATE_QUAD_DUPLICATE_VERTEX notes
-        in validator). Investigation pending: whether these represent
-        incomplete edge-insertion handling or expected boundary artifacts.
-        All synthetic tests and donut/structured pass with 0-1 padded tris.
+        conversion (vs 0-1 for donut/structured). Result mesh gains 92 new
+        boundary vertices (8 from edge-insertion vertices, 84 others TBD).
+        Geometry question: are padded tris geometrically interior (in the
+        middle of the mesh) despite having boundary-classified vertices?
+        Validator treats [v0,v1,v2,v0] as notes not violations. Needs:
+        (1) Geometric check for interior-looking padded tris, (2) Audit why
+        annulus produces 13x more padded tris than peers.
     """
     from chilmesh import CHILmesh
     from chilmesh.layer_paths import paths_on_outer_vertices
