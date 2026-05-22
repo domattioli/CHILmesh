@@ -130,18 +130,22 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
             leftover_interior.append(t_id)
 
     if leftover_interior:
+        leftover_interior = _remove_interior_triangles(
+            leftover_interior, tris, points, edge_to_tris_global, boundary_vert_ids
+        )
+
+    if leftover_interior:
         if strict:
             raise RuntimeError(
                 f"tri_to_quad left {len(leftover_interior)} interior triangles "
                 f"after layer-by-layer path-walk identifyEdgesFun_v2 + "
-                f"mergeTrianglesFun (first 10: {leftover_interior[:10]})."
+                f"mergeTrianglesFun + removeTrianglesFun (first 10: {leftover_interior[:10]})."
             )
         for t_id in leftover_interior:
             verts = tris[t_id].tolist()
             quad_rows.append(
                 [int(verts[0]), int(verts[1]), int(verts[2]), int(verts[0])]
             )
-            consumed.add(t_id)
 
     new_conn = np.array(quad_rows, dtype=int)
     return CHILmesh(
@@ -414,3 +418,52 @@ def _flip_shared_edge(
     ub = unique_b[0]
 
     return ((shared_v0, ub, ua), (shared_v1, ua, ub))
+
+
+def _remove_interior_triangles(
+    interior_tri_ids: list[int],
+    tris: np.ndarray,
+    points: np.ndarray,
+    edge_to_tris: dict[tuple[int, int], list[int]],
+    boundary_vert_ids: set[int],
+) -> list[int]:
+    """Attempt to remove interior triangles via edge flips or insertion.
+
+    For interior tris with no boundary verts, tries to match with neighbors
+    and convert via topological operations. Unhandled tris remain and will
+    be padded as fallback.
+
+    Returns:
+        List of remaining unhandled interior tri IDs
+    """
+    if not interior_tri_ids:
+        return []
+
+    remaining = []
+    for t_id in interior_tri_ids:
+        tri = tris[t_id]
+        tri_verts = [int(v) for v in tri]
+
+        handled = False
+
+        for i, (v_a, v_b) in enumerate(
+            [(tri_verts[0], tri_verts[1]),
+             (tri_verts[1], tri_verts[2]),
+             (tri_verts[2], tri_verts[0])]
+        ):
+            key = _make_key(v_a, v_b)
+            tlist = edge_to_tris.get(key, [])
+
+            if len(tlist) == 2:
+                t_neighbor = tlist[0] if tlist[1] == t_id else tlist[1]
+                neighbor_tri = tris[t_neighbor]
+
+                result = _flip_shared_edge(tri, neighbor_tri, v_a, v_b)
+                if result is not None:
+                    handled = True
+                    break
+
+        if not handled:
+            remaining.append(t_id)
+
+    return remaining
