@@ -186,253 +186,55 @@ def tri_to_quad_full(
     smooth: bool = True,
     smooth_method: str = "fem",
     smooth_iters: int = 50,
-    doublet_passes: int = 4,
-    remove_boundary_tris: bool = True,
 ) -> "CHILmesh":
-    """Full QuADMesh pipeline: tri_to_quad + tri removal + DoubletCollapse + smoothing.
+    """tri_to_quad followed by element-count-preserving smoothing.
 
-    Ports the post-processing chain from
-    ``QuADMesh/02_QuADMESH_Library/05_Post-Process_Routine/PostProcessRoutine.m``:
+    Per user direction: never drop elements. Only operations that move
+    vertex coordinates are applied here; topology stays exactly as
+    ``tri_to_quad`` produced it (no DoubletCollapse, no edgeRemoval,
+    no QuadVertexMerge).
 
+    Pipeline:
       1. ``tri_to_quad`` — layer-by-layer path-walk merge.
-      2. ``edgeRemoval`` on residual padded boundary tris (per ``removeTrianglesFun``
-         case ``canRemoveEdges && n_edges == 1``).
-      3. ``DoubletCollapse`` — fold quad pairs sharing 3 verts into one quad.
-         Iterates up to ``doublet_passes`` rounds since each pass can enable
-         new candidates.
-      4. ``direct_smoother`` (FEM-based) or ``angle_based_smoother`` for the
-         final geometric quality boost.
+      2. Smoothing — ``CHILmesh.smooth_mesh``. Tries the FEM (direct)
+         smoother first; falls back to ``angle-based`` if the sparse
+         solve returns non-finite coordinates (FEM K can go singular
+         on mixed-element topologies, and ``spsolve`` issues a warning
+         but does not raise).
 
     Args:
         mesh: Pure-triangle input.
-        smooth: Apply FEM/angle-based smoother as final step.
+        smooth: Apply smoother as final step.
         smooth_method: ``"fem"`` (direct) or ``"angle-based"``.
         smooth_iters: Passed to angle-based smoother (ignored for FEM).
-        doublet_passes: Max DoubletCollapse iterations.
-        remove_boundary_tris: Collapse padded boundary tris via edgeRemoval.
 
     Returns:
-        New CHILmesh.
+        New CHILmesh with same element count as ``tri_to_quad`` output.
 
-    Not ported (future work, tracked separately):
-      - ``edgeInsertion`` (case 2/3), ``edgeBisection`` — needed for interior
-        tris with no boundary verts (annulus + delaware bay don't produce any
-        post the ``b383dd1`` flip-bug fix).
-      - ``QuadVertexMerge_v2`` — valence-3 diagonal merge.
-      - ``CleanupBoundaryQuads_v2``, ``MCSmooth``.
+    Not yet ported (future work — each must be evaluated for "never
+    drop elements" compliance before landing):
+      - ``edgeRemoval`` / ``edgeBisection`` / ``edgeInsertion`` —
+        ``removeTrianglesFun`` cases that change element count.
+      - ``DoubletCollapse`` — 2 quads → 1 quad, same coverage but
+        topologically drops a row.
+      - ``QuadVertexMerge_v2``, ``CleanupBoundaryQuads_v2``, ``MCSmooth``.
     """
-    from chilmesh import CHILmesh
+    out = tri_to_quad(mesh, strict=False)
+    if not smooth:
+        return out
 
-    q = tri_to_quad(mesh, strict=False)
-    conn = np.asarray(q.connectivity_list, dtype=int).copy()
-    pts = np.asarray(q.points, dtype=float).copy()
-
-    if remove_boundary_tris:
-        conn, pts = _remove_padded_boundary_tris(conn, pts)
-
-    for _ in range(doublet_passes):
-        new_conn = _doublet_collapse(conn, pts)
-        if new_conn.shape[0] == conn.shape[0]:
-            break
-        conn = new_conn
-
-    out = CHILmesh(
-        connectivity=conn,
-        points=pts,
-        grid_name=mesh.grid_name,
-        compute_layers=True,
-    )
-
-    if smooth:
-        pre_pts = np.asarray(out.points).copy()
-        try:
-            out.smooth_mesh(method=smooth_method, acknowledge_change=True)
-            if not np.isfinite(out.points).all():
-                raise RuntimeError("smoother produced non-finite coordinates")
-        except Exception:
-            # FEM smoother (sparse spsolve) can return non-finite values on
-            # singular matrices without raising; angle-based smoother is more
-            # robust on small / mixed-element meshes.
-            out.change_points(pre_pts, acknowledge_change=True)
-            out.smooth_mesh(method="angle-based", acknowledge_change=True)
+    pre_pts = np.asarray(out.points).copy()
+    try:
+        out.smooth_mesh(method=smooth_method, acknowledge_change=True)
+        if not np.isfinite(out.points).all():
+            raise RuntimeError("smoother produced non-finite coordinates")
+    except Exception:
+        out.change_points(pre_pts, acknowledge_change=True)
+        out.smooth_mesh(method="angle-based", acknowledge_change=True)
 
     return out
 
 
-def _remove_padded_boundary_tris(
-    conn: np.ndarray,
-    pts: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Port of MATLAB ``edgeRemoval`` applied to all padded boundary tris.
-
-    For each padded triangle ``[a, b, c, a]``, find one shared edge with a
-    neighboring quad and collapse it: the boundary endpoint with higher
-    valence is kept; the other is merged into it. Affected quads pick up the
-    surviving vertex ID. The tri row is dropped.
-    """
-    n_pad = int(np.sum(conn[:, 0] == conn[:, 3]))
-    if n_pad == 0:
-        return conn, pts
-
-    # Build edge → element multimap, treating each row as an n-gon.
-    def _build_edge_map(c: np.ndarray) -> dict[tuple[int, int], list[int]]:
-        out: dict[tuple[int, int], list[int]] = {}
-        for i in range(c.shape[0]):
-            row = c[i]
-            if row[0] == row[3]:
-                verts = [int(row[j]) for j in range(3)]
-            else:
-                verts = [int(row[j]) for j in range(4)]
-            n = len(verts)
-            for k in range(n):
-                a, b = verts[k], verts[(k + 1) % n]
-                key = (a, b) if a < b else (b, a)
-                out.setdefault(key, []).append(i)
-        return out
-
-    keep = np.ones(conn.shape[0], dtype=bool)
-
-    edge_map = _build_edge_map(conn)
-
-    for elem_id in range(conn.shape[0]):
-        if not keep[elem_id]:
-            continue
-        if conn[elem_id, 0] != conn[elem_id, 3]:
-            continue
-        verts = [int(conn[elem_id, k]) for k in range(3)]
-
-        # Identify which edge of the tri lies on a mesh boundary (length-1 edge list).
-        chosen_edge = None
-        for k in range(3):
-            a, b = verts[k], verts[(k + 1) % 3]
-            key = (a, b) if a < b else (b, a)
-            tlist = edge_map.get(key, [])
-            tlist_live = [t for t in tlist if keep[t]]
-            if len(tlist_live) == 1:
-                chosen_edge = (a, b)
-                break
-
-        if chosen_edge is None:
-            # Interior padded tri (unexpected). Try any edge shared with a quad.
-            for k in range(3):
-                a, b = verts[k], verts[(k + 1) % 3]
-                key = (a, b) if a < b else (b, a)
-                tlist = [t for t in edge_map.get(key, []) if keep[t] and t != elem_id]
-                if tlist and conn[tlist[0], 0] != conn[tlist[0], 3]:
-                    chosen_edge = (a, b)
-                    break
-            if chosen_edge is None:
-                continue
-
-        v_keep, v_drop = chosen_edge
-        # Skip if any quad would acquire duplicate verts (both v_keep and v_drop).
-        bad_collision = False
-        for i in range(conn.shape[0]):
-            if not keep[i] or i == elem_id:
-                continue
-            row_set = {int(conn[i, k]) for k in range(4) if not (conn[i, 0] == conn[i, 3] and k == 3)}
-            if v_keep in row_set and v_drop in row_set:
-                bad_collision = True
-                break
-        if bad_collision:
-            continue
-        # Collapse v_drop into v_keep: midpoint coords, then relabel in conn.
-        pts[v_keep, :2] = 0.5 * (pts[v_keep, :2] + pts[v_drop, :2])
-        mask = conn == v_drop
-        conn[mask] = v_keep
-        keep[elem_id] = False
-        # Rebuild edge map after relabel; drop any newly-degenerate row.
-        edge_map = {}
-        for i in range(conn.shape[0]):
-            if not keep[i]:
-                continue
-            row = conn[i]
-            if row[0] == row[3]:
-                v = [int(row[j]) for j in range(3)]
-            else:
-                v = [int(row[j]) for j in range(4)]
-            v_dedup = [v[j] for j in range(len(v)) if v[j] != v[(j + 1) % len(v)]]
-            if len(v_dedup) < 3:
-                keep[i] = False
-                continue
-            for k in range(len(v_dedup)):
-                a, b = v_dedup[k], v_dedup[(k + 1) % len(v_dedup)]
-                key = (a, b) if a < b else (b, a)
-                edge_map.setdefault(key, []).append(i)
-
-    conn = conn[keep]
-    return conn, pts
-
-
-def _doublet_collapse(
-    conn: np.ndarray,
-    pts: np.ndarray,
-) -> np.ndarray:
-    """Port of MATLAB ``DoubletCollapse``.
-
-    Interior valence-2 vertex shared by exactly two quads → collapse both
-    quads into one by replacing the valence-2 vertex with the "unique" vertex
-    of the second quad (the one not shared with the first quad's other three
-    verts). The second quad's row is dropped.
-    """
-    n_elems = conn.shape[0]
-    if n_elems == 0:
-        return conn
-
-    # vert → list of (elem_id, is_padded_tri)
-    vert_to_elems: dict[int, list[int]] = {}
-    for ei in range(n_elems):
-        row = conn[ei]
-        if row[0] == row[3]:
-            verts = [int(row[k]) for k in range(3)]
-        else:
-            verts = [int(row[k]) for k in range(4)]
-        for v in set(verts):
-            vert_to_elems.setdefault(v, []).append(ei)
-
-    # Boundary verts: vertex incident to a length-1 edge.
-    edge_count: dict[tuple[int, int], int] = {}
-    for ei in range(n_elems):
-        row = conn[ei]
-        if row[0] == row[3]:
-            verts = [int(row[k]) for k in range(3)]
-        else:
-            verts = [int(row[k]) for k in range(4)]
-        n = len(verts)
-        for k in range(n):
-            a, b = verts[k], verts[(k + 1) % n]
-            key = (a, b) if a < b else (b, a)
-            edge_count[key] = edge_count.get(key, 0) + 1
-    boundary_verts = {v for key, cnt in edge_count.items() if cnt == 1 for v in key}
-
-    keep = np.ones(n_elems, dtype=bool)
-
-    for v, adj in vert_to_elems.items():
-        if v in boundary_verts:
-            continue
-        if len(adj) != 2:
-            continue
-        e1, e2 = adj
-        if not (keep[e1] and keep[e2]):
-            continue
-        # Both must be quads (no padded tris).
-        if conn[e1, 0] == conn[e1, 3] or conn[e2, 0] == conn[e2, 3]:
-            continue
-
-        verts1 = [int(conn[e1, k]) for k in range(4)]
-        verts2 = [int(conn[e2, k]) for k in range(4)]
-        # Unique vert of quad2 (not in quad1's verts).
-        unique_v = [u for u in verts2 if u not in verts1]
-        if len(unique_v) != 1:
-            continue
-        u = unique_v[0]
-
-        # Replace v in e1 with u, drop e2.
-        new_row = [u if x == v else x for x in verts1]
-        conn[e1] = np.array(new_row, dtype=int)
-        keep[e2] = False
-
-    return conn[keep]
 
 
 def _identify_edges_fun_v2(
