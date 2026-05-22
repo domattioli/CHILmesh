@@ -1,9 +1,7 @@
-<h1 align="center">
-  CHILmesh
-</h1>
+<h1 align="center">CHILmesh</h1>
 
 <p align="center">
-  <strong>Fast 2D mesh processing, smoothing, and analysis for triangular, quadrilateral, and mixed-element meshes. Intended for hydrodynamic domains. </strong>
+  <strong>Fast 2D mesh processing, smoothing, and analysis for triangular, quadrilateral, and mixed-element meshes. Intended for hydrodynamic domains.</strong>
 </p>
 
 <p align="center">
@@ -16,10 +14,11 @@
   <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?label=PyPI&logo=python&logoColor=white&cacheSeconds=300" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
   <a href="https://doi.org/10.5281/zenodo.20263854"><img src=".github/badges/zenodo-doi.svg" alt="DOI"></a>
-  <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>  
+  <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>
+  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
 </p>
 
-> **Note for MATLAB users**: This Python implementation is the actively-developed successor to the original MATLAB codebase. It is **still in development** and the API may evolve. The original MATLAB code (no longer maintained) remains available for reference here on github [src/@CHILmesh/CHILmesh.m](src/@CHILmesh/CHILmesh.m) and on [MathWorks](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh/files/src/@CHILmesh/CHILmesh.m)
+> **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on [MathWorks](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh/files/src/@CHILmesh/CHILmesh.m).
 
 ---
 
@@ -29,11 +28,12 @@
 - [Gallery](#gallery)
 - [Features](#features)
 - [Installation](#installation)
-- [Performance](#performance-v030)
+- [Performance](#performance)
 - [API Overview](#api-overview)
 - [Mesh Smoothing](#mesh-smoothing)
 - [Examples](#examples)
 - [CLI](#cli)
+- [Downstream Projects](#downstream-projects)
 - [Contributing](#contributing)
 - [Citation](#citation)
 
@@ -41,13 +41,9 @@
 
 ## Quick Start
 
-
 ```bash
 pip install chilmesh
 ```
-
-
-
 
 ```python
 import chilmesh
@@ -55,15 +51,12 @@ import matplotlib.pyplot as plt
 
 mesh = chilmesh.examples.annulus()
 mesh.smooth_mesh(method='fem', acknowledge_change=True)
-
 quality, angles, stats = mesh.elem_quality()
 mesh.plot_quality()
 plt.show()
 ```
 
-
-
-See [`examples/`](examples/) for more runnable scripts.
+See [`examples/`](examples/) for runnable scripts.
 
 ---
 
@@ -78,97 +71,74 @@ See [`examples/`](examples/) for more runnable scripts.
 <p align="center">
   <img src="output/mixed_mesh_showcase.png?v=2" alt="Mixed-element mesh: wireframe, layers, quality">
   <br>
-  <sub><em><strong>Figure 2.</strong> Mixed-element pipeline — wireframe, skeletonization, and per-element quality on one tri+quad mesh, all via the standard API. Reproduce: <code>python scripts/generate_mixed_truss_demo.py</code>.</em></sub>
+  <sub><em><strong>Figure 2.</strong> Mixed-element pipeline — wireframe, skeletonization, and per-element quality on one tri+quad mesh. Reproduce: <code>python scripts/generate_mixed_truss_demo.py</code>.</em></sub>
 </p>
 
 <p align="center">
   <img src="output/annulus_quickstart.png?v=7" alt="Skeletonization + quality plotting across three smoothing states">
   <br>
-  <sub><em><strong>Figure 3.</strong> Flagship plots <code>plot_layer()</code> and <code>plot_quality()</code> tracking how skeletonization and quality respond to smoothing (raw → truss → FEM). Reproduce: <code>python scripts/generate_3row_admesh.py</code>.</em></sub>
+  <sub><em><strong>Figure 3.</strong> <code>plot_layer()</code> and <code>plot_quality()</code> tracking skeletonization and quality across raw → truss → FEM smoothing. Reproduce: <code>python scripts/generate_3row_admesh.py</code>.</em></sub>
 </p>
 
 <p align="center">
-  <img src="output/readme_pipeline_annulus.gif" alt="Animated 4-stage CHILmesh annulus pipeline: Raw → ADMESH truss → FEM smoother → right-iso">
+  <img src="output/readme_pipeline_annulus.gif" alt="Animated 4-stage CHILmesh annulus pipeline">
   <br>
-  <sub><em><strong>Figure 4.</strong> Same Figure 3 pipeline as a Manim animation. Vertex IDs persist across stages and morph continuously between snapshots; polygon edges cross-fade per stage because Delaunay re-triangulation runs after every smoother that moves vertices freely. Higher-fidelity 1080p mp4 at <a href="output/readme_pipeline_annulus.mp4"><code>output/readme_pipeline_annulus.mp4</code></a>; scene script at <a href="output/pipeline_annulus_scene.py"><code>output/pipeline_annulus_scene.py</code></a>.</em></sub>
+  <sub><em><strong>Figure 4.</strong> Figure 3 as a Manim animation. Higher-fidelity 1080p at <a href="output/readme_pipeline_annulus.mp4"><code>output/readme_pipeline_annulus.mp4</code></a>.</em></sub>
 </p>
 
 ---
 
 ## Features
 
-- **Fast** — full init + quality analysis on a 98,365-element mesh in **~3.3 s** (4.3× faster than v0.2.0).
-  - Hash-mapped O(1) edge lookups, vectorised numpy core ops, kd-tree spatial queries at O(log n)
+- **Fast** — full init + quality analysis on a 98,365-element mesh in ~3.3 s (4.3× faster than v0.2.0)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
-- **Smoothing** — three algorithms: Balendran direct FEM (one-shot solve), Zhou-Shimada angle-based (iterative), and the ADMESH Spring-Based Truss Smoother (force relaxation)
-- **Mesh alterations** — `insert_vertex`, coord-only vertex moves, advancing-front element addition; topology-update primitives via the `MutableMesh` API (full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94))
-- **Analysis** — element quality, interior angles, layer-based skeletonization
-- **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS](https://www.aquaveo.com/sms) `.2dm` read/write. ([gmsh](https://gmsh.info/) Coming Soon)
-- **Spatial queries** — point-in-element, k-nearest vertices, radius search.
-- **Mesh traversal algorithms** (in-development)
-- **ADMESH-Domains integration** — `from_admesh_domain()` adapter for catalog meshes
+- **Smoothing** — Balendran direct FEM, Zhou-Shimada angle-based, and ADMESH Spring-Based Truss
+- **Analysis** — element quality, interior angles, layer-based skeletonization (medial axis)
+- **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS Aquaveo](https://www.aquaveo.com/sms) `.2dm` read/write
+- **Spatial queries** — point-in-element, k-nearest vertices, radius search at O(log n)
+- **Mesh alterations** — `insert_vertex`, coord moves, advancing-front element addition; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
+- **ADMESH-Domains integration** — `from_admesh_domain()` adapter
 
 ---
 
 ## Installation
 
-From PyPI (pip):
-
 ```bash
-pip install chilmesh
+pip install chilmesh                        # PyPI
+uv pip install chilmesh                     # uv
+conda install -c conda-forge chilmesh       # conda-forge (pending)
+pip install -e .                            # from source
 ```
-
-
-
-With [uv](https://docs.astral.sh/uv/) (faster, pip-compatible):
-
-```bash
-uv pip install chilmesh        # or:  uv add chilmesh
-```
-
-
-
-From conda-forge (once published):
-
-```bash
-conda install -c conda-forge chilmesh
-# or: mamba install -c conda-forge chilmesh
-```
-
-
-
-From source:
-
-```bash
-git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
-pip install -e .
-```
-
-
 
 ---
 
 ## Performance
 
-CHILmesh is engineered for fast initialisation, query, and analysis on large unstructured 2D meshes. Hash-mapped edge adjacencies reduce topology build from `O(n²)` to amortised `O(n)`; core operations (`signed_area`, `interior_angles`, `elem_quality`) are fully vectorised over numpy arrays; a centroid kd-tree backs spatial queries (`find_element`, `nearest_vertices`) at `O(log n)` per call.
-
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 
-| Stage | v0.2.0 | v0.4.0 |
-|---|---:|---:|
-| Fast init (no layers) | 3.9 s | **0.44 s** |
-| Full init (with layers) | 7.7 s | **3.26 s** |
-| Quality analysis | 6.6 s | **0.07 s** |
-| **Total workflow** | **14.3 s** | **3.33 s** |
-| `find_element` (per call) | n/a | **< 50 μs** |
-| `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** |
+| Stage | v0.2.0 ※ | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † |
+|---|---:|---:|---:|
+| Fast init (no layers) | 3.9 s | **0.44 s** | **0.31 s** (0.70×) |
+| Full init (with layers) | 7.7 s | **3.26 s** | **2.35 s** (0.72×) |
+| — Adjacency build only | ~3.9 s | ~3.07 s | **~0.12 s** |
+| — Skeletonization only | ~3.8 s | ~0.19 s | ~0.59 s ‡ |
+| Quality analysis | 6.6 s | **0.07 s** | **< 1 ms** (0.08×) |
+| **Total workflow** | **14.3 s** | **3.33 s** | **~2.36 s** |
+| `find_element` (per call) | n/a | **< 50 μs** | **< 50 μs** |
+| `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** | **~0.17 μs** |
+| Skeletonization per layer | ~97 ms/layer | ~5 ms/layer | ~15 ms/layer ‡ |
 
-Per-stage breakdown, methodology, and historical baselines in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_wnat_hagen.py --json results.json`.
+※ v0.2.0 is the direct Python port of the original MATLAB implementation ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)) — numbers reflect parity with the MATLAB baseline before Python optimisation. Adjacency and per-layer estimates are derived from measured fast/full init delta (~39 layers on WNAT_Hagen).
+
+† **Preliminary — working branch [`009-rust-backend-port`](https://github.com/domattioli/CHILmesh/tree/009-rust-backend-port).** 1,131 tests pass; benchmarking criteria under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
+
+‡ Rust skeletonization currently ~3× slower than EdgeMap on WNAT_Hagen — per-layer adjacency recomputation across the FFI boundary. Under investigation ([#145](https://github.com/domattioli/CHILmesh/issues/145)).
+
+Full methodology and raw data: [`docs/RUST_PERFORMANCE.md`](docs/RUST_PERFORMANCE.md) · [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
 ---
 
 ## API Overview
-
 
 ```python
 import chilmesh
@@ -188,108 +158,76 @@ mesh.plot_layer()       # skeletonization layers
 # Skeletonization output
 layers = mesh.layers    # {'OE', 'IE', 'OV', 'IV'} per layer
 
-# Spatial queries (v0.3.0)
+# Spatial queries
 elem_id = mesh.find_element([0.5, 0.0])
 neighbors = mesh.nearest_vertices([0.5, 0.0], k=5)
 in_radius = mesh.find_elements_in_radius([0.5, 0.0], radius=0.2)
 ```
 
-
-
-Full reference in [`docs/API.md`](docs/API.md). Optional ADMESH truss warm-start via `chilmesh.optimize_with_admesh_truss`.
+Full reference: [`docs/API.md`](docs/API.md).
 
 ---
 
 ## Mesh Smoothing
 
-Three smoothing algorithms — pick by use case. Each preserves boundary nodes, leaves topology unchanged, and accepts mixed-element meshes.
+Three algorithms — each preserves boundary nodes, leaves topology unchanged, and accepts mixed-element meshes.
 
-| Algorithm | API | Style | When |
+| Algorithm | API call | Style | Best for |
 |---|---|---|---|
-
-| **Balendran direct FEM** | `smooth_mesh(method='fem', ...)` → `direct_smoother(kinf=1e12)` | One-shot sparse solve | Best general-purpose default. Stable on tri / quad / mixed. |
-| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based', ...)` → `angle_based_smoother(n_iter, omega, tol)` | Iterative, angle-maximising | Fallback for difficult mixed meshes where FEM stalls. |
-| **ADMESH Spring-Based Truss Smoother** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, niter, Fscale)` | distmesh2d-style spring/force relaxation against a signed-distance field | When you want quality gains plus boundary nodes that respect a domain SDF (e.g., coastline). |
-
-
-```python
-mesh.smooth_mesh(method='fem', acknowledge_change=True)         # default
-mesh.smooth_mesh(method='angle-based', acknowledge_change=True) # fallback
-mesh = chilmesh.optimize_with_admesh_truss(mesh, sdf, niter=500, Fscale=0.5)
-```
-
-
-
-Stiffness assembly, convergence parameters, and algorithm details: [`docs/API.md`](docs/API.md).
+| **Balendran direct FEM** | `smooth_mesh(method='fem')` | One-shot sparse solve | General-purpose default; stable on tri/quad/mixed |
+| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based')` | Iterative, angle-maximising | Difficult mixed meshes where FEM stalls |
+| **ADMESH Spring-Based Truss** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, ...)` | Spring/force relaxation against SDF | Quality gains with SDF-respecting boundary nodes |
 
 **References.**
-- FEM smoother: Balendran, B. (1999). *"A direct smoothing method for surface meshes."* Proc. 8th International Meshing Roundtable, pp. 189–193.
-- Angle-based smoother: Zhou, M. & Shimada, K. (2000). *"An angle-based approach to two-dimensional mesh smoothing."* Proc. 9th IMR, pp. 373–384.
-- ADMESH Spring-Based Truss Smoother: Conroy et al. (2012) *"ADMESH: An advanced, automatic unstructured mesh generator for shallow water models."* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
+- Balendran (1999). *A direct smoothing method for surface meshes.* Proc. 8th IMR, pp. 189–193.
+- Zhou & Shimada (2000). *An angle-based approach to two-dimensional mesh smoothing.* Proc. 9th IMR, pp. 373–384.
+- Conroy et al. (2012). *ADMESH: An advanced, automatic unstructured mesh generator for shallow water models.* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
 
 ---
 
 ## Examples
 
-Runnable scripts in [`examples/`](examples/) demonstrate common tasks against bundled fixtures — no external mesh files required:
-
-- [`01_quickstart.py`](examples/01_quickstart.py) — load a mesh, print stats, save a plot
-- [`02_fort14_roundtrip.py`](examples/02_fort14_roundtrip.py) — fort.14 read / write
-- [`03_smoothing.py`](examples/03_smoothing.py) — angle-based smoother on perturbed interior
-- [`04_spatial_queries.py`](examples/04_spatial_queries.py) — `find_element`, radius search, k-nearest vertices
-
-
 ```bash
-python examples/01_quickstart.py
+python examples/01_quickstart.py        # load, stats, plot
+python examples/02_fort14_roundtrip.py  # fort.14 read/write
+python examples/03_smoothing.py         # angle-based smoother
+python examples/04_spatial_queries.py   # find_element, radius search, k-nearest
 ```
-
-
 
 ---
 
 ## CLI
 
-`chilmesh` ships with a small shell entry point for inspection, conversion, smoothing, and plotting. No new dependencies — pure stdlib `argparse` over the existing public API.
-
-
 ```bash
-# Mesh statistics (verts, elems, edges, layers, quality)
-chilmesh info path/to/mesh.fort.14
-
-# Format conversion (output format inferred from suffix)
-chilmesh convert mesh.2dm mesh.fort.14
-
-# In-place smoothing
-chilmesh smooth mesh.fort.14 -o smoothed.fort.14 --method angle-based --iter 50
-
-# Static figure (PNG / PDF / SVG by suffix; --layers or --quality for overlays)
-chilmesh plot mesh.fort.14 -o mesh.png --quality
+chilmesh info mesh.fort.14                                      # stats
+chilmesh convert mesh.2dm mesh.fort.14                         # format conversion
+chilmesh smooth mesh.fort.14 -o out.fort.14 --method fem       # smooth in-place
+chilmesh plot mesh.fort.14 -o mesh.png --quality               # render
 ```
 
-
-
-Each subcommand has its own `--help` with an example. Also available as `python -m chilmesh ...` when the script isn't on PATH.
+Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 ---
 
 ## Downstream Projects
 
-[**ADMESH**](https://github.com/domattioli/ADMESH) — Optimized 2D triangular mesh generation for hydrodynamic domains
-[**MADMESHR**](https://github.com/domattioli/MADMESHR) — AI based quad- and mixed element generation for hydrodynamic domains.
-[**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) — Mesh catalog for hydrodynamic domains.
+| Repo | Description |
+|---|---|
+| [**ADMESH**](https://github.com/domattioli/ADMESH) | Optimized 2D triangular mesh generation for hydrodynamic domains |
+| [**MADMESHR**](https://github.com/domattioli/MADMESHR) | AI-based quad- and mixed-element generation for hydrodynamic domains |
+| [**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) | Mesh catalog for hydrodynamic domains |
 
 ---
 
 ## Contributing
 
-Issues and pull requests welcome at [github.com/domattioli/CHILmesh](https://github.com/domattioli/CHILmesh). Run `pytest -v` before opening a PR — see [`TESTING.md`](TESTING.md) for the test-suite guide.
+Issues and PRs welcome at [github.com/domattioli/CHILmesh](https://github.com/domattioli/CHILmesh). Run `pytest -v` before opening a PR — see [`TESTING.md`](TESTING.md).
 
 ---
 
 ## Citation
 
-CHILmesh originated in MATLAB as the mixed-element data structure backing a skeletonization-driven heuristic for indirect triangle-to-quad conversion that preserves the underlying size function (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python implementation is the actively-developed successor serving as a shared API for downstream projects (MADMESHR, ADMESH, ADMESH-Domains).
-
+CHILmesh originated in MATLAB as the data structure backing a skeletonization-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python library is the actively-developed successor.
 
 ```bibtex
 @software{mattioli_chilmesh,
@@ -304,10 +242,7 @@ CHILmesh originated in MATLAB as the mixed-element data structure backing a skel
 }
 ```
 
-
-
-**MATLAB source (Mattioli, 2017 thesis).** [Read thesis (PDF)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
-
+**MATLAB source (Mattioli, 2017).** [Read thesis (PDF)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
@@ -320,9 +255,8 @@ CHILmesh originated in MATLAB as the mixed-element data structure backing a skel
 }
 ```
 
-
 ---
 
 ## License
 
-MIT License — See [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
