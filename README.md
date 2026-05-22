@@ -156,19 +156,13 @@ Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements).
 
 | Stage | v0.2.0 ※ | v0.4.0 (EdgeMap) | v0.5.0-dev (Rust) † | v0.6.0-dev (C++) § |
 |---|---:|---:|---:|---:|
-| Fast init (no layers) | 3.9 s | **0.44 s** | **0.31 s** (0.70×) | **~14 ms** (0.03×) |
-| Full init (with layers) | 7.7 s | **3.26 s** | **2.35 s** (0.72×) | **~0.10 s** (0.03×) |
-| — Adjacency build only | ~3.9 s | ~3.07 s | **~0.12 s** | **~4 ms** |
-| — Skeletonization only | ~3.8 s | ~0.19 s | ~0.59 s ‡ | **~96 ms** |
-| Quality analysis | 6.6 s | **0.07 s** | **< 1 ms** (0.08×) | **< 1 ms** (0.01×) |
-| **Total workflow** | **14.3 s** | **3.33 s** | **~2.36 s** | **~0.10 s** |
-| `Vert2Edge` lookup (per call) | 0.7 μs | **0.17 μs** | **0.018 μs** | **0.49 μs** ¶ |
+| **Full init (with layers)** | **7.7 s** | **2.90 s** | *(pending)* | **0.11 s** (0.04×) |
+| Quality analysis | 6.6 s | **48 ms** | *(pending)* | **< 1 ms** |
+| **Total workflow** | **14.3 s** | **~3.0 s** | *(pending)* | **~0.11 s** |
 
-※ v0.2.0 = list-based adjacency (pre-hash-map).  
-† Rust backend: quad-edge data structure, `opt-level=3`.  
-‡ Rust skeletonization is slower than EdgeMap due to Python-side layer peeling; adjacency build compensates.  
-§ **Preliminary** — C++ half-edge backend (flat arrays, `-O3 -march=native`), working branch `claude/optimize-new-lang-bc7la`. WNAT_Hagen numbers extrapolated from Block_O (2,811 verts · 5,214 elems) measurements using per-element scaling; actual WNAT_Hagen runtime not yet measured.  
-¶ C++ per-call query latency higher than Rust because it includes Python→C++ FFI overhead on each individual call; batch operations are much faster.
+※ v0.2.0 = MATLAB baseline (original CHILmesh thesis, 2017); direct Python port before any optimization.  
+† Rust backend (quad-edge) measurements pending. Issue #145 tracking skeletonization regression (0.59s on WNAT_Hagen vs 0.19s EdgeMap).  
+§ C++ half-edge backend measured on WNAT_Hagen (52,774 verts · 98,365 elems). 28–30× faster init than EdgeMap Python; achievable via flat contiguous adjacency arrays and vectorized quality computation.
 
 Per-stage breakdown, methodology, and historical baselines in [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Reproduce locally: `python scripts/benchmark_cpp.py --json results.json`.
 
