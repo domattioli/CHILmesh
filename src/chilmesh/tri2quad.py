@@ -51,6 +51,14 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
     Raises:
         ValueError: If the input is not a pure-triangle mesh.
         RuntimeError: If ``strict`` and an interior triangle survives.
+
+    Notes:
+        Annulus fixture produces 13 boundary-touching triangles after
+        conversion. These are encoded as padded [v0,v1,v2,v0] rows and
+        pass validation (logged as DEGENERATE_QUAD_DUPLICATE_VERTEX notes
+        in validator). Investigation pending: whether these represent
+        incomplete edge-insertion handling or expected boundary artifacts.
+        All synthetic tests and donut/structured pass with 0-1 padded tris.
     """
     from chilmesh import CHILmesh
     from chilmesh.layer_paths import paths_on_outer_vertices
