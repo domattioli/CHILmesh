@@ -16,10 +16,11 @@ struct HalfEdge {
 };
 
 struct LayerData {
-    std::vector<int32_t> OE;  // outer elements
-    std::vector<int32_t> IE;  // inner elements
-    std::vector<int32_t> OV;  // outer vertices
-    std::vector<int32_t> IV;  // inner vertices
+    std::vector<int32_t> OE;         // outer elements
+    std::vector<int32_t> IE;         // inner elements
+    std::vector<int32_t> OV;         // outer vertices
+    std::vector<int32_t> IV;         // inner vertices
+    std::vector<int32_t> bEdgeIDs;   // boundary edges defining this layer's outer frontier
 };
 
 class HalfEdgeMesh {

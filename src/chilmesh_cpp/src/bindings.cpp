@@ -80,6 +80,7 @@ PYBIND11_MODULE(chilmesh_cpp, m) {
                 layer["IE"] = py::array_t<int32_t>(ld.IE.size(), ld.IE.data());
                 layer["OV"] = py::array_t<int32_t>(ld.OV.size(), ld.OV.data());
                 layer["IV"] = py::array_t<int32_t>(ld.IV.size(), ld.IV.data());
+                layer["bEdgeIDs"] = py::array_t<int32_t>(ld.bEdgeIDs.size(), ld.bEdgeIDs.data());
                 result.append(layer);
             }
             return result;

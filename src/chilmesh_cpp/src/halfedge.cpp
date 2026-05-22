@@ -243,8 +243,10 @@ void HalfEdgeMesh::skeletonize() {
             }
         }
 
-        // OV: vertices that are on the actual outer boundary (degree > 0 boundary edges)
+        // OV: vertices on the boundary frontier of this layer (boundary edges).
+        // bEdgeIDs: the boundary edges themselves (Python parity).
         std::unordered_map<int32_t, bool> ov_set;
+        std::unordered_map<int32_t, bool> bedge_set;
         for (int e : to_peel) {
             int k = max_vpe;
             while (k > 3 && connectivity[e * max_vpe + k - 1] == -1) --k;
@@ -257,10 +259,12 @@ void HalfEdgeMesh::skeletonize() {
                     int32_t v1 = edge2vert[eid * 2 + 1];
                     ov_set[v0] = true;
                     ov_set[v1] = true;
+                    bedge_set[eid] = true;
                 }
             }
         }
         for (auto& [v, _] : ov_set) ld.OV.push_back(v);
+        for (auto& [eid, _] : bedge_set) ld.bEdgeIDs.push_back(eid);
 
         // IV: vertices of peeled elems not in OV
         for (int v = 0; v < n_verts; ++v) {
