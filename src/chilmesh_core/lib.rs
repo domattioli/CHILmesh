@@ -1,8 +1,10 @@
 pub mod errors;
 pub mod io;
+pub mod adjacency;
 
 use pyo3::prelude::*;
 use ndarray::Array2;
+use numpy::PyArray2;
 
 /// RustMesh represents a 2D mesh with mixed element types (triangles and quads)
 #[pyclass]
@@ -12,6 +14,7 @@ pub struct RustMesh {
     pub elem_type: Vec<u32>,         // Element types (3=triangle, 4=quad)
     pub num_verts: usize,
     pub num_elems: usize,
+    pub edges: Option<Array2<i32>>,  // Quad-edge topology: [n_edges, 4]
 }
 
 #[pymethods]
@@ -24,6 +27,7 @@ impl RustMesh {
             elem_type: Vec::new(),
             num_verts: 0,
             num_elems: 0,
+            edges: None,
         }
     }
 
@@ -50,6 +54,49 @@ impl RustMesh {
     #[getter]
     fn n_elems(&self) -> usize {
         self.num_elems
+    }
+
+    /// Build adjacencies (quad-edge construction + converters)
+    fn build_adjacencies(&mut self) -> PyResult<()> {
+        let edges = adjacency::build_quadegg_from_connectivity(&self.connectivity, self.num_verts);
+        self.edges = Some(edges);
+        Ok(())
+    }
+
+    /// Get Edge2Vert: returns ndarray [n_edges, 2]
+    fn get_edge2vert<'py>(&self, py: Python<'py>) -> PyResult<Py<PyArray2<i32>>> {
+        let result = adjacency::to_edge2vert(&self.connectivity);
+        Ok(PyArray2::from_owned_array(py, result).to_owned())
+    }
+
+    /// Get Elem2Edge: returns ndarray [n_elems, 3|4]
+    fn get_elem2edge<'py>(&self, py: Python<'py>) -> PyResult<Py<PyArray2<i32>>> {
+        let result = adjacency::to_elem2edge(&self.connectivity);
+        Ok(PyArray2::from_owned_array(py, result).to_owned())
+    }
+
+    /// Get Vert2Edge: returns PyList of lists
+    fn get_vert2edge(&self) -> PyResult<Vec<Vec<usize>>> {
+        let result = adjacency::to_vert2edge(&self.connectivity, self.num_verts);
+        Ok(result)
+    }
+
+    /// Get Vert2Elem: returns PyList of lists
+    fn get_vert2elem(&self) -> PyResult<Vec<Vec<usize>>> {
+        let result = adjacency::to_vert2elem(&self.connectivity, self.num_verts);
+        Ok(result)
+    }
+
+    /// Get Edge2Elem: returns ndarray [n_edges, 2]
+    fn get_edge2elem<'py>(&self, py: Python<'py>) -> PyResult<Py<PyArray2<i32>>> {
+        let result = adjacency::to_edge2elem(&self.connectivity);
+        Ok(PyArray2::from_owned_array(py, result).to_owned())
+    }
+
+    /// Get Elem2Vert: returns connectivity ndarray [n_elems, 3|4]
+    fn get_elem2vert<'py>(&self, py: Python<'py>) -> PyResult<Py<PyArray2<i32>>> {
+        let result = adjacency::to_elem2vert(&self.connectivity);
+        Ok(PyArray2::from_owned_array(py, result).to_owned())
     }
 }
 

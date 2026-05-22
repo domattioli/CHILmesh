@@ -10,10 +10,11 @@ crate-type = ["cdylib"]
 path = "lib.rs"
 
 [dependencies]
-pyo3 = { version = "0.28.3", features = ["abi3-py38"] }
-ndarray = "0.17.2"
+pyo3 = { version = "0.21.2", features = ["abi3-py38"] }
+ndarray = "0.15.6"
 thiserror = "2.0.18"
 quadtree = "0.5"
+numpy = "0.21"
 
 [profile.release]
 opt-level = 3
