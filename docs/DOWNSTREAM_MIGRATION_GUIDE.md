@@ -229,7 +229,7 @@ print(f"Boundary vertices: {len(boundary_verts)}")
 
 ### Phase 1: Update CHILmesh (1 hour)
 ```bash
-pip install --upgrade 'chilmesh>=0.2.0'
+pip install --upgrade 'chilmesh>=1.0.0'
 ```
 
 ### Phase 2: Test Compatibility (30 minutes)
@@ -324,20 +324,20 @@ boundary_verts = boundaries[0]
 
 ### Error: "AttributeError: CHILmesh has no attribute 'get_vertex_edges'"
 
-**Cause:** Using CHILmesh < 0.2.0
+**Cause:** Using CHILmesh < 1.0.0
 
 **Fix:**
 ```bash
-pip install --upgrade 'chilmesh>=0.2.0'
+pip install --upgrade 'chilmesh>=1.0.0'
 ```
 
 ### Error: "ModuleNotFoundError: No module named 'chilmesh.bridge'"
 
-**Cause:** Using CHILmesh < 0.2.0, or bridge module not found
+**Cause:** Using CHILmesh < 1.0.0, or bridge module not found
 
 **Fix:**
 ```bash
-pip install --upgrade 'chilmesh>=0.2.0'
+pip install --upgrade 'chilmesh>=1.0.0'
 python -c "from chilmesh.bridge import MeshAdapterForMADMESHR; print('OK')"
 ```
 

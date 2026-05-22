@@ -13,6 +13,12 @@ recursive-include src/chilmesh/data *.14 *.fort.14
 # C++ extension source (so users can rebuild on unsupported platforms)
 recursive-include src/chilmesh_cpp *.cpp *.hpp *.h CMakeLists.txt pyproject.toml
 
+# Rust extension source (so users can rebuild on unsupported platforms)
+include src/chilmesh_core/Cargo.toml
+include src/chilmesh_core/Cargo.lock
+recursive-include src/chilmesh_core *.rs
+prune src/chilmesh_core/target
+
 # Internal / dev-only paths — exclude from sdist
 prune .claude
 prune .planning

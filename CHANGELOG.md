@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
 ## [1.0.0] — 2026-05-22
 
 First **stable** release. CHILmesh is now the production backbone for ADMESH,
@@ -57,8 +59,8 @@ MADMESHR, and ADMESH-Domains.
 - **`[tool.setuptools] packages`** list now includes `chilmesh.backends` —
   the backend wrappers ship in the installed wheel (previously dropped silently).
 - **MANIFEST.in** ships C++ source (`*.cpp`, `*.hpp`, `CMakeLists.txt`,
-  `pyproject.toml`) so users on platforms without a pre-built wheel can
-  compile locally.
+  `pyproject.toml`) and Rust source (`*.rs`, `Cargo.toml`, `Cargo.lock`)
+  so users on platforms without a pre-built wheel can compile locally.
 
 ### 🗑 v1.0.0 Removed
 
