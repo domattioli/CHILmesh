@@ -249,6 +249,12 @@ def tri_to_quad_full(
                 break
             conn = new_conn
 
+    # Absorb any leftover interior triangles by fusing adjacent interior
+    # tri pairs into a single quad covering their union. Two adjacent
+    # triangles sharing one edge form a convex quad iff the diagonal lies
+    # inside the union — guarded by signed-area sign check below.
+    conn = _fuse_interior_tri_pairs(conn, pts)
+
     out = CHILmesh(
         connectivity=conn,
         points=pts,
@@ -271,11 +277,13 @@ def tri_to_quad_full(
         lap_pts = _laplacian_smooth(out, n_iter=smooth_iters, omega=0.7)
         out.change_points(lap_pts, acknowledge_change=True)
 
-        # Topology cleanup with validator-guarded acceptance: per
-        # iteration, snapshot the mesh, apply swap + doublet + QVM, then
-        # validate. If any new violation appears, discard the iteration
-        # and exit. Imported lazily so the module is importable outside
-        # the test environment.
+        # Topology cleanup with validator-guarded acceptance. For meshes
+        # below ``_LARGE_MESH_THRESHOLD`` we run the O(n²) snapshot
+        # validator per swap; above that, we skip per-swap validation and
+        # rely on local geometric checks (hexagon convexity, signed-area
+        # sign, diagonal midpoint containment, perimeter crossings) plus a
+        # single end-of-loop validation.
+        _LARGE_MESH_THRESHOLD = 1000
         try:
             from tests._validity.validator import (
                 validate_mesh_elements as _v,
@@ -283,6 +291,10 @@ def tri_to_quad_full(
             _have_validator = True
         except ImportError:
             _have_validator = False
+
+        _use_per_swap_validator = (
+            _have_validator and out.n_elems <= _LARGE_MESH_THRESHOLD
+        )
 
         def _viol_count(mesh: "CHILmesh") -> int:
             if not _have_validator:
@@ -292,7 +304,7 @@ def tri_to_quad_full(
             except Exception:
                 return -1
 
-        baseline_viol = _viol_count(out)
+        baseline_viol = _viol_count(out) if _have_validator else 0
 
         class _SwapValidator:
             """Callable wrapper that runs the mesh validator on a connectivity
@@ -317,7 +329,7 @@ def tri_to_quad_full(
         for _ in range(8):
             c = np.asarray(out.connectivity_list, dtype=int).copy()
             p = np.asarray(out.points, dtype=float).copy()
-            sv = _SwapValidator(baseline=baseline_viol)
+            sv = _SwapValidator(baseline=baseline_viol) if _use_per_swap_validator else None
             c_new = _quad_pair_edge_swap(c, p, quality_threshold=0.5,
                                           min_improvement=0.02,
                                           validator=sv)
@@ -329,11 +341,15 @@ def tri_to_quad_full(
                 break
             candidate = _CM(connectivity=c_new, points=p,
                              grid_name=out.grid_name, compute_layers=True)
-            new_viol = _viol_count(candidate)
-            if _have_validator and new_viol > baseline_viol:
-                break
+            # On large meshes the per-swap validator is skipped, so accept
+            # the iteration without snapshot validation. Geometric guards
+            # in _quad_pair_edge_swap reject invalid swaps locally.
+            if _use_per_swap_validator:
+                new_viol = _viol_count(candidate)
+                if new_viol > baseline_viol:
+                    break
+                baseline_viol = new_viol
             out = candidate
-            baseline_viol = new_viol if _have_validator else 0
 
         # Final smoothing pass on the topology-cleaned mesh. Skip Laplacian
         # inside the loop because post-doublet/QVM relabeling expands some
@@ -1122,6 +1138,119 @@ def _doublet_collapse(
     return conn[keep]
 
 
+def _fuse_interior_tri_pairs(
+    conn: np.ndarray,
+    pts: np.ndarray,
+) -> np.ndarray:
+    """Fuse pairs of adjacent interior triangles into a single quad.
+
+    An "interior triangle" is a padded-tri row ``[a, b, c, a]`` whose
+    three vertices are all NOT on the mesh boundary. When two such tris
+    share exactly one edge ``(u, v)``, the union forms a quad
+    ``(u, w_1, v, w_2)`` where ``w_1`` and ``w_2`` are the two non-shared
+    vertices. The fusion is accepted iff the resulting quad is convex and
+    has a consistent CCW orientation (positive signed area).
+    """
+    n_elems = conn.shape[0]
+    if n_elems == 0:
+        return conn
+
+    edge_to_elems = _build_full_edge_map(conn)
+    boundary_verts: set[int] = set()
+    for key, elems in edge_to_elems.items():
+        if len(elems) == 1:
+            boundary_verts.add(key[0])
+            boundary_verts.add(key[1])
+
+    interior_tri_ids: list[int] = []
+    for ei in range(n_elems):
+        row = conn[ei]
+        if row[0] != row[3]:
+            continue
+        verts = {int(row[k]) for k in range(3)}
+        if not (verts & boundary_verts):
+            interior_tri_ids.append(ei)
+
+    if not interior_tri_ids:
+        return conn
+
+    keep = np.ones(n_elems, dtype=bool)
+    used: set[int] = set()
+
+    def _signed_area_quad(verts: list[int]) -> float:
+        poly = pts[verts, :2]
+        x = poly[:, 0]
+        y = poly[:, 1]
+        return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+    def _is_convex_ccw(verts: list[int]) -> bool:
+        poly = pts[verts, :2]
+        n = len(verts)
+        sign = 0
+        for k in range(n):
+            a = poly[(k - 1) % n]
+            b = poly[k]
+            c = poly[(k + 1) % n]
+            cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
+            if cross > 1e-14:
+                s = 1
+            elif cross < -1e-14:
+                s = -1
+            else:
+                return False  # collinear vertex
+            if sign == 0:
+                sign = s
+            elif s != sign:
+                return False
+        return sign == 1
+
+    for ei in interior_tri_ids:
+        if ei in used or not keep[ei]:
+            continue
+        row = conn[ei]
+        verts_a = [int(row[k]) for k in range(3)]
+        # Try each edge in the tri for a neighboring interior tri.
+        for k in range(3):
+            u = verts_a[k]
+            v = verts_a[(k + 1) % 3]
+            w_a = verts_a[(k + 2) % 3]
+            key = (u, v) if u < v else (v, u)
+            neighbors = [n for n in edge_to_elems.get(key, []) if n != ei]
+            if len(neighbors) != 1:
+                continue
+            ej = neighbors[0]
+            if ej in used or not keep[ej]:
+                continue
+            row_b = conn[ej]
+            if row_b[0] != row_b[3]:
+                continue  # neighbor is a quad
+            verts_b = [int(row_b[k]) for k in range(3)]
+            if not ({int(x) for x in verts_b} & boundary_verts == set()):
+                # mixed: one of the neighbor tri verts is on boundary
+                # — skip; keep this case for a boundary-aware pass.
+                continue
+            # The fourth vertex is verts_b minus {u, v}.
+            others = [int(x) for x in verts_b if x not in (u, v)]
+            if len(others) != 1:
+                continue
+            w_b = others[0]
+            if w_b in (u, v, w_a):
+                continue
+            # Quad CCW: u → w_a → v → w_b. The shared edge (u,v) becomes
+            # a diagonal; the new perimeter is (u→w_a, w_a→v, v→w_b, w_b→u).
+            quad = [u, w_a, v, w_b]
+            if _signed_area_quad(quad) <= 0:
+                continue
+            if not _is_convex_ccw(quad):
+                continue
+            # Accept fusion: overwrite ei with the quad, drop ej.
+            conn[ei] = np.array(quad, dtype=int)
+            keep[ej] = False
+            used.add(ei)
+            used.add(ej)
+            break
+
+    return conn[keep]
 
 
 def _identify_edges_fun_v2(
