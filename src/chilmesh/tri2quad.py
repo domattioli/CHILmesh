@@ -141,6 +141,7 @@ def tri_to_quad(mesh: "CHILmesh", *, strict: bool = True) -> "CHILmesh":
             quad_rows.append(
                 [int(verts[0]), int(verts[1]), int(verts[2]), int(verts[0])]
             )
+            consumed.add(t_id)
 
     new_conn = np.array(quad_rows, dtype=int)
     return CHILmesh(
@@ -359,3 +360,57 @@ def _merge_tris_fun(
     if next_after_ua == shared_v0:
         return (ua, shared_v0, ub, shared_v1)
     return (ua, shared_v1, ub, shared_v0)
+
+
+def _count_boundary_edges(
+    tri_verts: list[int],
+    boundary_vert_ids: set[int],
+    edge_to_tris: dict[tuple[int, int], list[int]],
+) -> tuple[int, list[int]]:
+    """Count boundary edges of a triangle.
+
+    Returns: (count, indices of boundary edges in [edge01, edge12, edge20])
+    """
+    v0, v1, v2 = tri_verts
+    edges = [(v0, v1), (v1, v2), (v2, v0)]
+    count = 0
+    boundary_edge_indices = []
+    for i, (a, b) in enumerate(edges):
+        key = _make_key(a, b)
+        if len(edge_to_tris.get(key, [])) == 1:
+            count += 1
+            boundary_edge_indices.append(i)
+    return count, boundary_edge_indices
+
+
+def _flip_shared_edge(
+    tri_a: np.ndarray,
+    tri_b: np.ndarray,
+    shared_v0: int,
+    shared_v1: int,
+) -> tuple[tuple[int, int, int], tuple[int, int, int]] | None:
+    """Flip shared edge between two adjacent triangles (no vertex insertion).
+
+    Takes two tris sharing edge (shared_v0, shared_v1) and returns them with the
+    diagonal flipped. This is a topological operation only; coordinates unchanged.
+
+    For tris [a,b,c] and [a,b,d] sharing edge (a,b), returns:
+      ([a,d,c], [b,c,d])
+    where the new shared edge is (c,d).
+
+    Per user direction: no midpoint insertion, no vertex addition.
+    Result tris are deferred to next layer for processing.
+    """
+    tri_a_l = [int(v) for v in tri_a]
+    tri_b_l = [int(v) for v in tri_b]
+
+    unique_a = [v for v in tri_a_l if v != shared_v0 and v != shared_v1]
+    unique_b = [v for v in tri_b_l if v != shared_v0 and v != shared_v1]
+
+    if len(unique_a) != 1 or len(unique_b) != 1:
+        return None
+
+    ua = unique_a[0]
+    ub = unique_b[0]
+
+    return ((shared_v0, ub, ua), (shared_v1, ua, ub))
