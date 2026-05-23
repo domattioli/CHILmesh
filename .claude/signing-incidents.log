@@ -1,2 +1,3 @@
 2026-05-23T13:52:13Z	SERVER_ERROR	req_011CbKcNAGL68kz6b7ehZGaT	400 missing source	ci: setup-python check-latest + MPLCONFIGDIR per-run tmpdir
 2026-05-23T19:11:06Z	SERVER_ERROR	req_011CbL2gVWXJAKEYoweD7mFY	400 missing source	feat(mutations): merge_elements fuses adjacent triangles into a quad
+2026-05-23T19:25:22Z	SERVER_ERROR	-	400 missing source (assumed persistent)	test(smoother): square-preservation regression for #105
