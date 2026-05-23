@@ -225,11 +225,16 @@ def _quality_for(pts, elems):
 
 def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
                  prev_pts=None, current_pts=None):
-    """Render a single keyframe with optional vertex tracking dots."""
+    """Render a single keyframe with interpolated mesh morphing and vertex dots.
+
+    prev_pts: interpolated points for mesh rendering (morphing between stages).
+    current_pts: positions for yellow vertex tracking dots.
+    """
     ax_mesh.clear()
     ax_hist.clear()
 
-    pts = stage["pts"]
+    # Use interpolated mesh points if provided, otherwise use stage points
+    pts = prev_pts if prev_pts is not None else stage["pts"]
     elems = stage["elems"]
     polys = [pts[elem] for elem in elems]
 
@@ -238,8 +243,17 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
         q = _quality_for(pts, elems)
         norm = Normalize(vmin=0.0, vmax=1.0)
         colors = matplotlib.colormaps[QCMAP](norm(q))
-        pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.4)
+        pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.5)
         ax_mesh.add_collection(pc)
+        # Draw mesh edges explicitly for clarity
+        edges = np.vstack([
+            elems[:, [0, 1]],
+            elems[:, [1, 2]],
+            elems[:, [2, 0]],
+        ])
+        edge_segments = pts[edges]
+        edge_coll = LineCollection(edge_segments, colors=EDGE, linewidths=0.3, alpha=0.4)
+        ax_mesh.add_collection(edge_coll)
         cbar_title = "Element quality (cool→good)"
     else:
         # Color by layer index (viridis).
@@ -247,9 +261,19 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
         n_layers = stage["n_layers"]
         norm = Normalize(vmin=0, vmax=max(1, n_layers - 1))
         colors = matplotlib.colormaps["viridis"](norm(elem_layer))
-        pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.4)
+        pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.5)
         ax_mesh.add_collection(pc)
         cbar_title = f"Layer index 0–{n_layers - 1}"
+
+    # Draw mesh edges explicitly for clarity
+    edges = np.vstack([
+        elems[:, [0, 1]],
+        elems[:, [1, 2]],
+        elems[:, [2, 0]],
+    ])
+    edge_segments = pts[edges]
+    edge_coll = LineCollection(edge_segments, colors=EDGE, linewidths=0.3, alpha=0.4)
+    ax_mesh.add_collection(edge_coll)
 
     # Mesh axes setup.
     x_min, x_max = pts[:, 0].min(), pts[:, 0].max()
@@ -264,10 +288,10 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
     for spine in ax_mesh.spines.values():
         spine.set_color(DIM)
 
-    # Add vertex tracking dots (yellow) if we have current points
+    # Add vertex tracking dots (yellow) if provided
     if current_pts is not None:
         for v_idx, (x, y) in enumerate(current_pts):
-            circle = Circle((x, y), radius=0.008, color=VERTEX_DOT, alpha=0.6, zorder=10)
+            circle = Circle((x, y), radius=0.012, color=VERTEX_DOT, alpha=0.7, zorder=10)
             ax_mesh.add_patch(circle)
 
     # Histogram panel (always colormapped quality of CURRENT stage mesh).
@@ -310,14 +334,16 @@ def main():
                  data["fem_quality"], data["fem_quality"]]
 
     # Frame schedule: HOLD at each stage, TRANSITION between stages
-    HOLD = 15     # frames to hold each stage (1.5s @ 10fps)
-    TRANS = 10    # transition frames between stages (1.0s)
+    HOLD = 25     # frames to hold each stage (2.5s @ 10fps)
+    TRANS = 12    # transition frames between stages (1.2s)
 
     # Build a flat list of (stage_idx, interp_t, pts_for_dots, quality_for_hist)
     # where interp_t=None means static, or 0.0..1.0 during transition
     frame_schedule = []
     for si in range(n_stages):
-        for _ in range(HOLD):
+        # Extra hold time for final stage (skeletonization view)
+        hold_frames = HOLD + (15 if si == n_stages - 1 else 0)
+        for _ in range(hold_frames):
             frame_schedule.append({"type": "hold", "stage": si})
         if si < n_stages - 1:
             pts_a = stages[si]["pts"]
@@ -350,20 +376,27 @@ def main():
         stage = stages[si]
 
         if info["type"] == "hold":
-            dot_pts = stage["pts"]
             render_frame(ax_mesh, ax_hist, stage, qualities[si], si, n_stages,
-                         current_pts=dot_pts)
+                         current_pts=stage["pts"])
         else:
-            # Transition: show base stage mesh + interpolated dot positions
+            # Transition: morph mesh + dots between stages
             t = info["t"]
             si_to = info["stage_to"]
             if info["can_interp"]:
-                dot_pts = (1 - t) * stages[si]["pts"] + t * stages[si_to]["pts"]
+                # Interpolate both mesh points and quality
+                interp_pts = (1 - t) * stages[si]["pts"] + t * stages[si_to]["pts"]
+                interp_qual = (1 - t) * qualities[si] + t * qualities[si_to]
             else:
-                dot_pts = stages[si_to]["pts"] if t > 0.5 else stages[si]["pts"]
+                # Discrete switch at midpoint
+                if t > 0.5:
+                    interp_pts = stages[si_to]["pts"]
+                    interp_qual = qualities[si_to]
+                else:
+                    interp_pts = stages[si]["pts"]
+                    interp_qual = qualities[si]
 
-            render_frame(ax_mesh, ax_hist, stage, qualities[si], si, n_stages,
-                         current_pts=dot_pts)
+            render_frame(ax_mesh, ax_hist, stage, interp_qual, si, n_stages,
+                         prev_pts=interp_pts, current_pts=interp_pts)
 
         # Stage label overlaid above mesh axes (in figure coords above ax_mesh)
         ax_mesh.text(
