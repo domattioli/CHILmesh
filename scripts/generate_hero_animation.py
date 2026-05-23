@@ -29,7 +29,6 @@ from chilmesh import optimize_with_admesh_truss_arrays
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = REPO_ROOT / "output" / "readme_pipeline_annulus.gif"
-DEBUG_LOG = REPO_ROOT / "output" / "animation_debug.log"
 
 BG = "#0e0e10"
 EDGE = "#3a7fbf"
@@ -225,13 +224,11 @@ def _quality_for(pts, elems):
 
 
 def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
-                 prev_pts=None, current_pts=None, debug=False, axis_bounds=None):
+                 prev_pts=None, current_pts=None):
     """Render a single keyframe with interpolated mesh morphing and vertex dots.
 
     prev_pts: interpolated points for mesh rendering (morphing between stages).
     current_pts: positions for yellow vertex tracking dots.
-    debug: if True, use fixed color instead of quality colormapping (for debugging morphing).
-    axis_bounds: (x_min, x_max, y_min, y_max) tuple to use fixed axes (for smooth transitions).
     """
     ax_mesh.clear()
     ax_hist.clear()
@@ -241,19 +238,9 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
     elems = stage["elems"]
     polys = [pts[elem] for elem in elems]
 
-    # Debug: verify pts are actually different during transitions
-    if debug and prev_pts is not None:
-        pt_diff = np.linalg.norm(prev_pts - stage["pts"])
-        with open(DEBUG_LOG, 'a') as f:
-            f.write(f"DEBUG: point displacement magnitude = {pt_diff:.6f}\n")
-
     if stage["viz"] == "quality":
         # Color by element quality (cool_r colormap).
-        # Use pre-computed quality_arr (interpolated during transitions) to avoid
-        # artifacts from morphing mesh deformation. Morphing intermediate meshes have
-        # terrible quality due to element shape distortion; use smooth interpolated
-        # quality values instead.
-        q = quality_arr
+        q = _quality_for(pts, elems)
         norm = Normalize(vmin=0.0, vmax=1.0)
         colors = matplotlib.colormaps[QCMAP](norm(q))
         pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.5)
@@ -288,19 +275,12 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
     edge_coll = LineCollection(edge_segments, colors=EDGE, linewidths=0.3, alpha=0.4)
     ax_mesh.add_collection(edge_coll)
 
-    # Mesh axes setup: use fixed bounds if provided (smooth transitions), else auto
-    if axis_bounds is not None:
-        x_min, x_max, y_min, y_max = axis_bounds
-    else:
-        x_min, x_max = pts[:, 0].min(), pts[:, 0].max()
-        y_min, y_max = pts[:, 1].min(), pts[:, 1].max()
-        pad = 0.05 * max(x_max - x_min, y_max - y_min)
-        x_min -= pad
-        x_max += pad
-        y_min -= pad
-        y_max += pad
-    ax_mesh.set_xlim(x_min, x_max)
-    ax_mesh.set_ylim(y_min, y_max)
+    # Mesh axes setup.
+    x_min, x_max = pts[:, 0].min(), pts[:, 0].max()
+    y_min, y_max = pts[:, 1].min(), pts[:, 1].max()
+    pad = 0.05 * max(x_max - x_min, y_max - y_min)
+    ax_mesh.set_xlim(x_min - pad, x_max + pad)
+    ax_mesh.set_ylim(y_min - pad, y_max + pad)
     ax_mesh.set_aspect("equal")
     ax_mesh.set_facecolor(BG)
     ax_mesh.set_xticks([])
@@ -395,13 +375,9 @@ def main():
         si = info["stage"]
         stage = stages[si]
 
-        # Debug: track frame types
-        if frame_idx < 5 or frame_idx % 20 == 0:
-            print(f"Frame {frame_idx}: {info['type']} stage={si}", flush=True)
-
         if info["type"] == "hold":
             render_frame(ax_mesh, ax_hist, stage, qualities[si], si, n_stages,
-                         current_pts=stage["pts"], debug=False)
+                         current_pts=stage["pts"])
         else:
             # Transition: morph mesh + dots between stages
             t = info["t"]
@@ -419,20 +395,8 @@ def main():
                     interp_pts = stages[si]["pts"]
                     interp_qual = qualities[si]
 
-            # Compute fixed axis bounds that encompass both start and end stages
-            # This prevents axes from rescaling during transitions, making morphing visible
-            pts_a = stages[si]["pts"]
-            pts_b = stages[si_to]["pts"]
-            x_min = min(pts_a[:, 0].min(), pts_b[:, 0].min())
-            x_max = max(pts_a[:, 0].max(), pts_b[:, 0].max())
-            y_min = min(pts_a[:, 1].min(), pts_b[:, 1].min())
-            y_max = max(pts_a[:, 1].max(), pts_b[:, 1].max())
-            pad = 0.05 * max(x_max - x_min, y_max - y_min)
-            axis_bounds = (x_min - pad, x_max + pad, y_min - pad, y_max + pad)
-
             render_frame(ax_mesh, ax_hist, stage, interp_qual, si, n_stages,
-                         prev_pts=interp_pts, current_pts=interp_pts, debug=False,
-                         axis_bounds=axis_bounds)
+                         prev_pts=interp_pts, current_pts=interp_pts)
 
         # Stage label overlaid above mesh axes (in figure coords above ax_mesh)
         ax_mesh.text(
