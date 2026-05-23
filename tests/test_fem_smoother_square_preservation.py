@@ -15,12 +15,11 @@ The pure-quad case is exact because every interior quad angle is 90deg and
 cot(90deg)=0, so the FEM right-hand side vanishes and the symmetric quad
 stiffness leaves the node fixed.
 
-The mixed case is NOT preserved by ``direct_smoother``: once triangle
-stiffness couples into a shared interior node, the *linear* FEM equilibrium
-shifts off the square position and no RHS force recovers it. That shift is the
-subject of #105 and is captured here as a strict xfail so that any future fix
-which restores square preservation will trip this test and force the marker's
-removal.
+A node shared between a quad and a triangle cannot satisfy both the 90°
+(square) and 60° (equilateral) targets at once, so default smoothing distorts
+the quad. The ``freeze_quad_nodes=True`` path (#105 hybrid) pins every
+quad-corner node and recovers exact squares; only pure-triangle interior nodes
+then move.
 """
 from __future__ import annotations
 
@@ -83,15 +82,20 @@ def test_angle_based_smoother_keeps_mixed_node_near_square():
     assert disp < 0.02, f"interior node drifted {disp:.4f} from square"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#105: direct_smoother (linear FEM solve) does not preserve squares "
-    "in mixed tri/quad meshes; interior node drifts ~0.11. Remove this marker "
-    "when a square-preserving mixed-mesh smoother lands.",
-)
-def test_direct_smoother_preserves_mixed_quad_square():
-    """Desired: a perfect square stays square even when a neighbour is triangulated."""
+def test_direct_smoother_freeze_quad_nodes_preserves_mixed_square():
+    """freeze_quad_nodes=True pins quad-corner nodes -> mixed square stays exact (#105 hybrid)."""
+    mesh = _mixed_mesh()
+    out = mesh.direct_smoother(freeze_quad_nodes=True)
+    np.testing.assert_allclose(out[INTERIOR, :2], SQUARE_POS, atol=1e-9)
+
+
+def test_direct_smoother_default_mixed_drifts_documented():
+    """Document the accepted default behaviour: without freeze, the shared node drifts.
+
+    This is not a bug — it is the harmonic FEM equilibrium when a quad and a
+    triangle share a node. Use freeze_quad_nodes=True for guaranteed squares.
+    """
     mesh = _mixed_mesh()
     out = mesh.direct_smoother()
     disp = float(np.linalg.norm(out[INTERIOR, :2] - SQUARE_POS))
-    assert disp < 1e-3, f"interior node drifted {disp:.4f} from square"
+    assert disp > 1e-2, "expected the unfrozen shared node to drift off square"

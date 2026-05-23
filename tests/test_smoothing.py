@@ -360,7 +360,13 @@ class TestMixedElementFEMSmoother:
         return CHILmesh(connectivity=conn, points=pts, compute_layers=False)
 
     def test_quad_stiffness_is_symmetric(self):
-        """All four quad vertices must receive equal diagonal stiffness (3.0 each)."""
+        """All four quad vertices get equal diagonal stiffness, and rows sum to zero.
+
+        Q4 bilinear Laplacian (#105): diagonal entry is 4/6 per vertex and each
+        row sums to zero (translation invariance). The equal-per-vertex property
+        is what the old tri-decomposition fix (#104) was reaching for; the Q4
+        operator gets it for free and is additionally square-preserving.
+        """
         from chilmesh import examples
         from scipy.sparse import csr_matrix
 
@@ -374,10 +380,14 @@ class TestMixedElementFEMSmoother:
 
         first_quad = mesh.connectivity_list[quad_idx[0]]
         diag_vals = [K[2 * v, 2 * v] for v in first_quad]
-        # Symmetric decomposition: 1.5 * D[0,0] = 1.5 * 2.0 = 3.0 per vertex
-        assert all(abs(d - 3.0) < 1e-10 for d in diag_vals), (
-            f"Quad diagonal stiffness asymmetric (expected 3.0 each): {diag_vals}"
+        expected = 4.0 / 6.0
+        assert all(abs(d - expected) < 1e-10 for d in diag_vals), (
+            f"Quad diagonal stiffness asymmetric (expected {expected} each): {diag_vals}"
         )
+        # Translation invariance: every assembled row sums to zero.
+        for v in first_quad:
+            assert abs(K[2 * v, :].sum()) < 1e-10
+            assert abs(K[2 * v + 1, :].sum()) < 1e-10
 
     def test_detect_element_types_mixed(self, mixed_mesh):
         """Mixed mesh must have 4 tris and 2 quads detected."""
