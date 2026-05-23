@@ -52,7 +52,10 @@ def test_version_string():
     import chilmesh
 
     assert chilmesh.__version__ != "0.0.0", "package not installed properly"
-    assert chilmesh.__version__ == "1.0.0", f"expected 1.0.0, got {chilmesh.__version__}"
+    # Accept 1.0.0 stable + pre-release suffixes (1.0.0a1, 1.0.0rc1, 1.0.0.dev1, etc.)
+    assert chilmesh.__version__.startswith("1.0.0"), (
+        f"expected 1.0.0[a/b/rc/.dev]*, got {chilmesh.__version__}"
+    )
 
 
 def test_backend_info_structure():
