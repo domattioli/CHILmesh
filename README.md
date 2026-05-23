@@ -49,7 +49,7 @@
 **The stable backbone for hydrodynamic mesh tooling.** Sibling projects [ADMESH](https://github.com/domattioli/ADMESH), [ADMESH-Domains](https://github.com/domattioli/ADMESH-Domains), and [QuADMesh](https://github.com/domattioli/QuADMesh) build on top of it.
 
 - **Pythonic API** — `from chilmesh import Mesh`; backwards-compatible `CHILmesh` alias preserved.
-- **C++ acceleration, bit-identical output** — half-edge extension is **66× faster than pure Python** on skeletonization, verified by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
+- **C++ acceleration, bit-identical output** — half-edge extension is **~24× faster than pure Python** on full init, verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
 - **One interface for all topologies** — triangles, quadrilaterals, and mixed meshes share the same call surface.
 - **Stable v1.x API** — sibling projects can pin `chilmesh>=1.0,<2`.
 
@@ -104,7 +104,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 
 ## Features
 
-- **Fast** — full init + quality analysis on a 98,365-element mesh in ~3.3 s (4.3× faster than v0.2.0)
+- **Fast** — full init + quality analysis on a 98,365-element mesh in ~1.7 s (4.6× faster than v0.2.0)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — Balendran direct FEM, Zhou-Shimada angle-based, and ADMESH Spring-Based Truss
 - **Analysis** — element quality, interior angles, layer-based skeletonization (medial axis)
@@ -132,13 +132,13 @@ Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3
 
 | Metric | v0.1.0 MATLAB ‡ | v0.2.0 Python Port | v0.3.0 Python Optimized | v0.4.0 Rust † | v1.0.0 C++ |
 |---|---:|---:|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 0.27 s | ~3.9 s | 1.01 s | 0.029 s | 0.036 s |
-| Skeletonization only | 0.67 s | ~3.8 s | 2.20 s | 0.20 s | 0.033 s |
-| Full init (adj + skeletonization) | 1.04 s | 7.7 s | 3.21 s | 0.23 s | 0.069 s |
-| Quality analysis | 12 ms | 6.6 s | 57 ms | <1 ms | <1 ms |
-| Vertex-edge lookup (per call) | ~2200 μs | ~700 μs | 0.08 μs | 0.02 μs | 0.04 μs |
+| Fast init (adj, no skeletonization) | 0.27 s | ~3.9 s | 1.31 s | 0.029 s | 0.036 s |
+| Skeletonization only | 0.67 s | ~3.8 s | 0.32 s | 0.20 s | 0.033 s |
+| Full init (adj + skeletonization) | 1.04 s | 7.7 s | 1.65 s | 0.23 s | 0.069 s |
+| Quality analysis | 12 ms | 6.6 s | 6.4 ms | <1 ms | <1 ms |
+| Vertex-edge lookup (per call) | ~2200 μs | ~700 μs | 0.34 μs | 0.02 μs | 0.04 μs |
 
-**C++ is 46× faster than Python on full init and 66× faster on skeletonization** — at the same logical output. The Python implementation remains the canonical reference; C++ is opt-in via direct `chilmesh_cpp` import, Rust via `chilmesh_core`.
+**C++ is ~24× faster than Python on full init.** Python's skeletonization is now within ~10× of C++ (and faster than the original MATLAB/Octave); the remaining Python gap is the pure-Python adjacency build (~4× slower than vectorized MATLAB, the largest single cost). The Python implementation remains the canonical reference; C++ is opt-in via direct `chilmesh_cpp` import, Rust via `chilmesh_core`.
 
 ‡ MATLAB v0.1.0 = the original QuADMesh+ `@CHILmesh` class ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)) measured under **GNU Octave 8.4** (no MathWorks MATLAB license in CI) on WNAT_Hagen, connectivity + points fed to the 2-arg constructor; medians of 3. Absolute times are Octave's interpreter, not MATLAB JIT — treat as the original-algorithm baseline, not a MATLAB-vs-Octave claim.  
 † Rust fast init includes fort.14 file I/O; Python and C++ receive raw arrays.
