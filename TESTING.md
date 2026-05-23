@@ -166,6 +166,15 @@ pytest -vv -s tests/test_smoothing.py::TestTriangleSmoother::test_fem_smoother_t
 
 Windows is exercised on every merge to `main` (issue #121). PR cycles stay fast — Linux-only — and Windows-specific regressions are caught at the merge gate, not on every push. The `build-and-smoke` job runs ubuntu-only and uses a `$RUNNER_TEMP`-based venv path that is OS-portable (works under any shell).
 
+#### xdist worker semantics
+
+`pytest -n auto` spawns one worker process per CPU. Each worker reimports `tests/conftest.py`, so the session-scope mesh cache (`_MESH_CACHE`) is per-worker — no cross-worker race, but each worker pays the `block_o` warmup once on push-to-main runs (PR runs exclude `slow`-marked fixtures). PR-mode local run: `842 passed, 47 skipped, 26.4s` (verified 2026-05-23, issue #122).
+
+#### Runner cache hygiene
+
+- `actions/setup-python` uses `check-latest: true` so a cached interpreter is replaced when GitHub publishes a newer patch release for the requested minor — `pip cache` still hits because `cache-dependency-path: pyproject.toml`.
+- `MPLCONFIGDIR` is set to a per-run `$RUNNER_TEMP` subdir on every job. matplotlib's first-run font-cache build dominates macOS wall-clock; routing it to tmp keeps the cost predictable and prevents `$HOME` writes on shared runners.
+
 Platform support claim (constitution §Release Checklist): "All tests pass on Python 3.10 / 3.11 / 3.12 × Ubuntu / macOS / Windows."
 
 ## Troubleshooting
