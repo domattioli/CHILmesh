@@ -1,7 +1,37 @@
 # CHILmesh Performance Benchmarks
 
-**Version:** 0.4.1 (Phase 5 spatial indexing + layer-paths, recompiled)
+**Version:** 1.1.0
 **Reference Mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers)
+
+> **Reproduce:** every number below regenerates from the committed harness —
+> `python scripts/benchmark.py --matlab` (Octave column needs `octave` on PATH;
+> C++ column needs `pip install ./src/chilmesh_cpp`). The harness also asserts
+> `n_layers` parity across all available implementations, so stale hand-entered
+> figures can't creep back in.
+
+## v1.1.0 — cross-language (single machine, WNAT_Hagen, medians)
+
+| Stage | MATLAB (Octave) | Python | C++ |
+|---|---:|---:|---:|
+| Fast init (adj, no skeletonization) | 0.27 s | 1.31 s | 0.060 s |
+| Skeletonization only | 0.67 s | 0.32 s | 0.052 s |
+| Full init (adj + skeletonization) | 1.04 s | 1.65 s | 0.112 s |
+| Quality analysis | 12 ms | 6.4 ms | 1.3 ms |
+
+`n_layers = 30` on all three (parity ✅). MATLAB is the original `src/@CHILmesh`
+class under GNU Octave 8.4 (interpreter, not MATLAB JIT); Python's
+skeletonization now beats Octave, with adjacency build (pure-Python loops) the
+remaining gap; C++ leads throughout. Rust is excluded — its skeletonization is
+incomplete (#163). Absolute times are machine-dependent.
+
+---
+
+## Historical (pre-1.1.0)
+
+Retained as the performance arc through v0.4.1; these figures predate the
+committed harness and were captured on the maintainer's hardware.
+
+**Version:** 0.4.1 (Phase 5 spatial indexing + layer-paths, recompiled)
 **Date:** 2026-05-21 (Recompiled from main branch)
 
 ---

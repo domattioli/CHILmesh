@@ -7,3 +7,4 @@
 2026-05-23T20:00:21Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): MATLAB v0.1.0 perf column + validation table
 2026-05-23T20:20:41Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): version-lineage perf columns
 2026-05-23T20:29:20Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): measured v0.3.0 python perf
+2026-05-23T21:04:45Z	SERVER_ERROR	-	400 missing source (assumed persistent)	v1.1.0 release prep

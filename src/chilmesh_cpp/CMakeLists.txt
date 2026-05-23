@@ -13,3 +13,8 @@ pybind11_add_module(chilmesh_cpp
 
 target_compile_options(chilmesh_cpp PRIVATE -O3 -march=native)
 target_include_directories(chilmesh_cpp PRIVATE src)
+
+# scikit-build-core only packages what CMake installs. Without this rule the
+# compiled module never lands in the wheel and `import chilmesh_cpp` resolves
+# to an empty namespace stub (CHILmesh #163).
+install(TARGETS chilmesh_cpp LIBRARY DESTINATION . RUNTIME DESTINATION .)

@@ -16,7 +16,12 @@ from typing import Any
 
 try:
     import chilmesh_cpp as _cpp
-    CPP_AVAILABLE = True
+    # An importable-but-empty namespace package (e.g. the source dir on sys.path
+    # without a compiled module) must not report as available — assert the real
+    # pybind11 API is present (CHILmesh #163).
+    CPP_AVAILABLE = hasattr(_cpp, "full_init")
+    if not CPP_AVAILABLE:
+        _cpp = None  # type: ignore
 except ImportError:
     CPP_AVAILABLE = False
     _cpp = None  # type: ignore
@@ -26,7 +31,7 @@ def _require_cpp() -> None:
     if not CPP_AVAILABLE:
         raise ImportError(
             "chilmesh_cpp C++ extension not available. "
-            "Build it with: cd src/chilmesh_cpp && pip install -e . --no-build-isolation"
+            "Build it with: pip install ./src/chilmesh_cpp"
         )
 
 
