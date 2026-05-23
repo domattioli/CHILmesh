@@ -249,13 +249,11 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
 
     if stage["viz"] == "quality":
         # Color by element quality (cool_r colormap).
-        # During debugging, use fixed color to isolate morphing from recoloring
-        if debug:
-            q = np.ones(len(elems))  # Constant color
-            with open(DEBUG_LOG, 'a') as f:
-                f.write(f"DEBUG: using constant color for morphing isolation\n")
-        else:
-            q = _quality_for(pts, elems)
+        # Use pre-computed quality_arr (interpolated during transitions) to avoid
+        # artifacts from morphing mesh deformation. Morphing intermediate meshes have
+        # terrible quality due to element shape distortion; use smooth interpolated
+        # quality values instead.
+        q = quality_arr
         norm = Normalize(vmin=0.0, vmax=1.0)
         colors = matplotlib.colormaps[QCMAP](norm(q))
         pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.5)
