@@ -34,6 +34,7 @@
 - [Installation](#installation)
 - [Performance](#performance)
 - [Validation](#validation)
+- [Implementations](#implementations)
 - [API Overview](#api-overview)
 - [Mesh Smoothing](#mesh-smoothing)
 - [Examples](#examples)
@@ -141,7 +142,7 @@ Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3
 **C++ is ~24× faster than Python on full init.** Python's skeletonization is now within ~10× of C++ (and faster than the original MATLAB/Octave); the remaining Python gap is the pure-Python adjacency build (~4× slower than vectorized MATLAB, the largest single cost). The Python implementation remains the canonical reference; C++ is opt-in via direct `chilmesh_cpp` import, Rust via `chilmesh_core`.
 
 ‡ MATLAB v0.1.0 = the original QuADMesh+ `@CHILmesh` class ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)) measured under **GNU Octave 8.4** (no MathWorks MATLAB license in CI) on WNAT_Hagen, connectivity + points fed to the 2-arg constructor; medians of 3. Absolute times are Octave's interpreter, not MATLAB JIT — treat as the original-algorithm baseline, not a MATLAB-vs-Octave claim.  
-† Rust fast init includes fort.14 file I/O; Python and C++ receive raw arrays.
+† Rust (v0.4.0) is experimental: its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)), so the skeletonization/full-init figures reflect a partial peel, not a verified result. Fast init includes fort.14 file I/O; Python and C++ receive raw arrays.
 
 Full methodology and raw data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
@@ -156,52 +157,63 @@ catalog, from 557 to 132k vertices. Identical connectivity + points are fed to
 both implementations; the MATLAB reader is bypassed so only the layering
 algorithm is compared.
 
-| Mesh | Vertices | Elements | MATLAB `n_layers` | Python `n_layers` | Match |
-|---|--:|--:|--:|--:|:--:|
-| Baranja Hill (ADMESH v2) | 557 | 1,011 | 10 | 10 | ✅ |
-| Baranja Hill | 645 | 1,193 | 12 | 12 | ✅ |
-| Wetting/Drying test | 2,716 | 4,978 | 15 | 15 | ✅ |
-| Lake Erie (refined) | 5,095 | 9,688 | 20 | 20 | ✅ |
-| Lake Erie (5k) | 13,266 | 24,910 | 17 | 17 | ✅ |
-| Delaware Bay | 14,449 | 26,698 | 17 | 17 | ✅ |
-| Delaware Bay (h 100–20000) | 14,449 | 26,697 | 17 | 17 | ✅ |
-| Lake Michigan | 21,981 | 41,887 | 25 | 25 | ✅ |
-| WNAT (Hagen) | 52,774 | 98,365 | 30 | 30 | ✅ |
-| Chesapeake Bay | 83,388 | 160,734 | 55 | 55 | ✅ |
-| Great Lakes | 132,162 | 250,905 | 46 | 46 | ✅ |
+| Mesh | Vertices | Elements | MATLAB | Python | C++ | Match |
+|---|--:|--:|--:|--:|--:|:--:|
+| Baranja Hill (ADMESH v2) | 557 | 1,011 | 10 | 10 | 10 | ✅ |
+| Baranja Hill | 645 | 1,193 | 12 | 12 | 12 | ✅ |
+| Wetting/Drying test | 2,716 | 4,978 | 15 | 15 | 15 | ✅ |
+| Lake Erie (refined) | 5,095 | 9,688 | 20 | 20 | 20 | ✅ |
+| Lake Erie (5k) | 13,266 | 24,910 | 17 | 17 | 17 | ✅ |
+| Delaware Bay | 14,449 | 26,698 | 17 | 17 | 17 | ✅ |
+| Delaware Bay (h 100–20000) | 14,449 | 26,697 | 17 | 17 | 17 | ✅ |
+| Lake Michigan | 21,981 | 41,887 | 25 | 25 | 25 | ✅ |
+| WNAT (Hagen) | 52,774 | 98,365 | 30 | 30 | 30 | ✅ |
+| Chesapeake Bay | 83,388 | 160,734 | 55 | 55 | 55 | ✅ |
+| Great Lakes | 132,162 | 250,905 | 46 | 46 | 46 | ✅ |
 
-11 / 11 meshes match. The seven previously-uncaptured reference counts (Lake Erie
-refined, Delaware Bay refined, Chesapeake Bay, Great Lakes, Lake Michigan, both
-Baranja Hill variants) were captured by this run and pinned in
+`n_layers` agrees across MATLAB (original), Python (reference), and C++ on all 11
+meshes (557 → 132k vertices). The seven previously-uncaptured reference counts
+(Lake Erie refined, Delaware Bay refined, Chesapeake Bay, Great Lakes, Lake
+Michigan, both Baranja Hill variants) were captured here and pinned in
 [`tests/test_skeletonization_matlab_parity_external.py`](tests/test_skeletonization_matlab_parity_external.py)
-(#128). The C++ and Rust backends are verified bit-identical to the Python
-reference by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
+(#128). C++↔Python equivalence is also unit-tested by
+[`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
+Reproduce any of this with `python scripts/benchmark.py --matlab`. (Rust is
+omitted — its skeletonization is incomplete, [#163](https://github.com/domattioli/CHILmesh/issues/163).)
 
 ---
 
-## Backends
+## Implementations
 
-CHILmesh v1.0.0 ships pure-Python by default. The C++ half-edge extension (`chilmesh_cpp`) and the Rust quad-edge extension (`chilmesh_core`) are optional accelerators that produce identical mesh topology and layer output.
+CHILmesh exists in four languages, but you only need to think about two. **`pip install chilmesh` gives you the pure-Python implementation** — zero compiled dependencies, runs everywhere, and is the canonical reference every other backend is validated against. **The C++ extension is the high-performance implementation**: same algorithms, bit-identical output, ~24× faster on full init — opt-in when you need the speed.
+
+| Language | Role | How to get it |
+|---|---|---|
+| **Python** | Reference implementation — the default | `pip install chilmesh` |
+| **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (build from source) |
+| Rust | Experimental (quad-edge); skeletonization is incomplete — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
+| MATLAB | Original 2017 implementation, archived & unmaintained | [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) |
+
+You write the same Python API regardless; the C++ core is transparently used when present.
 
 ```python
 import chilmesh
 
 chilmesh.backend_info()
-# {'available': ['cpp', 'rust', 'python'],
+# {'available': ['cpp', 'python'],
 #  'selected': 'cpp',
-#  'versions': {'cpp': '0.6.0.dev0', 'rust': '0.5.0.dev0', 'python': '1.0.0'}}
+#  'versions': {'cpp': '0.6.0.dev0', 'python': '1.1.0'}}
 ```
 
-Force a specific backend with the `CHILMESH_BACKEND` environment variable (`python`, `cpp`, or `rust`). When in doubt, leave it unset — defaults pick the fastest available.
+Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked.
 
-**Building the C++ extension** (from source):
+**Building the C++ extension** (from source — `scikit-build-core` + `pybind11`, fetched automatically):
 
 ```bash
-cd src/chilmesh_cpp
-pip install .                                       # uses scikit-build-core + pybind11
+pip install ./src/chilmesh_cpp
 ```
 
-Pre-built binary wheels for `manylinux` / `macOS` / `Windows` arrive in v1.1.0 via `cibuildwheel`.
+Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned.
 
 ---
 

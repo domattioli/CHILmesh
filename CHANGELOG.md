@@ -6,6 +6,46 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-05-23
+
+### ✨ Added
+
+- **`MutableMesh.merge_elements`** now fuses two adjacent triangles into a real
+  CCW quad (was a stub that only deleted one element). Element IDs stay stable;
+  the deleted row uses the negative-vertex sentinel. ([#132](https://github.com/domattioli/CHILmesh/issues/132))
+- **`direct_smoother(freeze_quad_nodes=True)`** pins quad-corner nodes so quads
+  keep their exact shape in mixed meshes. ([#105](https://github.com/domattioli/CHILmesh/issues/105))
+- **Public mesh-query helpers**: `ccw_edges_around_vert`, `rebuild_adjacencies`,
+  `invalidate_adjacencies`, `submesh`. ([#133](https://github.com/domattioli/CHILmesh/issues/133), [#143](https://github.com/domattioli/CHILmesh/issues/143), [#138](https://github.com/domattioli/CHILmesh/issues/138))
+- **`scripts/benchmark.py`** — reproducible cross-language (Python / C++ / MATLAB
+  via Octave) timing + `n_layers` parity harness behind the Performance and
+  Validation tables.
+
+### 🛠 Changed
+
+- **Quad FEM stiffness** is now the Q4 bilinear Laplacian (translation-invariant,
+  square-preserving) instead of a triangle-rotation decomposition that biased
+  quads toward 60°. ([#105](https://github.com/domattioli/CHILmesh/issues/105))
+- **README**: added a Validation section (Python↔MATLAB↔C++ `n_layers` parity,
+  11 meshes) and an Implementations section; Performance table gains a measured
+  `v0.1.0 MATLAB` (Octave) column and refreshed Python figures.
+
+### 🐛 Fixed
+
+- **C++ wheel was empty** — `chilmesh_cpp` shipped no compiled module because
+  CMake had no `install()` rule, so `import chilmesh_cpp` resolved to an empty
+  namespace stub and `CPP_AVAILABLE` was a false positive. The extension now
+  packages correctly and `CPP_AVAILABLE` asserts the real API. ([#163](https://github.com/domattioli/CHILmesh/issues/163))
+- Captured the seven missing MATLAB reference layer counts for skeletonization
+  parity. ([#128](https://github.com/domattioli/CHILmesh/issues/128))
+
+### 📋 Known issues
+
+- Rust backend (`chilmesh_core`) skeletonization is incomplete (returns 2 layers
+  regardless of mesh); excluded from validation until fixed. ([#163](https://github.com/domattioli/CHILmesh/issues/163))
+- Python `_build_adjacencies` is the remaining perf bottleneck (~4× behind
+  vectorized MATLAB); vectorization tracked separately.
+
 ## [1.0.0] — 2026-05-22
 
 First **stable** release. CHILmesh is now the production backbone for ADMESH,

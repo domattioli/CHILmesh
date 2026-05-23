@@ -16,7 +16,10 @@ from typing import Any
 
 try:
     import chilmesh_core as _rust
-    RUST_AVAILABLE = True
+    # Guard against an importable-but-empty namespace package (CHILmesh #163).
+    RUST_AVAILABLE = hasattr(_rust, "RustMesh")
+    if not RUST_AVAILABLE:
+        _rust = None  # type: ignore
 except ImportError:
     RUST_AVAILABLE = False
     _rust = None  # type: ignore
