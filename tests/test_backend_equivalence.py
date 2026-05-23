@@ -20,13 +20,15 @@ from chilmesh import CHILmesh, examples
 
 try:
     import chilmesh_cpp
-    CPP_AVAILABLE = True
+    # Namespace-package import can succeed without compiled functions;
+    # require the actual API surface to consider C++ "available".
+    CPP_AVAILABLE = hasattr(chilmesh_cpp, "fast_init") and hasattr(chilmesh_cpp, "full_init")
 except ImportError:
     CPP_AVAILABLE = False
 
 try:
     import chilmesh_core
-    RUST_AVAILABLE = True
+    RUST_AVAILABLE = hasattr(chilmesh_core, "build_mesh") or True
 except ImportError:
     RUST_AVAILABLE = False
 
