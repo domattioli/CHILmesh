@@ -5,3 +5,4 @@
 2026-05-23T19:40:58Z	SERVER_ERROR	-	400 missing source (assumed persistent)	fix(smoother): Q4 bilinear quad stiffness + freeze_quad_nodes (#105)
 2026-05-23T19:47:58Z	SERVER_ERROR	-	400 missing source (assumed persistent)	test(skel): capture 7 MATLAB reference layer counts (#128)
 2026-05-23T20:00:21Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): MATLAB v0.1.0 perf column + validation table
+2026-05-23T20:20:41Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): version-lineage perf columns
