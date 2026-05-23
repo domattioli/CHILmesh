@@ -169,43 +169,42 @@ class MutableMesh:
         return new_elem_ids
 
     def merge_elements(self, elem_a: int, elem_b: int) -> int:
-        """Merge two adjacent triangles into a quad or valid configuration.
+        """Merge two adjacent triangles into a single quad.
 
-        Removes the shared edge between two triangles and creates either:
-        - A single quadrilateral (if neighbors form a valid convex quad)
-        - Two padded triangles (fallback if quad is concave or invalid)
+        The shared edge becomes the quad's interior diagonal and is dropped.
+        ``elem_a`` is rewritten as the resulting quad (CCW); ``elem_b`` is
+        marked deleted in place so element IDs stay stable for the caller.
 
         Parameters
         ----------
         elem_a : int
-            First triangle
+            First triangle (becomes the merged quad).
         elem_b : int
-            Second triangle (must be adjacent)
+            Second triangle; must share exactly one edge with ``elem_a``.
 
         Returns
         -------
         int
-            Element ID of merged result (quad or primary triangle)
+            Element ID of the merged quad (always ``elem_a``).
 
         Raises
         ------
+        IndexError
+            If either element ID is out of range.
         ValueError
-            If elements are not adjacent or not both triangles
-        RuntimeError
-            If merge would violate mesh constraints
+            If merging an element with itself, if the elements are not
+            adjacent, or if either element is not a triangle.
         """
         if elem_a == elem_b:
             raise ValueError("Cannot merge element with itself")
 
-        elem_list = self.mesh.connectivity_list
-        n_cols = elem_list.shape[1]
+        n_elems = self.mesh.n_elems
+        for eid in (elem_a, elem_b):
+            if eid < 0 or eid >= n_elems:
+                raise IndexError(f"Element {eid} out of range [0, {n_elems})")
 
-        # Check both elements are triangles
-        if n_cols == 4:
-            if elem_list[elem_a, 2] == elem_list[elem_a, 3] or \
-               elem_list[elem_b, 2] == elem_list[elem_b, 3]:
-                raise ValueError("Both elements must be triangles")
-        # For 3-column connectivity, all are triangles
+        if not (self._is_triangle(elem_a) and self._is_triangle(elem_b)):
+            raise ValueError("Both elements must be triangles")
 
         # Find shared edge
         shared_edge = self._find_shared_edge(elem_a, elem_b)
@@ -220,6 +219,13 @@ class MutableMesh:
         self.mesh._build_spatial_indices()
         self._validate_invariants()
         return merged_id
+
+    def _is_triangle(self, elem_id: int) -> bool:
+        """True if the element is a triangle (3-col row, or 4-col with a repeated vertex)."""
+        if self.mesh.connectivity_list.shape[1] == 3:
+            return True
+        row = self.mesh.connectivity_list[elem_id]
+        return len({int(v) for v in row}) <= 3
 
     # ============================================================================
     # Internal helper methods
@@ -358,18 +364,48 @@ class MutableMesh:
     def _merge_elements_internal(
         self, elem_a: int, elem_b: int, shared_edge: int
     ) -> int:
-        """Merge two elements into a quad or coalesced triangle.
+        """Fuse two adjacent triangles into a quad written into ``elem_a``.
 
-        MVP: Mark elem_b as deleted by setting to all zeros.
-        Full implementation would create actual quad from two triangles.
+        The two shared-edge vertices become opposite corners' neighbours and
+        the shared edge is dropped (it becomes the quad's interior diagonal).
+        ``elem_b`` is marked deleted with the negative-vertex sentinel (``-1``),
+        which every adjacency builder skips (see ``_identify_edges`` and
+        ``_build_vert2elem``: only ``v >= 0`` are kept). Using ``-1`` rather
+        than ``0`` avoids spuriously binding the deleted row to vertex 0.
+
+        A triangle-only (3-column) table is widened to 4 columns first, padding
+        existing triangles as ``[v0, v1, v2, v2]``; the caller's subsequent
+        ``_build_adjacencies()`` normalises padding and flips ``mesh.type``.
         """
-        n_cols = self.mesh.connectivity_list.shape[1]
-        if n_cols == 3:
-            self.mesh.connectivity_list[elem_b, :] = [0, 0, 0]
-        else:
-            self.mesh.connectivity_list[elem_b, :] = [0, 0, 0, 0]
+        conn = self.mesh.connectivity_list
+
+        shared = self.mesh.edge2vert(np.array([shared_edge]))[0]
+        s0, s1 = int(shared[0]), int(shared[1])
+
+        apex_a = next(int(v) for v in conn[elem_a, :3] if int(v) not in (s0, s1))
+        apex_b = next(int(v) for v in conn[elem_b, :3] if int(v) not in (s0, s1))
+
+        # Quad boundary walks apex_a -> s0 -> apex_b -> s1; the shared edge
+        # (s0, s1) is the diagonal, not a boundary edge. Enforce CCW winding.
+        quad = [apex_a, s0, apex_b, s1]
+        if self._polygon_signed_area(self.mesh.points[quad, :2]) < 0:
+            quad = [apex_a, s1, apex_b, s0]
+
+        if conn.shape[1] == 3:
+            self.mesh.connectivity_list = np.column_stack([conn, conn[:, 2]])
+            conn = self.mesh.connectivity_list
+
+        conn[elem_a, :] = quad
+        conn[elem_b, :] = [-1, -1, -1, -1]
 
         return elem_a
+
+    @staticmethod
+    def _polygon_signed_area(pts: np.ndarray) -> float:
+        """Shoelace signed area of an (n, 2) polygon; positive when CCW."""
+        x = pts[:, 0]
+        y = pts[:, 1]
+        return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
 
     def insert_vertex(self, point: np.ndarray) -> int:
         """Insert vertex into mesh; auto-triangulates containing element.
@@ -492,7 +528,8 @@ class MutableMesh:
 
     def _get_edge_set(self, elem_id: int, n_cols: int) -> set:
         """Get edge set for an element."""
-        if elem_id >= self.mesh.n_elems or self.mesh.connectivity_list[elem_id, 0] == 0:
+        first_vert = self.mesh.connectivity_list[elem_id, 0]
+        if elem_id >= self.mesh.n_elems or first_vert == 0 or first_vert < 0:
             return set()
 
         elem = self.mesh.connectivity_list[elem_id]
