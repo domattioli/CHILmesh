@@ -64,7 +64,7 @@ Documentation = "https://github.com/domattioli/CHILmesh#readme"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["chilmesh", "chilmesh.utils", "chilmesh.data", "chilmesh.backends"]
+packages = ["chilmesh", "chilmesh.utils", "chilmesh.data", "chilmesh.backends", "chilmesh.validation"]
 
 [tool.setuptools.package-data]
 "chilmesh.data" = ["*.fort.14", "*.14"]
