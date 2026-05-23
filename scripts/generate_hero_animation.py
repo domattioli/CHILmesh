@@ -43,9 +43,9 @@ QCMAP = "cool_r"
 
 
 def _annulus_sdf(points: np.ndarray) -> np.ndarray:
-    """Signed distance function for annulus domain (r_inner=0.4, r_outer=1.0)."""
+    """Signed distance function matching CHILmesh annulus fixture (r_inner=0.3, r_outer=1.0)."""
     r = np.linalg.norm(points, axis=1)
-    r_inner = 0.4
+    r_inner = 0.3
     r_outer = 1.0
     # Negative inside annulus, positive outside
     return np.maximum(r - r_outer, r_inner - r)
@@ -101,36 +101,19 @@ def _infer_boundary_from_delaunay(points: np.ndarray, triangles: np.ndarray) -> 
 
 
 def _stage_data():
-    """Build the 4 pipeline stages from random Delaunay + ADMESH truss + FEM + layers."""
+    """Build the 4 pipeline stages: raw Delaunay → ADMESH truss → FEM → layers.
 
-    # Stage 1: Random Delaunay in annulus domain
-    print("Stage 1: Random Delaunay initialization...")
+    Uses examples.annulus() as Stage 1 — it is itself a Delaunay triangulation.
+    scipy.spatial.Delaunay cannot represent non-convex (donut) domains without
+    a constrained triangulation library, so we use the fixture directly and label
+    it accurately: "Delaunay triangulation · raw input".
+    """
 
-    # Use annulus fixture as base to ensure proper boundary constraints
+    # Stage 1: Raw annulus Delaunay triangulation
+    print("Stage 1: Annulus Delaunay triangulation (raw input)...")
     annulus_base = examples.annulus()
-    raw_pts_base = annulus_base.points[:, :2].copy()
-    raw_elems_base = np.array([list(c[:3]) for c in annulus_base.connectivity_list], dtype=np.int32)
-
-    # Add small perturbations to interior points (not boundary) to make it "random"
-    np.random.seed(42)
-    boundary_mask = np.zeros(len(raw_pts_base), dtype=bool)
-    boundary_indices_base = _infer_boundary_from_delaunay(raw_pts_base, raw_elems_base)
-    boundary_mask[boundary_indices_base] = True
-
-    # Perturb interior points slightly
-    perturbation = np.random.randn(len(raw_pts_base), 2) * 0.02
-    perturbation[boundary_mask] = 0  # Keep boundary fixed
-    raw_pts = raw_pts_base + perturbation
-    raw_elems = raw_elems_base  # Keep same connectivity
-
-    # Ensure points are valid (sometimes perturbation can push interior points outside domain)
-    raw_pts = _project_to_annulus_boundary(raw_pts, _annulus_sdf)
-
-    # Recompute Delaunay to get proper triangulation for perturbed points
-    delaunay = Delaunay(raw_pts)
-    raw_elems = np.asarray(delaunay.simplices, dtype=np.int32)
-
-    # Identify boundary vertices
+    raw_pts = annulus_base.points[:, :2].copy()
+    raw_elems = np.array([list(c[:3]) for c in annulus_base.connectivity_list], dtype=np.int32)
     boundary_indices = _infer_boundary_from_delaunay(raw_pts, raw_elems)
 
     # Stage 2: ADMESH truss optimization to convergence
@@ -140,11 +123,10 @@ def _stage_data():
             raw_pts,
             raw_elems,
             sdf=_annulus_sdf,
-            size_fn=None,  # Uniform size
-            h0=_annulus_h0(),
+            size_fn=None,
             boundary_indices=boundary_indices,
-            niter=500,  # Solve to convergence
-            enforce_non_degradation=True,
+            niter=300,
+            enforce_non_degradation=False,  # Always return truss output for visualization
         )
     except Exception as e:
         print(f"  ADMESH truss warn: {e}")
@@ -193,8 +175,8 @@ def _stage_data():
     return {
         "stages": [
             {
-                "name": "Random Delaunay",
-                "algo": "Perturbed annulus mesh + Delaunay",
+                "name": "Delaunay triangulation",
+                "algo": "Raw input mesh (unsmoothed)",
                 "pts": raw_pts, "elems": raw_elems,
                 "viz": "quality",
             },
@@ -315,6 +297,11 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
     )
 
 
+def _ease(t: float) -> float:
+    """Smooth step easing: t in [0,1] → smoothed t."""
+    return t * t * (3 - 2 * t)
+
+
 def main():
     data = _stage_data()
     stages = data["stages"]
@@ -322,38 +309,73 @@ def main():
     qualities = [data["raw_quality"], data["truss_quality"],
                  data["fem_quality"], data["fem_quality"]]
 
+    # Frame schedule: HOLD at each stage, TRANSITION between stages
+    HOLD = 15     # frames to hold each stage (1.5s @ 10fps)
+    TRANS = 10    # transition frames between stages (1.0s)
+
+    # Build a flat list of (stage_idx, interp_t, pts_for_dots, quality_for_hist)
+    # where interp_t=None means static, or 0.0..1.0 during transition
+    frame_schedule = []
+    for si in range(n_stages):
+        for _ in range(HOLD):
+            frame_schedule.append({"type": "hold", "stage": si})
+        if si < n_stages - 1:
+            pts_a = stages[si]["pts"]
+            pts_b = stages[si + 1]["pts"]
+            can_interp = (len(pts_a) == len(pts_b))
+            for fi in range(TRANS):
+                t = _ease(fi / (TRANS - 1))
+                frame_schedule.append({
+                    "type": "trans",
+                    "stage": si,          # base stage for mesh/label
+                    "stage_to": si + 1,   # target stage
+                    "t": t,
+                    "can_interp": can_interp,
+                })
+
+    total_frames = len(frame_schedule)
+
     fig = plt.figure(figsize=(12, 5.5), facecolor=BG)
     gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 1.05], wspace=0.18,
                           left=0.04, right=0.97, top=0.88, bottom=0.12)
     ax_mesh = fig.add_subplot(gs[0, 0])
     ax_hist = fig.add_subplot(gs[0, 1])
 
-    # Place stage title/algo text above figure (outside axes) for readability
     fig.suptitle("CHILmesh pipeline · annulus", color=TEXT, fontsize=14,
                  fontweight="bold", y=0.98)
 
-    # Frames: hold each stage for ~20 frames at 10fps = 2s per stage.
-    HOLD_FRAMES = 18
-    total_frames = HOLD_FRAMES * n_stages
-
     def animate(frame_idx):
-        stage_idx = frame_idx // HOLD_FRAMES
+        info = frame_schedule[frame_idx]
+        si = info["stage"]
+        stage = stages[si]
 
-        # Add stage annotation on the plot area itself (positioned at top-left, outside mesh area)
+        if info["type"] == "hold":
+            dot_pts = stage["pts"]
+            render_frame(ax_mesh, ax_hist, stage, qualities[si], si, n_stages,
+                         current_pts=dot_pts)
+        else:
+            # Transition: show base stage mesh + interpolated dot positions
+            t = info["t"]
+            si_to = info["stage_to"]
+            if info["can_interp"]:
+                dot_pts = (1 - t) * stages[si]["pts"] + t * stages[si_to]["pts"]
+            else:
+                dot_pts = stages[si_to]["pts"] if t > 0.5 else stages[si]["pts"]
+
+            render_frame(ax_mesh, ax_hist, stage, qualities[si], si, n_stages,
+                         current_pts=dot_pts)
+
+        # Stage label overlaid above mesh axes (in figure coords above ax_mesh)
         ax_mesh.text(
-            0.02, 1.08, f"Stage {stage_idx + 1}/{n_stages}: {stages[stage_idx]['name']}",
+            0.02, 1.08, f"Stage {si + 1}/{n_stages}: {stage['name']}",
             transform=ax_mesh.transAxes, color=ACCENT, fontsize=13,
             fontweight="bold", ha="left", va="bottom",
         )
         ax_mesh.text(
-            0.02, 1.03, stages[stage_idx]['algo'],
+            0.02, 1.02, stage["algo"],
             transform=ax_mesh.transAxes, color=TEXT, fontsize=10,
             ha="left", va="bottom",
         )
-
-        render_frame(ax_mesh, ax_hist, stages[stage_idx],
-                     qualities[stage_idx], stage_idx, n_stages,
-                     current_pts=stages[stage_idx]["pts"])
         return []
 
     print(f"Rendering {total_frames} frames → {OUT_PATH}...")
