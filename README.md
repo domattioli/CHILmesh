@@ -33,6 +33,7 @@
 - [Features](#features)
 - [Installation](#installation)
 - [Performance](#performance)
+- [Validation](#validation)
 - [API Overview](#api-overview)
 - [Mesh Smoothing](#mesh-smoothing)
 - [Examples](#examples)
@@ -129,20 +130,53 @@ pip install -e .                            # from source
 
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3 trials. **v1.0.0 backends are output-equivalent** — the C++ extension produces bit-identical skeletonization layers to Python, verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
 
-| Metric | v0.2.0 MATLAB ※ | v1.0.0 Python | v1.0.0 Rust † | v1.0.0 C++ |
-|---|---:|---:|---:|---:|
-| Fast init (adj, no skeletonization) | ~3.9 s | 1.01 s | 0.029 s | **0.036 s** |
-| Skeletonization only | ~3.8 s | 2.20 s | 0.20 s | **0.033 s** |
-| Full init (adj + skeletonization) | 7.7 s | 3.21 s | 0.23 s | **0.069 s** |
-| Quality analysis | 6.6 s | 57 ms | <1 ms | **<1 ms** |
-| Vertex-edge lookup (per call) | ~700 μs | **0.08 μs** | 0.02 μs | 0.04 μs |
+| Metric | v0.1.0 MATLAB ‡ | v0.2.0 MATLAB ※ | v1.0.0 Python | v1.0.0 Rust † | v1.0.0 C++ |
+|---|---:|---:|---:|---:|---:|
+| Fast init (adj, no skeletonization) | 0.27 s | ~3.9 s | 1.01 s | 0.029 s | **0.036 s** |
+| Skeletonization only | 0.67 s | ~3.8 s | 2.20 s | 0.20 s | **0.033 s** |
+| Full init (adj + skeletonization) | 1.04 s | 7.7 s | 3.21 s | 0.23 s | **0.069 s** |
+| Quality analysis | 12 ms | 6.6 s | 57 ms | <1 ms | **<1 ms** |
+| Vertex-edge lookup (per call) | ~2200 μs | ~700 μs | **0.08 μs** | 0.02 μs | 0.04 μs |
 
 **C++ is 46× faster than Python on full init and 66× faster on skeletonization** — at the same logical output. The Python implementation remains the canonical reference; C++ is opt-in via direct `chilmesh_cpp` import, Rust via `chilmesh_core`.
 
-※ MATLAB v0.2.0 = direct Python port of original MATLAB implementation ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)).  
+‡ MATLAB v0.1.0 = the original QuADMesh+ `@CHILmesh` class ([Mattioli, OSU MSc thesis, 2017](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)) measured under **GNU Octave 8.4** (no MathWorks MATLAB license in CI) on WNAT_Hagen, connectivity + points fed to the 2-arg constructor; medians of 3. Absolute times are Octave's interpreter, not MATLAB JIT — treat as the original-algorithm baseline, not a MATLAB-vs-Octave claim.  
+※ MATLAB v0.2.0 = direct Python port of original MATLAB implementation.  
 † Rust fast init includes fort.14 file I/O; Python and C++ receive raw arrays.
 
 Full methodology and raw data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+
+---
+
+## Validation
+
+**Cross-language skeletonization parity.** The Python port's `n_layers` (medial-axis
+skeletonization) is validated against the original QuADMesh+ MATLAB
+`@CHILmesh` algorithm — run under GNU Octave 8.4 — across the ADMESH-Domains
+catalog, from 557 to 132k vertices. Identical connectivity + points are fed to
+both implementations; the MATLAB reader is bypassed so only the layering
+algorithm is compared.
+
+| Mesh | Vertices | Elements | MATLAB `n_layers` | Python `n_layers` | Match |
+|---|--:|--:|--:|--:|:--:|
+| Baranja Hill (ADMESH v2) | 557 | 1,011 | 10 | 10 | ✅ |
+| Baranja Hill | 645 | 1,193 | 12 | 12 | ✅ |
+| Wetting/Drying test | 2,716 | 4,978 | 15 | 15 | ✅ |
+| Lake Erie (refined) | 5,095 | 9,688 | 20 | 20 | ✅ |
+| Lake Erie (5k) | 13,266 | 24,910 | 17 | 17 | ✅ |
+| Delaware Bay | 14,449 | 26,698 | 17 | 17 | ✅ |
+| Delaware Bay (h 100–20000) | 14,449 | 26,697 | 17 | 17 | ✅ |
+| Lake Michigan | 21,981 | 41,887 | 25 | 25 | ✅ |
+| WNAT (Hagen) | 52,774 | 98,365 | 30 | 30 | ✅ |
+| Chesapeake Bay | 83,388 | 160,734 | 55 | 55 | ✅ |
+| Great Lakes | 132,162 | 250,905 | 46 | 46 | ✅ |
+
+11 / 11 meshes match. The seven previously-uncaptured reference counts (Lake Erie
+refined, Delaware Bay refined, Chesapeake Bay, Great Lakes, Lake Michigan, both
+Baranja Hill variants) were captured by this run and pinned in
+[`tests/test_skeletonization_matlab_parity_external.py`](tests/test_skeletonization_matlab_parity_external.py)
+(#128). The C++ and Rust backends are verified bit-identical to the Python
+reference by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
 
 ---
 
