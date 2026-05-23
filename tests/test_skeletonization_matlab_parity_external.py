@@ -16,9 +16,16 @@ faithful port of the original MATLAB ``meshLayers`` function from QuADMesh+
 For each mesh below, the Python port must produce the same ``n_layers`` value
 as the MATLAB reference.
 
-Reference values were captured by the project maintainer from external MATLAB
-runs and are documented in ``MATLAB_REFERENCE_LAYER_COUNTS`` below. To run
-these tests locally:
+Reference values were captured from the original QuADMesh+ ``meshLayers``
+algorithm in ``00_CHILMesh_Class/@CHILmesh/CHILmesh.m``. The seven values tagged
+"F12 captured 2026-05-23" were produced by running that MATLAB class under
+GNU Octave 8.4 on the ADMESH-Domains catalog meshes (connectivity + points fed
+to the 2-arg ``CHILmesh(ConnectivityList, Points)`` constructor, bypassing the
+MATLAB ``readFort14`` reader). The harness was validated first against the three
+already-known references — delaware-bay@default (17), lake-erie@5k (17),
+misc-tests@wetting-drying (15) — which it reproduced exactly before the unknowns
+were captured. The Python port's ``n_layers`` agreed with the Octave oracle on
+all ten meshes. To run these tests locally:
 
 .. code-block:: bash
 
@@ -56,19 +63,19 @@ import pytest
 MATLAB_REFERENCE_LAYER_COUNTS: dict[str, Optional[int | Tuple[int, int]]] = {
     "italy@default-v1": 15,
     "lake-erie@5k-nodes-v1": 17,
-    "lake-erie@refined-v1": None,
+    "lake-erie@refined-v1": 20,                  # F12 captured 2026-05-23 (Lake_Erie_mesh_refined.14)
     "delaware-bay@default-v1": 17,
-    "delaware-bay@refined-100-20000-v1": None,
+    "delaware-bay@refined-100-20000-v1": 17,     # F12 captured 2026-05-23 (Deleware_Bay_hmin_100_hmax_20000.14)
     "wnat@hagen-v1": (35, 45),    # WNAT family observed at ~39; exact variant unconfirmed
     "wnat@onur-v1": (35, 45),
     "wnat@test-v1": (35, 45),
     "wnat@nc-inundation-v6c-v1": (35, 45),
     "misc-tests@wetting-drying-v1": 15,
-    "chesapeake-bay@default-v1": None,
-    "great-lakes@default-v1": None,
-    "lake-michigan@default-v1": None,
-    "baranja-hill@default-v1": None,
-    "baranja-hill@admesh-v2-v1": None,
+    "chesapeake-bay@default-v1": 55,             # F12 captured 2026-05-23 (Chesapeake_Bay.14)
+    "great-lakes@default-v1": 46,                # F12 captured 2026-05-23 (Great_Lakes.14)
+    "lake-michigan@default-v1": 25,              # F12 captured 2026-05-23 (Lake_Michigan_mesh.14)
+    "baranja-hill@default-v1": 12,               # F12 captured 2026-05-23 (Baranja_Hill.14)
+    "baranja-hill@admesh-v2-v1": 10,             # F12 captured 2026-05-23 (Baranja_Hill_ADMESH_v2.14)
 }
 
 

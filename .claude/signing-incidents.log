@@ -3,3 +3,4 @@
 2026-05-23T19:25:22Z	SERVER_ERROR	-	400 missing source (assumed persistent)	test(smoother): square-preservation regression for #105
 2026-05-23T19:31:57Z	SERVER_ERROR	-	400 missing source (assumed persistent)	chore: sync DomI@95f6551
 2026-05-23T19:40:58Z	SERVER_ERROR	-	400 missing source (assumed persistent)	fix(smoother): Q4 bilinear quad stiffness + freeze_quad_nodes (#105)
+2026-05-23T19:47:58Z	SERVER_ERROR	-	400 missing source (assumed persistent)	test(skel): capture 7 MATLAB reference layer counts (#128)
