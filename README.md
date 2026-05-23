@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="output/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
+</p>
+
 <h1 align="center">CHILmesh</h1>
 
 <p align="center">
@@ -33,7 +37,7 @@
 - [Mesh Smoothing](#mesh-smoothing)
 - [Examples](#examples)
 - [CLI](#cli)
-- [Downstream Projects](#downstream-projects)
+- [Sibling Projects](#sibling-projects)
 - [Contributing](#contributing)
 - [Citation](#citation)
 
@@ -41,7 +45,12 @@
 
 ## Why CHILmesh
 
-CHILmesh is the **stable backbone** for hydrodynamic mesh tooling — used by [ADMESH](https://github.com/domattioli/ADMESH), [MADMESHR](https://github.com/domattioli/MADMESHR), and [ADMESH-Domains](https://github.com/domattioli/ADMESH-Domains). v1.0.0 ships a Pythonic public API (`from chilmesh import Mesh`) backed by a half-edge C++ extension that is **66× faster than pure Python** on skeletonization while producing bit-identical layer output (verified by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py)). Triangles, quadrilaterals, and mixed meshes share one interface; downstream projects can rely on a stable v1.x API.
+**The stable backbone for hydrodynamic mesh tooling.** Sibling projects [ADMESH](https://github.com/domattioli/ADMESH), [ADMESH-Domains](https://github.com/domattioli/ADMESH-Domains), and [QuADMesh](https://github.com/domattioli/QuADMesh) build on top of it.
+
+- **Pythonic API** — `from chilmesh import Mesh`; backwards-compatible `CHILmesh` alias preserved.
+- **C++ acceleration, bit-identical output** — half-edge extension is **66× faster than pure Python** on skeletonization, verified by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
+- **One interface for all topologies** — triangles, quadrilaterals, and mixed meshes share the same call surface.
+- **Stable v1.x API** — sibling projects can pin `chilmesh>=1.0,<2`.
 
 ---
 
@@ -234,13 +243,15 @@ Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 ---
 
-## Downstream Projects
+## Sibling Projects
 
-| Repo | Description |
-|---|---|
-| [**ADMESH**](https://github.com/domattioli/ADMESH) | Optimized 2D triangular mesh generation for hydrodynamic domains |
-| [**MADMESHR**](https://github.com/domattioli/MADMESHR) | AI-based quad- and mixed-element generation for hydrodynamic domains |
-| [**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) | Mesh catalog for hydrodynamic domains |
+CHILmesh is the shared mesh-data substrate for a small ecosystem of hydrodynamic mesh tooling. Each sibling depends on CHILmesh; CHILmesh depends on none of them.
+
+| Repo | Language | Description |
+|---|---|---|
+| [**ADMESH**](https://github.com/domattioli/ADMESH) | Python | Advanced, automatic unstructured mesh generator for shallow water models (Conroy et al., 2012). Consumes CHILmesh for adjacency, smoothing, and quality analysis. |
+| [**ADMESH-Domains**](https://github.com/domattioli/ADMESH-Domains) | Python | Registry of ADMESH / ADCIRC-compatible hydrodynamic domains. Pairs with `chilmesh.Mesh.from_admesh_domain()` for one-call mesh loading. |
+| [**QuADMesh**](https://github.com/domattioli/QuADMesh) | MATLAB | Original research project (OSU MSc thesis, 2017) on skeletonization-driven indirect tri-to-quad conversion. Pre-dates this Python ecosystem; CHILmesh's data structure descends from it. |
 
 ---
 
@@ -261,7 +272,7 @@ CHILmesh originated in MATLAB as the data structure backing a skeletonization-dr
                quadrilateral, and mixed-element grids},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {0.4.1},
+  version   = {1.0.0},
   doi       = {10.5281/zenodo.20263854},
   url       = {https://github.com/domattioli/CHILmesh}
 }
