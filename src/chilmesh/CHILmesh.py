@@ -2038,15 +2038,27 @@ class CHILmesh(CHILmeshPlotMixin):
 
     def _quad_stiffness_assembly(self, quad_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
         """
-        Assemble stiffness matrix contributions from quad elements.
+        Assemble stiffness from quad elements via the Q4 bilinear Laplacian.
 
-        Averages both diagonal decompositions (0→2 and 1→3) so every quad vertex
-        receives equal stiffness weighting (1.5×D each). Single-diagonal decomposition
-        double-counts diagonal vertices (2×D vs 1×D), creating asymmetric forces at
-        quad-triangle seams that cause element collapse in mixed meshes.
+        Each quad contributes the standard 4-node isoparametric Laplacian on the
+        reference unit square (nodes CCW), applied independently per coordinate:
 
-        Total stiffness magnitude unchanged: 4 triangles × 0.5 weight = 2 triangle
-        contributions, same as the single-diagonal form.
+            K_local = (1/6) * [[ 4, -1, -2, -1],
+                               [-1,  4, -1, -2],
+                               [-2, -1,  4, -1],
+                               [-1, -2, -1,  4]]   (each entry scales I_2)
+
+        Row sums are zero, so the operator is translation-invariant (rigid-body
+        modes lie in its null space) and a perfectly square quad is harmonic —
+        its interior nodes feel zero net force, so squares are preserved.
+
+        This replaces the prior tri-decomposition (#105), which summed the
+        *triangle* rotation block ``T = 2·R(120°)`` over the quad's two diagonal
+        splits. That reused the equilateral-triangle (60°) target on quads,
+        actively biasing them toward 60° corners and distorting squares in mixed
+        meshes. The opposite-corner coupling (the ``-2`` entries) is what makes a
+        4-cycle stencil translation-invariant; a nearest-neighbour-only rotation
+        stencil cannot be (see #105 analysis).
 
         Parameters:
             quad_indices: Array of quad element indices
@@ -2054,32 +2066,31 @@ class CHILmesh(CHILmeshPlotMixin):
             n: Total number of vertices
 
         Returns:
-            (rows, cols, data): CSR matrix format lists for assembly
+            (rows, cols, data): COO triplet lists for sparse assembly
         """
         import numpy as np
 
         q = self.connectivity_list[quad_indices, :4]
 
-        D = 2.0 * np.eye(2)
-        T = np.array([[-1.0, -np.sqrt(3)], [np.sqrt(3), -1.0]])
+        KL = (1.0 / 6.0) * np.array(
+            [[4.0, -1.0, -2.0, -1.0],
+             [-1.0, 4.0, -1.0, -2.0],
+             [-2.0, -1.0, 4.0, -1.0],
+             [-1.0, -2.0, -1.0, 4.0]]
+        )
 
         rows, cols, data = [], [], []
         for quad in q:
-            # Average both diagonals so all 4 vertices get equal stiffness (1.5*D each).
-            # Diagonal 0-2: (0,1,2) + (0,2,3); diagonal 1-3: (0,1,3) + (1,2,3).
-            for diag_tris in [
-                [(quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3])],
-                [(quad[0], quad[1], quad[3]), (quad[1], quad[2], quad[3])],
-            ]:
-                for tri in diag_tris:
-                    for i in range(3):
-                        for j in range(3):
-                            block = D if i == j else T if j == (i + 1) % 3 else T.T
-                            for di in range(2):
-                                for dj in range(2):
-                                    rows.append(2 * tri[i] + di)
-                                    cols.append(2 * tri[j] + dj)
-                                    data.append(0.5 * block[di, dj])
+            for i in range(4):
+                for j in range(4):
+                    k = KL[i, j]
+                    if k == 0.0:
+                        continue
+                    vi, vj = int(quad[i]), int(quad[j])
+                    for d in range(2):
+                        rows.append(2 * vi + d)
+                        cols.append(2 * vj + d)
+                        data.append(k)
 
         return rows, cols, data
 
@@ -2176,17 +2187,24 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return F
 
-    def direct_smoother( self, kinf=1e12 ) -> np.ndarray:
+    def direct_smoother( self, kinf=1e12, freeze_quad_nodes: bool = False ) -> np.ndarray:
         """
         Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
         Supports triangle, quad, and mixed-element meshes.
 
-        Implements the Balendran direct smoothing formulation for triangles,
-        extended to quads via analogy (maintaining the energy-minimization
-        principle on a per-element stiffness matrix).
+        Triangles use the Balendran rotation-based stiffness (equilateral target);
+        quads use the Q4 bilinear Laplacian (square target, see
+        ``_quad_stiffness_assembly``).
 
         Parameters:
-            kinf: Large stiffness value for fixed boundary vertices
+            kinf: Large stiffness value for fixed (pinned) vertices.
+            freeze_quad_nodes: When True, pin every vertex that is a corner of any
+                quad element in addition to the boundary. In a mixed mesh a node
+                shared between a quad and a triangle cannot satisfy both the 90°
+                (square) and 60° (equilateral) targets — smoothing it necessarily
+                distorts the quad. Freezing quad-corner nodes guarantees quads keep
+                their exact shape; only pure-triangle interior nodes move. Default
+                False (all interior nodes smooth). See #105.
 
         Reference:
             Balendran, B. (1999).
@@ -2238,7 +2256,12 @@ class CHILmesh(CHILmeshPlotMixin):
                     edge_count[key] = edge_count.get(key, 0) + 1
             boundary_nodes = np.unique([v for key, cnt in edge_count.items() if cnt == 1 for v in key])
 
-        for v in boundary_nodes:
+        pinned = set(int(v) for v in boundary_nodes)
+        if freeze_quad_nodes and len(quad_indices) > 0:
+            quad_corner_nodes = np.unique(self.connectivity_list[quad_indices, :4].flatten())
+            pinned |= set(int(v) for v in quad_corner_nodes)
+
+        for v in pinned:
             F[2*v:2*v+2] = kinf * p[v]
             K[2*v, 2*v] = kinf
             K[2*v+1, 2*v+1] = kinf
