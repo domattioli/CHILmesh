@@ -180,11 +180,57 @@ class TestSwapEdge:
 class TestMergeElements:
     """Tests for element merging (coarsening)."""
 
+    def _first_interior_edge_pair(self, mesh):
+        """Return (edge_id, elem_a, elem_b) for the first interior edge."""
+        edge2elem = mesh.edge2elem()
+        for edge_id in range(mesh.n_edges):
+            ea, eb = int(edge2elem[edge_id][0]), int(edge2elem[edge_id][1])
+            if ea != -1 and eb != -1:
+                return edge_id, ea, eb
+        return None
+
     def test_merge_elements_adjacent(self, triangle_mesh):
-        """Verify merge_elements merges adjacent triangles."""
-        pytest.skip("merge_elements implementation incomplete (MVP: marking deleted, not removing)")
-        # Full implementation would remove deleted elements from connectivity_list
-        # This is deferred to Phase 5.2 as it requires careful element ID remapping
+        """Two adjacent triangles fuse into one CCW quad; elem_b is deleted."""
+        mutable = MutableMesh(triangle_mesh)
+        n_verts_before = triangle_mesh.n_verts
+
+        found = self._first_interior_edge_pair(triangle_mesh)
+        assert found is not None, "fixture has no interior edge to merge across"
+        _, elem_a, elem_b = found
+        tri_a = set(int(v) for v in triangle_mesh.connectivity_list[elem_a, :3])
+        tri_b = set(int(v) for v in triangle_mesh.connectivity_list[elem_b, :3])
+        expected_quad_verts = tri_a | tri_b
+
+        merged = mutable.merge_elements(elem_a, elem_b)
+
+        assert merged == elem_a
+        # Table widened to 4 columns to hold the quad.
+        assert triangle_mesh.connectivity_list.shape[1] == 4
+        quad_row = triangle_mesh.connectivity_list[merged]
+        # Genuine quad: 4 distinct vertices == union of the two triangles.
+        assert set(int(v) for v in quad_row) == expected_quad_verts
+        assert len(expected_quad_verts) == 4
+        # _elem_type classifies the merged row as a quad, not a padded tri.
+        _, quads = triangle_mesh._elem_type()
+        assert merged in quads
+        # Winding is CCW (positive signed area).
+        area = MutableMesh._polygon_signed_area(triangle_mesh.points[quad_row, :2])
+        assert area > 0
+        # elem_b is deleted via the negative sentinel...
+        assert all(int(v) < 0 for v in triangle_mesh.connectivity_list[elem_b])
+        # ...and contributes no phantom membership for vertex 0.
+        assert elem_b not in triangle_mesh.get_vertex_elements(0)
+        # No vertices were added or removed by a merge.
+        assert triangle_mesh.n_verts == n_verts_before
+        # Mesh is now mixed and adjacencies rebuilt cleanly.
+        assert triangle_mesh.type in ("Mixed-Element", "Quadrilateral")
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_merge_elements_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range element IDs raise IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.merge_elements(0, triangle_mesh.n_elems)
 
     def test_merge_elements_non_adjacent_raises(self, triangle_mesh):
         """Verify merge_elements raises on non-adjacent elements."""

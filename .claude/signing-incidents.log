@@ -1,0 +1,10 @@
+2026-05-23T13:52:13Z	SERVER_ERROR	req_011CbKcNAGL68kz6b7ehZGaT	400 missing source	ci: setup-python check-latest + MPLCONFIGDIR per-run tmpdir
+2026-05-23T19:11:06Z	SERVER_ERROR	req_011CbL2gVWXJAKEYoweD7mFY	400 missing source	feat(mutations): merge_elements fuses adjacent triangles into a quad
+2026-05-23T19:25:22Z	SERVER_ERROR	-	400 missing source (assumed persistent)	test(smoother): square-preservation regression for #105
+2026-05-23T19:31:57Z	SERVER_ERROR	-	400 missing source (assumed persistent)	chore: sync DomI@95f6551
+2026-05-23T19:40:58Z	SERVER_ERROR	-	400 missing source (assumed persistent)	fix(smoother): Q4 bilinear quad stiffness + freeze_quad_nodes (#105)
+2026-05-23T19:47:58Z	SERVER_ERROR	-	400 missing source (assumed persistent)	test(skel): capture 7 MATLAB reference layer counts (#128)
+2026-05-23T20:00:21Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): MATLAB v0.1.0 perf column + validation table
+2026-05-23T20:20:41Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): version-lineage perf columns
+2026-05-23T20:29:20Z	SERVER_ERROR	-	400 missing source (assumed persistent)	docs(readme): measured v0.3.0 python perf
+2026-05-23T21:04:45Z	SERVER_ERROR	-	400 missing source (assumed persistent)	v1.1.0 release prep
