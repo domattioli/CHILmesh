@@ -20,6 +20,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   to new coordinates while preserving topology. Rejects non-boundary vertices;
   aborts (no mutation) if any incident element would become non-positive-area.
   ([#160](https://github.com/domattioli/CHILmesh/issues/160))
+- **`MutableMesh.split_triangles(elem_ids)`** — atomic bulk triangle split;
+  rebuilds adjacencies once at the end. Full rollback on any per-element
+  precondition failure.
+  ([#161](https://github.com/domattioli/CHILmesh/issues/161))
+- **`MutableMesh.smooth_topology(metric_threshold, max_passes) -> int`** —
+  iteratively swap interior edges that raise the minimum angle of adjacent
+  triangles; monotone, terminates at fixpoint.
+  ([#161](https://github.com/domattioli/CHILmesh/issues/161))
 
 ## [1.1.0] — 2026-05-23
 

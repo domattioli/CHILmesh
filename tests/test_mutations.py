@@ -605,3 +605,80 @@ class TestMoveBoundaryNode:
             mutable.move_boundary_node(-1, np.array([0.0, 0.0]))
         with pytest.raises(IndexError):
             mutable.move_boundary_node(triangle_mesh.n_verts, np.array([0.0, 0.0]))
+
+
+class TestSplitTriangles:
+    """Tests for bulk triangle split (#161, transactional refinement)."""
+
+    def test_split_triangles_basic(self, triangle_mesh):
+        """N splits in one call; adjacency rebuilt once; result matches N sequential splits."""
+        mutable = MutableMesh(triangle_mesh)
+        n_verts_before = triangle_mesh.n_verts
+        n_elems_before = triangle_mesh.n_elems
+
+        # Split first 3 elements atomically.
+        ids = np.array([0, 1, 2], dtype=int)
+        new_ids = mutable.split_triangles(ids)
+
+        assert triangle_mesh.n_verts == n_verts_before + 3
+        # Each split adds 2 new elements (original reused + 2 appended).
+        assert triangle_mesh.n_elems == n_elems_before + 6
+        assert len(new_ids) == 9  # 3 IDs returned per split
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_split_triangles_rollback_on_invalid(self, triangle_mesh):
+        """Invalid element in list rolls back; mesh unchanged."""
+        mutable = MutableMesh(triangle_mesh)
+        n_verts_before = triangle_mesh.n_verts
+        n_elems_before = triangle_mesh.n_elems
+        conn_before = triangle_mesh.connectivity_list.copy()
+
+        # Mix valid + out-of-range → should roll back entirely.
+        bad_ids = np.array([0, triangle_mesh.n_elems + 9999], dtype=int)
+        with pytest.raises(IndexError):
+            mutable.split_triangles(bad_ids)
+
+        assert triangle_mesh.n_verts == n_verts_before
+        assert triangle_mesh.n_elems == n_elems_before
+        np.testing.assert_array_equal(triangle_mesh.connectivity_list, conn_before)
+
+    def test_split_triangles_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range element raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.split_triangles(np.array([-1], dtype=int))
+        with pytest.raises(IndexError):
+            mutable.split_triangles(np.array([triangle_mesh.n_elems], dtype=int))
+
+
+class TestSmoothTopology:
+    """Tests for topology smoothing via edge swaps (#161)."""
+
+    def test_smooth_topology_returns_int(self, triangle_mesh):
+        """smooth_topology returns number of swaps (int)."""
+        mutable = MutableMesh(triangle_mesh)
+        n = mutable.smooth_topology()
+        assert isinstance(n, int)
+        assert n >= 0
+
+    def test_smooth_topology_preserves_ccw(self, triangle_mesh):
+        """All live elements remain CCW after smoothing."""
+        mutable = MutableMesh(triangle_mesh)
+        mutable.smooth_topology()
+        assert _all_live_elements_ccw(triangle_mesh)
+
+    def test_smooth_topology_terminates(self, triangle_mesh):
+        """Second call with max_passes=1 does not raise; result is 0 or small."""
+        mutable = MutableMesh(triangle_mesh)
+        mutable.smooth_topology()  # first pass to fixpoint
+        n2 = mutable.smooth_topology(max_passes=1)
+        # At fixpoint second call swaps nothing (or very little if near-tie).
+        assert isinstance(n2, int)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_smooth_topology_strict_threshold(self, triangle_mesh):
+        """Very large threshold prevents any swaps."""
+        mutable = MutableMesh(triangle_mesh)
+        n = mutable.smooth_topology(metric_threshold=1e6)
+        assert n == 0

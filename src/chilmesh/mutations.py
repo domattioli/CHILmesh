@@ -448,6 +448,157 @@ class MutableMesh:
         self.mesh._build_spatial_indices()
         self._validate_invariants()
 
+    def split_triangles(self, elem_ids: np.ndarray) -> np.ndarray:
+        """Split multiple triangles atomically; rebuild adjacencies once.
+
+        Equivalent to N sequential ``split_triangle`` calls but with a single
+        adjacency + spatial-index rebuild at the end. Atomic: any per-element
+        precondition failure rolls back to the pre-call state.
+
+        Parameters
+        ----------
+        elem_ids : array-like of int
+            Element IDs to split (must all be triangles).
+
+        Returns
+        -------
+        ndarray
+            Concatenated array of new element IDs from all splits.
+
+        Raises
+        ------
+        IndexError
+            If any element ID is out of range.
+        ValueError
+            If any element is not a triangle.
+        RuntimeError
+            If a provided split point is outside its element; full rollback.
+        """
+        elem_ids = np.asarray(elem_ids, dtype=int).ravel()
+        snap = self._snapshot()
+        new_ids_all: list = []
+        try:
+            for eid in elem_ids:
+                if eid < 0 or eid >= self.mesh.n_elems:
+                    raise IndexError(f"Element {eid} out of range [0, {self.mesh.n_elems})")
+                elem = self.mesh.connectivity_list[eid]
+                n_cols = self.mesh.connectivity_list.shape[1]
+                if n_cols == 4 and elem[2] != elem[3]:
+                    raise ValueError(f"Element {eid} is not a triangle")
+                tri_verts = elem[:3]
+                p0, p1, p2 = self.mesh.points[tri_verts, :2]
+                point = (p0 + p1 + p2) / 3.0
+                self._validate_point_in_triangle(point, tri_verts)
+                new_vert_id = self._insert_vertex_internal(point)
+                new_ids = self._create_triangle_subdivisions(eid, tri_verts, new_vert_id)
+                new_ids_all.extend(new_ids.tolist())
+        except Exception:
+            self._restore(snap)
+            raise
+        self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
+        self._validate_invariants()
+        return np.array(new_ids_all, dtype=int)
+
+    def smooth_topology(self, metric_threshold: float = 0.0, max_passes: int = 100) -> int:
+        """Improve mesh quality by swapping interior edges that raise min angle.
+
+        Scans all interior edges each pass; swaps any edge whose flip raises
+        the minimum angle of the two adjacent triangles above
+        ``metric_threshold``. Repeats until no improvement or ``max_passes``
+        reached (monotone, always terminates).
+
+        Parameters
+        ----------
+        metric_threshold : float
+            Minimum angle improvement (radians) required to trigger a swap.
+            Default 0.0 accepts any improvement.
+        max_passes : int
+            Maximum number of full-edge-scan passes.
+
+        Returns
+        -------
+        int
+            Total number of edges swapped.
+        """
+        n_swapped = 0
+        for _ in range(max_passes):
+            swapped_this_pass = 0
+            edge2elem = self.mesh.edge2elem()
+            for edge_id in range(self.mesh.n_edges):
+                ea, eb = int(edge2elem[edge_id][0]), int(edge2elem[edge_id][1])
+                if ea == -1 or eb == -1:
+                    continue
+                if not (self._is_triangle(ea) and self._is_triangle(eb)):
+                    continue
+                if not self._swap_improves_quality(edge_id, ea, eb, metric_threshold):
+                    continue
+                try:
+                    self.swap_edge(edge_id)
+                    n_swapped += 1
+                    swapped_this_pass += 1
+                    break  # adjacency rebuilt; edge IDs changed — restart this pass
+                except (ValueError, RuntimeError):
+                    pass
+            if swapped_this_pass == 0:
+                break
+        return n_swapped
+
+    def _snapshot(self) -> dict:
+        """Capture mesh state for atomic rollback."""
+        return {
+            'points': self.mesh.points.copy(),
+            'connectivity_list': self.mesh.connectivity_list.copy(),
+            'n_verts': self.mesh.n_verts,
+            'n_elems': self.mesh.n_elems,
+        }
+
+    def _restore(self, snap: dict) -> None:
+        """Restore mesh state from snapshot and rebuild structures."""
+        self.mesh.points = snap['points']
+        self.mesh.connectivity_list = snap['connectivity_list']
+        self.mesh.n_verts = snap['n_verts']
+        self.mesh.n_elems = snap['n_elems']
+        self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
+
+    def _swap_improves_quality(
+        self, edge_id: int, elem_a: int, elem_b: int, threshold: float
+    ) -> bool:
+        """True if swapping this edge raises min angle of both adjacent triangles."""
+        edge_verts = self.mesh.edge2vert(np.array([edge_id]))[0]
+        v0, v1 = int(edge_verts[0]), int(edge_verts[1])
+        row_a = self.mesh.connectivity_list[elem_a, :3]
+        row_b = self.mesh.connectivity_list[elem_b, :3]
+        try:
+            v2 = next(int(v) for v in row_a if int(v) not in (v0, v1))
+            v3 = next(int(v) for v in row_b if int(v) not in (v0, v1))
+        except StopIteration:
+            return False
+        before = min(
+            self._min_angle_from_verts(v0, v1, v2),
+            self._min_angle_from_verts(v0, v1, v3),
+        )
+        after = min(
+            self._min_angle_from_verts(v0, v2, v3),
+            self._min_angle_from_verts(v1, v2, v3),
+        )
+        return after > before + threshold
+
+    def _min_angle_from_verts(self, va: int, vb: int, vc: int) -> float:
+        """Minimum interior angle (radians) of the triangle (va, vb, vc)."""
+        pts = self.mesh.points[[va, vb, vc], :2]
+        angles = []
+        for i in range(3):
+            a = pts[(i + 1) % 3] - pts[i]
+            b = pts[(i + 2) % 3] - pts[i]
+            na, nb = np.linalg.norm(a), np.linalg.norm(b)
+            if na < 1e-14 or nb < 1e-14:
+                return 0.0
+            cos_a = np.clip(np.dot(a, b) / (na * nb), -1.0, 1.0)
+            angles.append(float(np.arccos(cos_a)))
+        return min(angles)
+
     def _is_triangle(self, elem_id: int) -> bool:
         """True if the element is a triangle (3-col row, or 4-col with a repeated vertex)."""
         if self.mesh.connectivity_list.shape[1] == 3:
@@ -573,11 +724,16 @@ class MutableMesh:
     def _swap_edge_internal(
         self, elem_a_id: int, elem_b_id: int, v0: int, v1: int, v2: int, v3: int
     ) -> Tuple[int, int]:
-        """Perform edge swap in connectivity."""
-        # New triangles: (v0, v2, v3) and (v1, v2, v3)
-        self.mesh.connectivity_list[elem_a_id, :3] = [v0, v2, v3]
-        self.mesh.connectivity_list[elem_b_id, :3] = [v1, v2, v3]
-
+        """Perform edge swap in connectivity, enforcing CCW winding."""
+        pts = self.mesh.points
+        new_a = [v0, v2, v3]
+        if self._signed_area(pts[v0, :2], pts[v2, :2], pts[v3, :2]) < 0:
+            new_a = [v0, v3, v2]
+        new_b = [v1, v2, v3]
+        if self._signed_area(pts[v1, :2], pts[v2, :2], pts[v3, :2]) < 0:
+            new_b = [v1, v3, v2]
+        self.mesh.connectivity_list[elem_a_id, :3] = new_a
+        self.mesh.connectivity_list[elem_b_id, :3] = new_b
         return (elem_a_id, elem_b_id)
 
     def _find_shared_edge(self, elem_a: int, elem_b: int) -> Opt[int]:
