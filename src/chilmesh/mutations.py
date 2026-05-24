@@ -220,6 +220,177 @@ class MutableMesh:
         self._validate_invariants()
         return merged_id
 
+    def remove_vertex(self, vert_id: int) -> None:
+        """Remove an interior vertex and re-triangulate the resulting cavity.
+
+        Coarsening / degenerate-vertex removal. The incident elements (which
+        must be triangles) are deleted and the surrounding ring is fan
+        re-triangulated without the removed vertex.
+
+        Tombstone convention: deleted elements are marked ``-1`` (consistent
+        with ``merge_elements``); the removed vertex is left orphaned in
+        ``points`` (``n_verts`` unchanged, no renumbering) so existing vertex
+        IDs stay stable for callers and incremental adjacency (see #162).
+
+        Parameters
+        ----------
+        vert_id : int
+            Index of the interior vertex to remove.
+
+        Raises
+        ------
+        IndexError
+            If ``vert_id`` is out of range.
+        ValueError
+            If ``vert_id`` is a boundary vertex (would change the domain
+            boundary), is already orphaned, or has a non-triangular incident
+            element (not supported in v1).
+        RuntimeError
+            If the cavity cannot be fan re-triangulated without producing a
+            non-positive-area element.
+        """
+        if vert_id < 0 or vert_id >= self.mesh.n_verts:
+            raise IndexError(f"Vertex {vert_id} out of range [0, {self.mesh.n_verts})")
+
+        if vert_id in {int(v) for v in self.mesh.boundary_node_indices()}:
+            raise ValueError(f"Vertex {vert_id} is on the boundary; cannot remove in v1")
+
+        incident = sorted(int(e) for e in self.mesh.get_vertex_elements(vert_id))
+        if not incident:
+            raise ValueError(f"Vertex {vert_id} is orphaned (no incident elements)")
+
+        for eid in incident:
+            if not self._is_triangle(eid):
+                raise ValueError(
+                    f"Vertex {vert_id} has a non-triangular incident element {eid}; "
+                    "only triangular cavities are supported in v1"
+                )
+
+        # Each incident triangle, walked from vert_id in its stored CCW order,
+        # contributes the directed edge opposite vert_id. Those directed edges
+        # form a single CCW cycle (the cavity ring).
+        ring_edges = []
+        for eid in incident:
+            tri = [int(v) for v in self.mesh.connectivity_list[eid, :3]]
+            i = tri.index(vert_id)
+            ring_edges.append((tri[(i + 1) % 3], tri[(i + 2) % 3]))
+
+        ring = self._chain_ring(ring_edges)
+        if ring is None or len(ring) < 3:
+            raise RuntimeError(
+                f"Cavity around vertex {vert_id} is not a simple ring; cannot re-triangulate"
+            )
+
+        # Fan-triangulate the ring. The cavity is star-shaped from the removed
+        # vertex but not necessarily from an arbitrary ring vertex, so try each
+        # ring vertex as the fan apex and keep the first that yields only
+        # positive-area triangles.
+        new_tris = self._fan_triangulate(ring)
+        if new_tris is None:
+            raise RuntimeError(
+                f"Cavity around vertex {vert_id} is not fan-triangulable "
+                "without inversion (non-convex); not supported in v1"
+            )
+
+        n_cols = self.mesh.connectivity_list.shape[1]
+        for eid in incident:
+            self.mesh.connectivity_list[eid] = [-1] * n_cols
+
+        rows = [
+            [a, b, c, c] if n_cols == 4 else [a, b, c]
+            for (a, b, c) in new_tris
+        ]
+        if rows:
+            self.mesh.connectivity_list = np.vstack(
+                [self.mesh.connectivity_list, np.array(rows, dtype=self.mesh.connectivity_list.dtype)]
+            )
+        self.mesh.n_elems = self.mesh.connectivity_list.shape[0]
+
+        self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
+        self._validate_invariants()
+
+    def collapse_edge(self, edge_id: int) -> int:
+        """Collapse an interior edge by merging its endpoints into one vertex.
+
+        The two triangles incident to the edge degenerate to zero area and are
+        deleted; every element referencing the removed endpoint is rewritten to
+        reference the survivor. Standard coarsening / short-edge elimination.
+
+        Survivor: ``v0`` (the first endpoint of the edge). Tombstone ``-1`` for
+        the two collapsed elements; the removed endpoint is left orphaned in
+        ``points`` (``n_verts`` unchanged), consistent with ``remove_vertex``.
+
+        Parameters
+        ----------
+        edge_id : int
+            Interior edge to collapse.
+
+        Returns
+        -------
+        int
+            Surviving vertex ID (``v0``).
+
+        Raises
+        ------
+        IndexError
+            If ``edge_id`` is out of range.
+        ValueError
+            If the edge is on the boundary (not supported in v1).
+        RuntimeError
+            If the collapse would invert any incident element (signed-area sign
+            flip); no mutation is applied in that case.
+        """
+        if edge_id < 0 or edge_id >= self.mesh.n_edges:
+            raise IndexError(f"Edge {edge_id} out of range [0, {self.mesh.n_edges})")
+
+        elems = [int(e) for e in self.mesh.edge2elem(np.array([edge_id]))[0]]
+        if -1 in elems:
+            raise ValueError(f"Edge {edge_id} is on the boundary; cannot collapse in v1")
+
+        edge_verts = self.mesh.edge2vert(np.array([edge_id]))[0]
+        survivor, removed = int(edge_verts[0]), int(edge_verts[1])
+        collapsing = {int(e) for e in elems}
+
+        conn = self.mesh.connectivity_list
+        n_cols = conn.shape[1]
+
+        # Elements (excluding the two collapsing ones) that reference the removed
+        # endpoint. Validate none invert under the substitution BEFORE mutating.
+        affected = []
+        for eid in range(self.mesh.n_elems):
+            if eid in collapsing:
+                continue
+            row = conn[eid]
+            if int(row[0]) < 0:  # tombstoned
+                continue
+            if removed in (int(v) for v in row):
+                affected.append(eid)
+
+        for eid in affected:
+            before = self._element_signed_area(conn[eid])
+            after_row = np.array(
+                [survivor if int(v) == removed else int(v) for v in conn[eid]]
+            )
+            after = self._element_signed_area(after_row)
+            if (before > 0 and after <= 1e-12) or (before < 0 and after >= -1e-12):
+                raise RuntimeError(
+                    f"collapse_edge({edge_id}) would invert element {eid}; aborted"
+                )
+
+        # Commit: rewrite survivors, tombstone the two collapsed elements.
+        for eid in affected:
+            for j in range(n_cols):
+                if int(conn[eid, j]) == removed:
+                    conn[eid, j] = survivor
+        for eid in collapsing:
+            conn[eid] = [-1] * n_cols
+
+        self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
+        self._validate_invariants()
+        return survivor
+
     def _is_triangle(self, elem_id: int) -> bool:
         """True if the element is a triangle (3-col row, or 4-col with a repeated vertex)."""
         if self.mesh.connectivity_list.shape[1] == 3:
@@ -406,6 +577,71 @@ class MutableMesh:
         x = pts[:, 0]
         y = pts[:, 1]
         return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
+
+    @staticmethod
+    def _chain_ring(edges):
+        """Chain directed edges into an ordered vertex cycle.
+
+        ``edges`` is a list of ``(a, b)`` directed edges that should form a
+        single simple cycle. Returns the ordered list of vertices around the
+        cycle, or ``None`` if the edges branch or do not close into one cycle.
+        """
+        succ = {}
+        for a, b in edges:
+            if a in succ:  # branching: not a simple cycle
+                return None
+            succ[a] = b
+        if len(succ) != len(edges):
+            return None
+        start = edges[0][0]
+        ring = [start]
+        cur = succ[start]
+        while cur != start:
+            if cur not in succ or len(ring) > len(edges):
+                return None
+            ring.append(cur)
+            cur = succ[cur]
+        return ring
+
+    def _fan_triangulate(self, ring):
+        """Fan-triangulate a vertex ring, trying each apex.
+
+        Returns a list of ``(a, b, c)`` triangles whose signed areas are all
+        positive, or ``None`` if no ring vertex works as a fan apex (cavity
+        non-convex).
+        """
+        n = len(ring)
+        for s in range(n):
+            order = ring[s:] + ring[:s]
+            apex = order[0]
+            tris = []
+            ok = True
+            for i in range(1, n - 1):
+                a, b, c = apex, order[i], order[i + 1]
+                area = self._signed_area(
+                    self.mesh.points[a, :2],
+                    self.mesh.points[b, :2],
+                    self.mesh.points[c, :2],
+                )
+                if area <= 1e-12:
+                    ok = False
+                    break
+                tris.append((a, b, c))
+            if ok:
+                return tris
+        return None
+
+    def _element_signed_area(self, row: np.ndarray) -> float:
+        """Signed area of an element row over its distinct (non-negative) vertices."""
+        verts = []
+        for v in row:
+            vi = int(v)
+            if vi < 0 or vi in verts:
+                continue
+            verts.append(vi)
+        if len(verts) < 3:
+            return 0.0
+        return self._polygon_signed_area(self.mesh.points[verts, :2])
 
     def insert_vertex(self, point: np.ndarray) -> int:
         """Insert vertex into mesh; auto-triangulates containing element.

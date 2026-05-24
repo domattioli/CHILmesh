@@ -6,6 +6,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### ✨ Added
+
+- **`MutableMesh.remove_vertex(vert_id)`** — remove an interior vertex and fan
+  re-triangulate the resulting cavity. Rejects boundary vertices; deleted
+  elements use the negative-vertex sentinel and the removed vertex is left
+  orphaned (IDs stay stable). ([#158](https://github.com/domattioli/CHILmesh/issues/158))
+- **`MutableMesh.collapse_edge(edge_id) -> survivor`** — collapse an interior
+  edge into its first endpoint, deleting the two incident triangles. Rejects
+  boundary edges and any collapse that would invert an incident element (no
+  mutation on rejection). ([#159](https://github.com/domattioli/CHILmesh/issues/159))
+
 ## [1.1.0] — 2026-05-23
 
 ### ✨ Added

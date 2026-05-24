@@ -379,3 +379,166 @@ class TestInsertVertex:
         # Query at barycenter should succeed after split
         found_elem = triangle_mesh.find_element(barycenter)
         assert found_elem >= 0, "find_element failed after split_triangle"
+
+
+def _first_interior_vertex(mesh):
+    """Return an interior vertex with only triangular incident elements, else None."""
+    boundary = {int(v) for v in mesh.boundary_node_indices()}
+    for vid in range(mesh.n_verts):
+        if vid in boundary:
+            continue
+        incident = mesh.get_vertex_elements(vid)
+        if not incident:
+            continue
+        all_tri = all(
+            mesh.connectivity_list.shape[1] == 3
+            or mesh.connectivity_list[e, 2] == mesh.connectivity_list[e, 3]
+            for e in incident
+        )
+        if all_tri:
+            return vid
+    return None
+
+
+def _first_interior_edge(mesh):
+    """Return (edge_id, v0, v1) for the first interior edge, else None."""
+    edge2elem = mesh.edge2elem()
+    for edge_id in range(mesh.n_edges):
+        ea, eb = int(edge2elem[edge_id][0]), int(edge2elem[edge_id][1])
+        if ea != -1 and eb != -1:
+            verts = mesh.edge2vert(np.array([edge_id]))[0]
+            return edge_id, int(verts[0]), int(verts[1])
+    return None
+
+
+def _all_live_elements_ccw(mesh):
+    """True if every non-tombstoned element has positive signed area."""
+    for eid in range(mesh.n_elems):
+        row = mesh.connectivity_list[eid]
+        if int(row[0]) < 0:
+            continue
+        verts = []
+        for v in row:
+            vi = int(v)
+            if vi >= 0 and vi not in verts:
+                verts.append(vi)
+        if len(verts) < 3:
+            continue
+        pts = mesh.points[verts, :2]
+        x, y = pts[:, 0], pts[:, 1]
+        area = 0.5 * (np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
+        if area <= 1e-10:
+            return False
+    return True
+
+
+class TestRemoveVertex:
+    """Tests for interior vertex removal (#158, coarsening)."""
+
+    def test_remove_interior_vertex(self, triangle_mesh):
+        """Removing an interior vertex deletes its cavity and re-triangulates."""
+        mutable = MutableMesh(triangle_mesh)
+        vid = _first_interior_vertex(triangle_mesh)
+        if vid is None:
+            pytest.skip("no interior triangular vertex in this fixture")
+
+        n_verts_before = triangle_mesh.n_verts
+        cavity = triangle_mesh.get_vertex_elements(vid)
+
+        mutable.remove_vertex(vid)
+
+        # n_verts unchanged (tombstone convention: vertex left orphaned).
+        assert triangle_mesh.n_verts == n_verts_before
+        # The removed vertex no longer belongs to any live element.
+        assert len(triangle_mesh.get_vertex_elements(vid)) == 0
+        # Old incident elements are tombstoned.
+        for eid in cavity:
+            assert all(int(v) < 0 for v in triangle_mesh.connectivity_list[eid])
+        # No degenerate / inverted live elements remain.
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_remove_boundary_vertex_raises(self, triangle_mesh):
+        """Removing a boundary vertex raises ValueError."""
+        mutable = MutableMesh(triangle_mesh)
+        boundary = triangle_mesh.boundary_node_indices()
+        assert len(boundary) > 0
+        with pytest.raises(ValueError, match="boundary"):
+            mutable.remove_vertex(int(boundary[0]))
+
+    def test_remove_vertex_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range vertex raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.remove_vertex(-1)
+        with pytest.raises(IndexError):
+            mutable.remove_vertex(triangle_mesh.n_verts)
+
+
+class TestCollapseEdge:
+    """Tests for interior edge collapse (#159, coarsening)."""
+
+    def test_collapse_interior_edge(self, triangle_mesh):
+        """Collapsing an interior edge tombstones its two triangles."""
+        mutable = MutableMesh(triangle_mesh)
+
+        live_before = sum(
+            1 for e in range(triangle_mesh.n_elems)
+            if int(triangle_mesh.connectivity_list[e, 0]) >= 0
+        )
+
+        # Many arbitrary interior-edge collapses legitimately invert a far
+        # element and are rejected (pre-mutation, mesh untouched), so scan for
+        # the first edge whose collapse is geometrically valid.
+        edge2elem = triangle_mesh.edge2elem()
+        survivor = None
+        v0 = v1 = None
+        for edge_id in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[edge_id][0]), int(edge2elem[edge_id][1])
+            if ea == -1 or eb == -1:
+                continue
+            verts = triangle_mesh.edge2vert(np.array([edge_id]))[0]
+            v0, v1 = int(verts[0]), int(verts[1])
+            try:
+                survivor = mutable.collapse_edge(edge_id)
+                break
+            except RuntimeError:
+                continue
+        if survivor is None:
+            pytest.skip("no non-inverting interior edge collapse in this fixture")
+
+        assert survivor == v0
+        # Two elements removed (the pair that shared the collapsed edge).
+        live_after = sum(
+            1 for e in range(triangle_mesh.n_elems)
+            if int(triangle_mesh.connectivity_list[e, 0]) >= 0
+        )
+        assert live_after == live_before - 2
+        # Removed endpoint no longer referenced by any live element.
+        assert len(triangle_mesh.get_vertex_elements(v1)) == 0
+        # No inverted / degenerate live elements.
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_collapse_boundary_edge_raises(self, triangle_mesh):
+        """Collapsing a boundary edge raises ValueError."""
+        mutable = MutableMesh(triangle_mesh)
+        edge2elem = triangle_mesh.edge2elem()
+        boundary_edge = None
+        for edge_id in range(triangle_mesh.n_edges):
+            elems = edge2elem[edge_id]
+            if elems[0] == -1 or elems[1] == -1:
+                boundary_edge = edge_id
+                break
+        if boundary_edge is None:
+            pytest.skip("no boundary edge in this fixture")
+        with pytest.raises(ValueError, match="boundary"):
+            mutable.collapse_edge(boundary_edge)
+
+    def test_collapse_edge_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range edge raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.collapse_edge(-1)
+        with pytest.raises(IndexError):
+            mutable.collapse_edge(triangle_mesh.n_edges)
