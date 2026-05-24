@@ -16,6 +16,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   edge into its first endpoint, deleting the two incident triangles. Rejects
   boundary edges and any collapse that would invert an incident element (no
   mutation on rejection). ([#159](https://github.com/domattioli/CHILmesh/issues/159))
+- **`MutableMesh.move_boundary_node(vert_id, new_xy)`** — move a boundary vertex
+  to new coordinates while preserving topology. Rejects non-boundary vertices;
+  aborts (no mutation) if any incident element would become non-positive-area.
+  ([#160](https://github.com/domattioli/CHILmesh/issues/160))
 
 ## [1.1.0] — 2026-05-23
 

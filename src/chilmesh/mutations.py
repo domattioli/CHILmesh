@@ -391,6 +391,63 @@ class MutableMesh:
         self._validate_invariants()
         return survivor
 
+    def move_boundary_node(self, vert_id: int, new_xy: np.ndarray) -> None:
+        """Move a boundary vertex to new coordinates with inversion guard.
+
+        Pure coordinate update — topology (connectivity) is unchanged. The move
+        is validated against all incident elements before applying; if any
+        element would become non-positive-area the move is aborted.
+
+        Parameters
+        ----------
+        vert_id : int
+            Boundary vertex to move.
+        new_xy : array-like, shape (2,)
+            New (x, y) position.
+
+        Raises
+        ------
+        IndexError
+            If ``vert_id`` is out of range.
+        ValueError
+            If ``vert_id`` is not a boundary vertex.
+        RuntimeError
+            If the move would invert any incident element; no mutation applied.
+        """
+        if vert_id < 0 or vert_id >= self.mesh.n_verts:
+            raise IndexError(f"Vertex {vert_id} out of range [0, {self.mesh.n_verts})")
+
+        boundary = {int(v) for v in self.mesh.boundary_node_indices()}
+        if vert_id not in boundary:
+            raise ValueError(f"Vertex {vert_id} is not on the boundary")
+
+        new_xy = np.asarray(new_xy, dtype=float).ravel()[:2]
+        incident = [int(e) for e in self.mesh.get_vertex_elements(vert_id)]
+
+        for eid in incident:
+            row = self.mesh.connectivity_list[eid]
+            if int(row[0]) < 0:
+                continue
+            seen: list = []
+            pts: list = []
+            for v in row:
+                vi = int(v)
+                if vi < 0 or vi in seen:
+                    continue
+                seen.append(vi)
+                pts.append(new_xy if vi == vert_id else self.mesh.points[vi, :2])
+            if len(pts) < 3:
+                continue
+            area = self._polygon_signed_area(np.array(pts))
+            if area <= 1e-12:
+                raise RuntimeError(
+                    f"move_boundary_node({vert_id}) would invert element {eid}; aborted"
+                )
+
+        self.mesh.points[vert_id, :2] = new_xy
+        self.mesh._build_spatial_indices()
+        self._validate_invariants()
+
     def _is_triangle(self, elem_id: int) -> bool:
         """True if the element is a triangle (3-col row, or 4-col with a repeated vertex)."""
         if self.mesh.connectivity_list.shape[1] == 3:

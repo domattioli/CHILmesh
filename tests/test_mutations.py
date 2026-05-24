@@ -542,3 +542,66 @@ class TestCollapseEdge:
             mutable.collapse_edge(-1)
         with pytest.raises(IndexError):
             mutable.collapse_edge(triangle_mesh.n_edges)
+
+
+class TestMoveBoundaryNode:
+    """Tests for boundary-node coordinate move (#160, guarded coordinate update)."""
+
+    def test_move_boundary_node_accepted(self, triangle_mesh):
+        """Small inward nudge accepted; coords updated, CCW preserved."""
+        mutable = MutableMesh(triangle_mesh)
+        boundary = triangle_mesh.boundary_node_indices()
+        vid = int(boundary[0])
+
+        old_xy = triangle_mesh.points[vid, :2].copy()
+        incident = triangle_mesh.get_vertex_elements(vid)
+        eid = int(next(iter(incident)))
+        verts = [int(v) for v in triangle_mesh.connectivity_list[eid] if int(v) >= 0]
+        centroid = triangle_mesh.points[verts, :2].mean(axis=0)
+        new_xy = old_xy + 0.01 * (centroid - old_xy)
+
+        mutable.move_boundary_node(vid, new_xy)
+
+        np.testing.assert_allclose(triangle_mesh.points[vid, :2], new_xy)
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_move_boundary_node_rejected_inversion(self, triangle_mesh):
+        """Move that degenerates an element is rejected; coords unchanged."""
+        mutable = MutableMesh(triangle_mesh)
+        vid = int(triangle_mesh.boundary_node_indices()[0])
+        old_xy = triangle_mesh.points[vid, :2].copy()
+
+        # Move to neighbor vertex position — area collapses to zero, rejected.
+        incident = triangle_mesh.get_vertex_elements(vid)
+        neighbor = None
+        for eid in incident:
+            for v in triangle_mesh.connectivity_list[eid]:
+                vi = int(v)
+                if vi != vid and vi >= 0:
+                    neighbor = vi
+                    break
+            if neighbor is not None:
+                break
+
+        with pytest.raises(RuntimeError):
+            mutable.move_boundary_node(vid, triangle_mesh.points[neighbor, :2].copy())
+
+        np.testing.assert_array_equal(triangle_mesh.points[vid, :2], old_xy)
+
+    def test_move_interior_vertex_raises(self, triangle_mesh):
+        """Moving a non-boundary vertex raises ValueError."""
+        mutable = MutableMesh(triangle_mesh)
+        vid = _first_interior_vertex(triangle_mesh)
+        if vid is None:
+            pytest.skip("no interior vertex in this fixture")
+        with pytest.raises(ValueError, match="boundary"):
+            mutable.move_boundary_node(vid, np.array([0.0, 0.0]))
+
+    def test_move_boundary_node_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range vertex raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.move_boundary_node(-1, np.array([0.0, 0.0]))
+        with pytest.raises(IndexError):
+            mutable.move_boundary_node(triangle_mesh.n_verts, np.array([0.0, 0.0]))
