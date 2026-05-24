@@ -162,9 +162,10 @@ class MutableMesh:
         # Perform swap: modify connectivity
         new_elem_ids = self._swap_edge_internal(elem_a_id, elem_b_id, v0, v1, v2, v3)
 
-        # Rebuild adjacencies and spatial indices (necessary after topology change)
-        self.mesh._build_adjacencies()
-        self.mesh._build_spatial_indices()
+        # Incremental O(1) adjacency patch; KD-trees deferred (marked dirty).
+        self._patch_swap_adjacency(edge_id, int(v0), int(v1), int(v2), int(v3),
+                                   int(elem_a_id), int(elem_b_id))
+        self.mesh._spatial_dirty = True
         self._validate_invariants()
         return new_elem_ids
 
@@ -542,6 +543,9 @@ class MutableMesh:
                     pass
             if swapped_this_pass == 0:
                 break
+        if n_swapped > 0:
+            self.mesh._build_spatial_indices()
+            self.mesh._spatial_dirty = False
         return n_swapped
 
     def _snapshot(self) -> dict:
@@ -598,6 +602,75 @@ class MutableMesh:
             cos_a = np.clip(np.dot(a, b) / (na * nb), -1.0, 1.0)
             angles.append(float(np.arccos(cos_a)))
         return min(angles)
+
+    def _patch_swap_adjacency(
+        self,
+        old_eid: int,
+        v0: int, v1: int, v2: int, v3: int,
+        ea: int, eb: int,
+    ) -> None:
+        """O(1) incremental adjacency patch after swapping edge old_eid (v0-v1)→(v2-v3).
+
+        Reuses ``old_eid`` slot for the new edge (no array resizing). Updates:
+        Edge2Vert, EdgeMap, Vert2Edge, Edge2Elem (for 3 affected edges),
+        Vert2Elem (4 vertices), Elem2Edge (2 elements).  KD-trees are NOT
+        rebuilt here — caller must set ``mesh._spatial_dirty = True``.
+        """
+        adj = self.mesh.adjacencies
+        edge_map = adj['EdgeMap']
+
+        # Reuse old_eid slot for the new diagonal {v2, v3}.
+        nv2, nv3 = min(v2, v3), max(v2, v3)
+        adj['Edge2Vert'][old_eid] = [nv2, nv3]
+        del edge_map._map[(min(v0, v1), max(v0, v1))]
+        edge_map._map[(nv2, nv3)] = old_eid
+
+        # Vert2Edge: v0/v1 lose old_eid; v2/v3 gain it.
+        adj['Vert2Edge'][v0].discard(old_eid)
+        adj['Vert2Edge'][v1].discard(old_eid)
+        adj['Vert2Edge'][v2].add(old_eid)
+        adj['Vert2Edge'][v3].add(old_eid)
+
+        # Edge2Elem for new diagonal: same two elements.
+        adj['Edge2Elem'][old_eid] = [ea, eb]
+
+        # Edge2Elem for {v1,v2}: ea→eb (ea no longer owns this edge).
+        e12 = edge_map.find_edge(v1, v2)
+        if e12 is not None:
+            r = adj['Edge2Elem'][e12]
+            if int(r[0]) == ea:
+                adj['Edge2Elem'][e12, 0] = eb
+            elif int(r[1]) == ea:
+                adj['Edge2Elem'][e12, 1] = eb
+
+        # Edge2Elem for {v0,v3}: eb→ea (eb no longer owns this edge).
+        e03 = edge_map.find_edge(v0, v3)
+        if e03 is not None:
+            r = adj['Edge2Elem'][e03]
+            if int(r[0]) == eb:
+                adj['Edge2Elem'][e03, 0] = ea
+            elif int(r[1]) == eb:
+                adj['Edge2Elem'][e03, 1] = ea
+
+        # Vert2Elem: v0 leaves eb; v1 leaves ea; v2 joins eb; v3 joins ea.
+        adj['Vert2Elem'][v0].discard(eb)
+        adj['Vert2Elem'][v1].discard(ea)
+        adj['Vert2Elem'][v2].add(eb)
+        adj['Vert2Elem'][v3].add(ea)
+
+        # Elem2Edge: recompute from actual new connectivity rows.
+        conn = self.mesh.connectivity_list
+        n_cols = conn.shape[1]
+        for elem_id in (ea, eb):
+            row = conn[elem_id]
+            n_v = 3 if n_cols == 3 or int(row[2]) == int(row[3 if n_cols == 4 else 2]) else 4
+            for i in range(n_v):
+                va, vb = int(row[i]), int(row[(i + 1) % n_v])
+                if va < 0 or vb < 0 or va == vb:
+                    continue
+                eid = edge_map.find_edge(va, vb)
+                if eid is not None:
+                    adj['Elem2Edge'][elem_id, i] = eid
 
     def _is_triangle(self, elem_id: int) -> bool:
         """True if the element is a triangle (3-col row, or 4-col with a repeated vertex)."""

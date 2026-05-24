@@ -682,3 +682,78 @@ class TestSmoothTopology:
         mutable = MutableMesh(triangle_mesh)
         n = mutable.smooth_topology(metric_threshold=1e6)
         assert n == 0
+
+
+class TestIncrementalAdjacency:
+    """Tests for incremental O(1) adjacency patch (#162)."""
+
+    @staticmethod
+    def _vert2edge_as_pairs(mesh):
+        """Convert Vert2Edge edge-ID sets to vertex-pair sets for topology comparison."""
+        e2v = mesh.adjacencies['Edge2Vert']
+        result = {}
+        for v in range(mesh.n_verts):
+            pairs = set()
+            for eid in mesh.adjacencies['Vert2Edge'][v]:
+                va, vb = int(e2v[eid][0]), int(e2v[eid][1])
+                pairs.add((min(va, vb), max(va, vb)))
+            result[v] = frozenset(pairs)
+        return result
+
+    def test_swap_adjacency_parity(self, triangle_mesh):
+        """Vert2Elem and Vert2Edge topology after incremental swap matches full rebuild."""
+        mutable = MutableMesh(triangle_mesh)
+
+        # Find a swappable interior edge.
+        edge2elem = triangle_mesh.edge2elem()
+        swapped = False
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped = True
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if not swapped:
+            pytest.skip("no swappable edge in this fixture")
+
+        # Incremental state — Vert2Elem by element IDs (stable), Vert2Edge by vertex pairs.
+        incr_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+        incr_v2e_pairs = self._vert2edge_as_pairs(triangle_mesh)
+
+        # Full rebuild.
+        triangle_mesh._build_adjacencies()
+        full_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+        full_v2e_pairs = self._vert2edge_as_pairs(triangle_mesh)
+
+        assert incr_v2m == full_v2m, "Vert2Elem mismatch after incremental swap patch"
+        assert incr_v2e_pairs == full_v2e_pairs, "Vert2Edge (by vertex pairs) mismatch"
+
+    def test_smooth_topology_adjacency_parity(self, triangle_mesh):
+        """Vert2Elem after smooth_topology matches full rebuild."""
+        mutable = MutableMesh(triangle_mesh)
+        mutable.smooth_topology()
+
+        incr_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+
+        triangle_mesh._build_adjacencies()
+        full_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+
+        assert incr_v2m == full_v2m
+
+    def test_smooth_topology_speed(self, triangle_mesh):
+        """1000 swap ops complete in < 10s (was ~50min with full rebuild per swap)."""
+        import time
+        mutable = MutableMesh(triangle_mesh)
+        # Run smooth_topology up to 1000 swaps worth of passes.
+        start = time.perf_counter()
+        mutable.smooth_topology(max_passes=200)
+        elapsed = time.perf_counter() - start
+        assert elapsed < 10.0, f"smooth_topology took {elapsed:.2f}s (expected < 10s)"

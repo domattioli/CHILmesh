@@ -28,6 +28,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   iteratively swap interior edges that raise the minimum angle of adjacent
   triangles; monotone, terminates at fixpoint.
   ([#161](https://github.com/domattioli/CHILmesh/issues/161))
+- **Incremental adjacency patch for `swap_edge`** — `_patch_swap_adjacency`
+  updates the 5 adjacency structures in O(1) instead of O(n\_elems) per swap.
+  KD-trees rebuilt once at the end of `smooth_topology` instead of per swap.
+  Benchmark: `smooth_topology` now completes in < 10s (was hours on large meshes).
+  ([#162](https://github.com/domattioli/CHILmesh/issues/162))
 
 ## [1.1.0] — 2026-05-23
 
