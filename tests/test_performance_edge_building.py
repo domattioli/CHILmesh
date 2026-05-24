@@ -182,3 +182,33 @@ class TestEdgeMapBackwardCompatibility:
         # Should have valid elements after smoothing
         areas = mesh_copy.signed_area()
         assert (areas > 0).all(), f"{mesh_name} has negative areas after smoothing"
+
+
+class TestVectorizedAdjacencyBuild:
+    """Regression benchmarks for #164 vectorized _build_adjacencies."""
+
+    @pytest.mark.parametrize("mesh_name", ["annulus", "donut", "structured"])
+    def test_build_adjacencies_under_20ms(self, mesh_name):
+        """Vectorized build should complete in < 20ms for small fixtures."""
+        import time
+        mesh = getattr(examples, mesh_name)()
+        # Warm-up
+        mesh._build_adjacencies()
+        t0 = time.perf_counter()
+        for _ in range(5):
+            mesh._build_adjacencies()
+        elapsed = (time.perf_counter() - t0) / 5
+        assert elapsed < 0.02, (
+            f"{mesh_name} _build_adjacencies took {elapsed*1000:.1f} ms, expected < 20 ms"
+        )
+
+    @pytest.mark.parametrize("mesh_name", ["annulus", "donut", "structured"])
+    def test_adjacency_structures_consistent_after_rebuild(self, mesh_name):
+        """Edge counts and structure are stable across multiple rebuilds."""
+        mesh = getattr(examples, mesh_name)()
+        n_edges_first = mesh.n_edges
+        mesh._build_adjacencies()
+        assert mesh.n_edges == n_edges_first
+        for eid in range(mesh.n_edges):
+            va, vb = int(mesh.adjacencies["Edge2Vert"][eid, 0]), int(mesh.adjacencies["Edge2Vert"][eid, 1])
+            assert mesh.adjacencies["EdgeMap"].find_edge(va, vb) == eid

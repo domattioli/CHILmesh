@@ -494,48 +494,101 @@ class CHILmesh(CHILmeshPlotMixin):
         return tri_elems, quad_elems
     
     def _build_adjacencies( self ) -> None:
-        """Build adjacency lists for the mesh"""
-        # Identify triangular and quadrilateral elements
+        """Build adjacency lists for the mesh (vectorized)."""
+        from .mesh_topology import EdgeMap
+
         tri_elems, quad_elems = self._elem_type()
-        
-        # Set mesh type based on element types
-        if len( quad_elems ) == 0:
+        if len(quad_elems) == 0:
             self.type = "Triangular"
-        elif len( tri_elems ) == 0:
+        elif len(tri_elems) == 0:
             self.type = "Quadrilateral"
         else:
             self.type = "Mixed-Element"
-            # For mixed-element mesh, triangles may need adjustment for consistency
-            if self.connectivity_list.shape[1] == 4:  # Already have space for 4 vertices
-                for elem_id in tri_elems:
-                    self.connectivity_list[elem_id, 3] = self.connectivity_list[elem_id, 0]
-        
-        # Identify edges of the mesh
-        edges, edge_map = self._identify_edges()
-        edge2vert = np.array( edges )
-        self.n_edges = len( edge2vert )
+            if self.connectivity_list.shape[1] == 4:
+                self.connectivity_list[tri_elems, 3] = self.connectivity_list[tri_elems, 0]
 
-        # Build Elem2Edge
-        elem2edge = self._build_elem2edge( edge2vert, edge_map )
+        conn = self.connectivity_list
+        n_elems, n_cols = conn.shape[0], conn.shape[1]
+        n_verts = self.n_verts
 
-        # Build Vert2Edge
-        vert2edge = self._build_vert2edge( edge2vert )
+        # Build flat (elem, slot) → (v0, v1) arrays in element-major, slot-minor order
+        # (same traversal order as the legacy Python loop) so first-encounter edge IDs
+        # remain consistent with the C++ backend.
+        v0 = conn.ravel(order='C').astype(np.int64)
+        v1 = np.roll(conn, -1, axis=1).ravel(order='C').astype(np.int64)
+        elem_flat = np.repeat(np.arange(n_elems, dtype=np.int64), n_cols)
+        slot_flat = np.tile(np.arange(n_cols, dtype=np.int64), n_elems)
 
-        # Build Vert2Elem
-        vert2elem = self._build_vert2elem()
+        valid = (v0 >= 0) & (v1 >= 0) & (v0 != v1)
+        v0 = v0[valid]; v1 = v1[valid]
+        elem_flat = elem_flat[valid]; slot_flat = slot_flat[valid]
 
-        # Build Edge2Elem
-        edge2elem = self._build_edge2elem( edge2vert, edge_map )
+        edges_canon = np.column_stack([np.minimum(v0, v1), np.maximum(v0, v1)])
+        unique_lex, first_occur, inverse_lex = np.unique(
+            edges_canon, axis=0, return_index=True, return_inverse=True
+        )
+        # Restore first-encounter ordering so edge IDs match the C++ backend.
+        insert_order = np.argsort(first_occur, kind='stable')
+        unique_edges = unique_lex[insert_order]
+        lex_to_ins = np.empty(len(insert_order), dtype=np.int64)
+        lex_to_ins[insert_order] = np.arange(len(insert_order), dtype=np.int64)
+        inverse = lex_to_ins[inverse_lex]
 
-        # Store adjacencies
+        n_edges = len(unique_edges)
+        self.n_edges = n_edges
+        edge2vert = unique_edges
+
+        elem2edge = np.zeros((n_elems, n_cols), dtype=int)
+        elem2edge[elem_flat, slot_flat] = inverse
+
+        edge2elem = np.full((n_edges, 2), -1, dtype=int)
+        ord2 = np.argsort(inverse, kind='stable')
+        si = inverse[ord2]; se = elem_flat[ord2]
+        keep = np.ones(len(si), dtype=bool)
+        keep[1:] = ~((si[1:] == si[:-1]) & (se[1:] == se[:-1]))
+        si = si[keep]; se = se[keep]
+        new_grp = np.concatenate([[True], si[1:] != si[:-1]])
+        edge2elem[si, np.where(new_grp, 0, 1)] = se
+
+        edge_map = EdgeMap()
+        edge_map._map = {(int(r[0]), int(r[1])): i for i, r in enumerate(unique_edges)}
+        edge_map._next_id = n_edges
+
+        e_ids = np.arange(n_edges, dtype=np.int64)
+        verts_e = np.concatenate([unique_edges[:, 0], unique_edges[:, 1]])
+        edges_e = np.tile(e_ids, 2)
+        oe = np.argsort(verts_e, kind='stable')
+        sve = verts_e[oe]; see = edges_e[oe]
+        bnde = np.concatenate([[0], np.where(sve[1:] != sve[:-1])[0] + 1, [len(sve)]])
+        vert2edge: Dict[int, Set[int]] = {}
+        for k in range(len(bnde) - 1):
+            vert2edge[int(sve[bnde[k]])] = set(see[bnde[k]:bnde[k + 1]].tolist())
+        for v in range(n_verts):
+            if v not in vert2edge:
+                vert2edge[v] = set()
+
+        flat_v = conn.ravel().astype(np.int64)
+        flat_e2 = np.repeat(np.arange(n_elems, dtype=np.int64), n_cols)
+        ok = flat_v >= 0
+        flat_v = flat_v[ok]; flat_e2 = flat_e2[ok]
+        ov = np.argsort(flat_v, kind='stable')
+        svv = flat_v[ov]; sev = flat_e2[ov]
+        bndv = np.concatenate([[0], np.where(svv[1:] != svv[:-1])[0] + 1, [len(svv)]])
+        vert2elem: Dict[int, Set[int]] = {}
+        for k in range(len(bndv) - 1):
+            vert2elem[int(svv[bndv[k]])] = set(sev[bndv[k]:bndv[k + 1]].tolist())
+        for v in range(n_verts):
+            if v not in vert2elem:
+                vert2elem[v] = set()
+
         self.adjacencies = {
-            "Elem2Vert": self.connectivity_list,
+            "Elem2Vert": conn,
             "Edge2Vert": edge2vert,
             "EdgeMap": edge_map,
             "Elem2Edge": elem2edge,
             "Vert2Edge": vert2edge,
             "Vert2Elem": vert2elem,
-            "Edge2Elem": edge2elem
+            "Edge2Elem": edge2elem,
         }
         self._validate_adjacencies()
 
@@ -579,198 +632,6 @@ class CHILmesh(CHILmeshPlotMixin):
             for elem_id in v2m[vert_id]:
                 assert 0 <= elem_id < self.n_elems, f"Invalid element ID {elem_id} in Vert2Elem[{vert_id}]"
 
-    def _identify_edges( self ) -> Tuple[List[Tuple[int, int]], 'EdgeMap']:
-        """
-        Identify edges of the mesh.
-
-        Builds both a list of edges (for backward compatibility) and an
-        EdgeMap (for O(1) lookups in subsequent operations).
-
-        Returns:
-            Tuple of (edges_list, edge_map) where:
-            - edges_list: List of edges as (v1, v2) tuples in sorted order
-            - edge_map: EdgeMap object for O(1) edge ID lookup
-        """
-        from .mesh_topology import EdgeMap
-
-        edge_map = EdgeMap()
-        seen = set()
-
-        for elem_id in range( self.n_elems ):
-            vertices = self.connectivity_list[elem_id]
-            n_vertices = 3 if self.type == "Triangular" else 4
-
-            for i in range( n_vertices ):
-                v1 = vertices[i]
-                v2 = vertices[(i+1) % n_vertices]
-
-                # Skip invalid edges (negative vertex ids or padding edges v==v in padded triangles)
-                # In MATLAB the value 0 signified a placeholder for a missing
-                # vertex in mixed element meshes.  In this Python port we use
-                # 0-based indexing, therefore vertex id ``0`` is valid and
-                # should not be discarded.  Only negative ids are considered
-                # invalid.
-                if v1 < 0 or v2 < 0 or v1 == v2:
-                    continue
-
-                # Store edge in canonical form to check for duplicates
-                edge = tuple( sorted( [int(v1), int(v2)] ) )
-                if edge not in seen:
-                    seen.add( edge )
-                    # Add to EdgeMap (maintains consistent ID ordering)
-                    edge_map.add_edge(edge[0], edge[1])
-
-        # Return edges in EdgeMap order to ensure IDs match
-        return edge_map.to_list(), edge_map
-    
-    def _build_elem2edge( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
-        """
-        Build Elem2Edge adjacency.
-
-        Parameters:
-            edge2vert: Edge-to-vertex adjacency (ndarray)
-            edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
-
-        Returns:
-            Element-to-edge adjacency
-
-        Note:
-            If edge_map is provided, uses O(1) lookups instead of linear search,
-            reducing complexity from O(n²) to O(n log n).
-        """
-        max_edges_per_elem = 4 if self.type != "Triangular" else 3
-        elem2edge = np.zeros( ( self.n_elems, max_edges_per_elem ), dtype=int )
-
-        # For each element
-        for elem_id in range( self.n_elems ):
-            vertices = self.connectivity_list[elem_id]
-            n_vertices = 3 if self.type == "Triangular" else 4
-
-            # For each edge of the element
-            for i in range( n_vertices ):
-                v1 = vertices[i]
-                v2 = vertices[(i+1) % n_vertices]
-
-                # Skip invalid edges (negative vertex ids or padding edges v==v in padded triangles)
-                if v1 < 0 or v2 < 0 or v1 == v2:
-                    continue
-
-                # Find the edge index using EdgeMap if available (O(1))
-                # Otherwise fall back to linear search (O(n))
-                if edge_map is not None:
-                    edge_id = edge_map.find_edge(int(v1), int(v2))
-                    if edge_id is not None:
-                        elem2edge[elem_id, i] = edge_id
-                else:
-                    edge = tuple( sorted( [int(v1), int(v2)] ) )
-                    for j, e in enumerate( edge2vert ):
-                        if set( e ) == set( edge ):
-                            elem2edge[elem_id, i] = j
-                            break
-
-        return elem2edge
-
-    def _build_vert2edge( self, edge2vert: np.ndarray ) -> Dict[int, Set[int]]:
-        """
-        Build Vert2Edge adjacency as explicit dict with set values.
-
-        Maps each vertex to the set of edge IDs incident to that vertex.
-
-        Parameters:
-            edge2vert: Edge-to-vertex adjacency (n_edges x 2 array)
-
-        Returns:
-            Dict mapping vertex ID to Set of incident edge IDs
-        """
-        vert2edge: Dict[int, Set[int]] = {}
-        for vert_id in range(self.n_verts):
-            vert2edge[vert_id] = set()
-
-        for edge_id, (v1, v2) in enumerate(edge2vert):
-            vert2edge[int(v1)].add(edge_id)
-            vert2edge[int(v2)].add(edge_id)
-
-        return vert2edge
-    
-    def _build_vert2elem( self ) -> Dict[int, Set[int]]:
-        """
-        Build Vert2Elem adjacency as explicit dict with set values.
-
-        Maps each vertex to the set of element IDs incident to that vertex.
-
-        Parameters:
-            None
-
-        Returns:
-            Dict mapping vertex ID to Set of incident element IDs
-        """
-        vert2elem: Dict[int, Set[int]] = {}
-        for vert_id in range(self.n_verts):
-            vert2elem[vert_id] = set()
-
-        for elem_id in range(self.n_elems):
-            vertices = self.connectivity_list[elem_id]
-            for v in vertices:
-                if v >= 0:
-                    vert2elem[int(v)].add(elem_id)
-
-        return vert2elem
-    
-    def _build_edge2elem( self, edge2vert: np.ndarray, edge_map: 'EdgeMap' = None ) -> np.ndarray:
-        """
-        Build Edge2Elem adjacency.
-
-        Parameters:
-            edge2vert: Edge-to-vertex adjacency (ndarray)
-            edge_map: EdgeMap for O(1) edge lookup (optional, for optimization)
-
-        Returns:
-            Edge-to-element adjacency (n_edges × 2 with -1 for boundary)
-
-        Note:
-            If edge_map is provided, uses O(1) lookups instead of linear search,
-            reducing complexity from O(n²) to O(n log n).
-        """
-        # Initialize with -1 sentinel (no adjacent element)
-        edge2elem = np.full( ( self.n_edges, 2 ), -1, dtype=int )
-
-        # Iterate through elements and their edges
-        for elem_id in range( self.n_elems ):
-            vertices = self.connectivity_list[elem_id]
-            n_vertices = 3 if self.type == "Triangular" else 4
-
-            # For each edge of the element
-            for i in range( n_vertices ):
-                v1 = vertices[i]
-                v2 = vertices[(i+1) % n_vertices]
-
-                # Skip invalid edges (negative vertex ids)
-                if v1 < 0 or v2 < 0:
-                    continue
-
-                # Find the edge index using EdgeMap if available (O(1))
-                # Otherwise fall back to linear search (O(n))
-                if edge_map is not None:
-                    edge_id = edge_map.find_edge(int(v1), int(v2))
-                    if edge_id is not None:
-                        # Check if edge already has an element assigned
-                        if edge2elem[edge_id, 0] == -1:
-                            edge2elem[edge_id, 0] = elem_id
-                        else:
-                            edge2elem[edge_id, 1] = elem_id
-                else:
-                    edge = tuple( sorted( [int(v1), int(v2)] ) )
-                    for edge_id, e in enumerate( edge2vert ):
-                        if set( e ) == set( edge ):
-                            # Check if edge already has an element assigned
-                            if edge2elem[edge_id, 0] == -1:
-                                edge2elem[edge_id, 0] = elem_id
-                            else:
-                                edge2elem[edge_id, 1] = elem_id
-                            break
-
-        return edge2elem
-    
     def boundary_edges( self ) -> np.ndarray:
         """
         Identify boundary edges of the mesh.

@@ -997,8 +997,8 @@ class MutableMesh:
         The two shared-edge vertices become opposite corners' neighbours and
         the shared edge is dropped (it becomes the quad's interior diagonal).
         ``elem_b`` is marked deleted with the negative-vertex sentinel (``-1``),
-        which every adjacency builder skips (see ``_identify_edges`` and
-        ``_build_vert2elem``: only ``v >= 0`` are kept). Using ``-1`` rather
+        which the adjacency builder skips (only ``v >= 0`` entries are kept).
+        Using ``-1`` rather
         than ``0`` avoids spuriously binding the deleted row to vertex 0.
 
         A triangle-only (3-column) table is widened to 4 columns first, padding
