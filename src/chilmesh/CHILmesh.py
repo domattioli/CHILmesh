@@ -1714,17 +1714,20 @@ class CHILmesh(CHILmeshPlotMixin):
             c = (ux*wx + uy*wy) / _math.sqrt(lu2 * lw2)
             return _math.acos(max(-1.0, min(1.0, c))) * _R2D
 
-        def _local_min_quality(verts_lists, v_idx, vpos, p_cur):
-            """Min angular-skewness quality over incident elements (matches elem_quality)."""
-            vpx, vpy = float(vpos[0]), float(vpos[1])
+        def _local_min_quality_fast(v_idx, vpos, p_cur, cached_elem_verts):
+            """Fast quality check using pre-computed element vertices."""
+            vpx, vpy = vpos[0], vpos[1]
             min_q = 1e9
-            for verts in verts_lists:
-                n_v = len(verts)
-                px = [vpx if vi == v_idx else float(p_cur[vi][0]) for vi in verts]
-                py = [vpy if vi == v_idx else float(p_cur[vi][1]) for vi in verts]
+            for ev in cached_elem_verts:
+                n_v = len(ev)
+                px = np.empty(n_v); py = np.empty(n_v)
+                for i, vi in enumerate(ev):
+                    if vi == v_idx:
+                        px[i] = vpx; py[i] = vpy
+                    else:
+                        px[i] = p_cur[vi, 0]; py[i] = p_cur[vi, 1]
 
                 if n_v == 3:
-                    # Area check
                     dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
                     dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
                     if dx1*dy2 - dy1*dx2 <= 0.0:
@@ -1735,7 +1738,6 @@ class CHILmesh(CHILmeshPlotMixin):
                     amax = max(a0, a1, a2); amin = min(a0, a1, a2)
                     q = 1.0 - max((amax - 60.0) / 120.0, (60.0 - amin) / 60.0)
                 else:
-                    # Quad: check two sub-triangle areas
                     dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
                     dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
                     if dx1*dy2 - dy1*dx2 <= 0.0:
@@ -1752,11 +1754,11 @@ class CHILmesh(CHILmeshPlotMixin):
                     q = 1.0 - max((amax - 90.0) / 90.0, (90.0 - amin) / 90.0)
                 if q < min_q:
                     min_q = q
-
             return min_q
 
         for _iter in range(n_iter):
             max_move = 0.0
+            elem_verts_cache = {}  # Cache element vertex lists per iteration
 
             for v in range(n):
                 if v in boundary_set:
@@ -1769,6 +1771,11 @@ class CHILmesh(CHILmeshPlotMixin):
                 ring = self._ordered_vertex_ring(v, elem_ids)
                 if ring is None or len(ring) < 2:
                     continue
+
+                # Cache element verts for this vertex (reuse in line search)
+                if v not in elem_verts_cache:
+                    elem_verts_cache[v] = [_elem_verts(self.connectivity_list[eid]) for eid in elem_ids]
+                cached_ev = elem_verts_cache[v]
 
                 m_ring = len(ring)
                 theta_star = two_pi / m_ring
@@ -1795,7 +1802,6 @@ class CHILmesh(CHILmeshPlotMixin):
                     bl = np.linalg.norm(bisector)
                     bisector = bisector / bl if bl > 1e-10 else np.array([-ua[1], ua[0]])
 
-                    # Cap deficit: prevents wild corrections for near-degenerate sectors
                     deficit = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)
                     avg_len = (la + lb) * 0.5
                     correction += deficit * avg_len * bisector
@@ -1803,16 +1809,14 @@ class CHILmesh(CHILmeshPlotMixin):
                 if np.linalg.norm(correction) < 1e-14:
                     continue
 
-                ev_lists = [_elem_verts(self.connectivity_list[eid]) for eid in elem_ids]
-                current_q = _local_min_quality(ev_lists, v, v_pos, p)
+                current_q = _local_min_quality_fast(v, v_pos, p, cached_ev)
 
-                # Line search: accept only when local minimum quality strictly improves
                 step = omega * correction / m_ring
                 scale = 1.0
                 accepted = False
                 for _ in range(6):
                     candidate = v_pos + scale * step
-                    new_q = _local_min_quality(ev_lists, v, candidate, p)
+                    new_q = _local_min_quality_fast(v, candidate, p, cached_ev)
                     if new_q > current_q:
                         accepted = True
                         break
