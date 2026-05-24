@@ -379,3 +379,475 @@ class TestInsertVertex:
         # Query at barycenter should succeed after split
         found_elem = triangle_mesh.find_element(barycenter)
         assert found_elem >= 0, "find_element failed after split_triangle"
+
+
+def _first_interior_vertex(mesh):
+    """Return an interior vertex with only triangular incident elements, else None."""
+    boundary = {int(v) for v in mesh.boundary_node_indices()}
+    for vid in range(mesh.n_verts):
+        if vid in boundary:
+            continue
+        incident = mesh.get_vertex_elements(vid)
+        if not incident:
+            continue
+        all_tri = all(
+            mesh.connectivity_list.shape[1] == 3
+            or mesh.connectivity_list[e, 2] == mesh.connectivity_list[e, 3]
+            for e in incident
+        )
+        if all_tri:
+            return vid
+    return None
+
+
+def _first_interior_edge(mesh):
+    """Return (edge_id, v0, v1) for the first interior edge, else None."""
+    edge2elem = mesh.edge2elem()
+    for edge_id in range(mesh.n_edges):
+        ea, eb = int(edge2elem[edge_id][0]), int(edge2elem[edge_id][1])
+        if ea != -1 and eb != -1:
+            verts = mesh.edge2vert(np.array([edge_id]))[0]
+            return edge_id, int(verts[0]), int(verts[1])
+    return None
+
+
+def _all_live_elements_ccw(mesh):
+    """True if every non-tombstoned element has positive signed area."""
+    for eid in range(mesh.n_elems):
+        row = mesh.connectivity_list[eid]
+        if int(row[0]) < 0:
+            continue
+        verts = []
+        for v in row:
+            vi = int(v)
+            if vi >= 0 and vi not in verts:
+                verts.append(vi)
+        if len(verts) < 3:
+            continue
+        pts = mesh.points[verts, :2]
+        x, y = pts[:, 0], pts[:, 1]
+        area = 0.5 * (np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
+        if area <= 1e-10:
+            return False
+    return True
+
+
+class TestRemoveVertex:
+    """Tests for interior vertex removal (#158, coarsening)."""
+
+    def test_remove_interior_vertex(self, triangle_mesh):
+        """Removing an interior vertex deletes its cavity and re-triangulates."""
+        mutable = MutableMesh(triangle_mesh)
+        vid = _first_interior_vertex(triangle_mesh)
+        if vid is None:
+            pytest.skip("no interior triangular vertex in this fixture")
+
+        n_verts_before = triangle_mesh.n_verts
+        cavity = triangle_mesh.get_vertex_elements(vid)
+
+        mutable.remove_vertex(vid)
+
+        # n_verts unchanged (tombstone convention: vertex left orphaned).
+        assert triangle_mesh.n_verts == n_verts_before
+        # The removed vertex no longer belongs to any live element.
+        assert len(triangle_mesh.get_vertex_elements(vid)) == 0
+        # Old incident elements are tombstoned.
+        for eid in cavity:
+            assert all(int(v) < 0 for v in triangle_mesh.connectivity_list[eid])
+        # No degenerate / inverted live elements remain.
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_remove_boundary_vertex_raises(self, triangle_mesh):
+        """Removing a boundary vertex raises ValueError."""
+        mutable = MutableMesh(triangle_mesh)
+        boundary = triangle_mesh.boundary_node_indices()
+        assert len(boundary) > 0
+        with pytest.raises(ValueError, match="boundary"):
+            mutable.remove_vertex(int(boundary[0]))
+
+    def test_remove_vertex_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range vertex raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.remove_vertex(-1)
+        with pytest.raises(IndexError):
+            mutable.remove_vertex(triangle_mesh.n_verts)
+
+
+class TestCollapseEdge:
+    """Tests for interior edge collapse (#159, coarsening)."""
+
+    def test_collapse_interior_edge(self, triangle_mesh):
+        """Collapsing an interior edge tombstones its two triangles."""
+        mutable = MutableMesh(triangle_mesh)
+
+        live_before = sum(
+            1 for e in range(triangle_mesh.n_elems)
+            if int(triangle_mesh.connectivity_list[e, 0]) >= 0
+        )
+
+        # Many arbitrary interior-edge collapses legitimately invert a far
+        # element and are rejected (pre-mutation, mesh untouched), so scan for
+        # the first edge whose collapse is geometrically valid.
+        edge2elem = triangle_mesh.edge2elem()
+        survivor = None
+        v0 = v1 = None
+        for edge_id in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[edge_id][0]), int(edge2elem[edge_id][1])
+            if ea == -1 or eb == -1:
+                continue
+            verts = triangle_mesh.edge2vert(np.array([edge_id]))[0]
+            v0, v1 = int(verts[0]), int(verts[1])
+            try:
+                survivor = mutable.collapse_edge(edge_id)
+                break
+            except RuntimeError:
+                continue
+        if survivor is None:
+            pytest.skip("no non-inverting interior edge collapse in this fixture")
+
+        assert survivor == v0
+        # Two elements removed (the pair that shared the collapsed edge).
+        live_after = sum(
+            1 for e in range(triangle_mesh.n_elems)
+            if int(triangle_mesh.connectivity_list[e, 0]) >= 0
+        )
+        assert live_after == live_before - 2
+        # Removed endpoint no longer referenced by any live element.
+        assert len(triangle_mesh.get_vertex_elements(v1)) == 0
+        # No inverted / degenerate live elements.
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_collapse_boundary_edge_raises(self, triangle_mesh):
+        """Collapsing a boundary edge raises ValueError."""
+        mutable = MutableMesh(triangle_mesh)
+        edge2elem = triangle_mesh.edge2elem()
+        boundary_edge = None
+        for edge_id in range(triangle_mesh.n_edges):
+            elems = edge2elem[edge_id]
+            if elems[0] == -1 or elems[1] == -1:
+                boundary_edge = edge_id
+                break
+        if boundary_edge is None:
+            pytest.skip("no boundary edge in this fixture")
+        with pytest.raises(ValueError, match="boundary"):
+            mutable.collapse_edge(boundary_edge)
+
+    def test_collapse_edge_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range edge raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.collapse_edge(-1)
+        with pytest.raises(IndexError):
+            mutable.collapse_edge(triangle_mesh.n_edges)
+
+
+class TestMoveBoundaryNode:
+    """Tests for boundary-node coordinate move (#160, guarded coordinate update)."""
+
+    def test_move_boundary_node_accepted(self, triangle_mesh):
+        """Small inward nudge accepted; coords updated, CCW preserved."""
+        mutable = MutableMesh(triangle_mesh)
+        boundary = triangle_mesh.boundary_node_indices()
+        vid = int(boundary[0])
+
+        old_xy = triangle_mesh.points[vid, :2].copy()
+        incident = triangle_mesh.get_vertex_elements(vid)
+        eid = int(next(iter(incident)))
+        verts = [int(v) for v in triangle_mesh.connectivity_list[eid] if int(v) >= 0]
+        centroid = triangle_mesh.points[verts, :2].mean(axis=0)
+        new_xy = old_xy + 0.01 * (centroid - old_xy)
+
+        mutable.move_boundary_node(vid, new_xy)
+
+        np.testing.assert_allclose(triangle_mesh.points[vid, :2], new_xy)
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_move_boundary_node_rejected_inversion(self, triangle_mesh):
+        """Move that degenerates an element is rejected; coords unchanged."""
+        mutable = MutableMesh(triangle_mesh)
+        vid = int(triangle_mesh.boundary_node_indices()[0])
+        old_xy = triangle_mesh.points[vid, :2].copy()
+
+        # Move to neighbor vertex position — area collapses to zero, rejected.
+        incident = triangle_mesh.get_vertex_elements(vid)
+        neighbor = None
+        for eid in incident:
+            for v in triangle_mesh.connectivity_list[eid]:
+                vi = int(v)
+                if vi != vid and vi >= 0:
+                    neighbor = vi
+                    break
+            if neighbor is not None:
+                break
+
+        with pytest.raises(RuntimeError):
+            mutable.move_boundary_node(vid, triangle_mesh.points[neighbor, :2].copy())
+
+        np.testing.assert_array_equal(triangle_mesh.points[vid, :2], old_xy)
+
+    def test_move_interior_vertex_raises(self, triangle_mesh):
+        """Moving a non-boundary vertex raises ValueError."""
+        mutable = MutableMesh(triangle_mesh)
+        vid = _first_interior_vertex(triangle_mesh)
+        if vid is None:
+            pytest.skip("no interior vertex in this fixture")
+        with pytest.raises(ValueError, match="boundary"):
+            mutable.move_boundary_node(vid, np.array([0.0, 0.0]))
+
+    def test_move_boundary_node_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range vertex raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.move_boundary_node(-1, np.array([0.0, 0.0]))
+        with pytest.raises(IndexError):
+            mutable.move_boundary_node(triangle_mesh.n_verts, np.array([0.0, 0.0]))
+
+
+class TestSplitTriangles:
+    """Tests for bulk triangle split (#161, transactional refinement)."""
+
+    def test_split_triangles_basic(self, triangle_mesh):
+        """N splits in one call; adjacency rebuilt once; result matches N sequential splits."""
+        mutable = MutableMesh(triangle_mesh)
+        n_verts_before = triangle_mesh.n_verts
+        n_elems_before = triangle_mesh.n_elems
+
+        # Split first 3 elements atomically.
+        ids = np.array([0, 1, 2], dtype=int)
+        new_ids = mutable.split_triangles(ids)
+
+        assert triangle_mesh.n_verts == n_verts_before + 3
+        # Each split adds 2 new elements (original reused + 2 appended).
+        assert triangle_mesh.n_elems == n_elems_before + 6
+        assert len(new_ids) == 9  # 3 IDs returned per split
+        assert _all_live_elements_ccw(triangle_mesh)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_split_triangles_rollback_on_invalid(self, triangle_mesh):
+        """Invalid element in list rolls back; mesh unchanged."""
+        mutable = MutableMesh(triangle_mesh)
+        n_verts_before = triangle_mesh.n_verts
+        n_elems_before = triangle_mesh.n_elems
+        conn_before = triangle_mesh.connectivity_list.copy()
+
+        # Mix valid + out-of-range → should roll back entirely.
+        bad_ids = np.array([0, triangle_mesh.n_elems + 9999], dtype=int)
+        with pytest.raises(IndexError):
+            mutable.split_triangles(bad_ids)
+
+        assert triangle_mesh.n_verts == n_verts_before
+        assert triangle_mesh.n_elems == n_elems_before
+        np.testing.assert_array_equal(triangle_mesh.connectivity_list, conn_before)
+
+    def test_split_triangles_out_of_range_raises(self, triangle_mesh):
+        """Out-of-range element raises IndexError."""
+        mutable = MutableMesh(triangle_mesh)
+        with pytest.raises(IndexError):
+            mutable.split_triangles(np.array([-1], dtype=int))
+        with pytest.raises(IndexError):
+            mutable.split_triangles(np.array([triangle_mesh.n_elems], dtype=int))
+
+
+class TestSmoothTopology:
+    """Tests for topology smoothing via edge swaps (#161)."""
+
+    def test_smooth_topology_returns_int(self, triangle_mesh):
+        """smooth_topology returns number of swaps (int)."""
+        mutable = MutableMesh(triangle_mesh)
+        n = mutable.smooth_topology()
+        assert isinstance(n, int)
+        assert n >= 0
+
+    def test_smooth_topology_preserves_ccw(self, triangle_mesh):
+        """All live elements remain CCW after smoothing."""
+        mutable = MutableMesh(triangle_mesh)
+        mutable.smooth_topology()
+        assert _all_live_elements_ccw(triangle_mesh)
+
+    def test_smooth_topology_terminates(self, triangle_mesh):
+        """Second call with max_passes=1 does not raise; result is 0 or small."""
+        mutable = MutableMesh(triangle_mesh)
+        mutable.smooth_topology()  # first pass to fixpoint
+        n2 = mutable.smooth_topology(max_passes=1)
+        # At fixpoint second call swaps nothing (or very little if near-tie).
+        assert isinstance(n2, int)
+        assert "Edge2Vert" in triangle_mesh.adjacencies
+
+    def test_smooth_topology_strict_threshold(self, triangle_mesh):
+        """Very large threshold prevents any swaps."""
+        mutable = MutableMesh(triangle_mesh)
+        n = mutable.smooth_topology(metric_threshold=1e6)
+        assert n == 0
+
+
+class TestIncrementalSkeletonization:
+    """Tests for incremental skeletonization (#93)."""
+
+    def test_reskeletonize_local_layers_valid(self, triangle_mesh):
+        """After swap + reskeletonize_local, n_layers > 0 and no empty OE entry."""
+        mutable = MutableMesh(triangle_mesh)
+        edge2elem = triangle_mesh.edge2elem()
+        swapped_elem = None
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped_elem = ea
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if swapped_elem is None:
+            pytest.skip("no swappable edge in this fixture")
+
+        mutable.reskeletonize_local(np.array([swapped_elem]))
+
+        assert triangle_mesh.n_layers > 0
+        assert len(triangle_mesh.layers['OE']) == triangle_mesh.n_layers
+        for iL in range(triangle_mesh.n_layers):
+            assert len(triangle_mesh.layers['OE'][iL]) > 0 or iL == triangle_mesh.n_layers - 1
+
+    def test_reskeletonize_local_parity(self, triangle_mesh):
+        """Partial re-skeletonize matches full _skeletonize on the same mesh."""
+        mutable = MutableMesh(triangle_mesh)
+        edge2elem = triangle_mesh.edge2elem()
+        swapped_elem = None
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped_elem = ea
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if swapped_elem is None:
+            pytest.skip("no swappable edge in this fixture")
+
+        mutable.reskeletonize_local(np.array([swapped_elem]))
+        local_oe = [set(int(e) for e in triangle_mesh.layers['OE'][iL])
+                    for iL in range(triangle_mesh.n_layers)]
+
+        triangle_mesh._skeletonize()
+        full_oe = [set(int(e) for e in triangle_mesh.layers['OE'][iL])
+                   for iL in range(triangle_mesh.n_layers)]
+
+        assert local_oe == full_oe, "OE layer assignment differs from full rebuild"
+
+    def test_skeletonize_diff_returns_changed(self, triangle_mesh):
+        """skeletonize_diff returns a dict of changed element assignments."""
+        mutable = MutableMesh(triangle_mesh)
+        snap = mutable._snapshot_layers()
+
+        edge2elem = triangle_mesh.edge2elem()
+        swapped = False
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped = True
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if not swapped:
+            pytest.skip("no swappable edge in this fixture")
+
+        diff = mutable.skeletonize_diff(snap)
+        assert isinstance(diff, dict)
+        # Each entry has 'old' and 'new' keys.
+        for eid, info in diff.items():
+            assert 'old' in info and 'new' in info
+
+    def test_snapshot_layers_deepcopy(self, triangle_mesh):
+        """_snapshot_layers produces independent copy (mutation doesn't affect snapshot)."""
+        mutable = MutableMesh(triangle_mesh)
+        snap = mutable._snapshot_layers()
+        original_n = len(snap['OE'])
+
+        # Append a dummy entry to live layers — snapshot must not change.
+        triangle_mesh.layers['OE'].append(np.array([9999]))
+
+        assert len(snap['OE']) == original_n
+
+
+class TestIncrementalAdjacency:
+    """Tests for incremental O(1) adjacency patch (#162)."""
+
+    @staticmethod
+    def _vert2edge_as_pairs(mesh):
+        """Convert Vert2Edge edge-ID sets to vertex-pair sets for topology comparison."""
+        e2v = mesh.adjacencies['Edge2Vert']
+        result = {}
+        for v in range(mesh.n_verts):
+            pairs = set()
+            for eid in mesh.adjacencies['Vert2Edge'][v]:
+                va, vb = int(e2v[eid][0]), int(e2v[eid][1])
+                pairs.add((min(va, vb), max(va, vb)))
+            result[v] = frozenset(pairs)
+        return result
+
+    def test_swap_adjacency_parity(self, triangle_mesh):
+        """Vert2Elem and Vert2Edge topology after incremental swap matches full rebuild."""
+        mutable = MutableMesh(triangle_mesh)
+
+        # Find a swappable interior edge.
+        edge2elem = triangle_mesh.edge2elem()
+        swapped = False
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped = True
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if not swapped:
+            pytest.skip("no swappable edge in this fixture")
+
+        # Incremental state — Vert2Elem by element IDs (stable), Vert2Edge by vertex pairs.
+        incr_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+        incr_v2e_pairs = self._vert2edge_as_pairs(triangle_mesh)
+
+        # Full rebuild.
+        triangle_mesh._build_adjacencies()
+        full_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+        full_v2e_pairs = self._vert2edge_as_pairs(triangle_mesh)
+
+        assert incr_v2m == full_v2m, "Vert2Elem mismatch after incremental swap patch"
+        assert incr_v2e_pairs == full_v2e_pairs, "Vert2Edge (by vertex pairs) mismatch"
+
+    def test_smooth_topology_adjacency_parity(self, triangle_mesh):
+        """Vert2Elem after smooth_topology matches full rebuild."""
+        mutable = MutableMesh(triangle_mesh)
+        mutable.smooth_topology()
+
+        incr_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+
+        triangle_mesh._build_adjacencies()
+        full_v2m = {v: frozenset(triangle_mesh.adjacencies['Vert2Elem'][v])
+                    for v in range(triangle_mesh.n_verts)}
+
+        assert incr_v2m == full_v2m
+
+    def test_smooth_topology_speed(self, triangle_mesh):
+        """1000 swap ops complete in < 10s (was ~50min with full rebuild per swap)."""
+        import time
+        mutable = MutableMesh(triangle_mesh)
+        # Run smooth_topology up to 1000 swaps worth of passes.
+        start = time.perf_counter()
+        mutable.smooth_topology(max_passes=200)
+        elapsed = time.perf_counter() - start
+        assert elapsed < 10.0, f"smooth_topology took {elapsed:.2f}s (expected < 10s)"

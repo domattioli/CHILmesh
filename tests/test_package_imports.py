@@ -52,9 +52,9 @@ def test_version_string():
     import chilmesh
 
     assert chilmesh.__version__ != "0.0.0", "package not installed properly"
-    # Accept 1.0.0 stable + pre-release suffixes (1.0.0a1, 1.0.0rc1, 1.0.0.dev1, etc.)
-    assert chilmesh.__version__.startswith("1.0.0"), (
-        f"expected 1.0.0[a/b/rc/.dev]*, got {chilmesh.__version__}"
+    # Accept any 1.x.y release
+    assert chilmesh.__version__.startswith("1."), (
+        f"expected 1.x.y, got {chilmesh.__version__}"
     )
 
 

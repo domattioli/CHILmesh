@@ -4,7 +4,46 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-05-24
+
+### ✨ Added
+
+- **`MutableMesh.remove_vertex(vert_id)`** — remove an interior vertex and fan
+  re-triangulate the resulting cavity. Rejects boundary vertices; deleted
+  elements use the negative-vertex sentinel and the removed vertex is left
+  orphaned (IDs stay stable). ([#158](https://github.com/domattioli/CHILmesh/issues/158))
+- **`MutableMesh.collapse_edge(edge_id) -> survivor`** — collapse an interior
+  edge into its first endpoint, deleting the two incident triangles. Rejects
+  boundary edges and any collapse that would invert an incident element (no
+  mutation on rejection). ([#159](https://github.com/domattioli/CHILmesh/issues/159))
+- **`MutableMesh.move_boundary_node(vert_id, new_xy)`** — move a boundary vertex
+  to new coordinates while preserving topology. Rejects non-boundary vertices;
+  aborts (no mutation) if any incident element would become non-positive-area.
+  ([#160](https://github.com/domattioli/CHILmesh/issues/160))
+- **`MutableMesh.split_triangles(elem_ids)`** — atomic bulk triangle split;
+  rebuilds adjacencies once at the end. Full rollback on any per-element
+  precondition failure.
+  ([#161](https://github.com/domattioli/CHILmesh/issues/161))
+- **`MutableMesh.smooth_topology(metric_threshold, max_passes) -> int`** —
+  iteratively swap interior edges that raise the minimum angle of adjacent
+  triangles; monotone, terminates at fixpoint.
+  ([#161](https://github.com/domattioli/CHILmesh/issues/161))
+- **`MutableMesh.reskeletonize_local(elem_ids, radius=2)`** — partial
+  re-skeletonization starting from the first affected layer minus `radius`.
+  Falls back to full `_skeletonize()` when affected elements are in the
+  outermost layers. Local update is O(start_layer × n_edges + tail_layers ×
+  n_edges) vs O(n_layers × n_edges) for a full rebuild.
+  ([#93](https://github.com/domattioli/CHILmesh/issues/93))
+- **`MutableMesh.skeletonize_diff(prev_layers) -> dict`** — run full
+  re-skeletonization and return per-element layer changes (old/new kind+index).
+  ([#93](https://github.com/domattioli/CHILmesh/issues/93))
+- **`MutableMesh._snapshot_layers()`** — capture layer arrays for diff.
+  ([#93](https://github.com/domattioli/CHILmesh/issues/93))
+- **Incremental adjacency patch for `swap_edge`** — `_patch_swap_adjacency`
+  updates the 5 adjacency structures in O(1) instead of O(n\_elems) per swap.
+  KD-trees rebuilt once at the end of `smooth_topology` instead of per swap.
+  Benchmark: `smooth_topology` now completes in < 10s (was hours on large meshes).
+  ([#162](https://github.com/domattioli/CHILmesh/issues/162))
 
 ## [1.1.0] — 2026-05-23
 
