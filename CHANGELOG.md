@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-05-24
 
 ### ✨ Added
 
@@ -28,6 +28,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   iteratively swap interior edges that raise the minimum angle of adjacent
   triangles; monotone, terminates at fixpoint.
   ([#161](https://github.com/domattioli/CHILmesh/issues/161))
+- **`MutableMesh.reskeletonize_local(elem_ids, radius=2)`** — partial
+  re-skeletonization starting from the first affected layer minus `radius`.
+  Falls back to full `_skeletonize()` when affected elements are in the
+  outermost layers. Local update is O(start_layer × n_edges + tail_layers ×
+  n_edges) vs O(n_layers × n_edges) for a full rebuild.
+  ([#93](https://github.com/domattioli/CHILmesh/issues/93))
+- **`MutableMesh.skeletonize_diff(prev_layers) -> dict`** — run full
+  re-skeletonization and return per-element layer changes (old/new kind+index).
+  ([#93](https://github.com/domattioli/CHILmesh/issues/93))
+- **`MutableMesh._snapshot_layers()`** — capture layer arrays for diff.
+  ([#93](https://github.com/domattioli/CHILmesh/issues/93))
 - **Incremental adjacency patch for `swap_edge`** — `_patch_swap_adjacency`
   updates the 5 adjacency structures in O(1) instead of O(n\_elems) per swap.
   KD-trees rebuilt once at the end of `smooth_topology` instead of per swap.

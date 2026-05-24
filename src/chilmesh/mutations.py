@@ -548,6 +548,177 @@ class MutableMesh:
             self.mesh._spatial_dirty = False
         return n_swapped
 
+    def reskeletonize_local(
+        self, elem_ids: np.ndarray, radius: int = 2
+    ) -> None:
+        """Re-skeletonize only the neighborhood affected by mutated elements.
+
+        Finds the earliest layer touched by ``elem_ids``, backs up ``radius``
+        layers, replays consumption of all earlier layers into fresh working
+        arrays, then re-peels from that start point — updating only
+        ``layers[start_layer:]`` and ``n_layers``.
+
+        Falls back to a full ``_skeletonize()`` when the affected elements are
+        in the first ``radius`` layers or when no layer data exists yet.
+
+        Parameters
+        ----------
+        elem_ids : array-like of int
+            Element IDs changed by the most recent mutation.
+        radius : int
+            How many layers *before* the first affected layer to start the
+            partial re-peel (provides a safety margin). Default 2.
+        """
+        elem_ids = np.asarray(elem_ids, dtype=int).ravel()
+        layers = self.mesh.layers
+
+        if not layers.get('OE'):
+            self.mesh._skeletonize()
+            return
+
+        # Find the first layer that contains any of the changed elements.
+        elem_set = set(int(e) for e in elem_ids)
+        affected_layer = None
+        for iL in range(self.mesh.n_layers):
+            oe_set = set(int(e) for e in layers['OE'][iL])
+            ie_set = set(int(e) for e in layers['IE'][iL])
+            if elem_set & (oe_set | ie_set):
+                affected_layer = iL
+                break
+
+        if affected_layer is None:
+            # Changed elements not in any existing layer — full rebuild.
+            self.mesh._skeletonize()
+            return
+
+        start_layer = max(0, affected_layer - radius)
+        if start_layer == 0:
+            self.mesh._skeletonize()
+            return
+
+        # Replay consumption of layers 0..(start_layer-1) to restore the
+        # working arrays at that checkpoint.  Element/vertex IDs are stable
+        # across _build_adjacencies, so this replay is valid even when edge
+        # IDs have been reassigned.
+        edge2vert_work = self.mesh.adjacencies['Edge2Vert'].copy()
+        edge2elem_work = self.mesh.adjacencies['Edge2Elem'].copy()
+
+        for iL in range(start_layer):
+            oe = layers['OE'][iL]
+            ov = layers['OV'][iL]
+            ie = layers['IE'][iL]
+            if len(oe) > 0:
+                edge2elem_work[np.isin(edge2elem_work, oe)] = -1
+            if len(ov) > 0:
+                edge2vert_work[np.isin(edge2vert_work, ov)] = -1
+            if len(ie) > 0:
+                edge2elem_work[np.isin(edge2elem_work, ie)] = -1
+
+        # Build new layers dict: keep 0..(start_layer-1), re-peel the rest.
+        new_layers: dict = {
+            'OE': list(layers['OE'][:start_layer]),
+            'IE': list(layers['IE'][:start_layer]),
+            'OV': list(layers['OV'][:start_layer]),
+            'IV': list(layers['IV'][:start_layer]),
+            'bEdgeIDs': list(layers['bEdgeIDs'][:start_layer]),
+        }
+
+        iL = start_layer
+        while np.any(edge2elem_work >= 0):
+            active_count = np.sum(edge2elem_work >= 0, axis=1)
+            iLbEdgeIDs = np.where(active_count == 1)[0]
+            if len(iLbEdgeIDs) == 0:
+                break
+
+            ov_raw = edge2vert_work[iLbEdgeIDs].ravel()
+            ov = np.unique(ov_raw[ov_raw >= 0]).astype(int)
+            new_layers['OV'].append(ov)
+            new_layers['bEdgeIDs'].append(iLbEdgeIDs)
+
+            oe_raw = edge2elem_work[iLbEdgeIDs].ravel()
+            oe = np.unique(oe_raw[oe_raw >= 0]).astype(int)
+            new_layers['OE'].append(oe)
+            if len(oe) > 0:
+                edge2elem_work[np.isin(edge2elem_work, oe)] = -1
+
+            ov_edge_mask = np.any(np.isin(edge2vert_work, ov), axis=1)
+            ov_edge_indices = np.where(ov_edge_mask)[0]
+            if len(ov_edge_indices) > 0:
+                ie_raw = edge2elem_work[ov_edge_indices].ravel()
+                ie = np.unique(ie_raw[ie_raw >= 0]).astype(int)
+            else:
+                ie = np.empty(0, dtype=int)
+            new_layers['IE'].append(ie)
+
+            if len(ov) > 0:
+                edge2vert_work[np.isin(edge2vert_work, ov)] = -1
+            if len(ie) > 0:
+                edge2elem_work[np.isin(edge2elem_work, ie)] = -1
+
+            if len(oe) > 0 or len(ie) > 0:
+                layer_elems = np.concatenate((oe, ie))
+                lv = self.mesh.connectivity_list[layer_elems].ravel()
+                lv = lv[lv >= 0]
+                iv = np.setdiff1d(np.unique(lv), ov).astype(int)
+            else:
+                iv = np.empty(0, dtype=int)
+            new_layers['IV'].append(iv)
+
+            iL += 1
+
+        self.mesh.layers = new_layers
+        self.mesh.n_layers = len(new_layers['OE'])
+
+    def skeletonize_diff(self, prev_layers: dict) -> dict:
+        """Run full re-skeletonization and return which elements changed layer.
+
+        Parameters
+        ----------
+        prev_layers : dict
+            Snapshot captured before a mutation (via ``_snapshot_layers``).
+
+        Returns
+        -------
+        dict
+            ``{elem_id: {'old': (kind, layer_idx) | None,
+                         'new': (kind, layer_idx) | None}}``
+            for every element whose layer assignment changed.  ``kind`` is
+            ``'OE'`` or ``'IE'``; ``None`` means the element was not in any
+            layer (tombstoned or newly created).
+        """
+        prev_map: dict = {}
+        for iL, (oe, ie) in enumerate(zip(prev_layers.get('OE', []),
+                                          prev_layers.get('IE', []))):
+            for e in oe:
+                prev_map[int(e)] = ('OE', iL)
+            for e in ie:
+                prev_map[int(e)] = ('IE', iL)
+
+        self.mesh._skeletonize()
+
+        new_map: dict = {}
+        for iL, (oe, ie) in enumerate(zip(self.mesh.layers['OE'],
+                                          self.mesh.layers['IE'])):
+            for e in oe:
+                new_map[int(e)] = ('OE', iL)
+            for e in ie:
+                new_map[int(e)] = ('IE', iL)
+
+        changed: dict = {}
+        for eid in set(prev_map) | set(new_map):
+            old = prev_map.get(eid)
+            new = new_map.get(eid)
+            if old != new:
+                changed[eid] = {'old': old, 'new': new}
+        return changed
+
+    def _snapshot_layers(self) -> dict:
+        """Snapshot current layer arrays for ``skeletonize_diff``."""
+        return {
+            key: [arr.copy() for arr in val]
+            for key, val in self.mesh.layers.items()
+        }
+
     def _snapshot(self) -> dict:
         """Capture mesh state for atomic rollback."""
         return {

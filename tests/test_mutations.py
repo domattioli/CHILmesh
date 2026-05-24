@@ -684,6 +684,100 @@ class TestSmoothTopology:
         assert n == 0
 
 
+class TestIncrementalSkeletonization:
+    """Tests for incremental skeletonization (#93)."""
+
+    def test_reskeletonize_local_layers_valid(self, triangle_mesh):
+        """After swap + reskeletonize_local, n_layers > 0 and no empty OE entry."""
+        mutable = MutableMesh(triangle_mesh)
+        edge2elem = triangle_mesh.edge2elem()
+        swapped_elem = None
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped_elem = ea
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if swapped_elem is None:
+            pytest.skip("no swappable edge in this fixture")
+
+        mutable.reskeletonize_local(np.array([swapped_elem]))
+
+        assert triangle_mesh.n_layers > 0
+        assert len(triangle_mesh.layers['OE']) == triangle_mesh.n_layers
+        for iL in range(triangle_mesh.n_layers):
+            assert len(triangle_mesh.layers['OE'][iL]) > 0 or iL == triangle_mesh.n_layers - 1
+
+    def test_reskeletonize_local_parity(self, triangle_mesh):
+        """Partial re-skeletonize matches full _skeletonize on the same mesh."""
+        mutable = MutableMesh(triangle_mesh)
+        edge2elem = triangle_mesh.edge2elem()
+        swapped_elem = None
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped_elem = ea
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if swapped_elem is None:
+            pytest.skip("no swappable edge in this fixture")
+
+        mutable.reskeletonize_local(np.array([swapped_elem]))
+        local_oe = [set(int(e) for e in triangle_mesh.layers['OE'][iL])
+                    for iL in range(triangle_mesh.n_layers)]
+
+        triangle_mesh._skeletonize()
+        full_oe = [set(int(e) for e in triangle_mesh.layers['OE'][iL])
+                   for iL in range(triangle_mesh.n_layers)]
+
+        assert local_oe == full_oe, "OE layer assignment differs from full rebuild"
+
+    def test_skeletonize_diff_returns_changed(self, triangle_mesh):
+        """skeletonize_diff returns a dict of changed element assignments."""
+        mutable = MutableMesh(triangle_mesh)
+        snap = mutable._snapshot_layers()
+
+        edge2elem = triangle_mesh.edge2elem()
+        swapped = False
+        for eid in range(triangle_mesh.n_edges):
+            ea, eb = int(edge2elem[eid][0]), int(edge2elem[eid][1])
+            if ea == -1 or eb == -1:
+                continue
+            try:
+                mutable.swap_edge(eid)
+                swapped = True
+                break
+            except (ValueError, RuntimeError):
+                continue
+        if not swapped:
+            pytest.skip("no swappable edge in this fixture")
+
+        diff = mutable.skeletonize_diff(snap)
+        assert isinstance(diff, dict)
+        # Each entry has 'old' and 'new' keys.
+        for eid, info in diff.items():
+            assert 'old' in info and 'new' in info
+
+    def test_snapshot_layers_deepcopy(self, triangle_mesh):
+        """_snapshot_layers produces independent copy (mutation doesn't affect snapshot)."""
+        mutable = MutableMesh(triangle_mesh)
+        snap = mutable._snapshot_layers()
+        original_n = len(snap['OE'])
+
+        # Append a dummy entry to live layers — snapshot must not change.
+        triangle_mesh.layers['OE'].append(np.array([9999]))
+
+        assert len(snap['OE']) == original_n
+
+
 class TestIncrementalAdjacency:
     """Tests for incremental O(1) adjacency patch (#162)."""
 
