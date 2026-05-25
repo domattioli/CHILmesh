@@ -1,12 +1,28 @@
 #!/usr/bin/env python3
-"""Cross-language CHILmesh benchmark + skeletonization parity harness.
+"""CHILmesh benchmark — cross-language parity + full mesh lifecycle.
 
-Times the skeletonization pipeline (adjacency build, layer peel, quality,
-vertex-edge lookup) for the available implementations and checks that every
-backend agrees on ``n_layers`` — the regression guard behind the README
-"Performance" and "Validation" tables.
+Two reports are produced:
 
-Implementations probed (each is optional; missing ones are skipped):
+1. **Cross-language skeletonization parity** (Python / C++ / MATLAB). Times the
+   skeletonization pipeline (adjacency build, layer peel, quality, vertex-edge
+   lookup) for the available implementations and checks every backend agrees on
+   ``n_layers`` — the regression guard behind the README "Performance" /
+   "Validation" tables.
+
+2. **Python mesh lifecycle** (#155). Times every post-generation stage a mesh
+   passes through — *generation itself is out of scope*:
+
+     adjacency build → skeletonization → quality → FEM direct smoother →
+     angle-based smoother → ADMESH warm-start truss optimizer
+
+   The truss stage needs a signed-distance function (SDF) for the domain. SDFs
+   for the bundled ``annulus`` / ``donut`` fixtures are built in and auto-matched
+   by mesh filename; for any other mesh pass ``--sdf {annulus,donut,square}`` or
+   the stage is reported as skipped. The smoothing/skeletonization stages run on
+   any mesh and scale to large inputs — point ``--mesh`` at a WNAT-scale ``.14``
+   to profile the lifecycle at production size.
+
+Implementations probed for report 1 (each optional; missing ones skipped):
   - Python   : always (the reference; ``chilmesh`` package)
   - C++      : if ``chilmesh_cpp`` importable (``pip install ./src/chilmesh_cpp``)
   - MATLAB   : if ``octave`` on PATH (runs the bundled ``src/@CHILmesh`` class)
@@ -17,6 +33,8 @@ needs GNU Octave, which we do not require in CI). Run with::
 
     CHILMESH_RUN_BENCH=1 python scripts/benchmark.py
     python scripts/benchmark.py --mesh src/chilmesh/data/Block_O.14 --matlab
+    # full lifecycle incl. truss on a domain with a known SDF:
+    python scripts/benchmark.py --mesh src/chilmesh/data/donut_domain.fort.14
 
 Outputs Markdown tables to stdout; ``--emit docs/BENCHMARK.md`` rewrites the doc.
 """
@@ -148,6 +166,100 @@ def bench_matlab(conn: np.ndarray, pts: np.ndarray) -> dict | None:
     }
 
 
+# --- Analytic signed-distance functions for the bundled fixture domains. ---
+# Mirror the values used by tests/test_admesh_warmstart.py so the truss-stage
+# numbers are comparable with the warm-start regression suite. Keyed by the mesh
+# filename stem; used by the lifecycle report's truss stage.
+def _annulus_sdf(p: np.ndarray) -> np.ndarray:
+    r = np.linalg.norm(p, axis=1)
+    return np.maximum(r - 1.0, 0.3 - r)
+
+
+def _square_sdf(p: np.ndarray) -> np.ndarray:
+    return np.max(np.abs(p) - 1.0, axis=1)
+
+
+_SDF_REGISTRY = {
+    "annulus": _annulus_sdf,
+    "donut": _annulus_sdf,   # donut fixture shares the annulus geometry (R=1, r=0.3)
+    "square": _square_sdf,
+}
+
+
+def _resolve_sdf(mesh_path: str, override: str | None):
+    """Return (name, sdf) for the truss stage, or (reason, None) if unavailable."""
+    if override:
+        if override == "none":
+            return "disabled (--sdf none)", None
+        if override in _SDF_REGISTRY:
+            return override, _SDF_REGISTRY[override]
+        return f"unknown sdf '{override}'", None
+    stem = Path(mesh_path).name.lower()
+    for key, fn in _SDF_REGISTRY.items():
+        if stem.startswith(key):
+            return key, fn
+    return "no built-in SDF for this domain (pass --sdf)", None
+
+
+def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
+                    smooth_iters: int) -> dict:
+    """Time the post-generation mesh lifecycle stages (Python; #155).
+
+    Generation is intentionally excluded. Each repeat rebuilds the mesh so the
+    adjacency/skeletonization timings are cold-start; the smoothers run on the
+    fully-initialised mesh and do not mutate it (they return new point arrays).
+    """
+    from chilmesh import CHILmesh
+
+    adj, skel, qual, fem, ang = [], [], [], [], []
+    mesh = None
+    for _ in range(repeats):
+        m = CHILmesh(connectivity=conn.copy(), points=pts.copy(),
+                     compute_layers=False, compute_adjacencies=False)
+        t = time.perf_counter(); m._build_adjacencies(); adj.append(time.perf_counter() - t)
+        t = time.perf_counter(); m._skeletonize(); skel.append(time.perf_counter() - t)
+        t = time.perf_counter(); m.signed_area(); qual.append(time.perf_counter() - t)
+        t = time.perf_counter(); m.direct_smoother(); fem.append(time.perf_counter() - t)
+        t = time.perf_counter(); m.angle_based_smoother(n_iter=smooth_iters)
+        ang.append(time.perf_counter() - t)
+        mesh = m
+    return {
+        "adj_s": statistics.median(adj),
+        "skel_s": statistics.median(skel),
+        "quality_s": statistics.median(qual),
+        "fem_smooth_s": statistics.median(fem),
+        "angle_smooth_s": statistics.median(ang),
+        "smooth_iters": smooth_iters,
+        "n_verts": int(mesh.n_verts),
+    }
+
+
+def bench_truss(conn: np.ndarray, pts: np.ndarray, sdf, repeats: int,
+                niter: int) -> dict | None:
+    """Time the ADMESH warm-start truss optimizer (#155).
+
+    Returns ``None`` when the mesh is not triangle-only (the optimizer requires
+    a pure-triangle input). ``sdf`` is the domain signed-distance function.
+    """
+    from chilmesh import CHILmesh, optimize_with_admesh_truss_arrays
+
+    m = CHILmesh(connectivity=conn.copy(), points=pts.copy(),
+                 compute_layers=False, compute_adjacencies=True)
+    tri_idx, quad_idx = m._detect_element_types()
+    if len(quad_idx) > 0:
+        return None  # truss optimizer is triangle-only
+    tris = np.asarray(m.connectivity_list)[:, :3].astype(np.int64)
+    edge2vert = m.adjacencies["Edge2Vert"]
+    boundary_indices = np.unique(edge2vert[m.boundary_edges()].flatten())
+    xy = pts[:, :2].astype(float)
+
+    t, _ = _median(
+        lambda: optimize_with_admesh_truss_arrays(
+            xy.copy(), tris, sdf, boundary_indices=boundary_indices, niter=niter),
+        repeats)
+    return {"truss_s": t, "niter": niter}
+
+
 def _fmt_s(v):
     if v is None:
         return "—"
@@ -164,6 +276,13 @@ def main() -> int:
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--matlab", action="store_true", help="include the Octave/MATLAB column")
     ap.add_argument("--emit", help="write the report to this path instead of stdout")
+    ap.add_argument("--smooth-iters", type=int, default=20,
+                    help="iterations for the angle-based smoother lifecycle stage")
+    ap.add_argument("--truss-iters", type=int, default=50,
+                    help="iterations for the ADMESH truss lifecycle stage")
+    ap.add_argument("--sdf", choices=["annulus", "donut", "square", "none"],
+                    help="signed-distance function for the truss stage "
+                         "(auto-detected from the mesh name if omitted)")
     args = ap.parse_args()
 
     if not os.environ.get("CHILMESH_RUN_BENCH") and args.emit is None:
@@ -208,6 +327,32 @@ def main() -> int:
               f"**Skeletonization parity:** n_layers = {n_layers_ref} across "
               f"{', '.join(name for name, _ in cols)} — "
               f"{'all agree ✅' if all_match else 'MISMATCH ❌ ' + repr(parity)}."]
+
+    # --- Report 2: Python mesh lifecycle (#155) — generation excluded. ---
+    life = bench_lifecycle(conn, pts, args.repeats, args.smooth_iters)
+    sdf_name, sdf = _resolve_sdf(args.mesh, args.sdf)
+    truss = bench_truss(conn, pts, sdf, args.repeats, args.truss_iters) if sdf else None
+
+    lines += [
+        "",
+        "### Mesh lifecycle (Python, post-generation)",
+        "",
+        f"Median of {args.repeats}. Smoother iterations: {life['smooth_iters']}.",
+        "",
+        "| Stage | Time |",
+        "|---|---:|",
+        f"| Adjacency build | {_fmt_s(life['adj_s'])} |",
+        f"| Skeletonization | {_fmt_s(life['skel_s'])} |",
+        f"| Quality (signed area) | {_fmt_s(life['quality_s'])} |",
+        f"| FEM direct smoother | {_fmt_s(life['fem_smooth_s'])} |",
+        f"| Angle-based smoother | {_fmt_s(life['angle_smooth_s'])} |",
+    ]
+    if truss is not None:
+        lines.append(
+            f"| ADMESH truss optimizer (sdf=`{sdf_name}`, {truss['niter']} iters) "
+            f"| {_fmt_s(truss['truss_s'])} |")
+    else:
+        lines.append(f"| ADMESH truss optimizer | — _(skipped: {sdf_name})_ |")
 
     report = "\n".join(lines) + "\n"
     if args.emit:
