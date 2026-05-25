@@ -265,6 +265,10 @@ class CHILmesh(CHILmeshPlotMixin):
         self.points = points
         self.connectivity_list = connectivity
         self.boundary_condition = None
+        # ADCIRC NOPE/NBOU boundary segments parsed from fort.14 (#129). Empty for
+        # node+element-only meshes. Each entry: {"kind": "open"|"flow",
+        # "ibtype": Optional[int], "nodes": np.ndarray of 0-based node indices}.
+        self.boundary_segments: List[Dict[str, Any]] = []
 
         # Hidden properties
         self.adjacencies: Dict[str, Any] = {}
@@ -1224,6 +1228,16 @@ class CHILmesh(CHILmeshPlotMixin):
                 max_nodes = max(max_nodes, num_nodes)
                 element_lines.append(line)
 
+            # Optional ADCIRC boundary section (NOPE/NBOU/IBTYPE) trailing the
+            # element block. Absent in legacy node+element-only files → empty
+            # list, load behavior unchanged. Malformed sections warn rather than
+            # break the load. (#129)
+            try:
+                boundary_segments = _parse_fort14_boundaries(f)
+            except Exception as exc:
+                warnings.warn(f"Could not parse fort.14 boundary section: {exc}")
+                boundary_segments = []
+
         # Allocate elements array with correct width
         # For mixed meshes, always use 4 columns with padded triangles
         elem_width = 4 if max_nodes == 4 else 3
@@ -1242,13 +1256,15 @@ class CHILmesh(CHILmeshPlotMixin):
                 # Quad or triangle in 3-column array
                 elements[i, :num_nodes] = node_indices
 
-        return CHILmesh(
+        mesh = CHILmesh(
             connectivity=elements,
             points=points,
             grid_name=header,
             compute_layers=compute_layers,
             compute_adjacencies=compute_adjacencies,
         )
+        mesh.boundary_segments = boundary_segments
+        return mesh
 
     @classmethod
     def from_admesh_domain(cls, record, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
@@ -1421,7 +1437,13 @@ class CHILmesh(CHILmeshPlotMixin):
             Prior to 0.1.1 this method recursed into itself instead of
             delegating to the module-level ``write_fort14`` writer (B1).
         """
-        return write_fort14(filename, self.points, self.connectivity_list, grid_name)
+        return write_fort14(
+            filename,
+            self.points,
+            self.connectivity_list,
+            grid_name,
+            boundary_segments=self.boundary_segments,
+        )
 
     def interior_angles(self, elem_ids=None) -> np.ndarray:
         """
@@ -2343,7 +2365,98 @@ class CHILmesh(CHILmeshPlotMixin):
         return deepcopy(self)
     
 
-def write_fort14( filename: Path, points: np.ndarray, elements: np.ndarray, grid_name: str ) -> bool:
+def _next_tokens(f) -> Opt[List[str]]:
+    """Next non-blank, comment-stripped line of an open fort.14 file as tokens.
+
+    ADCIRC files append a ``! comment`` to many records; everything after the
+    first ``!`` is dropped. Returns ``None`` at end of file. (#129)
+    """
+    while True:
+        line = f.readline()
+        if line == "":
+            return None
+        stripped = line.split("!", 1)[0].strip()
+        if not stripped:
+            continue
+        return stripped.split()
+
+
+def _parse_fort14_boundaries(f) -> List[Dict[str, Any]]:
+    """Parse the trailing ADCIRC boundary section of an open fort.14 file.
+
+    Expects the file positioned immediately after the element-connectivity
+    block. Reads the open-boundary block (``NOPE``/``NETA`` + per-segment node
+    strings) then the land/flow-boundary block (``NBOU``/``NVEL`` + per-segment
+    ``NVELL IBTYPE`` headers and node strings). Node ids are converted to 0-based
+    indices. Returns ``[]`` when no boundary section is present. (#129)
+
+    Weir-type segments (IBTYPE 4/24/5/25 …) carry extra columns per node line;
+    only the first column (the node id) is retained — the paired-node/barrier
+    height geometry is not modeled.
+    """
+    segments: List[Dict[str, Any]] = []
+
+    tok = _next_tokens(f)
+    if tok is None:
+        return segments  # node+element-only file, no boundary section
+
+    n_open = int(tok[0])
+    _next_tokens(f)  # NETA: total open-boundary nodes (derivable; discard)
+    for _ in range(n_open):
+        header = _next_tokens(f)
+        n_nodes = int(header[0])
+        nodes = [int(float(_next_tokens(f)[0])) - 1 for _ in range(n_nodes)]
+        segments.append({"kind": "open", "ibtype": None, "nodes": np.asarray(nodes, dtype=int)})
+
+    tok = _next_tokens(f)
+    if tok is None:
+        return segments  # open boundaries only
+
+    n_flow = int(tok[0])
+    _next_tokens(f)  # NVEL: total land-boundary nodes (derivable; discard)
+    for _ in range(n_flow):
+        header = _next_tokens(f)
+        n_nodes = int(header[0])
+        ibtype = int(header[1]) if len(header) > 1 else None
+        nodes = [int(float(_next_tokens(f)[0])) - 1 for _ in range(n_nodes)]
+        segments.append({"kind": "flow", "ibtype": ibtype, "nodes": np.asarray(nodes, dtype=int)})
+
+    return segments
+
+
+def _write_fort14_boundaries(f, boundary_segments: List[Dict[str, Any]]) -> None:
+    """Emit the ADCIRC NOPE/NBOU boundary section for ``boundary_segments``.
+
+    Inverse of :func:`_parse_fort14_boundaries`; node indices written 1-based.
+    Open segments emit no IBTYPE; flow segments emit ``NVELL IBTYPE`` (0 when
+    unknown). (#129)
+    """
+    open_segs = [s for s in boundary_segments if s.get("kind") == "open"]
+    flow_segs = [s for s in boundary_segments if s.get("kind") != "open"]
+
+    f.write(f"{len(open_segs)}\n")
+    f.write(f"{sum(len(s['nodes']) for s in open_segs)}\n")
+    for seg in open_segs:
+        f.write(f"{len(seg['nodes'])}\n")
+        for node in seg["nodes"]:
+            f.write(f"{int(node) + 1}\n")
+
+    f.write(f"{len(flow_segs)}\n")
+    f.write(f"{sum(len(s['nodes']) for s in flow_segs)}\n")
+    for seg in flow_segs:
+        ibtype = seg.get("ibtype")
+        f.write(f"{len(seg['nodes'])} {ibtype if ibtype is not None else 0}\n")
+        for node in seg["nodes"]:
+            f.write(f"{int(node) + 1}\n")
+
+
+def write_fort14(
+    filename: Path,
+    points: np.ndarray,
+    elements: np.ndarray,
+    grid_name: str,
+    boundary_segments: Opt[List[Dict[str, Any]]] = None,
+) -> bool:
     """
     Write mesh data to a .fort.14 ADCIRC file.
 
@@ -2355,6 +2468,9 @@ def write_fort14( filename: Path, points: np.ndarray, elements: np.ndarray, grid
         points: (n_nodes, 2 or 3) numpy array of node coordinates
         elements: (n_elems, 3 or 4) array of vertex indices (0-based)
         grid_name: Header string
+        boundary_segments: Optional ADCIRC boundary segments (see
+            ``CHILmesh.boundary_segments``). When falsy, no boundary section is
+            written — byte-identical to the legacy node+element output. (#129)
     """
     try:
         with open(filename, 'w', encoding='utf-8', newline='\n') as f:
@@ -2385,6 +2501,9 @@ def write_fort14( filename: Path, points: np.ndarray, elements: np.ndarray, grid
                         # Quad: [v0, v1, v2, v3]
                         n1, n2, n3, n4 = indices
                         f.write(f"{i} 4 {n1} {n2} {n3} {n4}\n")
+
+            if boundary_segments:
+                _write_fort14_boundaries(f, boundary_segments)
         return True
     except Exception as e:
         print(f"Error writing fort14 file {filename}: {e}")

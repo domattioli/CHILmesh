@@ -20,25 +20,31 @@ pytest tests/test_smoothing.py::TestTriangleSmoother::test_fem_smoother_triangle
 
 ## Test Suite Overview
 
-**26 test files | 439 passing | 9 skipped | Runtime: 17.2s**
+**42 test files | 982 tests collected**
+
+- Fast PR mode (`pytest -n auto -m "not slow"`): **928 passed, 52 skipped (~27s)**
+- Full suite adds 2 `slow`-marked `block_o` tests, run on push-to-`main` / `release/**`
 
 ### Fixtures (Parametrized)
 
-All tests run against 4 built-in meshes via `@pytest.mark.parametrize('mesh', [...])`:
+Most tests run against the built-in meshes via `@pytest.mark.parametrize('mesh', [...])`.
+`conftest.py` exposes 5 fixtures (`FIXTURE_NAMES`); the 4 triangle fixtures form
+`TRI_FIXTURE_NAMES` for triangle-only parametrizations:
 
 | Fixture | Type | Size | Load Time | Use Case |
 |---------|------|------|-----------|----------|
 | **annulus** | Triangle | Small | ~0.1s | Quick smoke tests |
 | **donut** | Triangle | Medium | ~0.5s | Geometry validation |
-| **block_o** | Triangle | Large (100k elems) | ~30s | Performance baseline |
+| **block_o** | Triangle | Large (100k elems) | ~30s | Performance baseline (`slow`) |
 | **structured** | Quad | Medium | ~1s | Mixed-element tests |
+| **quad_2x2** | Quad | Tiny (4 elems) | <0.01s | Quad/mixed unit cases |
 
 ### Test Categories
 
-- **Unit tests** (~240): Core geometry, adjacency, skeletonization
-- **Integration tests** (~150): Mesh I/O, ADMESH warmstart, layer validation
-- **Regression tests** (~30): MATLAB parity, bug fixes
-- **Performance tests** (~10): Determinism, edge-building speed
+- **Unit tests**: Core geometry, adjacency, skeletonization, smoothing
+- **Integration tests**: Mesh I/O, ADMESH warmstart, layer validation, backend equivalence
+- **Regression tests**: MATLAB parity, fixed-bug reproducers
+- **Performance tests**: Determinism, edge-building speed
 
 ## Running Tests
 
@@ -146,10 +152,10 @@ pytest -vv -s tests/test_smoothing.py::TestTriangleSmoother::test_fem_smoother_t
 
 ## Known Issues & Skipped Tests
 
-**9 tests skipped:** External mesh MATLAB parity tests. Skipped because:
-- Large mesh files not bundled (stored separately)
-- Used for regression validation, not CI gating
-- Run manually for verification: `pytest tests/test_skeletonization_matlab_parity_external.py -v`
+**52 tests skipped (fast PR mode).** Skips are environment- or geometry-conditional, not failures:
+- **External MATLAB parity** (`test_skeletonization_matlab_parity_external.py`): require `admesh-domains` + large mesh files not bundled. Run manually: `pip install admesh-domains && pytest tests/test_skeletonization_matlab_parity_external.py -v`
+- **C++ backend equivalence** (`test_backend_equivalence.py`): skipped when `chilmesh_cpp` extension is not built (`pip install -e ".[cpp]"` or build the extension to exercise these).
+- **Geometry-conditional** (e.g. `test_spatial_indexing.py`): point-location cases that don't apply to holed fixtures (annulus/donut/block_o).
 
 ## CI & Release Gates
 

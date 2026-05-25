@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-24T03:11:49Z",
+  "phase": "post-phase-5",
+  "phase_name": "Phase 5 mutation API + perf optimization sweep",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "complete",
+  "tracking": "GitHub issues (no GSD phase dirs in this repo)",
+  "completed_tasks": [
+    {"id": 1, "name": "Phase 5 mutation API (#94 epic): remove_vertex, collapse_edge, move_boundary_node, split_triangles, smooth_topology, incremental adjacency, incremental skeletonization", "status": "done", "commits": "e27a264 f6ba53a 7b9976b 293f86d"},
+    {"id": 2, "name": "Vectorize _build_adjacencies (#164): np.unique + argsort, ~190 lines of Python loops removed", "status": "done", "commit": "511e836"},
+    {"id": 3, "name": "Archive stale C2 half-edge spec", "status": "done", "commit": "ce29604"},
+    {"id": 4, "name": "Optimize angle_based_smoother (#139): cache elem verts per iteration", "status": "done", "commit": "b880800"},
+    {"id": 5, "name": "Merge PR #165 (squash to main)", "status": "done", "commit": "fa50a89"}
+  ],
+  "remaining_tasks": [
+    {"id": 6, "name": "#163 Rust + C++ backends blocked from cross-language validation benchmark (array-skel)", "status": "not_started", "note": "aligns with user #94 comment re: patchwork python/cpp/rust backends"},
+    {"id": 7, "name": "#155 Benchmarking should detail all chilmesh lifecycle steps", "status": "not_started"},
+    {"id": 8, "name": "#129 layers/skeletonization should consider boundary types", "status": "not_started"},
+    {"id": 9, "name": "#142 promote mesh-element-validity helper to public API", "status": "not_started"},
+    {"id": 10, "name": "#122 CI runtime optimization (xdist safety + macOS profiling)", "status": "not_started"},
+    {"id": 11, "name": "#105 Re-integrate FEM smoother work (PR #104)", "status": "not_started"},
+    {"id": 12, "name": "#75 Plotting library feature request", "status": "not_started"},
+    {"id": 13, "name": "#154 .chil file format design", "status": "not_started"},
+    {"id": 14, "name": "#153 Sibling project: mesh-segmenter", "status": "not_started"},
+    {"id": 15, "name": "#152 cross-repo label canon sweep (operator triage)", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "introspect@DomI and handoff skills not loaded this session", "type": "external", "workaround": "used gsd-pause-work for handoff; install via 'claude plugin install introspect@DomI'"}
+  ],
+  "human_actions_pending": [
+    {"action": "Decide downstream propagation: ADMESH/QuADMesh/MADMESHing should consume v1.2.0 Phase 5 APIs", "context": "user #94 comment: effects must propagate to other mesh generators", "blocking": false},
+    {"action": "Optional: tag/release v1.2.0 to PyPI via /pypi-publish", "context": "version bumped in pyproject.toml; CHANGELOG promoted", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Vectorized _build_adjacencies uses element-major slot-minor traversal (conn.ravel + np.roll)", "rationale": "first-encounter edge ID ordering must match the C++ backend; slot-major order broke test_cpp_layer_member_sets_match_python[bEdgeIDs]", "phase": "164"},
+    {"decision": "Edge IDs preserved via np.unique(return_index) + argsort(first_occur), not raw lexicographic order", "rationale": "C++/Python equivalence tests compare bEdgeIDs and Vert2Edge by edge ID", "phase": "164"},
+    {"decision": "angle_based_smoother optimized by caching, not full vectorization", "rationale": "per-vertex variable ring/incident-element counts resist clean array vectorization; caching elem verts per iteration is the high-leverage, low-risk win", "phase": "139"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Pick next open issue. #163 (Rust/C++ backends) aligns with user's stated direction on patchwork backends. Or propagate v1.2.0 to downstream repos.",
+  "context_notes": "Phase 5 fully shipped + merged. All 939 tests pass. The optimization sweep (#164, #139) directly serves the user's #94 goal: faster CHILmesh primitives propagate to ADMESH/QuADMesh/MADMESHing."
+}
