@@ -1,4 +1,8 @@
 <p align="center">
+  <video src="videos/quadmesh_logo.mp4" autoplay loop muted playsinline width="680"></video>
+</p>
+
+<p align="center">
   <img src="output/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
 </p>
 
