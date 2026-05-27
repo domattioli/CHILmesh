@@ -1,4 +1,8 @@
 <p align="center">
+  <video src="videos/quadmesh_logo.mp4" autoplay loop muted playsinline width="680"></video>
+</p>
+
+<p align="center">
   <img src="output/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
 </p>
 
@@ -19,7 +23,7 @@
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
   <a href="https://doi.org/10.5281/zenodo.20263854"><img src=".github/badges/zenodo-doi.svg" alt="DOI"></a>
   <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>
-  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
+  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License"></a>
 </p>
 
 > **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on [MathWorks](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh/files/src/@CHILmesh/CHILmesh.m).
@@ -340,4 +344,8 @@ CHILmesh originated in MATLAB as the data structure backing a skeletonization-dr
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**Noncommercial / research use only.** Licensed under the PolyForm Noncommercial
+License 1.0.0 **with an additional No-AI/ML-training restriction** — see
+[LICENSE](LICENSE) and [AI-USAGE.md](AI-USAGE.md). No commercial use and no use
+as AI/ML training data without a separate written license. Commercial or
+AI-training licenses: domburner@duck.com
