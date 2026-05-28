@@ -1,7 +1,7 @@
 # CHILmesh Test Suite Audit
 
 **Date:** 2026-05-15
-**Branch:** `daily-issue-fixing`
+**Branch:** `daily-maintenance`
 **Issue:** [#110](https://github.com/domattioli/CHILmesh/issues/110)
 **Scope:** Read-only audit. No code changes.
 
@@ -270,7 +270,7 @@ Each finding is keyed `F<n>` for cross-referencing in the backlog below.
 
 ## Backlog Status (2026-05-18)
 
-Resolved in this session (autonomous batch on `daily-issue-fixing`):
+Resolved in this session (autonomous batch on `daily-maintenance`):
 
 | ID | Status | Commit | Notes |
 |---|---|---|---|
@@ -322,7 +322,7 @@ These were considered and intentionally not added to the backlog.
 
 ## Success Criteria (issue #110)
 
-- [x] `TEST-AUDIT.md` committed on `daily-issue-fixing`.
+- [x] `TEST-AUDIT.md` committed on `daily-maintenance`.
 - [x] Each finding has a `file:line` reference (or `global` tag) — see F1-F14 above.
 - [x] Backlog items each link back to a finding.
 - [x] No code changes in this issue's scope.

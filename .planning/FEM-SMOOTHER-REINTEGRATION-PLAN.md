@@ -54,7 +54,7 @@ docs/README:
 ### 1. Code Source Uncertainty
 **Blocker:** Where is the preserved FEM smoother code?
 - PR #104 branch deleted?
-- Code on `daily-issue-fixing` branch?
+- Code on `daily-maintenance` branch?
 - Need to locate + verify correctness
 
 **Resolution:** Requires:
@@ -97,7 +97,7 @@ docs/README:
 git log --all --oneline --grep="FEM\|quad.*stiffness\|PR #104" | head -20
 
 # Inspect branch
-git show origin/daily-issue-fixing:src/chilmesh/CHILmesh.py | grep "_quad_stiffness_assembly" | head -5
+git show origin/daily-maintenance:src/chilmesh/CHILmesh.py | grep "_quad_stiffness_assembly" | head -5
 
 # Or inspect PR:
 git log --all --grep="104" --format="%h %s" | head -5
@@ -115,7 +115,7 @@ git show <SHA>:src/chilmesh/CHILmesh.py
 git cherry-pick <FEM-SHA>..<END-SHA>
 
 # Option B: Rebase preserved branch
-git rebase main origin/daily-issue-fixing -- tests/ src/
+git rebase main origin/daily-maintenance -- tests/ src/
 
 # Resolve conflicts (docstrings, test structure)
 ```

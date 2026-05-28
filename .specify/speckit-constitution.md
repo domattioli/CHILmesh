@@ -274,7 +274,7 @@ CHILmesh's global constitution (`.specify/memory/constitution.md`) takes precede
 
 CHILmesh's development guide (`.claude/CLAUDE.md`) dictates:
 
-- **Branch policy:** All work on `daily-issue-fixing` branch (not `spec-branch` variable in spec.md)
+- **Branch policy:** All work on `daily-maintenance` branch (not `spec-branch` variable in spec.md)
 - **Testing baseline:** All tests must pass before committing spec changes
 - **Code review:** Peer review required per constitution.md § 3.3
 
