@@ -30,7 +30,7 @@ GitHub release auto-deposits to Zenodo and mints a fresh DOI.
    ```
 
    Zenodo prints the exact markdown on the upload page; just paste.
-7. Commit + push the DOI metadata to `daily-issue-fixing`. Open a PR.
+7. Commit + push the DOI metadata to `daily-maintenance`. Open a PR.
 
 ## Per-release maintenance
 

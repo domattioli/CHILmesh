@@ -1,7 +1,7 @@
 ## CHILmesh Hooks Audit
 
 **Date:** 2026-05-15
-**Branch:** `daily-issue-fixing`
+**Branch:** `daily-maintenance`
 **Issue:** [#112](https://github.com/domattioli/CHILmesh/issues/112)
 **Scope:** Read-only inventory. No upstream changes.
 
@@ -83,7 +83,7 @@ Each finding tagged `H<n>` for cross-referencing.
 
 ### Local-only (would implement in `.claude/settings.json` here)
 
-- **H8 — Once DomI ships the scaffold (`d11ca39` or successor), CHILmesh's local `.claude/settings.json` should merge upstream's `SessionStart`/`PreToolUse`/`Stop` registrations with one local override: a repo-scope `PreToolUse:Bash` matcher that hard-stops any `git checkout -b claude/*` or `git push origin claude/*` (a stricter version of `branch_guard`).** This is local because the **policy** (one-branch-only, named `daily-issue-fixing`) is CHILmesh-specific; the **mechanism** (matcher + bash regex) is universal.
+- **H8 — Once DomI ships the scaffold (`d11ca39` or successor), CHILmesh's local `.claude/settings.json` should merge upstream's `SessionStart`/`PreToolUse`/`Stop` registrations with one local override: a repo-scope `PreToolUse:Bash` matcher that hard-stops any `git checkout -b claude/*` or `git push origin claude/*` (a stricter version of `branch_guard`).** This is local because the **policy** (one-branch-only, named `daily-maintenance`) is CHILmesh-specific; the **mechanism** (matcher + bash regex) is universal.
 
 - **H9 — No local hook is needed for `pytest -m "not slow"` policing.** Test-audit F9 (unregistered `@pytest.mark.slow`) is a `pyproject.toml` fix, not a hook.
 
