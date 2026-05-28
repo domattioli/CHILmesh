@@ -251,6 +251,6 @@ Issues and PRs welcome at [github.com/domattioli/CHILmesh](https://github.com/do
 
 **Noncommercial / research use only.** Licensed under the PolyForm Noncommercial
 License 1.0.0 **with an additional No-AI/ML-training restriction** — see
-[LICENSE](LICENSE) and [AI-USAGE.md](AI-USAGE.md). No commercial use and no use
+[LICENSE](LICENSE) and [.claude/AI-USAGE.md](.claude/AI-USAGE.md). No commercial use and no use
 as AI/ML training data without a separate written license. Commercial or
 AI-training licenses: domburner@duck.com
