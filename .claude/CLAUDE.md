@@ -366,3 +366,11 @@ Auto-detects: credentials (`PYPI_TOKEN` env var or `~/.pypirc`), package name/ve
 ---
 **Last Updated:** 2026-05-15
 **Document Version:** 1.4
+
+## Coding dispatch — Haiku subagent default
+
+All coding work (writing or editing source code) MUST be dispatched to a subagent running the Haiku model (`claude-haiku-4-5`) — not written inline by the main session. The orchestrator session plans, reviews, and integrates; implementation is delegated to the Haiku subagent.
+
+- **Default**: for any code-writing/editing task, spawn a subagent with `model: haiku`.
+- **Exception**: only when the operator explicitly directs otherwise (e.g. "do it inline", "use Sonnet/Opus for this"). Explicit operator instruction only — never assumed.
+- **Scope**: applies to code. Non-coding work (planning, research, docs, git/PR orchestration, review) stays on the main session.
