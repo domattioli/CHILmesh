@@ -35,6 +35,16 @@ needs GNU Octave, which we do not require in CI). Run with::
     python scripts/benchmark.py --mesh src/chilmesh/data/Block_O.14 --matlab
     # full lifecycle incl. truss on a domain with a known SDF:
     python scripts/benchmark.py --mesh src/chilmesh/data/donut_domain.fort.14
+    # keep heavy meshes manual-only — auto-skip the OOM-prone stages in CI:
+    python scripts/benchmark.py --mesh wnat.14 --max-elements 500000
+
+The memory/time-heavy lifecycle stages (FEM direct smoother, ADMESH truss) are
+gated by ``--max-elements N`` (#155). On a mesh whose element count exceeds
+``N`` those two stages are skipped with a reason instead of being run — the FEM
+direct sparse solver OOM-kills at WNAT scale (~4M DOF, see #168), so a heavy
+mesh would otherwise abort the whole report. ``N=0`` (the default) disables the
+gate and runs every stage; CI passes a finite ``N`` so large meshes stay
+manual-only profiling targets while the scalable stages still report.
 
 Outputs Markdown tables to stdout; ``--emit docs/BENCHMARK.md`` rewrites the doc.
 """
@@ -201,13 +211,32 @@ def _resolve_sdf(mesh_path: str, override: str | None):
     return "no built-in SDF for this domain (pass --sdf)", None
 
 
+def _gate_heavy(n_elems: int, max_elements: int) -> tuple[bool, str]:
+    """Decide whether the OOM-prone lifecycle stages should be skipped (#155).
+
+    ``max_elements <= 0`` disables the gate (every stage runs — the manual /
+    local default). Otherwise a mesh with more than ``max_elements`` elements
+    has its FEM direct smoother + ADMESH truss stages skipped, because the FEM
+    direct sparse solver OOM-kills at WNAT scale (#168). Returns
+    ``(skip, reason)``; ``reason`` is empty when not skipping.
+    """
+    if max_elements <= 0 or n_elems <= max_elements:
+        return False, ""
+    return True, (f"mesh has {n_elems:,} elements > --max-elements "
+                  f"{max_elements:,} gate (FEM solver OOMs at scale, #168)")
+
+
 def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
-                    smooth_iters: int) -> dict:
+                    smooth_iters: int, skip_fem: bool = False) -> dict:
     """Time the post-generation mesh lifecycle stages (Python; #155).
 
     Generation is intentionally excluded. Each repeat rebuilds the mesh so the
     adjacency/skeletonization timings are cold-start; the smoothers run on the
     fully-initialised mesh and do not mutate it (they return new point arrays).
+
+    ``skip_fem`` omits the FEM direct smoother stage (``fem_smooth_s`` is then
+    ``None``) — used by the ``--max-elements`` gate to keep the OOM-prone solver
+    off heavy meshes while the scalable stages still report (#155, #168).
     """
     from chilmesh import CHILmesh
 
@@ -219,7 +248,8 @@ def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
         t = time.perf_counter(); m._build_adjacencies(); adj.append(time.perf_counter() - t)
         t = time.perf_counter(); m._skeletonize(); skel.append(time.perf_counter() - t)
         t = time.perf_counter(); m.signed_area(); qual.append(time.perf_counter() - t)
-        t = time.perf_counter(); m.direct_smoother(); fem.append(time.perf_counter() - t)
+        if not skip_fem:
+            t = time.perf_counter(); m.direct_smoother(); fem.append(time.perf_counter() - t)
         t = time.perf_counter(); m.angle_based_smoother(n_iter=smooth_iters)
         ang.append(time.perf_counter() - t)
         mesh = m
@@ -227,7 +257,8 @@ def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
         "adj_s": statistics.median(adj),
         "skel_s": statistics.median(skel),
         "quality_s": statistics.median(qual),
-        "fem_smooth_s": statistics.median(fem),
+        "fem_smooth_s": None if skip_fem else statistics.median(fem),
+        "fem_skipped": skip_fem,
         "angle_smooth_s": statistics.median(ang),
         "smooth_iters": smooth_iters,
         "n_verts": int(mesh.n_verts),
@@ -283,6 +314,11 @@ def main() -> int:
     ap.add_argument("--sdf", choices=["annulus", "donut", "square", "none"],
                     help="signed-distance function for the truss stage "
                          "(auto-detected from the mesh name if omitted)")
+    ap.add_argument("--max-elements", type=int, default=0,
+                    help="skip the OOM-prone heavy lifecycle stages (FEM direct "
+                         "smoother + ADMESH truss) when the mesh exceeds this "
+                         "element count; 0 (default) runs every stage. CI sets a "
+                         "finite value so WNAT-scale meshes stay manual-only (#155, #168)")
     args = ap.parse_args()
 
     if not os.environ.get("CHILMESH_RUN_BENCH") and args.emit is None:
@@ -329,28 +365,40 @@ def main() -> int:
               f"{'all agree ✅' if all_match else 'MISMATCH ❌ ' + repr(parity)}."]
 
     # --- Report 2: Python mesh lifecycle (#155) — generation excluded. ---
-    life = bench_lifecycle(conn, pts, args.repeats, args.smooth_iters)
+    skip_heavy, gate_reason = _gate_heavy(int(mesh.n_elems), args.max_elements)
+    life = bench_lifecycle(conn, pts, args.repeats, args.smooth_iters,
+                           skip_fem=skip_heavy)
     sdf_name, sdf = _resolve_sdf(args.mesh, args.sdf)
-    truss = bench_truss(conn, pts, sdf, args.repeats, args.truss_iters) if sdf else None
+    truss = (bench_truss(conn, pts, sdf, args.repeats, args.truss_iters)
+             if (sdf and not skip_heavy) else None)
 
     lines += [
         "",
         "### Mesh lifecycle (Python, post-generation)",
         "",
         f"Median of {args.repeats}. Smoother iterations: {life['smooth_iters']}.",
+    ]
+    if skip_heavy:
+        lines.append(f"\n> **Heavy stages skipped** — {gate_reason}.")
+    lines += [
         "",
         "| Stage | Time |",
         "|---|---:|",
         f"| Adjacency build | {_fmt_s(life['adj_s'])} |",
         f"| Skeletonization | {_fmt_s(life['skel_s'])} |",
         f"| Quality (signed area) | {_fmt_s(life['quality_s'])} |",
-        f"| FEM direct smoother | {_fmt_s(life['fem_smooth_s'])} |",
-        f"| Angle-based smoother | {_fmt_s(life['angle_smooth_s'])} |",
     ]
+    if life["fem_skipped"]:
+        lines.append("| FEM direct smoother | — _(skipped: --max-elements gate)_ |")
+    else:
+        lines.append(f"| FEM direct smoother | {_fmt_s(life['fem_smooth_s'])} |")
+    lines.append(f"| Angle-based smoother | {_fmt_s(life['angle_smooth_s'])} |")
     if truss is not None:
         lines.append(
             f"| ADMESH truss optimizer (sdf=`{sdf_name}`, {truss['niter']} iters) "
             f"| {_fmt_s(truss['truss_s'])} |")
+    elif skip_heavy:
+        lines.append("| ADMESH truss optimizer | — _(skipped: --max-elements gate)_ |")
     else:
         lines.append(f"| ADMESH truss optimizer | — _(skipped: {sdf_name})_ |")
 

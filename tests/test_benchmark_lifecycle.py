@@ -48,6 +48,28 @@ def test_lifecycle_reports_all_stages(bench, donut_arrays):
         assert out[key] > 0.0, f"stage {key} reported non-positive time"
     assert out["smooth_iters"] == 3
     assert out["n_verts"] == pts.shape[0]
+    assert out["fem_skipped"] is False
+
+
+def test_gate_heavy_decision(bench):
+    # gate disabled (0) or mesh within budget → run everything
+    assert bench._gate_heavy(1_000, 0) == (False, "")
+    assert bench._gate_heavy(40, 50)[0] is False
+    assert bench._gate_heavy(50, 50)[0] is False  # boundary: equal is allowed
+    # mesh over the gate → skip, with both counts in the reason
+    skip, reason = bench._gate_heavy(4_000_000, 500_000)
+    assert skip is True
+    assert "4,000,000" in reason and "500,000" in reason
+
+
+def test_max_elements_gate_skips_fem(bench, donut_arrays):
+    conn, pts = donut_arrays
+    out = bench.bench_lifecycle(conn, pts, repeats=1, smooth_iters=3, skip_fem=True)
+    assert out["fem_skipped"] is True
+    assert out["fem_smooth_s"] is None
+    # scalable stages still report positive times
+    for key in ("adj_s", "skel_s", "quality_s", "angle_smooth_s"):
+        assert out[key] > 0.0, f"stage {key} reported non-positive time"
 
 
 def test_sdf_registry_resolves_bundled_domains(bench):

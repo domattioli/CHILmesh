@@ -9,6 +9,15 @@
 > `n_layers` parity across all available implementations, so stale hand-entered
 > figures can't creep back in.
 
+> **Heavy meshes (`--max-elements`, #155):** the lifecycle report's FEM direct
+> smoother and ADMESH truss stages OOM/timeout at WNAT scale (~4M DOF — the FEM
+> direct sparse solver alone exceeds typical CI RAM, see #168). Pass
+> `--max-elements N` to skip those two stages when a mesh exceeds `N` elements;
+> the scalable stages (adjacency, skeletonization, quality, angle smoother)
+> still report. `N=0` (default) runs every stage, so local/manual profiling is
+> unaffected — CI passes a finite `N` to keep WNAT-scale meshes manual-only.
+> Example: `python scripts/benchmark.py --mesh wnat.14 --max-elements 500000`.
+
 ## v1.1.0 — cross-language (single machine, WNAT_Hagen, medians)
 
 | Stage | MATLAB (Octave) | Python | C++ |
