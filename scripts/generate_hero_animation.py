@@ -240,20 +240,16 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
 
     if stage["viz"] == "quality":
         # Color by element quality (cool_r colormap).
-        q = _quality_for(pts, elems)
+        try:
+            q = _quality_for(pts, elems)
+        except Exception:
+            # Fall back to uniform quality=1.0 if quality computation fails
+            # (can happen with interpolated degenerate meshes)
+            q = np.ones(len(elems))
         norm = Normalize(vmin=0.0, vmax=1.0)
         colors = matplotlib.colormaps[QCMAP](norm(q))
         pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.5)
         ax_mesh.add_collection(pc)
-        # Draw mesh edges explicitly for clarity
-        edges = np.vstack([
-            elems[:, [0, 1]],
-            elems[:, [1, 2]],
-            elems[:, [2, 0]],
-        ])
-        edge_segments = pts[edges]
-        edge_coll = LineCollection(edge_segments, colors=EDGE, linewidths=0.3, alpha=0.4)
-        ax_mesh.add_collection(edge_coll)
         cbar_title = "Element quality (cool→good)"
     else:
         # Color by layer index (viridis).
@@ -334,7 +330,7 @@ def main():
                  data["fem_quality"], data["fem_quality"]]
 
     # Frame schedule: HOLD at each stage, TRANSITION between stages
-    HOLD = 25     # frames to hold each stage (2.5s @ 10fps)
+    HOLD = 40     # frames to hold each stage (4.0s @ 10fps)
     TRANS = 12    # transition frames between stages (1.2s)
 
     # Build a flat list of (stage_idx, interp_t, pts_for_dots, quality_for_hist)
