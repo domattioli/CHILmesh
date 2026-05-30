@@ -2,7 +2,7 @@
 name: Owner attention request
 about: Flag an issue as needing the owner's input, decision, or review
 title: ""
-labels: "owner: input-needed"
+labels: "Executive: Needs-Input"
 ---
 
 <!--
