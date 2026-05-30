@@ -2177,9 +2177,14 @@ class CHILmesh(CHILmeshPlotMixin):
             K[2*v+1, 2*v+1] = kinf
 
         c = spsolve(K, F)
+        new_xy = c.reshape(-1, 2)
+        domain_diag = float(np.linalg.norm(np.ptp(p, axis=0)))
+        max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))
+        if not np.isfinite(c).all() or max_disp > domain_diag:
+            return self.points.copy()
         new_points = np.zeros_like(self.points)
-        new_points[:, :2] = c.reshape(-1, 2)
-        new_points[:, 2] = self.points[:, 2]  # preserve z if needed
+        new_points[:, :2] = new_xy
+        new_points[:, 2] = self.points[:, 2]
         return new_points    
 
 
