@@ -1,0 +1,42 @@
+name: Sync Labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/labels.yml'
+      - '.github/workflows/sync-labels.yml'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync:
+    name: Sync labels from .github/labels.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # labels.yml is structured (labels:/deprecated: keys + per-label class:)
+      # for the git-issue-label-manager tooling. EndBug/label-sync wants a flat
+      # array of {name,color,description}, so derive one at runtime.
+      #
+      # GitHub caps label descriptions at 100 chars, so truncate defensively —
+      # keeps any over-length canonical description from failing the sync.
+      - name: Flatten labels.yml to array
+        run: |
+          yq -o=json '.labels' .github/labels.yml \
+            | jq 'map({name, color, description: (.description // "" | .[0:100])})' \
+            > "${RUNNER_TEMP}/labels.flat.json"
+          echo "Flattened $(jq 'length' "${RUNNER_TEMP}/labels.flat.json") labels."
+
+      - name: Sync labels
+        uses: EndBug/label-sync@v2
+        with:
+          config-file: ${{ runner.temp }}/labels.flat.json
+          # true: prune any label not in labels.yml (deletes orphaned/deprecated
+          # definitions repo-wide). Safe now that issue label values are
+          # normalized to the canonical taxonomy (2026-05-24 sweep).
+          delete-other-labels: true
