@@ -1,7 +1,7 @@
 name: Feature Request
 description: Propose a new feature, enhancement, or API addition
 title: "feat: "
-labels: ["enhancement"]
+labels: ["type: feat", "priority: normal", "status: triage"]
 body:
   - type: markdown
     attributes:
@@ -74,10 +74,9 @@ body:
     attributes:
       label: Priority
       options:
-        - "priority:low"
-        - "priority:medium"
-        - "priority:high"
-        - "priority:critical"
+        - "now"
+        - "normal"
+        - "someday"
       default: 1
     validations:
       required: true

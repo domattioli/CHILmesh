@@ -1,12 +1,12 @@
 name: Research / Task
 description: Audit, investigation, documentation, or research task (no immediate code change required)
 title: "task: "
-labels: ["type:research"]
+labels: ["request: research", "type: feat", "priority: someday", "status: brainstorming"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for audits, investigations, documentation work, or any task that does not fit Bug Report or Feature Request. Routine Claude Code sessions can pick these up if labeled `claude-routine-sessions`.
+        Use this for audits, investigations, documentation work, or any task that does not fit Bug Report or Feature Request.
   - type: textarea
     id: background
     attributes:
@@ -44,20 +44,12 @@ body:
     attributes:
       label: Priority
       options:
-        - "priority:low"
-        - "priority:medium"
-        - "priority:high"
-        - "priority:critical"
-      default: 0
+        - "now"
+        - "normal"
+        - "someday"
+      default: 2
     validations:
       required: true
-  - type: checkboxes
-    id: routine-eligible
-    attributes:
-      label: Routine session eligibility
-      description: If checked, the `claude-routine-sessions` label will be added (see CLAUDE.md routine workflow).
-      options:
-        - label: This task is suitable for autonomous Claude Code routine sessions
   - type: textarea
     id: related
     attributes:

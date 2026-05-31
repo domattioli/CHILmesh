@@ -1,7 +1,7 @@
 name: Bug Report
 description: Report a defect or unexpected behavior in CHILmesh
 title: "bug: "
-labels: ["bug"]
+labels: ["type: bug", "priority: normal", "status: ready"]
 body:
   - type: markdown
     attributes:
@@ -82,10 +82,9 @@ body:
     attributes:
       label: Priority
       options:
-        - "priority:low"
-        - "priority:medium"
-        - "priority:high"
-        - "priority:critical"
+        - "now"
+        - "normal"
+        - "someday"
       default: 1
     validations:
       required: true
