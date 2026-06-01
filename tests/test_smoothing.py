@@ -518,6 +518,85 @@ class TestQuadAspectRatioPreservation:
         )
 
 
+class TestFEMSmootherDivergenceGuard:
+    """Regression tests for near-singular stiffness guard (#174).
+
+    spsolve() returns finite-but-garbage coords on slivery quads without raising.
+    Repeated passes compound → exponential drift. Guard must reject and return
+    original coords unchanged.
+    """
+
+    def _make_near_singular_mesh(self):
+        """Build a near-degenerate quad mesh with an extremely slivery element.
+
+        One quad is squashed to near-zero height (aspect ratio ~1e6), which
+        produces a near-singular stiffness matrix. The other quad is normal.
+        """
+        # 6 vertices: two quads sharing a horizontal edge.
+        # Top quad: normal (unit square).
+        # Bottom quad: extremely thin (height 1e-6 → near-singular stiffness).
+        eps = 1e-6
+        pts = np.array([
+            [0.0, 0.0, 0.0],         # 0 - bottom-left of thin quad
+            [1.0, 0.0, 0.0],         # 1 - bottom-right of thin quad
+            [0.0, eps, 0.0],          # 2 - top-left of thin quad / bottom-left of normal quad
+            [1.0, eps, 0.0],          # 3 - top-right of thin quad / bottom-right of normal quad
+            [0.0, 1.0 + eps, 0.0],   # 4 - top-left of normal quad
+            [1.0, 1.0 + eps, 0.0],   # 5 - top-right of normal quad
+        ], dtype=float)
+        # Quad connectivity (0-indexed, CCW): [v0, v1, v2, v3]
+        conn = np.array([
+            [0, 1, 3, 2],  # thin (near-singular) quad — CCW
+            [2, 3, 5, 4],  # normal quad — CCW
+        ], dtype=int)
+        return CHILmesh(connectivity=conn, points=pts, compute_layers=False)
+
+    def test_near_singular_guard_returns_finite_coords(self):
+        """direct_smoother must return finite coords even on near-singular mesh."""
+        mesh = self._make_near_singular_mesh()
+        result = mesh.direct_smoother(kinf=1e12)
+        assert np.all(np.isfinite(result)), (
+            "direct_smoother returned non-finite coords on near-singular mesh"
+        )
+
+    def test_near_singular_guard_returns_original_on_garbage_solve(self):
+        """When solve produces displacement > domain diagonal, original coords returned."""
+        mesh = self._make_near_singular_mesh()
+        original = mesh.points.copy()
+        result = mesh.direct_smoother(kinf=1e12)
+        domain_diag = float(np.linalg.norm(np.ptp(original[:, :2], axis=0)))
+        max_disp = float(np.max(np.linalg.norm(result[:, :2] - original[:, :2], axis=1)))
+        # Either the solve produced a small, sensible displacement...
+        # ...or the guard fired and returned original coords exactly.
+        if max_disp > domain_diag:
+            pytest.fail(
+                f"Guard did not fire: max_disp={max_disp:.3g} > domain_diag={domain_diag:.3g}"
+            )
+        # If guard fired, result == original (within float precision).
+        # If solve was stable, result may differ but displacement must be bounded.
+        # Both outcomes are acceptable; what's NOT acceptable is silent exponential drift.
+
+    def test_multiple_fem_passes_do_not_diverge(self):
+        """Repeated calls to direct_smoother must not produce exponentially growing displacement.
+
+        Regression for the QuADMesh Test_Case_1.14 pattern: pass 1 ok, passes 2-5 diverge.
+        """
+        mesh = self._make_near_singular_mesh()
+        domain_diag = float(np.linalg.norm(np.ptp(mesh.points[:, :2], axis=0)))
+        prev_points = mesh.points.copy()
+        for i in range(5):
+            result = mesh.direct_smoother(kinf=1e12)
+            assert np.all(np.isfinite(result)), f"Pass {i+1}: non-finite coords"
+            max_disp = float(np.max(np.linalg.norm(result[:, :2] - prev_points[:, :2], axis=1)))
+            assert max_disp <= domain_diag, (
+                f"Pass {i+1}: displacement {max_disp:.3g} exceeds domain diagonal {domain_diag:.3g} "
+                f"— divergence guard failed"
+            )
+            # Update mesh points for next pass (simulate repeated calling)
+            mesh.change_points(result, acknowledge_change=True)
+            prev_points = result.copy()
+
+
 class TestSmootherIntegration:
     """Integration tests for smooth_mesh() method."""
 

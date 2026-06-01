@@ -1802,31 +1802,54 @@ class CHILmesh(CHILmeshPlotMixin):
                 m_ring = len(ring)
                 theta_star = two_pi / m_ring
                 v_pos = p[v]
-                correction = np.zeros(2)
 
-                for k in range(m_ring):
-                    a = p[ring[k]]
-                    b = p[ring[(k + 1) % m_ring]]
+                # Vectorized ring computation
+                ring_arr = np.array(ring)
+                ring_next = np.roll(ring_arr, -1)  # [ring[1], ring[2], ..., ring[0]]
 
-                    da = a - v_pos
-                    db = b - v_pos
-                    la = np.linalg.norm(da)
-                    lb = np.linalg.norm(db)
-                    if la < 1e-14 or lb < 1e-14:
-                        continue
+                a_vecs = p[ring_arr]  # (m_ring, 2)
+                b_vecs = p[ring_next]  # (m_ring, 2)
 
-                    ua = da / la
-                    ub = db / lb
-                    cos_a = np.clip(ua @ ub, -1.0, 1.0)
-                    alpha_k = np.arccos(cos_a)
+                da = a_vecs - v_pos  # (m_ring, 2)
+                db = b_vecs - v_pos  # (m_ring, 2)
 
-                    bisector = ua + ub
-                    bl = np.linalg.norm(bisector)
-                    bisector = bisector / bl if bl > 1e-10 else np.array([-ua[1], ua[0]])
+                la = np.linalg.norm(da, axis=1)  # (m_ring,)
+                lb = np.linalg.norm(db, axis=1)  # (m_ring,)
 
-                    deficit = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)
-                    avg_len = (la + lb) * 0.5
-                    correction += deficit * avg_len * bisector
+                # Valid mask: exclude degenerate edges
+                valid = (la >= 1e-14) & (lb >= 1e-14)
+
+                ua = np.zeros_like(da)
+                ub = np.zeros_like(db)
+                ua[valid] = da[valid] / la[valid, np.newaxis]
+                ub[valid] = db[valid] / lb[valid, np.newaxis]
+
+                # Compute angles: cos(alpha_k) = ua · ub
+                cos_a = np.sum(ua * ub, axis=1)  # (m_ring,)
+                cos_a = np.clip(cos_a, -1.0, 1.0)
+                alpha_k = np.arccos(cos_a)  # (m_ring,)
+
+                # Bisectors
+                bisector = ua + ub  # (m_ring, 2)
+                bl = np.linalg.norm(bisector, axis=1)  # (m_ring,)
+
+                # Normalize bisectors; fallback for small norms
+                normalized_bisector = np.zeros_like(bisector)
+                large_bl = bl > 1e-10
+                normalized_bisector[large_bl] = bisector[large_bl] / bl[large_bl, np.newaxis]
+                # Fallback: perpendicular to ua (rotate 90° CCW: [-y, x])
+                normalized_bisector[~large_bl] = np.column_stack([-ua[~large_bl, 1], ua[~large_bl, 0]])
+
+                # Deficits and corrections
+                deficits = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)  # (m_ring,)
+                avg_lens = (la + lb) * 0.5  # (m_ring,)
+
+                # Only include valid contributions
+                deficits[~valid] = 0.0
+                avg_lens[~valid] = 0.0
+
+                # correction = sum_k(deficit_k * avg_len_k * bisector_k)
+                correction = np.sum(deficits[:, np.newaxis] * avg_lens[:, np.newaxis] * normalized_bisector, axis=0)
 
                 if np.linalg.norm(correction) < 1e-14:
                     continue
@@ -2154,9 +2177,14 @@ class CHILmesh(CHILmeshPlotMixin):
             K[2*v+1, 2*v+1] = kinf
 
         c = spsolve(K, F)
+        new_xy = c.reshape(-1, 2)
+        domain_diag = float(np.linalg.norm(np.ptp(p, axis=0)))
+        max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))
+        if not np.isfinite(c).all() or max_disp > domain_diag:
+            return self.points.copy()
         new_points = np.zeros_like(self.points)
-        new_points[:, :2] = c.reshape(-1, 2)
-        new_points[:, 2] = self.points[:, 2]  # preserve z if needed
+        new_points[:, :2] = new_xy
+        new_points[:, 2] = self.points[:, 2]
         return new_points    
 
 

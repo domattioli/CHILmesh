@@ -1,0 +1,4 @@
+# Exclude Claude-specific files from source distributions (git archive, PyPI sdist, Zenodo).
+# Keeps .claude/ off PyPI wheels and Zenodo snapshots without removing from the repo.
+.claude/  export-ignore
+CLAUDE.md export-ignore
