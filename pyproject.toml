@@ -63,7 +63,7 @@ Changelog = "https://github.com/domattioli/CHILmesh/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/domattioli/CHILmesh#readme"
 
 [tool.setuptools]
-package-dir = {"": "src"}
+package-dir = {"" = "src"}
 packages = ["chilmesh", "chilmesh.utils", "chilmesh.data", "chilmesh.backends"]
 license-files = []
 
