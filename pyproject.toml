@@ -7,7 +7,7 @@ name = "chilmesh"
 version = "1.2.0"
 description = "Fast 2D mesh library for hydrodynamic domains — Python API with optional C++ acceleration"
 authors = [{name = "Dominik Mattioli"}]
-license = {file = "LICENSE"}
+license = {text = "PolyForm Noncommercial License 1.0.0"}
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = [
@@ -53,7 +53,7 @@ dev = [
 ]
 
 [project.scripts]
-chilmesh = "chilmesh.cli:main"
+childmesh = "chilmesh.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/domattioli/CHILmesh"
@@ -63,8 +63,9 @@ Changelog = "https://github.com/domattioli/CHILmesh/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/domattioli/CHILmesh#readme"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"": "src"}
 packages = ["chilmesh", "chilmesh.utils", "chilmesh.data", "chilmesh.backends"]
+license-files = []
 
 [tool.setuptools.package-data]
 "chilmesh.data" = ["*.fort.14", "*.14"]
