@@ -53,7 +53,7 @@ dev = [
 ]
 
 [project.scripts]
-childmesh = "chilmesh.cli:main"
+chilmesh = "chilmesh.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/domattioli/CHILmesh"
