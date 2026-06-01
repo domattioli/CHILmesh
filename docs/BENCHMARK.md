@@ -35,6 +35,27 @@ incomplete (#163). Absolute times are machine-dependent.
 
 ---
 
+## v1.1.0 — mesh lifecycle (Python, post-generation) (#155)
+
+Times every post-generation stage. Generation itself excluded (per #155). Reference mesh: `donut_domain.fort.14` (188 vertices, 276 elements) with `--sdf donut`, 5 smoother/truss iterations, 3 repeats.
+
+> **Lifecycle stages confirmed:** adjacency build → skeletonization → quality → FEM direct smoother → angle-based smoother → ADMESH warm-start truss optimizer.
+
+| Stage | Time (donut) |
+|---|---:|
+| Adjacency build | 3 ms |
+| Skeletonization | 2 ms |
+| Quality (signed area) | 0 ms |
+| FEM direct smoother | 37 ms |
+| Angle-based smoother | 202 ms |
+| ADMESH truss optimizer (sdf=`donut`, 5 iters) | 34 ms |
+
+> **Heavy-mesh gate (#155, #168):** FEM direct smoother and ADMESH truss OOM/timeout at WNAT scale (~4M DOF). Pass `--max-elements N` to auto-skip those two stages when `n_elems > N`; scalable stages (adjacency, skeletonization, quality, angle smoother) always report. WNAT-scale lifecycle profiling requires iterative/GPU solver work (#167, #168).
+
+> **Reproduce:** `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh src/chilmesh/data/donut_domain.fort.14 --sdf donut --smooth-iters 5 --truss-iters 5`
+
+---
+
 ## Historical (pre-1.1.0)
 
 Retained as the performance arc through v0.4.1; these figures predate the
