@@ -1,0 +1,50 @@
+name: Introspect Monthly Review
+
+# Self-sustaining monthly cadence for the introspect skill (DomI #120, follow-up to #9).
+# Opens one dated "introspect skill monthly review" issue from the skill's template.
+# Idempotent: skips if an open issue for the current month already exists.
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'   # 00:00 UTC on the 1st of each month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  open-review-issue:
+    name: Open monthly introspect review issue
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open or skip monthly review issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEMPLATE: skills/introspect/templates/monthly-review.md
+        run: |
+          set -euo pipefail
+
+          MONTH="$(date -u +%Y-%m)"
+          TITLE="chore: introspect skill monthly review — ${MONTH}"
+
+          if [ ! -f "${TEMPLATE}" ]; then
+            echo "::error::template ${TEMPLATE} missing"
+            exit 1
+          fi
+
+          EXISTING="$(gh issue list --state open --search "in:title \"${TITLE}\"" --json number --jq '.[0].number // empty')"
+          if [ -n "${EXISTING}" ]; then
+            echo "Open review issue already exists (#${EXISTING}) for ${MONTH} — skipping (idempotent)."
+            exit 0
+          fi
+
+          BODY="$(sed "s/{{MONTH}}/${MONTH}/g" "${TEMPLATE}")"
+
+          gh issue create \
+            --title "${TITLE}" \
+            --body "${BODY}" \
+            --label "type: chore" \
+            --label "priority: someday"
