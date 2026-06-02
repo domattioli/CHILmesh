@@ -8,7 +8,7 @@ Ground truth established empirically (deterministic across runs):
 | mesh           | smoother              | interior node (start [1,1]) |
 |----------------|-----------------------|-----------------------------|
 | pure quad      | direct_smoother       | [1.0000, 1.0000]  exact     |
-| mixed tri/quad | direct_smoother       | [0.9269, 0.9154]  distorted |
+| mixed tri/quad | direct_smoother       | distorted (#173: F=0 fix; value shifted from [0.9269, 0.9154]) |
 | mixed tri/quad | angle_based_smoother  | [0.9879, 0.9879]  ~0.017 off|
 
 The pure-quad case is exact because every interior quad angle is 90deg and
