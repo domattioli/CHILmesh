@@ -1330,8 +1330,14 @@ class CHILmesh(CHILmeshPlotMixin):
         attributes qualifies. This avoids a hard dependency on the
         ``admesh_domains`` package — consumers can pass any compatible object.
 
+        Alternatively, if the record has a ``type`` attribute, routes to the
+        appropriate file reader:
+        - type == "SMS_2DM" (or "2dm"): calls read_from_2dm(record.filename)
+        - type == "fort14", "FORT14", "ADCIRC": calls read_from_fort14(record.filename)
+
         Parameters:
-            record: An object with ``.connectivity`` and ``.points`` attributes.
+            record: An object with ``.connectivity`` and ``.points`` attributes,
+                or a ``type`` and ``filename`` attribute for file-based loading.
                 Optionally ``.grid_name`` (str) for naming the mesh.
             compute_layers: If False, skip skeletonization for fast init.
 
@@ -1343,6 +1349,24 @@ class CHILmesh(CHILmeshPlotMixin):
             >>> record = get_mesh("WNAT/hagen@v1")
             >>> mesh = CHILmesh.from_admesh_domain(record)
         """
+        # Check for type-based routing (file-based loading)
+        record_type = getattr(record, "type", None)
+        if record_type is not None:
+            record_type_lower = str(record_type).lower()
+            if record_type_lower in ("sms_2dm", "2dm"):
+                filename = getattr(record, "filename", None)
+                if filename is not None:
+                    return cls.read_from_2dm(
+                        Path(filename), compute_layers=compute_layers
+                    )
+            elif record_type_lower in ("fort14", "adcirc"):
+                filename = getattr(record, "filename", None)
+                if filename is not None:
+                    return cls.read_from_fort14(
+                        Path(filename), compute_layers=compute_layers
+                    )
+
+        # Fall through to duck-typed path (connectivity + points attributes)
         name = getattr(record, "grid_name", None)
         return cls(
             connectivity=np.asarray(record.connectivity),
@@ -1435,23 +1459,54 @@ class CHILmesh(CHILmeshPlotMixin):
         filename = Path(filename)
         nodes = {}
         elems = []
+        has_mixed = False
+        has_tri = False
+        has_quad = False
+
         with open(filename) as f:
             for line in f:
                 parts = line.split()
                 if not parts:
                     continue
-                if parts[0] in ('E3T', 'E4Q'):
-                    elems.append([int(x) - 1 for x in parts[2:]])
+                if parts[0] == 'E3T':
+                    # E3T: elem_id n1 n2 n3 material_id
+                    # Take only vertex indices (parts[2:5]), skip material_id
+                    vertices = [int(x) - 1 for x in parts[2:5]]
+                    elems.append(vertices)
+                    has_tri = True
+                elif parts[0] == 'E4Q':
+                    # E4Q: elem_id n1 n2 n3 n4 material_id
+                    # Take only vertex indices (parts[2:6]), skip material_id
+                    vertices = [int(x) - 1 for x in parts[2:6]]
+                    elems.append(vertices)
+                    has_quad = True
                 elif parts[0] == 'ND':
                     nid = int(parts[1]) - 1
                     nodes[nid] = [float(x) for x in parts[2:]]
+
+        if not nodes:
+            raise ValueError("No nodes found in 2dm file")
+
+        # Check if mixed-element mesh
+        has_mixed = has_tri and has_quad
 
         n_verts = max(nodes.keys()) + 1
         pts = np.zeros((n_verts, 3))
         for nid, coords in nodes.items():
             pts[nid] = coords if len(coords) == 3 else coords + [0.0]
 
-        conn = np.array(elems, dtype=int)
+        # Handle padding for mixed-element meshes
+        if has_mixed:
+            # Pad triangles to 4 columns by repeating first vertex
+            padded_elems = []
+            for elem in elems:
+                if len(elem) == 3:
+                    padded_elems.append([elem[0], elem[1], elem[2], elem[0]])
+                else:
+                    padded_elems.append(elem)
+            conn = np.array(padded_elems, dtype=int)
+        else:
+            conn = np.array(elems, dtype=int)
         return cls(connectivity=conn, points=pts,
                    grid_name=filename.stem, compute_layers=compute_layers)
 
