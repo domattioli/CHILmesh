@@ -224,11 +224,12 @@ def _quality_for(pts, elems):
 
 
 def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
-                 prev_pts=None, current_pts=None):
+                 prev_pts=None, current_pts=None, quality_array_override=None):
     """Render a single keyframe with interpolated mesh morphing and vertex dots.
 
     prev_pts: interpolated points for mesh rendering (morphing between stages).
     current_pts: positions for yellow vertex tracking dots.
+    quality_array_override: if provided, use this quality array for mesh coloring instead of recomputing.
     """
     ax_mesh.clear()
     ax_hist.clear()
@@ -240,12 +241,15 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
 
     if stage["viz"] == "quality":
         # Color by element quality (cool_r colormap).
-        try:
-            q = _quality_for(pts, elems)
-        except Exception:
-            # Fall back to uniform quality=1.0 if quality computation fails
-            # (can happen with interpolated degenerate meshes)
-            q = np.ones(len(elems))
+        if quality_array_override is not None:
+            q = quality_array_override
+        else:
+            try:
+                q = _quality_for(pts, elems)
+            except Exception:
+                # Fall back to uniform quality=1.0 if quality computation fails
+                # (can happen with interpolated degenerate meshes)
+                q = np.ones(len(elems))
         norm = Normalize(vmin=0.0, vmax=1.0)
         colors = matplotlib.colormaps[QCMAP](norm(q))
         pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.5)
@@ -338,7 +342,7 @@ def main():
     frame_schedule = []
     for si in range(n_stages):
         # Extra hold time for final stage (skeletonization view)
-        hold_frames = HOLD + (15 if si == n_stages - 1 else 0)
+        hold_frames = HOLD + (20 if si == n_stages - 1 else 0)
         for _ in range(hold_frames):
             frame_schedule.append({"type": "hold", "stage": si})
         if si < n_stages - 1:
@@ -392,7 +396,7 @@ def main():
                     interp_qual = qualities[si]
 
             render_frame(ax_mesh, ax_hist, stage, interp_qual, si, n_stages,
-                         prev_pts=interp_pts, current_pts=interp_pts)
+                         prev_pts=interp_pts, current_pts=interp_pts, quality_array_override=interp_qual)
 
         # Stage label overlaid above mesh axes (in figure coords above ax_mesh)
         ax_mesh.text(
