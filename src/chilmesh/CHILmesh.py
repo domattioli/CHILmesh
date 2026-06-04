@@ -1288,6 +1288,442 @@ class CHILmesh(CHILmeshPlotMixin):
         # Invalidate spatial indices after moving points
         self._build_spatial_indices()
 
+    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *kwargs) -> np.ndarray:
+        """
+        Perform mesh smoothing using a modified FEM-based approach.
+
+        Parameters:
+            method: Smoothing method ('FEM','angle-based')
+            acknowledge_change: If True, acknowledges the change in the mesh
+        """
+        assert acknowledge_change, "acknowledge_change must be True to change mesh -- this will change the mesh, make sure you understand this before using this method within a broader algorithm."
+        if method.lower() == 'fem':
+            new_points = self.direct_smoother( *kwargs )
+        elif method.lower() == 'angle-based':
+            new_points = self.angle_based_smoother( *kwargs )
+        else:
+            raise ValueError(f"Unknown smoothing method: {method}")
+        self.change_points( new_points, acknowledge_change=True )
+        return new_points
+
+    def _ordered_vertex_ring(self, v_idx: int, elem_ids: list) -> list | None:
+        """
+        Return CCW-ordered ring of neighbor vertices around interior vertex v_idx.
+
+        Uses element connectivity to chain pred->succ pairs. Returns None if
+        non-manifold or the vertex is on the boundary (open ring).
+        """
+        succ_map: dict[int, int] = {}
+
+        for eid in elem_ids:
+            row = self.connectivity_list[eid]
+            if row.shape[0] == 4 and row[3] == row[0]:
+                verts = row[:3].tolist()
+            elif row.shape[0] == 4 and (
+                row[0] == row[1] or row[1] == row[2]
+                or row[2] == row[3] or row[1] == row[3]
+                or row[0] == row[2]
+            ):
+                seen: set[int] = set()
+                verts = []
+                for x in row.tolist():
+                    if x not in seen:
+                        seen.add(x)
+                        verts.append(x)
+            else:
+                verts = row.tolist()
+
+            n_local = len(verts)
+            try:
+                i = verts.index(v_idx)
+            except ValueError:
+                continue
+
+            pred = verts[(i - 1) % n_local]
+            succ = verts[(i + 1) % n_local]
+            succ_map[pred] = succ
+
+        if len(succ_map) != len(elem_ids):
+            return None
+
+        start = next(iter(succ_map))
+        ring = [start]
+        cur = start
+        for _ in range(len(succ_map) - 1):
+            nxt = succ_map.get(cur)
+            if nxt is None or nxt == start:
+                break
+            ring.append(nxt)
+            cur = nxt
+
+        if succ_map.get(ring[-1]) != start or len(ring) != len(succ_map):
+            return None
+
+        return ring
+
+    def angle_based_smoother(self, n_iter: int = 100, omega: float = 0.5,
+                              tol: float = 1e-8) -> np.ndarray:
+        """
+        Iterative angle-based smoother (Zhou & Shimada 2000).
+
+        For each interior vertex, computes a bisector-weighted correction that
+        drives each sector angle toward the equiangular target 2pi/m. Deficit
+        is clamped to +/-pi/3 to prevent overshoot in near-degenerate sectors.
+        Updates are Gauss-Seidel and accepted only when the local minimum-quality
+        metric strictly improves, guaranteeing monotone quality growth.
+
+        Parameters:
+            n_iter: Maximum number of passes over all interior vertices
+            omega:  Initial relaxation factor (halved up to 6x in line search)
+            tol:    Convergence threshold on max per-vertex displacement
+
+        Reference:
+            Zhou, M., & Shimada, K. (2000).
+            "An angle-based approach to two-dimensional mesh smoothing".
+            Proceedings of the 9th International Meshing Roundtable, 373-384.
+        """
+        p = self.points[:, :2].copy()
+        n = self.n_verts
+
+        edge_verts = self.edge2vert(self.boundary_edges())
+        boundary_set = set(np.unique(edge_verts.flatten()).tolist())
+
+        vert2elem = self.adjacencies['Vert2Elem']
+        two_pi = 2.0 * np.pi
+        deficit_cap = np.pi / 3.0
+
+        def _elem_verts(row):
+            if row.shape[0] == 4 and row[3] == row[0]:
+                return row[:3].tolist()
+            if row.shape[0] == 4 and (
+                row[0] == row[1] or row[1] == row[2]
+                or row[2] == row[3] or row[1] == row[3]
+                or row[0] == row[2]
+            ):
+                seen: set[int] = set()
+                out = []
+                for x in row.tolist():
+                    if x not in seen:
+                        seen.add(x)
+                        out.append(x)
+                return out
+            return row.tolist()
+
+        import math as _math
+        _R2D = 180.0 / _math.pi
+
+        def _acos_deg(px0, py0, px1, py1, px2, py2):
+            ux = px1 - px0; uy = py1 - py0
+            wx = px2 - px0; wy = py2 - py0
+            lu2 = ux*ux + uy*uy
+            lw2 = wx*wx + wy*wy
+            if lu2 < 1e-28 or lw2 < 1e-28:
+                return 0.0
+            c = (ux*wx + uy*wy) / _math.sqrt(lu2 * lw2)
+            return _math.acos(max(-1.0, min(1.0, c))) * _R2D
+
+        def _local_min_quality_fast(v_idx, vpos, p_cur, cached_elem_verts):
+            vpx, vpy = vpos[0], vpos[1]
+            min_q = 1e9
+            for ev in cached_elem_verts:
+                n_v = len(ev)
+                px = np.empty(n_v); py = np.empty(n_v)
+                for i, vi in enumerate(ev):
+                    if vi == v_idx:
+                        px[i] = vpx; py[i] = vpy
+                    else:
+                        px[i] = p_cur[vi, 0]; py[i] = p_cur[vi, 1]
+
+                if n_v == 3:
+                    dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
+                    dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    a0 = _acos_deg(px[0],py[0], px[1],py[1], px[2],py[2])
+                    a1 = _acos_deg(px[1],py[1], px[0],py[0], px[2],py[2])
+                    a2 = 180.0 - a0 - a1
+                    amax = max(a0, a1, a2); amin = min(a0, a1, a2)
+                    q = 1.0 - max((amax - 60.0) / 120.0, (60.0 - amin) / 60.0)
+                else:
+                    dx1 = px[1]-px[0]; dy1 = py[1]-py[0]
+                    dx2 = px[2]-px[0]; dy2 = py[2]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    dx1 = px[2]-px[0]; dy1 = py[2]-py[0]
+                    dx2 = px[3]-px[0]; dy2 = py[3]-py[0]
+                    if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    a0 = _acos_deg(px[0],py[0], px[3],py[3], px[1],py[1])
+                    a1 = _acos_deg(px[1],py[1], px[0],py[0], px[2],py[2])
+                    a2 = _acos_deg(px[2],py[2], px[1],py[1], px[3],py[3])
+                    a3 = 360.0 - a0 - a1 - a2
+                    amax = max(a0, a1, a2, a3); amin = min(a0, a1, a2, a3)
+                    q = 1.0 - max((amax - 90.0) / 90.0, (90.0 - amin) / 90.0)
+                if q < min_q:
+                    min_q = q
+            return min_q
+
+        for _iter in range(n_iter):
+            max_move = 0.0
+            elem_verts_cache = {}
+
+            for v in range(n):
+                if v in boundary_set:
+                    continue
+
+                elem_ids = list(vert2elem[v])
+                if not elem_ids:
+                    continue
+
+                ring = self._ordered_vertex_ring(v, elem_ids)
+                if ring is None or len(ring) < 2:
+                    continue
+
+                if v not in elem_verts_cache:
+                    elem_verts_cache[v] = [_elem_verts(self.connectivity_list[eid]) for eid in elem_ids]
+                cached_ev = elem_verts_cache[v]
+
+                m_ring = len(ring)
+                theta_star = two_pi / m_ring
+                v_pos = p[v]
+
+                ring_arr = np.array(ring)
+                ring_next = np.roll(ring_arr, -1)
+
+                a_vecs = p[ring_arr]
+                b_vecs = p[ring_next]
+
+                da = a_vecs - v_pos
+                db = b_vecs - v_pos
+
+                la = np.linalg.norm(da, axis=1)
+                lb = np.linalg.norm(db, axis=1)
+
+                valid = (la >= 1e-14) & (lb >= 1e-14)
+
+                ua = np.zeros_like(da)
+                ub = np.zeros_like(db)
+                ua[valid] = da[valid] / la[valid, np.newaxis]
+                ub[valid] = db[valid] / lb[valid, np.newaxis]
+
+                cos_a = np.sum(ua * ub, axis=1)
+                cos_a = np.clip(cos_a, -1.0, 1.0)
+                alpha_k = np.arccos(cos_a)
+
+                bisector = ua + ub
+                bl = np.linalg.norm(bisector, axis=1)
+
+                normalized_bisector = np.zeros_like(bisector)
+                large_bl = bl > 1e-10
+                normalized_bisector[large_bl] = bisector[large_bl] / bl[large_bl, np.newaxis]
+                normalized_bisector[~large_bl] = np.column_stack([-ua[~large_bl, 1], ua[~large_bl, 0]])
+
+                deficits = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)
+                avg_lens = (la + lb) * 0.5
+
+                deficits[~valid] = 0.0
+                avg_lens[~valid] = 0.0
+
+                correction = np.sum(deficits[:, np.newaxis] * avg_lens[:, np.newaxis] * normalized_bisector, axis=0)
+
+                if np.linalg.norm(correction) < 1e-14:
+                    continue
+
+                current_q = _local_min_quality_fast(v, v_pos, p, cached_ev)
+
+                step = omega * correction / m_ring
+                scale = 1.0
+                accepted = False
+                for _ in range(6):
+                    candidate = v_pos + scale * step
+                    new_q = _local_min_quality_fast(v, candidate, p, cached_ev)
+                    if new_q > current_q:
+                        accepted = True
+                        break
+                    scale *= 0.5
+
+                if accepted:
+                    p[v] = candidate
+                    move = np.linalg.norm(scale * step)
+                    if move > max_move:
+                        max_move = move
+
+            if max_move < tol:
+                break
+
+        new_points = np.zeros_like(self.points)
+        new_points[:, :2] = p
+        new_points[:, 2] = self.points[:, 2]
+        return new_points
+
+    def _detect_element_types(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Detect element types from connectivity_list.
+
+        Returns:
+            (tris, quads): Arrays of triangle and quad element indices.
+        """
+        n_cols = self.connectivity_list.shape[1]
+
+        if n_cols == 3:
+            all_indices = np.arange(self.connectivity_list.shape[0])
+            return all_indices, np.array([], dtype=int)
+        elif n_cols == 4:
+            rows = self.connectivity_list
+            tri_mask = (
+                (rows[:, 0] == rows[:, 1])
+                | (rows[:, 1] == rows[:, 2])
+                | (rows[:, 2] == rows[:, 3])
+                | (rows[:, 3] == rows[:, 0])
+                | (rows[:, 0] == rows[:, 2])
+                | (rows[:, 1] == rows[:, 3])
+            )
+            all_indices = np.arange(len(rows))
+            return all_indices[tri_mask], all_indices[~tri_mask]
+        else:
+            raise ValueError(f"Unexpected connectivity_list shape: {self.connectivity_list.shape}")
+
+    def _tri_stiffness_assembly(self, tri_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
+        """Assemble stiffness matrix contributions from triangle elements (Balendran 1999)."""
+        t = self.connectivity_list[tri_indices, :3]
+
+        D = 2.0 * np.eye(2)
+        T = np.array([[-1.0, -np.sqrt(3)], [np.sqrt(3), -1.0]])
+
+        rows, cols, data = [], [], []
+        for tri in t:
+            for i in range(3):
+                for j in range(3):
+                    block = D if i == j else T if j == (i+1)%3 else T.T
+                    for di in range(2):
+                        for dj in range(2):
+                            rows.append(2*tri[i] + di)
+                            cols.append(2*tri[j] + dj)
+                            data.append(block[di, dj])
+
+        return rows, cols, data
+
+    def _quad_stiffness_assembly(self, quad_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
+        """Assemble stiffness from quad elements via the Q4 bilinear Laplacian."""
+        q = self.connectivity_list[quad_indices, :4]
+
+        KL = (1.0 / 6.0) * np.array(
+            [[4.0, -1.0, -2.0, -1.0],
+             [-1.0, 4.0, -1.0, -2.0],
+             [-2.0, -1.0, 4.0, -1.0],
+             [-1.0, -2.0, -1.0, 4.0]]
+        )
+
+        rows, cols, data = [], [], []
+        for quad in q:
+            for i in range(4):
+                for j in range(4):
+                    k = KL[i, j]
+                    if k == 0.0:
+                        continue
+                    vi, vj = int(quad[i]), int(quad[j])
+                    for d in range(2):
+                        rows.append(2 * vi + d)
+                        cols.append(2 * vj + d)
+                        data.append(k)
+
+        return rows, cols, data
+
+    def _mixed_stiffness_assembly(self, tri_indices: np.ndarray, quad_indices: np.ndarray,
+                                   p: np.ndarray, n: int) -> tuple:
+        """Assemble stiffness matrix for mixed element mesh."""
+        rows, cols, data = [], [], []
+
+        if len(tri_indices) > 0:
+            tri_rows, tri_cols, tri_data = self._tri_stiffness_assembly(tri_indices, p, n)
+            rows.extend(tri_rows)
+            cols.extend(tri_cols)
+            data.extend(tri_data)
+
+        if len(quad_indices) > 0:
+            quad_rows, quad_cols, quad_data = self._quad_stiffness_assembly(quad_indices, p, n)
+            rows.extend(quad_rows)
+            cols.extend(quad_cols)
+            data.extend(quad_data)
+
+        return rows, cols, data
+
+    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False) -> np.ndarray:
+        """
+        Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
+        Supports triangle, quad, and mixed-element meshes.
+
+        Triangles use the Balendran rotation-based stiffness (equilateral target);
+        quads use the Q4 bilinear Laplacian (square target).
+
+        Interior RHS F = 0 per Balendran/MATLAB FEMSmooth.m — only boundary
+        pinning terms are non-zero. (#173 fix: removed incorrect
+        _compute_angle_based_forces call from interior RHS.)
+
+        Parameters:
+            kinf: Large stiffness value for fixed (pinned) vertices.
+            freeze_quad_nodes: When True, pin every vertex that is a corner of any
+                quad element in addition to the boundary.
+
+        Reference:
+            Balendran, B. (1999).
+            "A direct smoothing method for surface meshes".
+            Proceedings of the 8th International Meshing Roundtable, 189-193.
+        """
+        from scipy.sparse import csr_matrix
+        from scipy.sparse.linalg import spsolve
+
+        p = self.points[:, :2]
+        n = self.n_verts
+
+        tri_indices, quad_indices = self._detect_element_types()
+
+        if len(quad_indices) == 0:
+            rows, cols, data = self._tri_stiffness_assembly(tri_indices, p, n)
+        elif len(tri_indices) == 0:
+            rows, cols, data = self._quad_stiffness_assembly(quad_indices, p, n)
+        else:
+            rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
+
+        K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
+
+        # Interior RHS = 0 per Balendran/MATLAB FEMSmooth.m (#173 fix)
+        F = np.zeros(2 * n)
+
+        if "Edge2Elem" in self.adjacencies:
+            edge_verts = self.edge2vert(self.boundary_edges())
+            boundary_nodes = np.unique(edge_verts.flatten())
+        else:
+            edge_count: dict[tuple, int] = {}
+            for row in self.connectivity_list:
+                verts = list(row[:3]) if (len(row) == 4 and row[3] == row[0]) else list(row)
+                for i in range(len(verts)):
+                    a, b = int(verts[i]), int(verts[(i + 1) % len(verts)])
+                    key = (min(a, b), max(a, b))
+                    edge_count[key] = edge_count.get(key, 0) + 1
+            boundary_nodes = np.unique([v for key, cnt in edge_count.items() if cnt == 1 for v in key])
+
+        pinned = set(int(v) for v in boundary_nodes)
+        if freeze_quad_nodes and len(quad_indices) > 0:
+            quad_corner_nodes = np.unique(self.connectivity_list[quad_indices, :4].flatten())
+            pinned |= set(int(v) for v in quad_corner_nodes)
+
+        for v in pinned:
+            F[2*v:2*v+2] = kinf * p[v]
+            K[2*v, 2*v] = kinf
+            K[2*v+1, 2*v+1] = kinf
+
+        c = spsolve(K, F)
+        new_xy = c.reshape(-1, 2)
+        domain_diag = float(np.linalg.norm(np.ptp(p, axis=0)))
+        max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))
+        if not np.isfinite(c).all() or max_disp > domain_diag:
+            return self.points.copy()
+        new_points = np.zeros_like(self.points)
+        new_points[:, :2] = new_xy
+        new_points[:, 2] = self.points[:, 2]
+        return new_points
+
     def admesh_metadata(self) -> dict:
         """
         Return a metadata dictionary compatible with the ADMESH-Domains catalog schema.
