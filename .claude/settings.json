@@ -1,6 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "juliusbrussee/caveman"
+      }
+    },
     "DomI": {
       "source": {
         "source": "github",
@@ -9,6 +15,7 @@
     }
   },
   "enabledPlugins": {
+    "caveman@caveman": true,
     "sync-from-domi@DomI": true,
     "request-from-domi@DomI": true,
     "introspect@DomI": true
@@ -62,6 +69,58 @@
           }
         ]
       }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Edit(*)",
+      "Write(*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git push *)",
+      "Bash(pytest *)",
+      "Bash(bash scripts/*)",
+      "Bash(bash skills/*)",
+      "Bash(. .venv/bin/activate*)",
+      "Bash(uv venv *)",
+      "Bash(uv pip install *)",
+      "Bash(pip install *)",
+      "mcp__github__push_files",
+      "mcp__github__add_issue_comment",
+      "mcp__github__issue_write",
+      "mcp__github__create_pull_request",
+      "mcp__github__update_pull_request",
+      "mcp__github__create_or_update_file",
+      "mcp__github__list_issues",
+      "mcp__github__issue_read",
+      "mcp__github__pull_request_read",
+      "mcp__github__list_pull_requests",
+      "mcp__github__get_file_contents",
+      "mcp__github__search_issues",
+      "mcp__github__list_branches",
+      "mcp__github__list_commits",
+      "mcp__github__search_code",
+      "mcp__github__search_pull_requests",
+      "mcp__github__actions_list",
+      "mcp__github__actions_get",
+      "mcp__github__get_job_logs",
+      "mcp__github__list_releases",
+      "mcp__github__get_latest_release",
+      "mcp__github__get_commit",
+      "mcp__github__list_tags",
+      "mcp__github__get_me",
+      "Bash(pip show *)",
+      "Bash(pip list)",
+      "Bash(pip check)",
+      "Bash(python -m pytest *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(git merge *)",
+      "Bash(source .venv/bin/activate*)",
+      "mcp__github__actions_run_trigger"
     ]
   }
 }
