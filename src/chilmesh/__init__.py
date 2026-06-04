@@ -18,6 +18,7 @@ from importlib import metadata
 from .CHILmesh import CHILmesh, write_fort14
 from .mesh_topology import EdgeMap
 from .mutations import MutableMesh
+from .quality import element_quality
 from . import examples
 from . import bridge
 from . import chilplotting
@@ -92,6 +93,8 @@ __all__ = [
     "EdgeMap",
     "MutableMesh",
     "write_fort14",
+    # Standalone quality computation
+    "element_quality",
     # Backend introspection
     "backend_info",
     # Submodules
