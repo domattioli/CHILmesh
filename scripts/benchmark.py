@@ -173,7 +173,7 @@ def bench_rust(conn: np.ndarray, pts: np.ndarray, repeats: int) -> dict | None:
         "full_s": tu,
         "quality_s": tq,
         "vertex_edge_us": ve * 1e6,
-        "n_layers": int(mu.n_layers),
+        "n_layers": int(mu.get_num_layers()),
     }
 
 
