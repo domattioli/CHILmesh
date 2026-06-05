@@ -161,7 +161,7 @@ def bench_rust(conn: np.ndarray, pts: np.ndarray, repeats: int) -> dict | None:
     rust_conn = conn.astype(np.int32)
     # fast_init not exposed from Rust backend; measure full_init directly
     tu, mu = _median(lambda: full_init(pts, rust_conn), repeats)
-    tq, _ = _median(lambda: mu.quality_analysis(), repeats)
+    tq, _ = _median(lambda: mu.compute_quality(), repeats)
     n = min(2000, mu.n_verts)
     t = time.perf_counter()
     for k in range(n):
