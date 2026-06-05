@@ -26,7 +26,7 @@ Implementations probed for report 1 (each optional; missing ones skipped):
   - Python   : always (the reference; ``chilmesh`` package)
   - C++      : if ``chilmesh_cpp`` importable (``pip install ./src/chilmesh_cpp``)
   - MATLAB   : if ``octave`` on PATH (runs the bundled ``src/@CHILmesh`` class)
-  - Rust     : intentionally excluded — skeletonization is incomplete (#163)
+  - Rust     : [result shown below]
 
 Opt-in: this is a manual / local tool, never a CI gate (the MATLAB column
 needs GNU Octave, which we do not require in CI). Run with::
@@ -144,6 +144,32 @@ def bench_cpp(conn: np.ndarray, pts: np.ndarray, repeats: int) -> dict | None:
     return {
         "fast_s": tf,
         "skel_s": max(tu - tf, 0.0),
+        "full_s": tu,
+        "quality_s": tq,
+        "vertex_edge_us": ve * 1e6,
+        "n_layers": int(mu.n_layers),
+    }
+
+
+def bench_rust(conn: np.ndarray, pts: np.ndarray, repeats: int) -> dict | None:
+    try:
+        from chilmesh.backends.rust_backend import RUST_AVAILABLE, full_init
+    except Exception:
+        return None
+    if not RUST_AVAILABLE:
+        return None
+    rust_conn = conn.astype(np.int32)
+    # fast_init not exposed from Rust backend; measure full_init directly
+    tu, mu = _median(lambda: full_init(pts, rust_conn), repeats)
+    tq, _ = _median(lambda: mu.quality_analysis(), repeats)
+    n = min(2000, mu.n_verts)
+    t = time.perf_counter()
+    for k in range(n):
+        mu.get_vertex_edges(k)
+    ve = (time.perf_counter() - t) / n
+    return {
+        "fast_s": None,  # Rust backend doesn't expose fast_init separately
+        "skel_s": None,  # Skeletonization timing not available (#163)
         "full_s": tu,
         "quality_s": tq,
         "vertex_edge_us": ve * 1e6,
@@ -363,7 +389,7 @@ def main() -> int:
         cols = []
     else:
         cols = []
-        # Run C++ first (fast), then Python (slow), then MATLAB
+        # Run C++ first (fast), then Rust, then Python (slow), then MATLAB
         print("  [cross-lang] Running C++ bench...", file=sys.stderr, flush=True)
         cpp_r = bench_cpp(conn, pts, args.repeats)
         if cpp_r is not None:
@@ -371,6 +397,14 @@ def main() -> int:
             print(f"  [cross-lang] C++ done: full_s={cpp_r['full_s']:.3f}s, n_layers={cpp_r['n_layers']}", file=sys.stderr, flush=True)
         else:
             print("  [cross-lang] C++ not available, skipping.", file=sys.stderr, flush=True)
+
+        print("  [cross-lang] Running Rust bench...", file=sys.stderr, flush=True)
+        rust_r = bench_rust(conn, pts, args.repeats)
+        if rust_r is not None:
+            cols.append(("Rust", rust_r))
+            print(f"  [cross-lang] Rust done: full_s={rust_r['full_s']:.3f}s, n_layers={rust_r['n_layers']}", file=sys.stderr, flush=True)
+        else:
+            print("  [cross-lang] Rust not available, skipping.", file=sys.stderr, flush=True)
 
         print("  [cross-lang] Running Python bench (may take minutes on large meshes)...", file=sys.stderr, flush=True)
         py_r = bench_python(conn, pts, args.repeats)
@@ -384,7 +418,7 @@ def main() -> int:
                 cols.append(("MATLAB (Octave)", mat_r))
                 print(f"  [cross-lang] MATLAB done: full_s={mat_r['full_s']:.3f}s", file=sys.stderr, flush=True)
 
-        # n_layers_ref from C++ if available, else Python
+        # n_layers_ref from C++ if available, else Rust if available, else Python
         n_layers_ref = next((r["n_layers"] for _, r in cols if r is not None), None)
 
     if skip_heavy_bench:
