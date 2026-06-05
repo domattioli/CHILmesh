@@ -1757,7 +1757,7 @@ class CHILmesh(CHILmeshPlotMixin):
         }
 
     @classmethod
-    def from_admesh_domain(cls, record: object, compute_layers: bool = True) -> "CHILmesh":
+    def from_admesh_domain(cls, record: object, compute_layers: bool = True, compute_adjacencies: bool = False) -> "CHILmesh":
         """
         Construct a CHILmesh from an ADMESH-Domains catalog record.
 
@@ -1776,6 +1776,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 or a ``type`` and ``filename`` attribute for file-based loading.
                 Optionally ``.grid_name`` (str) for naming the mesh.
             compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: If False, skip adjacency building for bare conn+pts load.
+                Ignored (forced True) when compute_layers=True.
 
         Returns:
             A CHILmesh instance.
@@ -1799,7 +1801,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 filename = getattr(record, "filename", None)
                 if filename is not None:
                     return cls.read_from_fort14(
-                        Path(filename), compute_layers=compute_layers
+                        Path(filename), compute_layers=compute_layers, compute_adjacencies=compute_adjacencies
                     )
 
         # Fall through to duck-typed path (connectivity + points attributes)
@@ -1951,6 +1953,7 @@ class CHILmesh(CHILmeshPlotMixin):
         cls,
         filename: Path,
         compute_layers: bool = True,
+        compute_adjacencies: bool = False,
     ) -> "CHILmesh":
         """
         Read mesh from ADCIRC fort.14 format.
@@ -1958,6 +1961,8 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             filename: Path to the fort.14 file.
             compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: If False, skip adjacency building for bare conn+pts load.
+                Ignored (forced True) when compute_layers=True.
 
         Returns:
             A CHILmesh instance with boundary_segments populated from
@@ -2031,7 +2036,7 @@ class CHILmesh(CHILmeshPlotMixin):
             mesh._build_adjacencies()
             mesh._skeletonize()
             mesh._build_spatial_indices()
-        else:
+        elif compute_adjacencies:
             mesh._build_adjacencies()
             mesh._build_spatial_indices()
 
@@ -2075,7 +2080,7 @@ def _check_fort14(filename) -> bool:
     and grid name header all match), False otherwise.
     """
     try:
-        CHILmesh.read_from_fort14(Path(filename), compute_layers=False)
+        CHILmesh.read_from_fort14(Path(filename), compute_layers=False, compute_adjacencies=False)
         return True
     except Exception as e:
         print(f"Error reading fort14 file {filename}: {e}")
