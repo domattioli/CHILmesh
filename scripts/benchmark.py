@@ -362,15 +362,30 @@ def main() -> int:
     if skip_heavy_bench:
         cols = []
     else:
-        # For cross-lang bench, need n_layers — build mesh with full init
-        mesh_full = CHILmesh(connectivity=conn.copy(), points=pts.copy())
-        n_layers_ref = int(mesh_full.n_layers)
-        del mesh_full
-        cols = [("Python", bench_python(conn, pts, args.repeats)),
-                ("C++", bench_cpp(conn, pts, args.repeats))]
+        cols = []
+        # Run C++ first (fast), then Python (slow), then MATLAB
+        print("  [cross-lang] Running C++ bench...", file=sys.stderr, flush=True)
+        cpp_r = bench_cpp(conn, pts, args.repeats)
+        if cpp_r is not None:
+            cols.append(("C++", cpp_r))
+            print(f"  [cross-lang] C++ done: full_s={cpp_r['full_s']:.3f}s, n_layers={cpp_r['n_layers']}", file=sys.stderr, flush=True)
+        else:
+            print("  [cross-lang] C++ not available, skipping.", file=sys.stderr, flush=True)
+
+        print("  [cross-lang] Running Python bench (may take minutes on large meshes)...", file=sys.stderr, flush=True)
+        py_r = bench_python(conn, pts, args.repeats)
+        cols.append(("Python", py_r))
+        print(f"  [cross-lang] Python done: full_s={py_r['full_s']:.3f}s, n_layers={py_r['n_layers']}", file=sys.stderr, flush=True)
+
         if args.matlab:
-            cols.append(("MATLAB (Octave)", bench_matlab(conn, pts)))
-        cols = [(name, r) for name, r in cols if r is not None]
+            print("  [cross-lang] Running MATLAB/Octave bench...", file=sys.stderr, flush=True)
+            mat_r = bench_matlab(conn, pts)
+            if mat_r is not None:
+                cols.append(("MATLAB (Octave)", mat_r))
+                print(f"  [cross-lang] MATLAB done: full_s={mat_r['full_s']:.3f}s", file=sys.stderr, flush=True)
+
+        # n_layers_ref from C++ if available, else Python
+        n_layers_ref = next((r["n_layers"] for _, r in cols if r is not None), None)
 
     if skip_heavy_bench:
         lines = [
@@ -409,6 +424,7 @@ def main() -> int:
 
     # --- Report 2: Python mesh lifecycle (#155) — generation excluded. ---
     skip_heavy, gate_reason = _gate_heavy(n_elems_raw, args.max_elements)
+    print("  [lifecycle] Running lifecycle bench...", file=sys.stderr, flush=True)
     life = bench_lifecycle(conn, pts, args.repeats, args.smooth_iters,
                            skip_fem=skip_heavy, skip_skel=skip_heavy)
     sdf_name, sdf = _resolve_sdf(args.mesh, args.sdf)
