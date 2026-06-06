@@ -34,12 +34,13 @@ def bench():
 def donut_arrays():
     from chilmesh import CHILmesh
 
-    m = CHILmesh.read_from_fort14(DONUT)
+    m = CHILmesh.read_from_fort14(DONUT, compute_layers=False, compute_adjacencies=True)
     conn = np.asarray(m.connectivity_list).astype(np.int64)
     pts = np.asarray(m.points).astype(float)
     return conn, pts
 
 
+@pytest.mark.slow
 def test_lifecycle_reports_all_stages(bench, donut_arrays):
     conn, pts = donut_arrays
     out = bench.bench_lifecycle(conn, pts, repeats=1, smooth_iters=3)
@@ -62,6 +63,7 @@ def test_gate_heavy_decision(bench):
     assert "4,000,000" in reason and "500,000" in reason
 
 
+@pytest.mark.slow
 def test_max_elements_gate_skips_fem(bench, donut_arrays):
     conn, pts = donut_arrays
     out = bench.bench_lifecycle(conn, pts, repeats=1, smooth_iters=3, skip_fem=True)
