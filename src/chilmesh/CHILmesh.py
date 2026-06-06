@@ -1757,7 +1757,7 @@ class CHILmesh(CHILmeshPlotMixin):
         }
 
     @classmethod
-    def from_admesh_domain(cls, record: object, compute_layers: bool = True) -> "CHILmesh":
+    def from_admesh_domain(cls, record: object, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
         Construct a CHILmesh from an ADMESH-Domains catalog record.
 
@@ -1776,6 +1776,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 or a ``type`` and ``filename`` attribute for file-based loading.
                 Optionally ``.grid_name`` (str) for naming the mesh.
             compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: Forwarded to the file reader / constructor. (#192)
 
         Returns:
             A CHILmesh instance.
@@ -1793,13 +1794,13 @@ class CHILmesh(CHILmeshPlotMixin):
                 filename = getattr(record, "filename", None)
                 if filename is not None:
                     return cls.read_from_2dm(
-                        Path(filename), compute_layers=compute_layers
+                        Path(filename), compute_layers=compute_layers, compute_adjacencies=compute_adjacencies
                     )
             elif record_type_lower in ("fort14", "adcirc"):
                 filename = getattr(record, "filename", None)
                 if filename is not None:
                     return cls.read_from_fort14(
-                        Path(filename), compute_layers=compute_layers
+                        Path(filename), compute_layers=compute_layers, compute_adjacencies=compute_adjacencies
                     )
 
         # Fall through to duck-typed path (connectivity + points attributes)
@@ -1809,6 +1810,7 @@ class CHILmesh(CHILmeshPlotMixin):
             points=np.asarray(record.points),
             grid_name=name,
             compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
         )
 
     def save(self, filename: str) -> None:
@@ -1836,7 +1838,7 @@ class CHILmesh(CHILmeshPlotMixin):
             raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
 
     @classmethod
-    def load(cls, filename: str, compute_layers: bool = True) -> "CHILmesh":
+    def load(cls, filename: str, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
         Load a mesh from a file.
 
@@ -1845,6 +1847,7 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             filename: Input file path.
             compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: Forwarded to the reader. (#192)
 
         Returns:
             A CHILmesh instance.
@@ -1860,9 +1863,9 @@ class CHILmesh(CHILmeshPlotMixin):
         if not path.exists():
             raise FileNotFoundError(f"File not found: {filename}")
         if path.suffix in (".14", ".fort14"):
-            return cls.read_from_fort14(path, compute_layers=compute_layers)
+            return cls.read_from_fort14(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
         elif path.suffix == ".2dm":
-            return cls.read_from_2dm(path, compute_layers=compute_layers)
+            return cls.read_from_2dm(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
         else:
             raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
 
@@ -1881,13 +1884,14 @@ class CHILmesh(CHILmeshPlotMixin):
                 f.write(f"ND {i+1} {pt[0]:.10f} {pt[1]:.10f} {pt[2]:.10f}\n")
 
     @classmethod
-    def read_from_2dm(cls, filename: Path, compute_layers: bool = True) -> "CHILmesh":
+    def read_from_2dm(cls, filename: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
         Read mesh from SMS 2dm format.
 
         Parameters:
             filename: Path to the 2dm file.
             compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: See :meth:`read_from_fort14`. (#192)
 
         Returns:
             A CHILmesh instance.
@@ -1944,13 +1948,15 @@ class CHILmesh(CHILmeshPlotMixin):
         else:
             conn = np.array(elems, dtype=int)
         return cls(connectivity=conn, points=pts,
-                   grid_name=filename.stem, compute_layers=compute_layers)
+                   grid_name=filename.stem, compute_layers=compute_layers,
+                   compute_adjacencies=compute_adjacencies)
 
     @classmethod
     def read_from_fort14(
         cls,
         filename: Path,
         compute_layers: bool = True,
+        compute_adjacencies: Opt[bool] = None,
     ) -> "CHILmesh":
         """
         Read mesh from ADCIRC fort.14 format.
@@ -1958,6 +1964,11 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             filename: Path to the fort.14 file.
             compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: Whether to build adjacency dicts. ``None``
+                (default) tracks ``compute_layers``; set True with
+                ``compute_layers=False`` for a fast adjacency-only load, or
+                False with ``compute_layers=False`` for a bare conn+pts mesh.
+                Forced True when ``compute_layers=True``. (#192)
 
         Returns:
             A CHILmesh instance with boundary_segments populated from
@@ -1977,12 +1988,27 @@ class CHILmesh(CHILmeshPlotMixin):
             p = lines[i].split(); i += 1
             pts[j] = [float(p[1]), float(p[2]), float(p[3]) if len(p) > 3 else 0.0]
 
-        conn = np.zeros((n_elems, 3), dtype=int)
+        elem_verts = []
+        has_tri = False
+        has_quad = False
         for j in range(n_elems):
             p = lines[i].split(); i += 1
             n_verts_elem = int(p[1])
             verts = [int(x) - 1 for x in p[2:2 + n_verts_elem]]
-            conn[j, :n_verts_elem] = verts
+            elem_verts.append(verts)
+            if n_verts_elem == 3:
+                has_tri = True
+            elif n_verts_elem == 4:
+                has_quad = True
+
+        if has_tri and has_quad:
+            # Mixed mesh: pad triangles to 4 cols by repeating first vertex.
+            conn = np.array(
+                [v if len(v) == 4 else [v[0], v[1], v[2], v[0]] for v in elem_verts],
+                dtype=int,
+            )
+        else:
+            conn = np.array(elem_verts, dtype=int)
 
         mesh = cls(
             connectivity=conn,
@@ -2026,14 +2052,19 @@ class CHILmesh(CHILmeshPlotMixin):
 
         mesh.boundary_segments = boundary_segments
 
+        # Default compute_adjacencies follows compute_layers (mirrors __init__).
+        if compute_adjacencies is None:
+            compute_adjacencies = compute_layers
+        if compute_layers:
+            compute_adjacencies = True
+
         # Now run adjacencies + skeletonization with segments in place.
         if compute_layers:
             mesh._build_adjacencies()
             mesh._skeletonize()
-            mesh._build_spatial_indices()
-        else:
+        elif compute_adjacencies:
             mesh._build_adjacencies()
-            mesh._build_spatial_indices()
+        mesh._build_spatial_indices()
 
         return mesh
 
