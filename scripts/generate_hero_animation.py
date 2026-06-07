@@ -8,7 +8,7 @@ Pipeline (4 stages, GIF loop):
 
 Each frame: left = mesh viz with vertex tracking dots, right = colormapped quality histogram.
 
-Output: output/readme_pipeline_annulus.gif (replaces existing).
+Output: docs/gallery/readme_pipeline_annulus.gif (replaces existing).
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from chilmesh import Mesh, examples
 from chilmesh import optimize_with_admesh_truss_arrays
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUT_PATH = REPO_ROOT / "output" / "readme_pipeline_annulus.gif"
+OUT_PATH = REPO_ROOT / "docs" / "gallery" / "readme_pipeline_annulus.gif"
 
 BG = "#0e0e10"
 EDGE = "#3a7fbf"

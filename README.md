@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="output/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
+  <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
 </p>
 
 <h1 align="center">CHILmesh</h1>
@@ -79,7 +79,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 - **ADMESH-Domains integration** — `from_admesh_domain()` adapter
 
 <p align="center">
-  <img src="output/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
+  <img src="docs/gallery/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
   <br>
   <sub><em><strong>Figure 1.</strong> Scale demo on WNAT_Hagen (52,774 vertices · 98,365 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_wnat_showcase.py</code>.</em></sub>
 </p>

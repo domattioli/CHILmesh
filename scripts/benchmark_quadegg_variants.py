@@ -6,7 +6,7 @@ Measures:
 2. Full init (adjacencies + skeletonization layers)
 
 Records: median-of-3 per operation + peak memory (tracemalloc)
-Output: JSON (output/benchmark.json) + markdown table (stdout)
+Output: JSON (docs/gallery/benchmark.json) + markdown table (stdout)
 
 Usage:
     python scripts/benchmark_quadegg_variants.py
@@ -156,7 +156,7 @@ def main():
         }
     }
     
-    output_path = Path('output/benchmark.json')
+    output_path = Path('docs/gallery/benchmark.json')
     output_path.parent.mkdir(exist_ok=True, parents=True)
     
     with open(output_path, 'w') as f:
