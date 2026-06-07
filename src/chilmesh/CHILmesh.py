@@ -2143,6 +2143,14 @@ class CHILmesh(CHILmeshPlotMixin):
         quads use the Q4 bilinear Laplacian (square target, see
         ``_quad_stiffness_assembly``).
 
+        Note (size-field behavior, #168): this smoother is **isotropic**. The
+        Balendran stiffness targets a uniform equilateral triangle (60 deg) /
+        square quad (90 deg) and takes **no size-field input** — it equalizes
+        element *shape*, not *size*. Applied to a graded mesh it grows fine
+        (e.g. coastal) edges and shrinks coarse (offshore) edges, eroding the
+        original sizing. For size-respecting smoothing, supply anisotropic
+        targets (not yet implemented) or run a separate sizing pass afterward.
+
         Parameters:
             kinf: Large stiffness value for fixed (pinned) vertices.
             freeze_quad_nodes: When True, pin every vertex that is a corner of any
