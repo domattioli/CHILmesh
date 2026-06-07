@@ -64,20 +64,12 @@ Thumbs.db
 .claude/skills/
 
 # Generated output artefacts (figures, debug PNGs, .npy dumps)
-# annulus_quickstart.png is tracked because README.md references it.
+# Tests generate output files; tracked artefacts live in docs/gallery/
 tests/output/
-output/*.npy
-output/*_debug*.png
-output/*_debug*.npy
-output/simple_render.png
-output/test_rendering.png
-output/annulus_layer2_boundary.*
-output/annulus_layers.png
-output/annulus_smoothed_retri.png
-output/layer2_debug.png
+output/
 
-# Manim intermediate render artefacts (regenerable from output/*_scene.py)
-output/media/
+# Gallery assets (committed demo/media from docs/gallery/) are tracked
+!docs/gallery/
 
 # Rust build artifacts
 src/chilmesh_core/target/
