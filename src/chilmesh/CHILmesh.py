@@ -1445,6 +1445,66 @@ class CHILmesh(CHILmeshPlotMixin):
             boundary_segments=self.boundary_segments,
         )
 
+    @staticmethod
+    def read_from_msh(full_file_name: str, compute_layers: bool = False, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
+        """
+        Load a mesh from a Gmsh ASCII .msh file.
+
+        Supports both format 2.2 and 4.1. Parses nodes and elements, supporting
+        triangular and quadrilateral elements only. Mixed-element meshes use
+        the padded-triangle convention in a 4-column array.
+
+        Parameters:
+            full_file_name: Path to the .msh file
+            compute_layers: If False, skip skeletonization for fast init (default: False)
+            compute_adjacencies: See ``CHILmesh.__init__``. If None (default), tracks
+                ``compute_layers``.
+
+        Returns:
+            A CHILmesh object
+
+        Raises:
+            GmshParseError: If file format is unsupported or malformed.
+        """
+        from . import gmsh_io
+
+        m = gmsh_io.read_msh(full_file_name)
+        return CHILmesh(
+            connectivity=m.connectivity_list,
+            points=m.points,
+            grid_name="Gmsh",
+            compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
+        )
+
+    def write_to_msh(self, filename: str, grid_name: str = "CHILmesh Grid", version: str = "4.1") -> bool:
+        """
+        Export the current mesh to Gmsh ASCII .msh format.
+
+        Supports format versions 2.2 and 4.1. Triangles in mixed-element meshes
+        (padded convention) are written as 3-node triangles; quads as 4-node quads.
+
+        Parameters:
+            filename: Path to save the file
+            grid_name: Optional title for the mesh
+            version: Gmsh format version, "2.2" or "4.1" (default: "4.1")
+
+        Returns:
+            ``True`` on success.
+
+        Raises:
+            ValueError: If version is not "2.2" or "4.1".
+        """
+        from . import gmsh_io
+
+        return gmsh_io.write_msh(
+            filename,
+            self.points,
+            self.connectivity_list,
+            grid_name,
+            version,
+        )
+
     def interior_angles(self, elem_ids=None) -> np.ndarray:
         """
         Calculate interior angles of mesh elements.

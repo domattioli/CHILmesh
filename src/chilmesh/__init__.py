@@ -16,6 +16,7 @@ from __future__ import annotations
 from importlib import metadata
 
 from .CHILmesh import CHILmesh, write_fort14
+from .gmsh_io import read_msh, write_msh, GmshParseError
 from .mesh_topology import EdgeMap
 from .mutations import MutableMesh
 from . import examples
@@ -92,6 +93,9 @@ __all__ = [
     "EdgeMap",
     "MutableMesh",
     "write_fort14",
+    "read_msh",
+    "write_msh",
+    "GmshParseError",
     # Backend introspection
     "backend_info",
     # Submodules
