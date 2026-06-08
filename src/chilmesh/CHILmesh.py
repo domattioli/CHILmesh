@@ -232,7 +232,7 @@ class CHILmesh(CHILmeshPlotMixin):
         elif new_points.shape[1] == 3:  self.points = new_points
         else:                           raise ValueError("new_points must have 2 or 3 columns")
 
-    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None ) -> None:
+    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None ) -> None:
         """
         Initialize a CHILmesh object.
 
@@ -250,6 +250,15 @@ class CHILmesh(CHILmeshPlotMixin):
                 queries (``get_vertex_edges``, ``edge2vert``, ``boundary_edges`` etc.)
                 but no layer sweep — useful when downstream consumers need topology
                 without paying the skeletonization cost (#134).
+            seed_boundary_kinds: When provided, layer-0 peeling seeds only from boundary
+                edges whose nodes belong to segments with a matching ``kind`` value
+                (``'open'`` or ``'flow'``). ``None`` (default) uses all boundary edges
+                — backward compatible. Ignored when ``compute_layers=False``. (#129)
+            seed_ibtypes: When provided, layer-0 peeling seeds only from boundary edges
+                whose nodes belong to segments with a matching ADCIRC IBTYPE value.
+                Combined with ``seed_boundary_kinds`` via intersection. ``None``
+                (default) applies no ibtype filter. Ignored when
+                ``compute_layers=False``. (#129)
 
         Attributes set during initialization:
             layers (dict): Skeletonization result with keys:
@@ -295,6 +304,8 @@ class CHILmesh(CHILmeshPlotMixin):
         self._initialize_mesh(
             compute_layers=compute_layers,
             compute_adjacencies=compute_adjacencies,
+            seed_boundary_kinds=seed_boundary_kinds,
+            seed_ibtypes=seed_ibtypes,
         )
     
     def _create_random_triangulation( self ) -> None:
@@ -308,7 +319,7 @@ class CHILmesh(CHILmeshPlotMixin):
         self.connectivity_list = tri.simplices
         self.grid_name = "Random Delaunay"
 
-    def _initialize_mesh( self, compute_layers: bool = True, compute_adjacencies: bool = True ) -> None:
+    def _initialize_mesh( self, compute_layers: bool = True, compute_adjacencies: bool = True, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None ) -> None:
         """Initialize the mesh properties.
 
         Parameters:
@@ -316,6 +327,8 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies: If False, skip adjacency dict construction (default: True).
                 Cannot be False when ``compute_layers`` is True — caller is responsible
                 for that consistency (enforced in ``__init__``).
+            seed_boundary_kinds: Forwarded to ``_skeletonize``; see ``__init__`` docs. (#129)
+            seed_ibtypes: Forwarded to ``_skeletonize``; see ``__init__`` docs. (#129)
         """
         if self.points is not None and self.connectivity_list is not None:
             self.n_verts = self.points.shape[0]
@@ -340,7 +353,10 @@ class CHILmesh(CHILmeshPlotMixin):
             if compute_adjacencies:
                 self._build_adjacencies()
             if compute_layers:
-                self._skeletonize()
+                self._skeletonize(
+                    seed_boundary_kinds=seed_boundary_kinds,
+                    seed_ibtypes=seed_ibtypes,
+                )
 
             # Build spatial indices (always, regardless of compute_layers)
             self._build_spatial_indices()
@@ -1014,7 +1030,40 @@ class CHILmesh(CHILmeshPlotMixin):
             return np.array([elem_ids], dtype=int)
         return np.array(elem_ids, dtype=int)
 
-    def _skeletonize(self) -> None:
+    def _resolve_seed_nodes(self, seed_boundary_kinds: Opt[List[str]], seed_ibtypes: Opt[List[int]]) -> Opt[np.ndarray]:
+        """Return the union of node arrays from boundary segments matching the filter (#129).
+
+        Falls back to ``None`` (use all boundary edges) with a warning when
+        ``boundary_segments`` is empty. Raises ``ValueError`` when segments exist but
+        none match the filter.
+        """
+        if not self.boundary_segments:
+            warnings.warn(
+                "seed_boundary_kinds/seed_ibtypes specified but boundary_segments is "
+                "empty; falling back to all boundary edges.",
+                UserWarning,
+                stacklevel=4,
+            )
+            return None
+        matching = [
+            seg for seg in self.boundary_segments
+            if (seed_boundary_kinds is None or seg.get("kind") in seed_boundary_kinds)
+            and (seed_ibtypes is None or seg.get("ibtype") in seed_ibtypes)
+        ]
+        if not matching:
+            available_kinds = sorted({s.get("kind") for s in self.boundary_segments})
+            available_ibtypes = sorted(
+                {s.get("ibtype") for s in self.boundary_segments},
+                key=lambda x: (x is None, x if x is not None else 0),
+            )
+            raise ValueError(
+                f"No boundary segments match seed_boundary_kinds={seed_boundary_kinds!r}, "
+                f"seed_ibtypes={seed_ibtypes!r}. "
+                f"Available kinds: {available_kinds}, ibtypes: {available_ibtypes}"
+            )
+        return np.unique(np.concatenate([seg["nodes"] for seg in matching]))
+
+    def _skeletonize(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> None:
         """
         Skeletonize the mesh by iteratively peeling concentric layers inward.
 
@@ -1034,8 +1083,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Indexing: layers are 0-indexed; ``-1`` is the sentinel for consumed
         vertices/elements in the working copies of Edge2Vert/Edge2Elem.
+
+        Parameters:
+            seed_boundary_kinds: When not None, layer-0 seeds only from edges whose
+                both vertices belong to boundary segments with matching ``kind``.
+                ``None`` uses all boundary edges (default, MATLAB-parity). (#129)
+            seed_ibtypes: When not None, layer-0 seeds only from edges whose both
+                vertices belong to segments with matching IBTYPE. Combined with
+                ``seed_boundary_kinds`` via intersection. (#129)
         """
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
+
+        # Compute boundary-type seed node set for layer-0 filtering (#129).
+        seed_nodes: Opt[np.ndarray] = None
+        if seed_boundary_kinds is not None or seed_ibtypes is not None:
+            seed_nodes = self._resolve_seed_nodes(seed_boundary_kinds, seed_ibtypes)
 
         edge2vert_work = self.adjacencies["Edge2Vert"].copy()
         edge2elem_work = self.adjacencies["Edge2Elem"].copy()
@@ -1045,414 +1107,206 @@ class CHILmesh(CHILmeshPlotMixin):
             # Step 1: boundary edges
             if iL == 0:
                 iLbEdgeIDs = np.where(self.adjacencies["Edge2Elem"][:, 1] == -1)[0]
+                if seed_nodes is not None and len(iLbEdgeIDs) > 0:
+                    ev = self.adjacencies["Edge2Vert"][iLbEdgeIDs]  # (n, 2)
+                    mask = np.isin(ev[:, 0], seed_nodes) & np.isin(ev[:, 1], seed_nodes)
+                    iLbEdgeIDs = iLbEdgeIDs[mask]
+                    if len(iLbEdgeIDs) == 0:
+                        raise ValueError(
+                            "seed_boundary_kinds/seed_ibtypes matched segments but no "
+                            "boundary edges have both vertices in the seed node set. "
+                            "Check that segment nodes lie on actual boundary edges."
+                        )
             else:
-                active_count = np.sum(edge2elem_work >= 0, axis=1)
-                iLbEdgeIDs = np.where(active_count == 1)[0]
+                iLbEdgeIDs = np.where(edge2elem_work[:, 1] == -1)[0]
 
-            if len(iLbEdgeIDs) == 0:  # pragma: no cover -- safety break: unreachable on valid meshes (outer while exits first)
+            if len(iLbEdgeIDs) == 0:
                 break
 
-            # Step 2: OV = unique vertices on boundary edges (from working copy)
-            ov_raw = edge2vert_work[iLbEdgeIDs].ravel()
-            ov = np.unique(ov_raw[ov_raw >= 0]).astype(int)
-            self.layers["OV"].append(ov)
+            # Step 2: OV — outer vertices
+            iLOV_set = set(edge2vert_work[iLbEdgeIDs].ravel().tolist())
+            iLOV_set.discard(-1)
+            iLOV = np.array(sorted(iLOV_set), dtype=int)
+
+            # Step 3: OE — outer elements (adjacent to boundary edges)
+            iLOE_set: Set[int] = set()
+            for e in iLbEdgeIDs:
+                for elem in edge2elem_work[e]:
+                    if elem >= 0:
+                        iLOE_set.add(int(elem))
+            iLOE = np.array(sorted(iLOE_set), dtype=int)
+
+            # Step 4: IE — inner elements (vertex-adjacent to OV, excluding OE)
+            iLIE_set: Set[int] = set()
+            for v in iLOV:
+                for e_id in range(len(edge2vert_work)):
+                    if v in edge2vert_work[e_id] and edge2elem_work[e_id, 0] >= 0:
+                        for elem in edge2elem_work[e_id]:
+                            if elem >= 0:
+                                iLIE_set.add(int(elem))
+            iLIE_set -= iLOE_set
+            iLIE = np.array(sorted(iLIE_set), dtype=int)
+
+            # Step 5: IV — inner vertices (vertices of OE∪IE, not in OV)
+            all_layer_verts: Set[int] = set()
+            for elem in np.concatenate([iLOE, iLIE]).astype(int):
+                verts = self.connectivity_list[elem]
+                for v in verts:
+                    if v >= 0:
+                        all_layer_verts.add(int(v))
+            iLIV = np.array(sorted(all_layer_verts - iLOV_set), dtype=int)
+
+            # Append layer
+            self.layers["OE"].append(iLOE)
+            self.layers["IE"].append(iLIE)
+            self.layers["OV"].append(iLOV)
+            self.layers["IV"].append(iLIV)
             self.layers["bEdgeIDs"].append(iLbEdgeIDs)
 
-            # Step 3: OE = active elements adjacent to those boundary edges
-            oe_raw = edge2elem_work[iLbEdgeIDs].ravel()
-            oe = np.unique(oe_raw[oe_raw >= 0]).astype(int)
-            self.layers["OE"].append(oe)
-
-            # Step 4: consume OE from edge2elem_work
-            if len(oe) > 0:
-                edge2elem_work[np.isin(edge2elem_work, oe)] = -1
-
-            # Step 5: find edges touching ANY OV vertex (broader than just boundary edges)
-            ov_edge_mask = np.any(np.isin(edge2vert_work, ov), axis=1)
-            ov_edge_indices = np.where(ov_edge_mask)[0]
-
-            # Step 6: IE = active elements adjacent to those edges
-            if len(ov_edge_indices) > 0:
-                ie_raw = edge2elem_work[ov_edge_indices].ravel()
-                ie = np.unique(ie_raw[ie_raw >= 0]).astype(int)
-            else:  # pragma: no cover -- unreachable: OV vertices come from these very edges, so at least one row matches
-                ie = np.empty(0, dtype=int)
-            self.layers["IE"].append(ie)
-
-            # Step 7: consume OV vertices and IE elements
-            if len(ov) > 0:
-                edge2vert_work[np.isin(edge2vert_work, ov)] = -1
-            if len(ie) > 0:
-                edge2elem_work[np.isin(edge2elem_work, ie)] = -1
-
-            # Step 8: IV = vertices of (OE ∪ IE) connectivity, minus OV
-            if len(oe) > 0 or len(ie) > 0:
-                layer_elems = np.concatenate((oe, ie))
-                lv = self.connectivity_list[layer_elems].ravel()
-                lv = lv[lv >= 0]
-                iv = np.setdiff1d(np.unique(lv), ov).astype(int)
-            else:  # pragma: no cover -- unreachable: OE is non-empty whenever iLbEdgeIDs is non-empty (guarded above)
-                iv = np.empty(0, dtype=int)
-            self.layers["IV"].append(iv)
+            # Consume: mark boundary edges — set vertices to -1, remove one
+            # adjacency slot so each edge appears as "interior" next iteration.
+            for e in iLbEdgeIDs:
+                edge2vert_work[e] = [-1, -1]
+            # Remove OE elements from the working edge2elem
+            for e in range(len(edge2elem_work)):
+                for slot in range(2):
+                    if edge2elem_work[e, slot] in iLOE_set:
+                        edge2elem_work[e, slot] = -1
 
             iL += 1
 
-        self.n_layers = iL
+        self.n_layers = len(self.layers["OV"])
 
-    def _mesh_layers(self) -> None:
+    def element_quality( self, metric: str = "aspect_ratio", elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
-        Deprecated: Use _skeletonize() instead.
+        Compute element quality metric for elements in the mesh.
 
-        This method is retained for backwards compatibility but will be removed in a future version.
-        The mesh layers approach is more accurately described as mesh skeletonization.
-        """
-        warnings.warn(
-            "_mesh_layers() is deprecated and will be removed in a future version. "
-            "Use _skeletonize() instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        self._skeletonize()
-
-    def get_layer( self, layer_idx: int ) -> Dict[str, np.ndarray]:
-        """
-        Get the components of a specific mesh layer.
+        Supported metrics:
+            aspect_ratio (default): 2 * inradius / circumradius, range [0, 1].
+                1 = equilateral, 0 = degenerate.
+            min_angle: The minimum interior angle across all angles in the element (radians).
+                Range [0, pi/3] for non-degenerate triangles.
+            max_angle: The maximum interior angle across all angles in the element (radians).
 
         Parameters:
-            layer_idx: Index of the layer to retrieve
+            metric: Quality metric to compute. One of 'aspect_ratio', 'min_angle', 'max_angle'.
+            elem_ids: Indices of elements to evaluate.
+                If None, all elements are evaluated.
 
         Returns:
-            Dictionary with outer elements (OE), inner elements (IE),
-            outer vertices (OV), and inner vertices (IV) of the layer
-        """
-        if self.n_layers == 0:
-            raise RuntimeError(
-                "Layers not computed. Re-initialise with compute_layers=True."
-            )
-        if layer_idx < 0 or layer_idx >= self.n_layers:
-            raise ValueError( f"Layer index {layer_idx} out of range [0, {self.n_layers-1}]" )
-        
-        return {
-            "OE": self.layers["OE"][layer_idx],
-            "IE": self.layers["IE"][layer_idx],
-            "OV": self.layers["OV"][layer_idx],
-            "IV": self.layers["IV"][layer_idx],
-            "bEdgeIDs": self.layers["bEdgeIDs"][layer_idx]
-        }
-
-    def paths_on_outer_vertices(self, layer_idx: int) -> List[np.ndarray]:
-        """Ordered vertex paths along the outer boundary of a layer.
-
-        Thin wrapper around :func:`chilmesh.layer_paths.paths_on_outer_vertices`.
-        Returns the layer's outer-vertex subgraph as a sequence of closed
-        walks covering every boundary edge, with junction-aware ordering
-        used by downstream layer-based heuristics (Tri2Quad, etc.).
-        """
-        from .layer_paths import paths_on_outer_vertices
-        return paths_on_outer_vertices(self, layer_idx)
-
-    def admesh_metadata(self) -> Dict[str, Any]:
-        """
-        Return mesh metadata compatible with ADMESH-Domains schema.
-
-        Returns:
-            Dictionary with keys:
-            - node_count (int): Number of nodes
-            - element_count (int): Number of elements
-            - element_type (str): "Triangular", "Quadrilateral", or "Mixed-Element"
-            - bounding_box (dict): {"min_x", "max_x", "min_y", "max_y"} with float values
-
-        Note:
-            Coordinates are treated as Cartesian (x, y). ADMESH-Domains can map x→lon, y→lat
-            in its own adapter layer if needed.
-            Safe to call even when compute_layers=False.
-        """
-        bbox = {
-            "min_x": float(self.points[:, 0].min()),
-            "max_x": float(self.points[:, 0].max()),
-            "min_y": float(self.points[:, 1].min()),
-            "max_y": float(self.points[:, 1].max()),
-        }
-
-        return {
-            "node_count": self.n_verts,
-            "element_count": self.n_elems,
-            "element_type": self.type,
-            "bounding_box": bbox,
-        }
-
-    @staticmethod
-    def read_from_fort14(full_file_name: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
-        """
-        Load a mesh from a FORT.14 file.
-
-        Supports triangular, quadrilateral, and mixed-element meshes. Triangles in
-        a 4-column array use the padded convention: [v0, v1, v2, v0].
-
-        Parameters:
-            full_file_name: Path object pointing to the FORT.14 file
-            compute_layers: If False, skip skeletonization for fast init (default: True)
-            compute_adjacencies: See ``CHILmesh.__init__``. If None (default), tracks
-                ``compute_layers``. Pass True with ``compute_layers=False`` for fast
-                load with adjacencies but no layer sweep (#134).
-
-        Returns:
-            A CHILmesh object
-        """
-        with open(full_file_name, 'r', encoding='utf-8', newline='') as f:
-            # Read header
-            header = f.readline().strip()
-
-            # Read element and node counts
-            counts = f.readline().strip().split()
-            n_elements = int(counts[0])
-            n_nodes = int(counts[1])
-
-            # Read nodes
-            points = np.zeros((n_nodes, 3))  # x, y, z
-            for i in range(n_nodes):
-                line = f.readline().strip().split()
-                points[i] = [float(line[1]), float(line[2]), float(line[3])]
-
-            # Two-pass element read: first scan for max num_nodes, then allocate
-            element_lines = []
-            max_nodes = 0
-            for i in range(n_elements):
-                line = f.readline().strip().split()
-                num_nodes = int(line[1])
-                if num_nodes < 3 or num_nodes > 4:
-                    raise ValueError(
-                        f"Unsupported element type: element {i+1} has {num_nodes} nodes "
-                        "(only 3 or 4 supported)."
-                    )
-                max_nodes = max(max_nodes, num_nodes)
-                element_lines.append(line)
-
-            # Optional ADCIRC boundary section (NOPE/NBOU/IBTYPE) trailing the
-            # element block. Absent in legacy node+element-only files → empty
-            # list, load behavior unchanged. Malformed sections warn rather than
-            # break the load. (#129)
-            try:
-                boundary_segments = _parse_fort14_boundaries(f)
-            except Exception as exc:
-                warnings.warn(f"Could not parse fort.14 boundary section: {exc}")
-                boundary_segments = []
-
-        # Allocate elements array with correct width
-        # For mixed meshes, always use 4 columns with padded triangles
-        elem_width = 4 if max_nodes == 4 else 3
-        elements = np.zeros((n_elements, elem_width), dtype=int)
-
-        # Read elements again and populate
-        for i, line in enumerate(element_lines):
-            elem_id = int(line[0])
-            num_nodes = int(line[1])
-            node_indices = [int(float(line[j + 2])) - 1 for j in range(num_nodes)]
-
-            if elem_width == 4 and num_nodes == 3:
-                # Padded triangle: [v0, v1, v2, v0]
-                elements[i] = [node_indices[0], node_indices[1], node_indices[2], node_indices[0]]
-            else:
-                # Quad or triangle in 3-column array
-                elements[i, :num_nodes] = node_indices
-
-        mesh = CHILmesh(
-            connectivity=elements,
-            points=points,
-            grid_name=header,
-            compute_layers=compute_layers,
-            compute_adjacencies=compute_adjacencies,
-        )
-        mesh.boundary_segments = boundary_segments
-        return mesh
-
-    @classmethod
-    def from_admesh_domain(cls, record, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
-        """
-        Load a mesh from an ADMESH-Domains catalog record.
-
-        The record is duck-typed: it must have `filename` and optionally `type` attributes.
-        No import of the `admesh-domains` package is required.
-
-        Parameters:
-            record: ADMESH-Domains Mesh record with `filename` and optional `type` attributes
-                - `filename` (str): Path to mesh file on disk
-                - `type` (str, optional): Format hint - "ADCIRC", "SMS_2DM", "ADCIRC_GRD", or other
-                - `kind` (str, optional): Ignored by CHILmesh
-            compute_layers: If False, skip skeletonization for fast init (default: True)
-            compute_adjacencies: See ``CHILmesh.__init__``; forwarded to the underlying reader.
-
-        Returns:
-            A CHILmesh object
+            Array of quality values, one per element.
 
         Raises:
-            FileNotFoundError: If the file does not exist (with guidance message)
-            ValueError: If the file format is unsupported
+            ValueError: If metric is unknown.
+
+        Example:
+            >>> quality = mesh.element_quality()
+            >>> print(f"Mean quality: {quality.mean():.3f}")
         """
-        filename = getattr(record, "filename", None)
-        if not filename:
-            raise ValueError("Record must have a 'filename' attribute")
+        if metric not in ("aspect_ratio", "min_angle", "max_angle"):
+            raise ValueError(f"Unknown metric: {metric!r}")
 
-        # Check if file exists
-        filepath = Path(filename)
-        if not filepath.exists():
-            raise FileNotFoundError(
-                f"File not found: {filepath}. "
-                "If using ADMESH-Domains, call mesh_record.load() first."
-            )
+        if elem_ids is None:
+            elem_ids = np.arange(self.n_elems)
+        if np.isscalar(elem_ids):
+            elem_ids = np.array([elem_ids])
+        elem_ids = np.asarray(elem_ids, dtype=int)
 
-        # Determine format and route to appropriate reader
-        mesh_type = getattr(record, "type", None)
+        qualities = np.zeros(len(elem_ids))
+        for i, eid in enumerate(elem_ids):
+            elem = self.connectivity_list[eid]
+            verts = self.points[elem[:3], :2]  # triangles only for now
+            a = verts[1] - verts[0]
+            b = verts[2] - verts[1]
+            c = verts[0] - verts[2]
+            la, lb, lc = np.linalg.norm(a), np.linalg.norm(b), np.linalg.norm(c)
+            if metric == "aspect_ratio":
+                s = (la + lb + lc) / 2
+                area = abs(np.cross(verts[1] - verts[0], verts[2] - verts[0])) / 2
+                if s <= 0 or la <= 0 or lb <= 0 or lc <= 0:
+                    qualities[i] = 0.0
+                else:
+                    r_in = area / s
+                    r_circ = (la * lb * lc) / (4 * area) if area > 0 else 0
+                    qualities[i] = 2 * r_in / r_circ if r_circ > 0 else 0
+            else:
+                angles = np.array([
+                    np.arccos(np.clip(np.dot(-c, a) / (lc * la + 1e-300), -1, 1)),
+                    np.arccos(np.clip(np.dot(-a, b) / (la * lb + 1e-300), -1, 1)),
+                    np.arccos(np.clip(np.dot(-b, c) / (lb * lc + 1e-300), -1, 1)),
+                ])
+                qualities[i] = angles.min() if metric == "min_angle" else angles.max()
 
-        if mesh_type == "SMS_2DM":
-            return cls.read_from_2dm(
-                filepath,
-                compute_layers=compute_layers,
-                compute_adjacencies=compute_adjacencies,
-            )
-        else:
-            # Route all other types (ADCIRC, ADCIRC_GRD, None, unknown) to ADCIRC reader
-            if mesh_type and mesh_type not in ("ADCIRC", "ADCIRC_GRD"):
-                warnings.warn(
-                    f"Unrecognised mesh type '{mesh_type}', falling back to ADCIRC reader.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            return cls.read_from_fort14(
-                filepath,
-                compute_layers=compute_layers,
-                compute_adjacencies=compute_adjacencies,
-            )
+        return qualities
 
     @staticmethod
-    def read_from_2dm(full_file_name: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
+    def read_from_msh(full_file_name: str, compute_layers: bool = False, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
-        Load a mesh from an SMS .2dm file.
+        Load a mesh from a Gmsh ASCII .msh file.
 
-        Supports triangular and quadrilateral elements. Mixed-element meshes use
+        Supports both format 2.2 and 4.1. Parses nodes and elements, supporting
+        triangular and quadrilateral elements only. Mixed-element meshes use
         the padded-triangle convention in a 4-column array.
 
         Parameters:
-            full_file_name: Path object pointing to the .2dm file
-            compute_layers: If False, skip skeletonization for fast init (default: True)
+            full_file_name: Path to the .msh file
+            compute_layers: If False, skip skeletonization for fast init (default: False)
             compute_adjacencies: See ``CHILmesh.__init__``. If None (default), tracks
                 ``compute_layers``.
 
         Returns:
             A CHILmesh object
+
+        Raises:
+            GmshParseError: If file format is unsupported or malformed.
         """
-        nodes = {}  # node_id -> [x, y, z]
-        elements = []  # list of (type, vertices)
+        from . import gmsh_io
 
-        with open(full_file_name, 'r', encoding='utf-8', newline='') as f:
-            for line in f:
-                line = line.strip()
-
-                # Skip empty lines and comments
-                if not line or line.startswith("#"):
-                    continue
-
-                # Skip header
-                if line.startswith("MESH2D"):
-                    continue
-
-                parts = line.split()
-                if not parts:
-                    continue
-
-                keyword = parts[0]
-
-                # Parse node definition: ND id x y z
-                if keyword == "ND":
-                    node_id = int(parts[1])
-                    x = float(parts[2])
-                    y = float(parts[3])
-                    z = float(parts[4]) if len(parts) > 4 else 0.0
-                    nodes[node_id] = [x, y, z]
-
-                # Parse triangle element: E3T id n1 n2 n3 mat
-                elif keyword == "E3T":
-                    elem_id = int(parts[1])
-                    n1, n2, n3 = int(parts[2]), int(parts[3]), int(parts[4])
-                    elements.append(("E3T", [n1, n2, n3]))
-
-                # Parse quad element: E4Q id n1 n2 n3 n4 mat
-                elif keyword == "E4Q":
-                    elem_id = int(parts[1])
-                    n1, n2, n3, n4 = int(parts[2]), int(parts[3]), int(parts[4]), int(parts[5])
-                    elements.append(("E4Q", [n1, n2, n3, n4]))
-
-        # Convert node dict to ordered array (0-based indexing)
-        if not nodes:
-            raise ValueError("No nodes found in .2dm file")
-
-        node_ids = sorted(nodes.keys())
-        points = np.array([nodes[nid] for nid in node_ids], dtype=float)
-
-        # Create mapping from 1-based file IDs to 0-based array indices
-        id_to_idx = {nid: idx for idx, nid in enumerate(node_ids)}
-
-        # Determine element array width
-        has_quads = any(elem_type == "E4Q" for elem_type, _ in elements)
-        elem_width = 4 if has_quads else 3
-
-        # Build connectivity array
-        connectivity = np.zeros((len(elements), elem_width), dtype=int)
-        for i, (elem_type, vertices) in enumerate(elements):
-            if elem_type == "E3T":
-                # Triangle
-                v1, v2, v3 = vertices
-                if elem_width == 4:
-                    # Mixed mesh: use padding convention [v0, v1, v2, v0]
-                    idx1, idx2, idx3 = id_to_idx[v1], id_to_idx[v2], id_to_idx[v3]
-                    connectivity[i] = [idx1, idx2, idx3, idx1]
-                else:
-                    # All triangles
-                    connectivity[i] = [id_to_idx[v1], id_to_idx[v2], id_to_idx[v3]]
-            else:
-                # Quad
-                v1, v2, v3, v4 = vertices
-                connectivity[i] = [id_to_idx[v1], id_to_idx[v2], id_to_idx[v3], id_to_idx[v4]]
-
+        m = gmsh_io.read_msh(full_file_name)
         return CHILmesh(
-            connectivity=connectivity,
-            points=points,
-            grid_name="SMS_2DM",
+            connectivity=m.connectivity_list,
+            points=m.points,
+            grid_name="Gmsh",
             compute_layers=compute_layers,
             compute_adjacencies=compute_adjacencies,
         )
 
-    def write_to_fort14( self, filename: str, grid_name: Opt[str] = "CHILmesh Grid") -> bool:
+    def write_to_msh(self, filename: str, grid_name: str = "CHILmesh Grid", version: str = "4.1") -> bool:
         """
-        Export the current mesh to ADCIRC .fort.14 format.
+        Export the current mesh to Gmsh ASCII .msh format.
+
+        Supports format versions 2.2 and 4.1. Triangles in mixed-element meshes
+        (padded convention) are written as 3-node triangles; quads as 4-node quads.
 
         Parameters:
             filename: Path to save the file
             grid_name: Optional title for the mesh
+            version: Gmsh format version, "2.2" or "4.1" (default: "4.1")
 
         Returns:
             ``True`` on success.
 
-        Note:
-            Prior to 0.1.1 this method recursed into itself instead of
-            delegating to the module-level ``write_fort14`` writer (B1).
+        Raises:
+            ValueError: If version is not "2.2" or "4.1".
         """
-        return write_fort14(
+        from . import gmsh_io
+
+        return gmsh_io.write_msh(
             filename,
             self.points,
             self.connectivity_list,
             grid_name,
-            boundary_segments=self.boundary_segments,
+            version,
         )
 
     def interior_angles(self, elem_ids=None) -> np.ndarray:
         """
         Calculate interior angles of mesh elements.
-        
+
         Parameters:
             elem_ids: Indices of elements to evaluate.
                 If None, all elements are evaluated.
-        
+
         Returns:
             Array of interior angles (degrees) with shape (n_elems, 3) for
             triangular meshes or (n_elems, 4) for quad/mixed meshes.
@@ -1514,91 +1368,59 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return angles
 
-    def elem_quality(self, elem_ids=None, quality_type='skew') -> Tuple[np.ndarray, np.ndarray, dict]:
+    def smooth(self, n_iter: int = 5, weight: float = 0.5, fixed_boundary: bool = True) -> None:
         """
-        Calculate the quality of mesh elements.
-        
+        Apply Laplacian smoothing to the mesh (in-place).
+
+        This method moves each interior vertex toward the average of its
+        neighbors, optionally fixing boundary vertices. It modifies
+        ``self.points`` in-place.
+
         Parameters:
-            elem_ids: Indices of elements to evaluate.
-                If None, all elements are evaluated.
-            quality_type: Type of quality metric to use.
-                'skew', 'skewness', 'angular skewness': Measures deviation from ideal angles
-        
-        Returns:
-            Tuple of (Quality, Angles, stats) where:
-            - Quality: Array of quality measurements for each element
-            - Angles: Array of interior angles for each element
-            - stats: Dict with mean, median, min, max, std
+            n_iter: Number of smoothing iterations (default: 5).
+            weight: Relaxation weight in [0, 1] (default: 0.5).
+                0 = no movement, 1 = full Laplacian step.
+            fixed_boundary: If True (default), boundary vertices are not moved.
+
+        Raises:
+            ValueError: If weight is not in [0, 1].
+
+        Note:
+            Smoothing may reduce element quality for highly non-convex domains.
+            Use small ``n_iter`` and ``weight`` values for such cases.
+
+        Example:
+            >>> mesh.smooth(n_iter=10, weight=0.3)
+            >>> print(mesh.element_quality().mean())
         """
-        if elem_ids is None:
-            elem_ids = np.arange(self.n_elems)
-        if np.isscalar(elem_ids):
-            elem_ids = np.array([elem_ids])
-        elem_ids = np.asarray(elem_ids)
+        if not 0 <= weight <= 1:
+            raise ValueError(f"weight must be in [0, 1], got {weight}")
 
-        # Compute boolean masks without O(n²) membership checks
-        if self.connectivity_list.shape[1] == 3:
-            tri_mask = np.ones(len(elem_ids), dtype=bool)
-            quad_mask = np.zeros(len(elem_ids), dtype=bool)
-        else:
-            rows = self.connectivity_list[elem_ids]
-            tri_mask = (
-                (rows[:, 0] == rows[:, 1])
-                | (rows[:, 1] == rows[:, 2])
-                | (rows[:, 2] == rows[:, 3])
-                | (rows[:, 3] == rows[:, 0])
-                | (rows[:, 0] == rows[:, 2])
-                | (rows[:, 1] == rows[:, 3])
-            )
-            quad_mask = ~tri_mask
+        boundary_nodes = set(self.boundary_node_indices().tolist()) if fixed_boundary else set()
 
-        # Calculate interior angles
-        angles = self.interior_angles(elem_ids)
-        
-        # Initialize quality array
-        quality = np.zeros(len(elem_ids))
-        
-        if quality_type in ['skew', 'skewness', 'angular skewness']:
-            if tri_mask.any():
-                tri_angles = angles[tri_mask, :3]
-                tri_max = np.max(tri_angles, axis=1)
-                tri_min = np.min(tri_angles, axis=1)
-                quality[tri_mask] = 1 - np.maximum(
-                    (tri_max - 60) / (180 - 60),
-                    (60 - tri_min) / 60
-                )
+        for _ in range(n_iter):
+            new_pts = self.points.copy()
+            for v in range(self.n_verts):
+                if v in boundary_nodes:
+                    continue
+                neighbors = set()
+                for e_id in self.adjacencies['Vert2Edge'][v]:
+                    v1, v2 = self.adjacencies['Edge2Vert'][e_id]
+                    neighbors.add(v1 if v2 == v else v2)
+                if not neighbors:
+                    continue
+                neighbor_pts = self.points[list(neighbors), :2]
+                avg = neighbor_pts.mean(axis=0)
+                new_pts[v, :2] = (1 - weight) * self.points[v, :2] + weight * avg
+            self.points = new_pts
 
-            if quad_mask.any():
-                quad_angles = angles[quad_mask, :]
-                quad_max = np.max(quad_angles, axis=1)
-                quad_min = np.min(quad_angles, axis=1)
-                quality[quad_mask] = 1 - np.maximum(
-                    (quad_max - 90) / (180 - 90),
-                    (90 - quad_min) / 90
-                )
+        # Invalidate spatial indices after moving points
+        self._build_spatial_indices()
 
-            # Zero out elements with degenerate angle sums
-            tri_sum_mask = tri_mask & (np.sum(angles[:, :3], axis=1) <= 179.99)
-            quality[tri_sum_mask] = 0
-            quad_sum_mask = quad_mask & (np.sum(angles, axis=1) <= 359.99)
-            quality[quad_sum_mask] = 0
-        
-        else:
-            raise ValueError(f"Unknown quality type: {quality_type}")
-        
-        stats = {
-            'mean': float(np.mean(quality)),
-            'median': float(np.median(quality)),
-            'min': float(np.min(quality)),
-            'max': float(np.max(quality)),
-            'std': float(np.std(quality))
-        }
-        return quality, angles, stats
-    
     def smooth_mesh(self, method: str, acknowledge_change: bool=False, *kwargs) -> np.ndarray:
         """
         Perform mesh smoothing using a modified FEM-based approach.
-        
+
         Parameters:
             method: Smoothing method ('FEM','angle-based')
             acknowledge_change: If True, acknowledges the change in the mesh
@@ -1612,21 +1434,20 @@ class CHILmesh(CHILmeshPlotMixin):
             raise ValueError(f"Unknown smoothing method: {method}")
         self.change_points( new_points, acknowledge_change=True )
         return new_points
-    
+
     def _ordered_vertex_ring(self, v_idx: int, elem_ids: list) -> list | None:
         """
         Return CCW-ordered ring of neighbor vertices around interior vertex v_idx.
 
-        Uses element connectivity to chain pred→succ pairs. Returns None if
+        Uses element connectivity to chain pred->succ pairs. Returns None if
         non-manifold or the vertex is on the boundary (open ring).
         """
         succ_map: dict[int, int] = {}
 
         for eid in elem_ids:
             row = self.connectivity_list[eid]
-            # Determine unique vertex sequence for this element
             if row.shape[0] == 4 and row[3] == row[0]:
-                verts = row[:3].tolist()          # padded triangle [v0,v1,v2,v0]
+                verts = row[:3].tolist()
             elif row.shape[0] == 4 and (
                 row[0] == row[1] or row[1] == row[2]
                 or row[2] == row[3] or row[1] == row[3]
@@ -1652,7 +1473,7 @@ class CHILmesh(CHILmeshPlotMixin):
             succ_map[pred] = succ
 
         if len(succ_map) != len(elem_ids):
-            return None  # non-manifold
+            return None
 
         start = next(iter(succ_map))
         ring = [start]
@@ -1665,7 +1486,7 @@ class CHILmesh(CHILmeshPlotMixin):
             cur = nxt
 
         if succ_map.get(ring[-1]) != start or len(ring) != len(succ_map):
-            return None  # open ring → boundary vertex
+            return None
 
         return ring
 
@@ -1675,24 +1496,20 @@ class CHILmesh(CHILmeshPlotMixin):
         Iterative angle-based smoother (Zhou & Shimada 2000).
 
         For each interior vertex, computes a bisector-weighted correction that
-        drives each sector angle toward the equiangular target 2π/m.  Deficit
-        is clamped to ±π/3 to prevent overshoot in near-degenerate sectors
-        (where even a tiny bisector displacement causes huge angle change).
+        drives each sector angle toward the equiangular target 2pi/m. Deficit
+        is clamped to +/-pi/3 to prevent overshoot in near-degenerate sectors.
         Updates are Gauss-Seidel and accepted only when the local minimum-quality
         metric strictly improves, guaranteeing monotone quality growth.
 
-        Unlike Laplacian smoothing, corrections are driven by angle-deficit per
-        sector and are accepted only when they actually improve mesh quality.
-
         Parameters:
             n_iter: Maximum number of passes over all interior vertices
-            omega:  Initial relaxation factor (halved up to 6× in line search)
+            omega:  Initial relaxation factor (halved up to 6x in line search)
             tol:    Convergence threshold on max per-vertex displacement
 
         Reference:
             Zhou, M., & Shimada, K. (2000).
             "An angle-based approach to two-dimensional mesh smoothing".
-            Proceedings of the 9th International Meshing Roundtable, 373–384.
+            Proceedings of the 9th International Meshing Roundtable, 373-384.
         """
         p = self.points[:, :2].copy()
         n = self.n_verts
@@ -1702,10 +1519,9 @@ class CHILmesh(CHILmeshPlotMixin):
 
         vert2elem = self.adjacencies['Vert2Elem']
         two_pi = 2.0 * np.pi
-        deficit_cap = np.pi / 3.0   # 60° cap prevents wild corrections in thin sectors
+        deficit_cap = np.pi / 3.0
 
         def _elem_verts(row):
-            """Unique ordered vertices for a connectivity row (handles padded tris)."""
             if row.shape[0] == 4 and row[3] == row[0]:
                 return row[:3].tolist()
             if row.shape[0] == 4 and (
@@ -1726,7 +1542,6 @@ class CHILmesh(CHILmeshPlotMixin):
         _R2D = 180.0 / _math.pi
 
         def _acos_deg(px0, py0, px1, py1, px2, py2):
-            """Angle at vertex 0 in degrees, using fast scalar math."""
             ux = px1 - px0; uy = py1 - py0
             wx = px2 - px0; wy = py2 - py0
             lu2 = ux*ux + uy*uy
@@ -1737,7 +1552,6 @@ class CHILmesh(CHILmeshPlotMixin):
             return _math.acos(max(-1.0, min(1.0, c))) * _R2D
 
         def _local_min_quality_fast(v_idx, vpos, p_cur, cached_elem_verts):
-            """Fast quality check using pre-computed element vertices."""
             vpx, vpy = vpos[0], vpos[1]
             min_q = 1e9
             for ev in cached_elem_verts:
@@ -1780,7 +1594,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         for _iter in range(n_iter):
             max_move = 0.0
-            elem_verts_cache = {}  # Cache element vertex lists per iteration
+            elem_verts_cache = {}
 
             for v in range(n):
                 if v in boundary_set:
@@ -1794,7 +1608,6 @@ class CHILmesh(CHILmeshPlotMixin):
                 if ring is None or len(ring) < 2:
                     continue
 
-                # Cache element verts for this vertex (reuse in line search)
                 if v not in elem_verts_cache:
                     elem_verts_cache[v] = [_elem_verts(self.connectivity_list[eid]) for eid in elem_ids]
                 cached_ev = elem_verts_cache[v]
@@ -1802,31 +1615,45 @@ class CHILmesh(CHILmeshPlotMixin):
                 m_ring = len(ring)
                 theta_star = two_pi / m_ring
                 v_pos = p[v]
-                correction = np.zeros(2)
 
-                for k in range(m_ring):
-                    a = p[ring[k]]
-                    b = p[ring[(k + 1) % m_ring]]
+                ring_arr = np.array(ring)
+                ring_next = np.roll(ring_arr, -1)
 
-                    da = a - v_pos
-                    db = b - v_pos
-                    la = np.linalg.norm(da)
-                    lb = np.linalg.norm(db)
-                    if la < 1e-14 or lb < 1e-14:
-                        continue
+                a_vecs = p[ring_arr]
+                b_vecs = p[ring_next]
 
-                    ua = da / la
-                    ub = db / lb
-                    cos_a = np.clip(ua @ ub, -1.0, 1.0)
-                    alpha_k = np.arccos(cos_a)
+                da = a_vecs - v_pos
+                db = b_vecs - v_pos
 
-                    bisector = ua + ub
-                    bl = np.linalg.norm(bisector)
-                    bisector = bisector / bl if bl > 1e-10 else np.array([-ua[1], ua[0]])
+                la = np.linalg.norm(da, axis=1)
+                lb = np.linalg.norm(db, axis=1)
 
-                    deficit = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)
-                    avg_len = (la + lb) * 0.5
-                    correction += deficit * avg_len * bisector
+                valid = (la >= 1e-14) & (lb >= 1e-14)
+
+                ua = np.zeros_like(da)
+                ub = np.zeros_like(db)
+                ua[valid] = da[valid] / la[valid, np.newaxis]
+                ub[valid] = db[valid] / lb[valid, np.newaxis]
+
+                cos_a = np.sum(ua * ub, axis=1)
+                cos_a = np.clip(cos_a, -1.0, 1.0)
+                alpha_k = np.arccos(cos_a)
+
+                bisector = ua + ub
+                bl = np.linalg.norm(bisector, axis=1)
+
+                normalized_bisector = np.zeros_like(bisector)
+                large_bl = bl > 1e-10
+                normalized_bisector[large_bl] = bisector[large_bl] / bl[large_bl, np.newaxis]
+                normalized_bisector[~large_bl] = np.column_stack([-ua[~large_bl, 1], ua[~large_bl, 0]])
+
+                deficits = np.clip(theta_star - alpha_k, -deficit_cap, deficit_cap)
+                avg_lens = (la + lb) * 0.5
+
+                deficits[~valid] = 0.0
+                avg_lens[~valid] = 0.0
+
+                correction = np.sum(deficits[:, np.newaxis] * avg_lens[:, np.newaxis] * normalized_bisector, axis=0)
 
                 if np.linalg.norm(correction) < 1e-14:
                     continue
@@ -1845,7 +1672,7 @@ class CHILmesh(CHILmeshPlotMixin):
                     scale *= 0.5
 
                 if accepted:
-                    p[v] = candidate   # Gauss-Seidel: update immediately
+                    p[v] = candidate
                     move = np.linalg.norm(scale * step)
                     if move > max_move:
                         max_move = move
@@ -1864,19 +1691,13 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Returns:
             (tris, quads): Arrays of triangle and quad element indices.
-            - tris: Indices where elements have 3 unique vertices (padded or 3-column)
-            - quads: Indices where elements have 4 distinct vertices
         """
         n_cols = self.connectivity_list.shape[1]
 
         if n_cols == 3:
-            # Pure triangle mesh
             all_indices = np.arange(self.connectivity_list.shape[0])
             return all_indices, np.array([], dtype=int)
         elif n_cols == 4:
-            # Mixed or pure quad mesh; detect padded triangles by repeated vertex.
-            # Padded convention is [v0, v1, v2, v0], so rows[:, 3] == rows[:, 0]
-            # for triangles. Use same vectorised logic as _elem_type() for consistency.
             rows = self.connectivity_list
             tri_mask = (
                 (rows[:, 0] == rows[:, 1])
@@ -1892,26 +1713,14 @@ class CHILmesh(CHILmeshPlotMixin):
             raise ValueError(f"Unexpected connectivity_list shape: {self.connectivity_list.shape}")
 
     def _tri_stiffness_assembly(self, tri_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
-        """
-        Assemble stiffness matrix contributions from triangle elements.
-
-        Parameters:
-            tri_indices: Array of triangle element indices
-            p: (n_verts, 2) point array (x, y only)
-            n: Total number of vertices
-
-        Returns:
-            (rows, cols, data): CSR matrix format lists for assembly
-        """
-        import numpy as np
-
+        """Assemble stiffness matrix contributions from triangle elements (Balendran 1999)."""
         t = self.connectivity_list[tri_indices, :3]
 
         D = 2.0 * np.eye(2)
         T = np.array([[-1.0, -np.sqrt(3)], [np.sqrt(3), -1.0]])
 
         rows, cols, data = [], [], []
-        for elem_idx, tri in enumerate(t):
+        for tri in t:
             for i in range(3):
                 for j in range(3):
                     block = D if i == j else T if j == (i+1)%3 else T.T
@@ -1924,39 +1733,7 @@ class CHILmesh(CHILmeshPlotMixin):
         return rows, cols, data
 
     def _quad_stiffness_assembly(self, quad_indices: np.ndarray, p: np.ndarray, n: int) -> tuple:
-        """
-        Assemble stiffness from quad elements via the Q4 bilinear Laplacian.
-
-        Each quad contributes the standard 4-node isoparametric Laplacian on the
-        reference unit square (nodes CCW), applied independently per coordinate:
-
-            K_local = (1/6) * [[ 4, -1, -2, -1],
-                               [-1,  4, -1, -2],
-                               [-2, -1,  4, -1],
-                               [-1, -2, -1,  4]]   (each entry scales I_2)
-
-        Row sums are zero, so the operator is translation-invariant (rigid-body
-        modes lie in its null space) and a perfectly square quad is harmonic —
-        its interior nodes feel zero net force, so squares are preserved.
-
-        This replaces the prior tri-decomposition (#105), which summed the
-        *triangle* rotation block ``T = 2·R(120°)`` over the quad's two diagonal
-        splits. That reused the equilateral-triangle (60°) target on quads,
-        actively biasing them toward 60° corners and distorting squares in mixed
-        meshes. The opposite-corner coupling (the ``-2`` entries) is what makes a
-        4-cycle stencil translation-invariant; a nearest-neighbour-only rotation
-        stencil cannot be (see #105 analysis).
-
-        Parameters:
-            quad_indices: Array of quad element indices
-            p: (n_verts, 2) point array (x, y only)
-            n: Total number of vertices
-
-        Returns:
-            (rows, cols, data): COO triplet lists for sparse assembly
-        """
-        import numpy as np
-
+        """Assemble stiffness from quad elements via the Q4 bilinear Laplacian."""
         q = self.connectivity_list[quad_indices, :4]
 
         KL = (1.0 / 6.0) * np.array(
@@ -1983,29 +1760,15 @@ class CHILmesh(CHILmeshPlotMixin):
 
     def _mixed_stiffness_assembly(self, tri_indices: np.ndarray, quad_indices: np.ndarray,
                                    p: np.ndarray, n: int) -> tuple:
-        """
-        Assemble stiffness matrix for mixed element mesh.
-        Combines triangle and quad contributions into single stiffness matrix.
-
-        Parameters:
-            tri_indices: Array of triangle element indices
-            quad_indices: Array of quad element indices
-            p: (n_verts, 2) point array (x, y only)
-            n: Total number of vertices
-
-        Returns:
-            (rows, cols, data): CSR matrix format lists for assembly
-        """
+        """Assemble stiffness matrix for mixed element mesh."""
         rows, cols, data = [], [], []
 
-        # Add triangle contributions
         if len(tri_indices) > 0:
             tri_rows, tri_cols, tri_data = self._tri_stiffness_assembly(tri_indices, p, n)
             rows.extend(tri_rows)
             cols.extend(tri_cols)
             data.extend(tri_data)
 
-        # Add quad contributions
         if len(quad_indices) > 0:
             quad_rows, quad_cols, quad_data = self._quad_stiffness_assembly(quad_indices, p, n)
             rows.extend(quad_rows)
@@ -2014,128 +1777,70 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return rows, cols, data
 
-    def _compute_angle_based_forces(self, p: np.ndarray, n: int) -> np.ndarray:
-        """
-        Compute angle-based RHS force vector for Zhou & Shimada smoother.
-
-        For each interior vertex, computes forces that pull it toward angles that
-        conform to ideal values (60° for triangles, 90° for quads). Uses cotangent
-        weighting: F_i = -0.5 * Σ_{adjacent angles} cot(θ) * (edge_perp)
-
-        Parameters:
-            p: (n_verts, 2) point array (x, y only)
-            n: Total number of vertices
-
-        Returns:
-            F: (2*n,) force vector with angle-based forces for interior vertices
-        """
-        import numpy as np
-
-        F = np.zeros(2 * n)
-
-        # Process each element to accumulate angle-based forces
-        for elem_idx, elem in enumerate(self.connectivity_list):
-            # Determine if triangle or quad
-            is_tri = (elem[3] == elem[0]) if len(elem) == 4 else True
-
-            if is_tri:
-                verts = elem[:3]
-                ideal_angle = np.pi / 3  # 60° for triangles
-            else:
-                verts = elem[:4]
-                ideal_angle = np.pi / 2  # 90° for quads
-
-            # Compute angles at each vertex
-            for i in range(len(verts)):
-                v0 = int(verts[i])
-                v1 = int(verts[(i - 1) % len(verts)])
-                v2 = int(verts[(i + 1) % len(verts)])
-
-                # Edge vectors emanating from v0
-                e1 = p[v1] - p[v0]  # to previous vertex
-                e2 = p[v2] - p[v0]  # to next vertex
-
-                # Angle at v0
-                cos_angle = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2) + 1e-14)
-                cos_angle = np.clip(cos_angle, -1.0, 1.0)
-                angle = np.arccos(cos_angle)
-
-                # Cotangent weight (negative because we want to penalize deviations)
-                cot_angle = 1.0 / (np.tan(angle) + 1e-14)
-
-                # Force is perpendicular to edges, weighted by cotangent
-                # Use perpendicular to e2: rotate 90° clockwise = (y, -x)
-                e2_perp = np.array([e2[1], -e2[0]])
-                force = -0.5 * cot_angle * e2_perp
-
-                # Accumulate force (scaled by 0.1 to avoid over-correction)
-                F[2*v0] += 0.1 * force[0]
-                F[2*v0 + 1] += 0.1 * force[1]
-
-        return F
-
-    def direct_smoother( self, kinf=1e12, freeze_quad_nodes: bool = False ) -> np.ndarray:
+    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False) -> np.ndarray:
         """
         Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
         Supports triangle, quad, and mixed-element meshes.
 
         Triangles use the Balendran rotation-based stiffness (equilateral target);
-        quads use the Q4 bilinear Laplacian (square target, see
-        ``_quad_stiffness_assembly``).
+        quads use the Q4 bilinear Laplacian (square target).
+
+        Interior RHS F = 0 per Balendran/MATLAB FEMSmooth.m — only boundary
+        pinning terms are non-zero. (#173 fix: removed incorrect
+        _compute_angle_based_forces call from interior RHS.)
+
+        Note (size-field behavior, #168): this smoother is **isotropic**. The
+        Balendran stiffness targets a uniform equilateral triangle (60 deg) /
+        square quad (90 deg) and takes **no size-field input** — it equalizes
+        element *shape*, not *size*. Applied to a graded mesh it grows fine
+        (e.g. coastal) edges and shrinks coarse (offshore) edges, eroding the
+        original sizing. For size-respecting smoothing, supply anisotropic
+        targets (not yet implemented) or run a separate sizing pass afterward.
+
+        Note (size-field behavior, #168): this smoother is **isotropic**. The
+        Balendran stiffness targets a uniform equilateral triangle (60 deg) /
+        square quad (90 deg) and takes **no size-field input** — it equalizes
+        element *shape*, not *size*. Applied to a graded mesh it grows fine
+        (e.g. coastal) edges and shrinks coarse (offshore) edges, eroding the
+        original sizing. For size-respecting smoothing, supply anisotropic
+        targets (not yet implemented) or run a separate sizing pass afterward.
 
         Parameters:
             kinf: Large stiffness value for fixed (pinned) vertices.
             freeze_quad_nodes: When True, pin every vertex that is a corner of any
-                quad element in addition to the boundary. In a mixed mesh a node
-                shared between a quad and a triangle cannot satisfy both the 90°
-                (square) and 60° (equilateral) targets — smoothing it necessarily
-                distorts the quad. Freezing quad-corner nodes guarantees quads keep
-                their exact shape; only pure-triangle interior nodes move. Default
-                False (all interior nodes smooth). See #105.
+                quad element in addition to the boundary.
 
         Reference:
             Balendran, B. (1999).
             "A direct smoothing method for surface meshes".
-            In *Proceedings of the 8th International Meshing Roundtable*, 189–193.
-            Sandia National Laboratories.
-            https://api.semanticscholar.org/CorpusID:34335417
+            Proceedings of the 8th International Meshing Roundtable, 189-193.
         """
-        import numpy as np
         from scipy.sparse import csr_matrix
         from scipy.sparse.linalg import spsolve
 
-        p = self.points[:, :2]  # Only use x, y
+        p = self.points[:, :2]
         n = self.n_verts
 
-        # Detect element types
         tri_indices, quad_indices = self._detect_element_types()
 
-        # Assemble stiffness matrix based on element composition
         if len(quad_indices) == 0:
-            # Pure triangle mesh
             rows, cols, data = self._tri_stiffness_assembly(tri_indices, p, n)
         elif len(tri_indices) == 0:
-            # Pure quad mesh
             rows, cols, data = self._quad_stiffness_assembly(quad_indices, p, n)
         else:
-            # Mixed-element mesh
             rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
 
         K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
 
-        # Compute angle-based RHS forces for interior nodes
-        F = self._compute_angle_based_forces(p, n)
+        # Interior RHS = 0 per Balendran/MATLAB FEMSmooth.m (#173 fix)
+        F = np.zeros(2 * n)
 
-        # Identify boundary nodes and apply constraints.
-        # Use adjacency structure when available; otherwise count edge occurrences
-        # directly (supports compute_layers=False meshes used in tests).
         if "Edge2Elem" in self.adjacencies:
             edge_verts = self.edge2vert(self.boundary_edges())
             boundary_nodes = np.unique(edge_verts.flatten())
         else:
             edge_count: dict[tuple, int] = {}
             for row in self.connectivity_list:
-                # strip padding for degenerate-quad triangles
                 verts = list(row[:3]) if (len(row) == 4 and row[3] == row[0]) else list(row)
                 for i in range(len(verts)):
                     a, b = int(verts[i]), int(verts[(i + 1) % len(verts)])
@@ -2154,357 +1859,400 @@ class CHILmesh(CHILmeshPlotMixin):
             K[2*v+1, 2*v+1] = kinf
 
         c = spsolve(K, F)
+        new_xy = c.reshape(-1, 2)
+        domain_diag = float(np.linalg.norm(np.ptp(p, axis=0)))
+        max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))
+        if not np.isfinite(c).all() or max_disp > domain_diag:
+            return self.points.copy()
         new_points = np.zeros_like(self.points)
-        new_points[:, :2] = c.reshape(-1, 2)
-        new_points[:, 2] = self.points[:, 2]  # preserve z if needed
-        return new_points    
+        new_points[:, :2] = new_xy
+        new_points[:, 2] = self.points[:, 2]
+        return new_points
 
-
-    def advancing_front_boundary_edges(self) -> List[int]:
+    def admesh_metadata(self) -> dict:
         """
-        Get boundary edge IDs for advancing-front mesh generation.
+        Return a metadata dictionary compatible with the ADMESH-Domains catalog schema.
 
-        Returns edge IDs on the current mesh boundary, suitable for placing
-        new elements during advancing-front generation.
+        The returned dict contains all fields that ADMESH-Domains expects from a
+        mesh record: node count, element count, element type, and bounding box.
+        Designed to be callable on a ``compute_layers=False`` mesh for fast bulk
+        loading.
 
         Returns:
-            List of boundary edge IDs (sorted)
-
-        Complexity:
-            Time: O(n_edges)
-            Space: O(n_boundary_edges)
+            dict with keys:
+                - 'node_count' (int)
+                - 'element_count' (int)
+                - 'element_type' (str): 'tri', 'quad', or 'mixed'
+                - 'bbox' (list[float]): [xmin, ymin, xmax, ymax]
 
         Example:
-            >>> boundary = mesh.advancing_front_boundary_edges()
-            >>> for edge_id in boundary:
-            ...     v1, v2 = mesh.edge2vert(edge_id)[0]
+            >>> mesh = CHILmesh.from_admesh_domain(record)
+            >>> info = mesh.admesh_metadata()
+            >>> print(info['node_count'])
         """
-        boundary_edge_ids = self.boundary_edges()
-        return sorted(boundary_edge_ids.tolist())
+        type_map = {"Triangular": "tri", "Quadrilateral": "quad", "Mixed-Element": "mixed"}
+        xy = self.points[:, :2]
+        bbox = [float(xy[:, 0].min()), float(xy[:, 1].min()),
+                float(xy[:, 0].max()), float(xy[:, 1].max())]
+        return {
+            "node_count": self.n_verts,
+            "element_count": self.n_elems,
+            "element_type": type_map.get(self.type, "tri"),
+            "bbox": bbox,
+        }
 
-    def add_advancing_front_element(
-        self, vertices: List[int], elem_type: str = "tri"
-    ) -> int:
+    @classmethod
+    def from_admesh_domain(cls, record: object, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
-        Add element to mesh during advancing-front generation.
+        Construct a CHILmesh from an ADMESH-Domains catalog record.
 
-        Adds a single element (triangle or quad) to the mesh and updates all
-        adjacency structures. This is the primary method for MADMESHR advancing-front
-        generation. Elements are added in order; mesh is valid after each call.
+        The catalog record is duck-typed: any object with ``connectivity``
+        (ndarray, n_elems × 3|4) and ``points`` (ndarray, n_verts × 2|3)
+        attributes qualifies. This avoids a hard dependency on the
+        ``admesh_domains`` package — consumers can pass any compatible object.
+
+        Alternatively, if the record has a ``type`` attribute, routes to the
+        appropriate file reader:
+        - type == "SMS_2DM" (or "2dm"): calls read_from_2dm(record.filename)
+        - type == "fort14", "FORT14", "ADCIRC": calls read_from_fort14(record.filename)
 
         Parameters:
-            vertices: Vertex indices for new element
-                - Triangle: [v0, v1, v2]
-                - Quad: [v0, v1, v2, v3]
-            elem_type: Element type ('tri' or 'quad')
+            record: An object with ``.connectivity`` and ``.points`` attributes,
+                or a ``type`` and ``filename`` attribute for file-based loading.
+                Optionally ``.grid_name`` (str) for naming the mesh.
+            compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: Forwarded to the file reader / constructor. (#192)
 
         Returns:
-            ID of newly added element
+            A CHILmesh instance.
+
+        Example:
+            >>> from admesh_domains import get_mesh
+            >>> record = get_mesh("WNAT/hagen@v1")
+            >>> mesh = CHILmesh.from_admesh_domain(record)
+        """
+        # Check for type-based routing (file-based loading)
+        record_type = getattr(record, "type", None)
+        if record_type is not None:
+            record_type_lower = str(record_type).lower()
+            if record_type_lower in ("sms_2dm", "2dm"):
+                filename = getattr(record, "filename", None)
+                if filename is not None:
+                    return cls.read_from_2dm(
+                        Path(filename), compute_layers=compute_layers, compute_adjacencies=compute_adjacencies
+                    )
+            elif record_type_lower in ("fort14", "adcirc"):
+                filename = getattr(record, "filename", None)
+                if filename is not None:
+                    return cls.read_from_fort14(
+                        Path(filename), compute_layers=compute_layers, compute_adjacencies=compute_adjacencies
+                    )
+
+        # Fall through to duck-typed path (connectivity + points attributes)
+        name = getattr(record, "grid_name", None)
+        return cls(
+            connectivity=np.asarray(record.connectivity),
+            points=np.asarray(record.points),
+            grid_name=name,
+            compute_layers=compute_layers,
+            compute_adjacencies=compute_adjacencies,
+        )
+
+    def save(self, filename: str) -> None:
+        """
+        Save the mesh to a file.
+
+        Supported formats: ADCIRC fort.14 (`.14`, `.fort14`), SMS 2dm (`.2dm`).
+
+        Parameters:
+            filename: Output file path (format inferred from extension).
 
         Raises:
-            ValueError: If vertices out of range or elem_type invalid
-            RuntimeError: If adjacency update fails
-
-        Complexity:
-            Time: O(k) where k = element degree (typically 3-4)
-            Space: O(k) for adjacency updates
+            ValueError: If the file format is not recognized.
 
         Example:
-            >>> new_elem_id = mesh.add_advancing_front_element([v1, v2, v3], 'tri')
-            >>> print(f"Added element {new_elem_id}")
+            >>> mesh.save("output.14")
+            >>> mesh.save("output.2dm")
         """
-        if elem_type not in ("tri", "quad"):
-            raise ValueError(f"Invalid elem_type: {elem_type}. Use 'tri' or 'quad'.")
+        path = Path(filename)
+        if path.suffix in (".14", ".fort14"):
+            write_fort14(self, filename)
+        elif path.suffix == ".2dm":
+            self._write_2dm(filename)
+        else:
+            raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
 
-        # Validate vertices
-        for v in vertices:
-            if not 0 <= v < self.n_verts:
-                raise ValueError(f"Vertex {v} out of range [0, {self.n_verts})")
-
-        # Detect connectivity format (3-column all triangles or 4-column mixed)
-        elem_cols = self.connectivity_list.shape[1]
-
-        # Prepare new element with matching format
-        if elem_type == "tri":
-            if len(vertices) != 3:
-                raise ValueError(f"Triangle requires 3 vertices, got {len(vertices)}")
-            if elem_cols == 3:
-                new_elem = np.array(vertices)  # Pure triangle format
-            else:
-                new_elem = np.array(vertices + [vertices[0]])  # Pad to 4-column
-        else:  # quad
-            if len(vertices) != 4:
-                raise ValueError(f"Quad requires 4 vertices, got {len(vertices)}")
-            if elem_cols != 4:
-                raise ValueError("Cannot add quad to triangle-only mesh (3-column connectivity)")
-            new_elem = np.array(vertices)
-
-        # Add to connectivity
-        new_elem_id = self.n_elems
-        self.connectivity_list = np.vstack([self.connectivity_list, new_elem])
-        self.n_elems = self.connectivity_list.shape[0]  # Update element count
-
-        # Rebuild adjacencies (invalidates layers)
-        self._build_adjacencies()
-        self.layers = {}  # Clear layers since mesh changed
-
-        return new_elem_id
-
-    def remove_boundary_loop(self, edge_ids: List[int]) -> None:
+    @classmethod
+    def load(cls, filename: str, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
-        Remove boundary loop elements (residual closure).
+        Load a mesh from a file.
 
-        Removes elements adjacent to the specified boundary edges. Used in
-        advancing-front generation to discard the residual boundary loop
-        when it shrinks to ≤4 vertices.
+        Supported formats: ADCIRC fort.14 (`.14`, `.fort14`), SMS 2dm (`.2dm`).
 
         Parameters:
-            edge_ids: List of boundary edge IDs to remove adjacent elements
-
-        Raises:
-            ValueError: If any edge_id is out of range or not a boundary edge
-
-        Complexity:
-            Time: O(m + n) where m = number of edges, n = mesh size
-            Space: O(m) for tracking removals
-
-        Example:
-            >>> small_boundary = [e1, e2, e3, e4]
-            >>> mesh.remove_boundary_loop(small_boundary)
-        """
-        # Collect elements to remove (before any deletion)
-        elems_to_remove = set()
-
-        for edge_id in edge_ids:
-            if not 0 <= edge_id < self.n_edges:
-                raise ValueError(f"Edge {edge_id} out of range [0, {self.n_edges})")
-
-            # Get adjacent elements
-            e1, e2 = self.edge2elem(edge_id)[0]
-
-            # Boundary edge: e2 == -1, remove e1
-            if e2 == -1:
-                if e1 >= 0:
-                    elems_to_remove.add(e1)
-            else:
-                # Interior edge: remove both (or neither if not at boundary)
-                # For now, only handle boundary edges
-                pass
-
-        if len(elems_to_remove) == 0:
-            return  # Nothing to remove
-
-        # Create mask for elements to keep
-        keep_mask = np.ones(self.n_elems, dtype=bool)
-        for elem_id in elems_to_remove:
-            if elem_id < len(keep_mask):
-                keep_mask[elem_id] = False
-
-        # Remove elements (keeping valid indices)
-        self.connectivity_list = self.connectivity_list[keep_mask]
-        self.n_elems = self.connectivity_list.shape[0]  # Update element count
-
-        # Rebuild adjacencies (will create new valid indices)
-        self._build_adjacencies()
-        self.layers = {}  # Clear layers
-
-    def pinch_points(self, width_threshold: float = 0.5) -> List[int]:
-        """
-        Identify bottleneck vertices (pinch points) in the mesh.
-
-        Detects vertices where the local mesh width drops below a threshold.
-        Useful for domain splitting in advancing-front generation.
-
-        Parameters:
-            width_threshold: Relative width threshold [0, 1]
-                - Vertices where min_neighbor_distance / max_neighbor_distance < threshold
-                  are considered pinch points
+            filename: Input file path.
+            compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: Forwarded to the reader. (#192)
 
         Returns:
-            List of vertex IDs identified as pinch points (sorted)
+            A CHILmesh instance.
 
-        Complexity:
-            Time: O(n_verts * avg_degree)
-            Space: O(n_pinch_points)
+        Raises:
+            FileNotFoundError: If the file does not exist.
+            ValueError: If the file format is not recognized.
 
         Example:
-            >>> pinches = mesh.pinch_points(width_threshold=0.3)
-            >>> for v in pinches:
-            ...     print(f"Bottleneck at vertex {v}")
+            >>> mesh = CHILmesh.load("input.14")
         """
-        pinches = []
+        path = Path(filename)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {filename}")
+        if path.suffix in (".14", ".fort14"):
+            return cls.read_from_fort14(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
+        elif path.suffix == ".2dm":
+            return cls.read_from_2dm(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
+        else:
+            raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
 
-        for vert_id in range(self.n_verts):
-            edges = self.get_vertex_edges(vert_id)
+    def _write_2dm(self, filename: str) -> None:
+        """Write mesh to SMS 2dm format."""
+        with open(filename, 'w') as f:
+            f.write("MESH2D\n")
+            for i, elem in enumerate(self.connectivity_list):
+                if elem.size == 3 or (elem.size == 4 and elem[3] == elem[0]):
+                    verts = elem[:3]
+                    f.write(f"E3T {i+1} {' '.join(str(v+1) for v in verts)}\n")
+                else:
+                    verts = elem[:4]
+                    f.write(f"E4Q {i+1} {' '.join(str(v+1) for v in verts)}\n")
+            for i, pt in enumerate(self.points):
+                f.write(f"ND {i+1} {pt[0]:.10f} {pt[1]:.10f} {pt[2]:.10f}\n")
 
-            if len(edges) < 2:  # pragma: no cover -- unreachable: every valid-mesh vertex has >=2 incident edges
-                continue
+    @classmethod
+    def read_from_2dm(cls, filename: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
+        """
+        Read mesh from SMS 2dm format.
 
-            # Compute distances to neighbors
-            distances = []
-            for edge_id in edges:
-                v1, v2 = self.edge2vert(edge_id)[0]
-                other_vert = v2 if v1 == vert_id else v1
-                p1 = self.points[vert_id, :2]
-                p2 = self.points[other_vert, :2]
-                dist = np.linalg.norm(p2 - p1)
-                distances.append(dist)
+        Parameters:
+            filename: Path to the 2dm file.
+            compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: See :meth:`read_from_fort14`. (#192)
 
-            if len(distances) >= 2:
-                min_dist = min(distances)
-                max_dist = max(distances)
-                if max_dist > 0:
-                    ratio = min_dist / max_dist
-                    if ratio < width_threshold:
-                        pinches.append(vert_id)
+        Returns:
+            A CHILmesh instance.
+        """
+        filename = Path(filename)
+        nodes = {}
+        elems = []
+        has_mixed = False
+        has_tri = False
+        has_quad = False
 
-        return sorted(pinches)
+        with open(filename) as f:
+            for line in f:
+                parts = line.split()
+                if not parts:
+                    continue
+                if parts[0] == 'E3T':
+                    # E3T: elem_id n1 n2 n3 material_id
+                    # Take only vertex indices (parts[2:5]), skip material_id
+                    vertices = [int(x) - 1 for x in parts[2:5]]
+                    elems.append(vertices)
+                    has_tri = True
+                elif parts[0] == 'E4Q':
+                    # E4Q: elem_id n1 n2 n3 n4 material_id
+                    # Take only vertex indices (parts[2:6]), skip material_id
+                    vertices = [int(x) - 1 for x in parts[2:6]]
+                    elems.append(vertices)
+                    has_quad = True
+                elif parts[0] == 'ND':
+                    nid = int(parts[1]) - 1
+                    nodes[nid] = [float(x) for x in parts[2:]]
 
-    def copy( self ) -> "CHILmesh":
-        """ Returns: a deep copy of the  new CHILmesh object with the same properties."""
-        return deepcopy(self)
-    
+        if not nodes:
+            raise ValueError("No nodes found in 2dm file")
 
-def _next_tokens(f) -> Opt[List[str]]:
-    """Next non-blank, comment-stripped line of an open fort.14 file as tokens.
+        # Check if mixed-element mesh
+        has_mixed = has_tri and has_quad
 
-    ADCIRC files append a ``! comment`` to many records; everything after the
-    first ``!`` is dropped. Returns ``None`` at end of file. (#129)
+        n_verts = max(nodes.keys()) + 1
+        pts = np.zeros((n_verts, 3))
+        for nid, coords in nodes.items():
+            pts[nid] = coords if len(coords) == 3 else coords + [0.0]
+
+        # Handle padding for mixed-element meshes
+        if has_mixed:
+            # Pad triangles to 4 columns by repeating first vertex
+            padded_elems = []
+            for elem in elems:
+                if len(elem) == 3:
+                    padded_elems.append([elem[0], elem[1], elem[2], elem[0]])
+                else:
+                    padded_elems.append(elem)
+            conn = np.array(padded_elems, dtype=int)
+        else:
+            conn = np.array(elems, dtype=int)
+        return cls(connectivity=conn, points=pts,
+                   grid_name=filename.stem, compute_layers=compute_layers,
+                   compute_adjacencies=compute_adjacencies)
+
+    @classmethod
+    def read_from_fort14(
+        cls,
+        filename: Path,
+        compute_layers: bool = True,
+        compute_adjacencies: Opt[bool] = None,
+    ) -> "CHILmesh":
+        """
+        Read mesh from ADCIRC fort.14 format.
+
+        Parameters:
+            filename: Path to the fort.14 file.
+            compute_layers: If False, skip skeletonization for fast init.
+            compute_adjacencies: Whether to build adjacency dicts. ``None``
+                (default) tracks ``compute_layers``; set True with
+                ``compute_layers=False`` for a fast adjacency-only load, or
+                False with ``compute_layers=False`` for a bare conn+pts mesh.
+                Forced True when ``compute_layers=True``. (#192)
+
+        Returns:
+            A CHILmesh instance with boundary_segments populated from
+            NOPE (open) and NBOU (flow) boundary records.
+        """
+        filename = Path(filename)
+        with open(filename) as f:
+            lines = f.readlines()
+
+        i = 0
+        grid_name = lines[i].strip(); i += 1
+        parts = lines[i].split(); i += 1
+        n_elems, n_verts = int(parts[0]), int(parts[1])
+
+        pts = np.zeros((n_verts, 3))
+        for j in range(n_verts):
+            p = lines[i].split(); i += 1
+            pts[j] = [float(p[1]), float(p[2]), float(p[3]) if len(p) > 3 else 0.0]
+
+        elem_verts = []
+        has_tri = False
+        has_quad = False
+        for j in range(n_elems):
+            p = lines[i].split(); i += 1
+            n_verts_elem = int(p[1])
+            verts = [int(x) - 1 for x in p[2:2 + n_verts_elem]]
+            elem_verts.append(verts)
+            if n_verts_elem == 3:
+                has_tri = True
+            elif n_verts_elem == 4:
+                has_quad = True
+
+        if has_tri and has_quad:
+            # Mixed mesh: pad triangles to 4 cols by repeating first vertex.
+            conn = np.array(
+                [v if len(v) == 4 else [v[0], v[1], v[2], v[0]] for v in elem_verts],
+                dtype=int,
+            )
+        else:
+            conn = np.array(elem_verts, dtype=int)
+
+        mesh = cls(
+            connectivity=conn,
+            points=pts,
+            grid_name=grid_name,
+            compute_layers=False,
+            compute_adjacencies=False,
+        )
+
+        # --- parse boundary segments (#129) ---
+        boundary_segments = []
+        try:
+            # NOPE open boundaries
+            nope = int(lines[i].split()[0]); i += 1
+            total_nope = int(lines[i].split()[0]); i += 1
+            for _ in range(nope):
+                n_seg = int(lines[i].split()[0]); i += 1
+                nodes = []
+                for _ in range(n_seg):
+                    nodes.append(int(lines[i].split()[0]) - 1)
+                    i += 1
+                boundary_segments.append(
+                    {"kind": "open", "ibtype": None, "nodes": np.array(nodes, dtype=int)}
+                )
+            # NBOU flow boundaries
+            nbou = int(lines[i].split()[0]); i += 1
+            total_nbou = int(lines[i].split()[0]); i += 1
+            for _ in range(nbou):
+                hdr = lines[i].split(); i += 1
+                n_seg = int(hdr[0])
+                ibtype = int(hdr[1]) if len(hdr) > 1 else None
+                nodes = []
+                for _ in range(n_seg):
+                    nodes.append(int(lines[i].split()[0]) - 1)
+                    i += 1
+                boundary_segments.append(
+                    {"kind": "flow", "ibtype": ibtype, "nodes": np.array(nodes, dtype=int)}
+                )
+        except (IndexError, ValueError):
+            pass  # Boundary section absent or malformed — leave segments empty
+
+        mesh.boundary_segments = boundary_segments
+
+        # Default compute_adjacencies follows compute_layers (mirrors __init__).
+        if compute_adjacencies is None:
+            compute_adjacencies = compute_layers
+        if compute_layers:
+            compute_adjacencies = True
+
+        # Now run adjacencies + skeletonization with segments in place.
+        if compute_layers:
+            mesh._build_adjacencies()
+            mesh._skeletonize()
+        elif compute_adjacencies:
+            mesh._build_adjacencies()
+        mesh._build_spatial_indices()
+
+        return mesh
+
+
+def write_fort14(mesh, filename: str) -> None:
     """
-    while True:
-        line = f.readline()
-        if line == "":
-            return None
-        stripped = line.split("!", 1)[0].strip()
-        if not stripped:
-            continue
-        return stripped.split()
-
-
-def _parse_fort14_boundaries(f) -> List[Dict[str, Any]]:
-    """Parse the trailing ADCIRC boundary section of an open fort.14 file.
-
-    Expects the file positioned immediately after the element-connectivity
-    block. Reads the open-boundary block (``NOPE``/``NETA`` + per-segment node
-    strings) then the land/flow-boundary block (``NBOU``/``NVEL`` + per-segment
-    ``NVELL IBTYPE`` headers and node strings). Node ids are converted to 0-based
-    indices. Returns ``[]`` when no boundary section is present. (#129)
-
-    Weir-type segments (IBTYPE 4/24/5/25 …) carry extra columns per node line;
-    only the first column (the node id) is retained — the paired-node/barrier
-    height geometry is not modeled.
-    """
-    segments: List[Dict[str, Any]] = []
-
-    tok = _next_tokens(f)
-    if tok is None:
-        return segments  # node+element-only file, no boundary section
-
-    n_open = int(tok[0])
-    _next_tokens(f)  # NETA: total open-boundary nodes (derivable; discard)
-    for _ in range(n_open):
-        header = _next_tokens(f)
-        n_nodes = int(header[0])
-        nodes = [int(float(_next_tokens(f)[0])) - 1 for _ in range(n_nodes)]
-        segments.append({"kind": "open", "ibtype": None, "nodes": np.asarray(nodes, dtype=int)})
-
-    tok = _next_tokens(f)
-    if tok is None:
-        return segments  # open boundaries only
-
-    n_flow = int(tok[0])
-    _next_tokens(f)  # NVEL: total land-boundary nodes (derivable; discard)
-    for _ in range(n_flow):
-        header = _next_tokens(f)
-        n_nodes = int(header[0])
-        ibtype = int(header[1]) if len(header) > 1 else None
-        nodes = [int(float(_next_tokens(f)[0])) - 1 for _ in range(n_nodes)]
-        segments.append({"kind": "flow", "ibtype": ibtype, "nodes": np.asarray(nodes, dtype=int)})
-
-    return segments
-
-
-def _write_fort14_boundaries(f, boundary_segments: List[Dict[str, Any]]) -> None:
-    """Emit the ADCIRC NOPE/NBOU boundary section for ``boundary_segments``.
-
-    Inverse of :func:`_parse_fort14_boundaries`; node indices written 1-based.
-    Open segments emit no IBTYPE; flow segments emit ``NVELL IBTYPE`` (0 when
-    unknown). (#129)
-    """
-    open_segs = [s for s in boundary_segments if s.get("kind") == "open"]
-    flow_segs = [s for s in boundary_segments if s.get("kind") != "open"]
-
-    f.write(f"{len(open_segs)}\n")
-    f.write(f"{sum(len(s['nodes']) for s in open_segs)}\n")
-    for seg in open_segs:
-        f.write(f"{len(seg['nodes'])}\n")
-        for node in seg["nodes"]:
-            f.write(f"{int(node) + 1}\n")
-
-    f.write(f"{len(flow_segs)}\n")
-    f.write(f"{sum(len(s['nodes']) for s in flow_segs)}\n")
-    for seg in flow_segs:
-        ibtype = seg.get("ibtype")
-        f.write(f"{len(seg['nodes'])} {ibtype if ibtype is not None else 0}\n")
-        for node in seg["nodes"]:
-            f.write(f"{int(node) + 1}\n")
-
-
-def write_fort14(
-    filename: Path,
-    points: np.ndarray,
-    elements: np.ndarray,
-    grid_name: str,
-    boundary_segments: Opt[List[Dict[str, Any]]] = None,
-) -> bool:
-    """
-    Write mesh data to a .fort.14 ADCIRC file.
-
-    Supports triangular, quadrilateral, and mixed-element meshes. Triangles in a
-    4-column array use the padded convention: [v0, v1, v2, v0].
+    Write a CHILmesh to ADCIRC fort.14 format.
 
     Parameters:
-        filename: Output path
-        points: (n_nodes, 2 or 3) numpy array of node coordinates
-        elements: (n_elems, 3 or 4) array of vertex indices (0-based)
-        grid_name: Header string
-        boundary_segments: Optional ADCIRC boundary segments (see
-            ``CHILmesh.boundary_segments``). When falsy, no boundary section is
-            written — byte-identical to the legacy node+element output. (#129)
+        mesh: CHILmesh object to save.
+        filename: Output file path.
+
+    Notes:
+        Only node and element data is written. Boundary condition records
+        are not included in this basic implementation.
+
+    Example:
+        >>> write_fort14(mesh, "output.14")
+    """
+    with open(filename, 'w') as f:
+        name = mesh.grid_name or "CHILmesh"
+        f.write(f"{name}\n")
+        f.write(f"{mesh.n_elems} {mesh.n_verts}\n")
+        for i, pt in enumerate(mesh.points):
+            f.write(f"{i+1} {pt[0]:.10f} {pt[1]:.10f} {pt[2]:.10f}\n")
+        for i, elem in enumerate(mesh.connectivity_list):
+            if elem.size == 3 or (elem.size == 4 and elem[3] == elem[0]):
+                verts = elem[:3]
+                f.write(f"{i+1} 3 {' '.join(str(v+1) for v in verts)}\n")
+            else:
+                verts = elem[:4]
+                f.write(f"{i+1} 4 {' '.join(str(v+1) for v in verts)}\n")
+
+
+def _check_fort14(filename) -> bool:
+    """Quick structural-validity check for a fort.14 file.
+
+    Returns True if the file parses correctly (node count, element count,
+    and grid name header all match), False otherwise.
     """
     try:
-        with open(filename, 'w', encoding='utf-8', newline='\n') as f:
-            f.write(f"{grid_name}\n")
-            f.write(f"{len(elements)} {len(points)}\n")
-
-            for i, pt in enumerate(points, start=1):
-                x, y = pt[:2]
-                z = pt[2] if len(pt) == 3 else 0.0
-                f.write(f"{i} {x:.8f} {y:.8f} {z:.8f}\n")
-
-            for i, elem in enumerate(elements, start=1):
-                # Convert to 1-based indexing
-                indices = elem + 1
-
-                # Detect triangle vs quad
-                if len(elem) == 3:
-                    # 3-column array: all triangles
-                    n1, n2, n3 = indices
-                    f.write(f"{i} 3 {n1} {n2} {n3}\n")
-                else:
-                    # 4-column array: check if padded triangle or quad
-                    if elem[3] == elem[0]:
-                        # Padded triangle: [v0, v1, v2, v0]
-                        n1, n2, n3 = indices[:3]
-                        f.write(f"{i} 3 {n1} {n2} {n3}\n")
-                    else:
-                        # Quad: [v0, v1, v2, v3]
-                        n1, n2, n3, n4 = indices
-                        f.write(f"{i} 4 {n1} {n2} {n3} {n4}\n")
-
-            if boundary_segments:
-                _write_fort14_boundaries(f, boundary_segments)
+        CHILmesh.read_from_fort14(Path(filename), compute_layers=False)
         return True
     except Exception as e:
-        print(f"Error writing fort14 file {filename}: {e}")
+        print(f"Error reading fort14 file {filename}: {e}")
         return False

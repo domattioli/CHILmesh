@@ -7,7 +7,7 @@ Visualizes the iterative layer-peeling from boundary inward:
   - green: IE (inner elements)
   - title labels each layer index
 
-Renders to /home/user/CHILmesh/output/skeletonization_toy.mp4
+Renders to /home/user/CHILmesh/docs/gallery/skeletonization_toy.mp4
 """
 from __future__ import annotations
 

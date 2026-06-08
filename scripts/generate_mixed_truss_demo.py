@@ -8,7 +8,7 @@ Pipeline:
 4. Delaunay-triangulate the gap band (layer-2 region) from ring boundary nodes only.
 5. Stitch ADMESH tris + gap tris + quad core into combined mixed-element mesh.
 6. FEM smooth combined mesh (symmetric quad stiffness, boundary pinned).
-7. Render 4-panel figure to output/mixed_truss_fem_demo.png.
+7. Render 4-panel figure to docs/gallery/mixed_truss_fem_demo.png.
 """
 from __future__ import annotations
 
@@ -342,7 +342,7 @@ def _plot_mixed(ax, mesh: CHILmesh, title: str):
 
 def main(out_path: Path | None = None) -> Path:
     if out_path is None:
-        out_path = Path(__file__).parent.parent / "output" / "mixed_truss_fem_demo.png"
+        out_path = Path(__file__).parent.parent / "docs" / "gallery" / "mixed_truss_fem_demo.png"
     out_path.parent.mkdir(exist_ok=True)
 
     print("[1/6] Building 16x12 quad grid …")

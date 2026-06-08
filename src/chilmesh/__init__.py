@@ -16,8 +16,10 @@ from __future__ import annotations
 from importlib import metadata
 
 from .CHILmesh import CHILmesh, write_fort14
+from .gmsh_io import read_msh, write_msh, GmshParseError
 from .mesh_topology import EdgeMap
 from .mutations import MutableMesh
+from .quality import element_quality
 from . import examples
 from . import bridge
 from . import chilplotting
@@ -92,6 +94,11 @@ __all__ = [
     "EdgeMap",
     "MutableMesh",
     "write_fort14",
+    "read_msh",
+    "write_msh",
+    "GmshParseError",
+    # Standalone quality computation
+    "element_quality",
     # Backend introspection
     "backend_info",
     # Submodules

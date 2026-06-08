@@ -61,7 +61,7 @@ def annulus_size_fn(p):
     return H_MIN + (H_MAX - H_MIN) * t
 
 
-OUTPUT_PATH = Path(__file__).parent.parent / "output" / "annulus_quickstart.png"
+OUTPUT_PATH = Path(__file__).parent.parent / "docs" / "gallery" / "annulus_quickstart.png"
 FIGSIZE = (15, 14)
 DPI = 100
 
