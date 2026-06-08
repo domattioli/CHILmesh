@@ -56,6 +56,40 @@ Times every post-generation stage. Generation itself excluded (per #155). Refere
 
 ---
 
+## v1.2.0 — real-world regional meshes (Valence registry, #155)
+
+Lifecycle profiled on genuine ADCIRC regional meshes from the Valence registry
+(`registry_data/meshes/`), 2026-06-08. Pure-Python backend (C++ extension not
+built in this environment). Supersedes prior "blocked — mesh not in environment"
+status: the regional meshes are on disk and runnable; only the global
+STOFS-2D-Global mesh (24.9M elems, 1.73 GB) remains out-of-environment.
+
+| Mesh | Vertices | Elements | Full init (adj+skel) | Skeletonization | n_layers | Angle smoother (1 it) |
+|---|---:|---:|---:|---:|---:|---:|
+| WNAT_Hagen | 52,774 | 98,365 | 1.07 s | 332 ms | 30 | 37.5 s (3 it) |
+| WNAT_Onur | 127,572 | 246,186 | 6.87 s | (incl.) | 39 | 32.6 s |
+| Great_Lakes | 132,162 | 250,905 | 7.03 s | (incl.) | 46 | — |
+
+WNAT_Hagen full lifecycle (FEM direct smoother 4.38 s + angle smoother 37.5 s,
+3 iters each) completes in ~45 s end-to-end — the first full-lifecycle run on a
+real WNAT mesh.
+
+> **Skeletonization regression fixed (this session):** `_skeletonize()` hung
+> indefinitely on every non-trivial mesh after the #129 boundary-seeding rewrite
+> (boundary-edge selection checked only `Edge2Elem[:,1]==-1` instead of the
+> active-element count, so newly-exposed `[-1, b]` boundary edges were never
+> peeled while consumed `[-1,-1]` edges looped forever). Restored the vectorized
+> `active_count == 1` peel from a3ce406; the #129 seed-node layer-0 filter is
+> preserved. Regression guarded by `tests/test_skeletonize_termination.py`.
+
+> **Reproduce:** `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh <valence>/registry_data/meshes/WNAT_Hagen.14 --sdf none --smooth-iters 3 --truss-iters 3`
+
+> **Still blocked:** STOFS-2D-Global global mesh (24.9M elems, 1.73 GB) lifecycle
+> needs a hosted runner to stage the file (Valence #77) and an iterative/GPU
+> solver for the FEM stage at that scale (#167, #168).
+
+---
+
 ## Historical (pre-1.1.0)
 
 Retained as the performance arc through v0.4.1; these figures predate the
