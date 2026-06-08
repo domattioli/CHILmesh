@@ -1118,64 +1118,58 @@ class CHILmesh(CHILmeshPlotMixin):
                             "Check that segment nodes lie on actual boundary edges."
                         )
             else:
-                iLbEdgeIDs = np.where(edge2elem_work[:, 1] == -1)[0]
+                active_count = np.sum(edge2elem_work >= 0, axis=1)
+                iLbEdgeIDs = np.where(active_count == 1)[0]
 
             if len(iLbEdgeIDs) == 0:
                 break
 
-            # Step 2: OV — outer vertices
-            iLOV_set = set(edge2vert_work[iLbEdgeIDs].ravel().tolist())
-            iLOV_set.discard(-1)
-            iLOV = np.array(sorted(iLOV_set), dtype=int)
-
-            # Step 3: OE — outer elements (adjacent to boundary edges)
-            iLOE_set: Set[int] = set()
-            for e in iLbEdgeIDs:
-                for elem in edge2elem_work[e]:
-                    if elem >= 0:
-                        iLOE_set.add(int(elem))
-            iLOE = np.array(sorted(iLOE_set), dtype=int)
-
-            # Step 4: IE — inner elements (vertex-adjacent to OV, excluding OE)
-            iLIE_set: Set[int] = set()
-            for v in iLOV:
-                for e_id in range(len(edge2vert_work)):
-                    if v in edge2vert_work[e_id] and edge2elem_work[e_id, 0] >= 0:
-                        for elem in edge2elem_work[e_id]:
-                            if elem >= 0:
-                                iLIE_set.add(int(elem))
-            iLIE_set -= iLOE_set
-            iLIE = np.array(sorted(iLIE_set), dtype=int)
-
-            # Step 5: IV — inner vertices (vertices of OE∪IE, not in OV)
-            all_layer_verts: Set[int] = set()
-            for elem in np.concatenate([iLOE, iLIE]).astype(int):
-                verts = self.connectivity_list[elem]
-                for v in verts:
-                    if v >= 0:
-                        all_layer_verts.add(int(v))
-            iLIV = np.array(sorted(all_layer_verts - iLOV_set), dtype=int)
-
-            # Append layer
-            self.layers["OE"].append(iLOE)
-            self.layers["IE"].append(iLIE)
+            # Step 2: OV = unique vertices on boundary edges (from working copy)
+            ov_raw = edge2vert_work[iLbEdgeIDs].ravel()
+            iLOV = np.unique(ov_raw[ov_raw >= 0]).astype(int)
             self.layers["OV"].append(iLOV)
-            self.layers["IV"].append(iLIV)
             self.layers["bEdgeIDs"].append(iLbEdgeIDs)
 
-            # Consume: mark boundary edges — set vertices to -1, remove one
-            # adjacency slot so each edge appears as "interior" next iteration.
-            for e in iLbEdgeIDs:
-                edge2vert_work[e] = [-1, -1]
-            # Remove OE elements from the working edge2elem
-            for e in range(len(edge2elem_work)):
-                for slot in range(2):
-                    if edge2elem_work[e, slot] in iLOE_set:
-                        edge2elem_work[e, slot] = -1
+            # Step 3: OE = active elements adjacent to those boundary edges
+            oe_raw = edge2elem_work[iLbEdgeIDs].ravel()
+            iLOE = np.unique(oe_raw[oe_raw >= 0]).astype(int)
+            self.layers["OE"].append(iLOE)
+
+            # Step 4: consume OE from edge2elem_work
+            if len(iLOE) > 0:
+                edge2elem_work[np.isin(edge2elem_work, iLOE)] = -1
+
+            # Step 5: find edges touching ANY OV vertex (broader than just boundary edges)
+            ov_edge_mask = np.any(np.isin(edge2vert_work, iLOV), axis=1)
+            ov_edge_indices = np.where(ov_edge_mask)[0]
+
+            # Step 6: IE = active elements adjacent to those edges
+            if len(ov_edge_indices) > 0:
+                ie_raw = edge2elem_work[ov_edge_indices].ravel()
+                iLIE = np.unique(ie_raw[ie_raw >= 0]).astype(int)
+            else:
+                iLIE = np.empty(0, dtype=int)
+            self.layers["IE"].append(iLIE)
+
+            # Step 7: consume OV vertices and IE elements
+            if len(iLOV) > 0:
+                edge2vert_work[np.isin(edge2vert_work, iLOV)] = -1
+            if len(iLIE) > 0:
+                edge2elem_work[np.isin(edge2elem_work, iLIE)] = -1
+
+            # Step 8: IV = vertices of (OE ∪ IE) connectivity, minus OV
+            if len(iLOE) > 0 or len(iLIE) > 0:
+                layer_elems = np.concatenate((iLOE, iLIE))
+                lv = self.connectivity_list[layer_elems].ravel()
+                lv = lv[lv >= 0]
+                iLIV = np.setdiff1d(np.unique(lv), iLOV).astype(int)
+            else:
+                iLIV = np.empty(0, dtype=int)
+            self.layers["IV"].append(iLIV)
 
             iL += 1
 
-        self.n_layers = len(self.layers["OV"])
+        self.n_layers = iL
 
     def element_quality( self, metric: str = "aspect_ratio", elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
