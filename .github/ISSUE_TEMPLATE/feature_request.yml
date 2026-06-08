@@ -1,88 +1,37 @@
 name: Feature Request
-description: Propose a new feature, enhancement, or API addition
-title: "feat: "
-labels: ["enhancement"]
+description: Propose a new feature or enhancement
+labels: ["type: feat", "status: ready", "priority: normal"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for new functionality, API additions, or enhancements. For bugs use the Bug Report template; for research / audit tasks use the Research / Task template.
+        Use this for general features. For new skills specifically, use the "Skill Request" template.
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What problem does this solve? Who is affected (CHILmesh users, MADMESHR, ADMESH, ADMESH-Domains)?
+      description: What problem does this solve? Who is affected?
     validations:
       required: true
   - type: textarea
     id: proposed-solution
     attributes:
       label: Proposed solution
-      description: Sketch the API and/or implementation approach. Include sample call sites if relevant.
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
-      description: Other approaches considered and why they were not chosen.
-  - type: dropdown
-    id: scope
-    attributes:
-      label: Scope
-      options:
-        - "api"
-        - "performance"
-        - "data-structures"
-        - "io"
-        - "smoothing"
-        - "skeletonization"
-        - "plotting"
-        - "ci"
-        - "docs"
-        - "refactor"
-        - "tests"
-    validations:
-      required: true
-  - type: dropdown
-    id: downstream-impact
-    attributes:
-      label: Downstream impact
-      description: Does this change affect a known downstream consumer?
-      options:
-        - "none"
-        - "MADMESHR"
-        - "ADMESH"
-        - "ADMESH-Domains"
-        - "multiple"
-    validations:
-      required: true
-  - type: dropdown
-    id: api-stability
-    attributes:
-      label: Public API impact
-      description: Per Constitution §VII, breaking changes require a deprecation cycle.
-      options:
-        - "additive (new public API)"
-        - "internal-only (no public surface change)"
-        - "deprecation (existing API)"
-        - "breaking (requires major bump)"
-    validations:
-      required: true
   - type: dropdown
     id: priority
     attributes:
       label: Priority
+      description: "Informational — `priority: normal` applied by default. Maintainer adjusts label if `now` or `someday` selected."
       options:
-        - "priority:low"
-        - "priority:medium"
-        - "priority:high"
-        - "priority:critical"
+        - "now"
+        - "normal"
+        - "someday"
       default: 1
     validations:
       required: true
-  - type: textarea
-    id: related
-    attributes:
-      label: Related issues, PRs, or design docs
-      placeholder: "e.g. #93, .planning/MODERNIZATION_PLAN.md"

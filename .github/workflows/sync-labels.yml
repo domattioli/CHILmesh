@@ -1,0 +1,33 @@
+name: Sync Labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/labels.yml'
+      - '.github/workflows/sync-labels.yml'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync:
+    name: Sync labels from .github/labels.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Flatten labels.yml to array
+        run: |
+          yq -o=json '.labels' .github/labels.yml \
+            | jq 'map({name, color, description: (.description // "" | .[0:100])})' \
+            > "${RUNNER_TEMP}/labels.flat.json"
+          echo "Flattened $(jq 'length' "${RUNNER_TEMP}/labels.flat.json") labels."
+
+      - name: Sync labels
+        uses: EndBug/label-sync@v2
+        with:
+          config-file: ${{ runner.temp }}/labels.flat.json
+          delete-other-labels: true
