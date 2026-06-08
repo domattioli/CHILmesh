@@ -1,5 +1,5 @@
 <p align="center">
-  <video src="videos/quadmesh_logo.mp4" autoplay loop muted playsinline width="680"></video>
+  <video src="docs/assets/quadmesh_logo.mp4" autoplay loop muted playsinline width="680"></video>
 </p>
 
 <p align="center">
@@ -204,7 +204,7 @@ Open issues: [github.com/domattioli/CHILmesh/issues](https://github.com/domattio
 
 - [`docs/API.md`](docs/API.md) — full API reference
 - [`docs/BENCHMARK.md`](docs/BENCHMARK.md) — benchmark methodology and raw data
-- [`TESTING.md`](TESTING.md) — test guide (pytest markers, local commands)
+- [`tests/TESTING.md`](tests/TESTING.md) — test guide (pytest markers, local commands)
 - [`examples/`](examples/) — runnable scripts (quickstart, fort.14 round-trip, smoothing, spatial queries)
 
 ---
@@ -243,7 +243,7 @@ CHILmesh originated in MATLAB as the data structure backing a skeletonization-dr
 
 ## Contributing
 
-Issues and PRs welcome at [github.com/domattioli/CHILmesh](https://github.com/domattioli/CHILmesh). Run `pytest -v` before opening a PR — see [`TESTING.md`](TESTING.md).
+Issues and PRs welcome at [github.com/domattioli/CHILmesh](https://github.com/domattioli/CHILmesh). Run `pytest -v` before opening a PR — see [`tests/TESTING.md`](tests/TESTING.md).
 
 ---
 
