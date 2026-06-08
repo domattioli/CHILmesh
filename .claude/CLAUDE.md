@@ -373,6 +373,50 @@ Auto-detects: credentials (`PYPI_TOKEN` env var or `~/.pypirc`), package name/ve
 **Last Updated:** 2026-06-08
 **Document Version:** 1.5
 
+## Repo-local labels (issue #152 triage)
+
+These labels are CHILmesh-specific — they have no equivalent in DomI's canonical `.github/labels.yml` and are intentionally kept repo-local. Future sessions should recognize them rather than re-flag as non-canon. Label manipulation (renames, deletes) requires a `gh`-equipped session.
+
+| Label | Meaning | Decision |
+|---|---|---|
+| `admesh` | Cross-repo dependency: ADMESH | repo-local keep |
+| `admesh-domains` | Cross-repo dependency: ADMESH-Domains | repo-local keep |
+| `API` | Public API surface changes | repo-local keep |
+| `benchmark` | Benchmarking / performance measurement work | repo-local keep |
+| `bridge` | Phase 3 bridge infrastructure for downstream projects | repo-local keep |
+| `code-quality` | Code quality and maintainability work | repo-local keep |
+| `coordination` | Cross-repo coordination with sibling repos | repo-local keep |
+| `data-structures` | Adjacency / topology data structure design | repo-local keep |
+| `design` | Algorithmic or API design decisions | repo-local keep |
+| `domi-sync` | DomI sync-contract issues (opened by `notify-downstream.yml`) | repo-local keep |
+| `FEM-smoother` | FEM smoother specific work | repo-local keep |
+| `integration` | Cross-repo integration work | repo-local keep |
+| `io` | fort.14 / .2dm file I/O | repo-local keep |
+| `mixed-element` | Tri/quad mixed-element support | repo-local keep |
+| `optimization` | Runtime optimization work | repo-local keep |
+| `performance` | Performance measurement and improvement | repo-local keep |
+| `phase-1` through `phase-5`, `phase-3-bridge` | Historical milestone tracking (Phases 1–5) | repo-local keep |
+| `portability` | Cross-platform portability concerns | repo-local keep |
+| `quality` | Mesh quality metrics | repo-local keep |
+| `report` | Analysis / benchmark reports | repo-local keep |
+| `rust-backend` | Rust backend investigations | repo-local keep |
+| `transfer-candidate` | Candidate for transfer to a sibling repo | repo-local keep |
+| `types` | Type annotation work | repo-local keep |
+| `validation` | Validation logic | repo-local keep |
+
+**Migrate to canon** (requires `gh`-equipped session — deferred):
+
+| Label | Canon equivalent |
+|---|---|
+| `ci` | `scope: automation` |
+| `cleanup` | `type: refactor` |
+| `experiment` | `status: brainstorming` |
+| `investigation` | `request: research` |
+| `migration` | `type: refactor` |
+| `Phase 009` | `status: brainstorming` |
+| `refactoring` | `type: refactor` |
+| `testing` | `scope: testing` |
+
 ## Coding dispatch — Haiku subagent default
 
 All coding work (writing or editing source code) MUST be dispatched to a subagent running the Haiku model (`claude-haiku-4-5`) — not written inline by the main session. The orchestrator session plans, reviews, and integrates; implementation is delegated to the Haiku subagent.
