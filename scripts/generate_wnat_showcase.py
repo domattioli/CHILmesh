@@ -1,4 +1,4 @@
-"""Regenerate ``output/wnat_hagen_showcase.png``.
+"""Regenerate ``docs/gallery/wnat_hagen_showcase.png``.
 
 Top panel: ``plot_quality()`` colormap on the full WNAT_Hagen mesh.
 Bottom panel: ``plot_quality_histogram()`` (100 bins, cool_r-coded
@@ -50,8 +50,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mesh", help="Path to fort.14 file (overrides discovery)")
     parser.add_argument(
-        "--output", default="output/wnat_hagen_showcase.png",
-        help="Output image path (default: output/wnat_hagen_showcase.png)",
+        "--output", default="docs/gallery/wnat_hagen_showcase.png",
+        help="Output image path (default: docs/gallery/wnat_hagen_showcase.png)",
     )
     parser.add_argument("--bins", type=int, default=100,
                         help="Histogram bin count (default: 100)")

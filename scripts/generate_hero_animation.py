@@ -8,7 +8,7 @@ Pipeline (4 stages, GIF loop):
 
 Each frame: left = mesh viz with vertex tracking dots, right = colormapped quality histogram.
 
-Output: output/readme_pipeline_annulus.gif (replaces existing).
+Output: docs/gallery/readme_pipeline_annulus.gif (replaces existing).
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from chilmesh import Mesh, examples
 from chilmesh import optimize_with_admesh_truss_arrays
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUT_PATH = REPO_ROOT / "output" / "readme_pipeline_annulus.gif"
+OUT_PATH = REPO_ROOT / "docs" / "gallery" / "readme_pipeline_annulus.gif"
 
 BG = "#0e0e10"
 EDGE = "#3a7fbf"
@@ -224,11 +224,12 @@ def _quality_for(pts, elems):
 
 
 def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
-                 prev_pts=None, current_pts=None):
+                 prev_pts=None, current_pts=None, quality_array_override=None):
     """Render a single keyframe with interpolated mesh morphing and vertex dots.
 
     prev_pts: interpolated points for mesh rendering (morphing between stages).
     current_pts: positions for yellow vertex tracking dots.
+    quality_array_override: if provided, use this quality array for mesh coloring instead of recomputing.
     """
     ax_mesh.clear()
     ax_hist.clear()
@@ -240,20 +241,19 @@ def render_frame(ax_mesh, ax_hist, stage, quality_arr, stage_idx, n_stages,
 
     if stage["viz"] == "quality":
         # Color by element quality (cool_r colormap).
-        q = _quality_for(pts, elems)
+        if quality_array_override is not None:
+            q = quality_array_override
+        else:
+            try:
+                q = _quality_for(pts, elems)
+            except Exception:
+                # Fall back to uniform quality=1.0 if quality computation fails
+                # (can happen with interpolated degenerate meshes)
+                q = np.ones(len(elems))
         norm = Normalize(vmin=0.0, vmax=1.0)
         colors = matplotlib.colormaps[QCMAP](norm(q))
         pc = PolyCollection(polys, facecolors=colors, edgecolors="#1a1a1f", linewidths=0.5)
         ax_mesh.add_collection(pc)
-        # Draw mesh edges explicitly for clarity
-        edges = np.vstack([
-            elems[:, [0, 1]],
-            elems[:, [1, 2]],
-            elems[:, [2, 0]],
-        ])
-        edge_segments = pts[edges]
-        edge_coll = LineCollection(edge_segments, colors=EDGE, linewidths=0.3, alpha=0.4)
-        ax_mesh.add_collection(edge_coll)
         cbar_title = "Element quality (cool→good)"
     else:
         # Color by layer index (viridis).
@@ -334,7 +334,7 @@ def main():
                  data["fem_quality"], data["fem_quality"]]
 
     # Frame schedule: HOLD at each stage, TRANSITION between stages
-    HOLD = 25     # frames to hold each stage (2.5s @ 10fps)
+    HOLD = 40     # frames to hold each stage (4.0s @ 10fps)
     TRANS = 12    # transition frames between stages (1.2s)
 
     # Build a flat list of (stage_idx, interp_t, pts_for_dots, quality_for_hist)
@@ -342,7 +342,7 @@ def main():
     frame_schedule = []
     for si in range(n_stages):
         # Extra hold time for final stage (skeletonization view)
-        hold_frames = HOLD + (15 if si == n_stages - 1 else 0)
+        hold_frames = HOLD + (20 if si == n_stages - 1 else 0)
         for _ in range(hold_frames):
             frame_schedule.append({"type": "hold", "stage": si})
         if si < n_stages - 1:
@@ -396,7 +396,7 @@ def main():
                     interp_qual = qualities[si]
 
             render_frame(ax_mesh, ax_hist, stage, interp_qual, si, n_stages,
-                         prev_pts=interp_pts, current_pts=interp_pts)
+                         prev_pts=interp_pts, current_pts=interp_pts, quality_array_override=interp_qual)
 
         # Stage label overlaid above mesh axes (in figure coords above ax_mesh)
         ax_mesh.text(

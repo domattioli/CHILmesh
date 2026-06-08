@@ -1,0 +1,57 @@
+name: Skill Request
+description: Propose a new skill for the marketplace (needs 2+ repo votes to merge)
+labels: ["request: skill", "type: feat", "status: triage", "priority: normal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Skills require **2+ repos voting in favor** before being added to the marketplace.
+        Add reactions or link source repos in your description to count as votes.
+  - type: input
+    id: skill-name
+    attributes:
+      label: Proposed skill name
+      placeholder: "e.g. slack-notify"
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: What does this skill do in 1-2 sentences?
+    validations:
+      required: true
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use cases
+      description: Concrete scenarios where this would be used
+    validations:
+      required: true
+  - type: textarea
+    id: voting-repos
+    attributes:
+      label: Repos requesting this skill
+      description: List which repos need this; >=2 distinct repos required to merge
+      placeholder: |
+        - github.com/domattioli/repo1 (use case A)
+        - github.com/domattioli/repo2 (use case B)
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      placeholder: "External APIs, libraries, credentials"
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: "Informational — `priority: normal` applied by default. Maintainer adjusts if needed."
+      options:
+        - "now"
+        - "normal"
+        - "someday"
+      default: 1
+    validations:
+      required: true

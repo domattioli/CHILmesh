@@ -115,7 +115,12 @@
       "mcp__github__get_me",
       "Bash(pip show *)",
       "Bash(pip list)",
-      "Bash(pip check)"
+      "Bash(pip check)",
+      "Bash(python -m pytest *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(git merge *)",
+      "Bash(source .venv/bin/activate*)",
+      "mcp__github__actions_run_trigger"
     ]
   }
 }
