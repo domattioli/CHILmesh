@@ -55,22 +55,19 @@ def backend_info() -> dict:
         >>> info['selected']
         'cpp'
     """
+    from .backends.cpp_backend import CPP_AVAILABLE, _cpp as _cpp_module
+    from .backends.rust_backend import RUST_AVAILABLE, _rust as _rust_module
+
     available = ["python"]
     versions = {"python": __version__}
 
-    try:
-        import chilmesh_cpp  # noqa: F401
+    if CPP_AVAILABLE:
         available.insert(0, "cpp")
-        versions["cpp"] = getattr(chilmesh_cpp, "__version__", "0.6.0.dev0")
-    except ImportError:
-        pass
+        versions["cpp"] = getattr(_cpp_module, "__version__", "0.6.0.dev0")
 
-    try:
-        import chilmesh_core  # noqa: F401
+    if RUST_AVAILABLE:
         available.insert(-1 if "cpp" in available else 0, "rust")
         versions["rust"] = "0.5.0.dev0"
-    except ImportError:
-        pass
 
     import os
     env_override = os.environ.get("CHILMESH_BACKEND", "").lower()

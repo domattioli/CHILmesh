@@ -28,7 +28,7 @@ except ImportError:
 
 try:
     import chilmesh_core
-    RUST_AVAILABLE = hasattr(chilmesh_core, "build_mesh") or True
+    RUST_AVAILABLE = hasattr(chilmesh_core, "RustMesh")
 except ImportError:
     RUST_AVAILABLE = False
 
