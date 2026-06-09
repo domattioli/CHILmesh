@@ -1103,7 +1103,18 @@ class CHILmesh(CHILmeshPlotMixin):
         edge2elem_work = self.adjacencies["Edge2Elem"].copy()
 
         iL = 0
+        # Defensive termination guard (#203): a valid mesh cannot have more
+        # layers than it has elements. If the peel ever exceeds this bound the
+        # working set is not shrinking (malformed/non-manifold adjacency) — fail
+        # loudly instead of spinning forever (the #155 hang class).
+        max_layers = len(self.connectivity_list) + 1
         while np.any(edge2elem_work >= 0):
+            if iL > max_layers:
+                raise RuntimeError(
+                    f"_skeletonize did not converge: exceeded max layer count "
+                    f"({max_layers}). The layer peel is not shrinking the active "
+                    f"element set, indicating a malformed or non-manifold mesh."
+                )
             # Step 1: boundary edges
             if iL == 0:
                 iLbEdgeIDs = np.where(self.adjacencies["Edge2Elem"][:, 1] == -1)[0]
