@@ -232,7 +232,7 @@ class CHILmesh(CHILmeshPlotMixin):
         elif new_points.shape[1] == 3:  self.points = new_points
         else:                           raise ValueError("new_points must have 2 or 3 columns")
 
-    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None ) -> None:
+    def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None, build_spatial_indices: bool = True, validate: bool = True ) -> None:
         """
         Initialize a CHILmesh object.
 
@@ -259,6 +259,13 @@ class CHILmesh(CHILmeshPlotMixin):
                 Combined with ``seed_boundary_kinds`` via intersection. ``None``
                 (default) applies no ibtype filter. Ignored when
                 ``compute_layers=False``. (#129)
+            build_spatial_indices: If False, skip KD-tree centroid and vertex spatial
+                index build (default: True). Set to False when downstream consumers need
+                only topology adjacencies and can skip the O(n log n) spatial indexing
+                overhead. (#204)
+            validate: If False, skip adjacency validation checks (default: True). Set to
+                False when consumer trusts mesh coherence and can skip validation overhead
+                on large meshes. (#204)
 
         Attributes set during initialization:
             layers (dict): Skeletonization result with keys:
@@ -306,6 +313,8 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies=compute_adjacencies,
             seed_boundary_kinds=seed_boundary_kinds,
             seed_ibtypes=seed_ibtypes,
+            build_spatial_indices=build_spatial_indices,
+            validate=validate,
         )
     
     def _create_random_triangulation( self ) -> None:
@@ -319,7 +328,7 @@ class CHILmesh(CHILmeshPlotMixin):
         self.connectivity_list = tri.simplices
         self.grid_name = "Random Delaunay"
 
-    def _initialize_mesh( self, compute_layers: bool = True, compute_adjacencies: bool = True, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None ) -> None:
+    def _initialize_mesh( self, compute_layers: bool = True, compute_adjacencies: bool = True, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None, build_spatial_indices: bool = True, validate: bool = True ) -> None:
         """Initialize the mesh properties.
 
         Parameters:
@@ -329,6 +338,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 for that consistency (enforced in ``__init__``).
             seed_boundary_kinds: Forwarded to ``_skeletonize``; see ``__init__`` docs. (#129)
             seed_ibtypes: Forwarded to ``_skeletonize``; see ``__init__`` docs. (#129)
+            build_spatial_indices: If False, skip spatial index build (default: True). (#204)
+            validate: If False, skip adjacency validation (default: True). (#204)
         """
         if self.points is not None and self.connectivity_list is not None:
             self.n_verts = self.points.shape[0]
@@ -351,15 +362,16 @@ class CHILmesh(CHILmeshPlotMixin):
                 self.type = "Mixed-Element"
 
             if compute_adjacencies:
-                self._build_adjacencies()
+                self._build_adjacencies( validate=validate )
             if compute_layers:
                 self._skeletonize(
                     seed_boundary_kinds=seed_boundary_kinds,
                     seed_ibtypes=seed_ibtypes,
                 )
 
-            # Build spatial indices (always, regardless of compute_layers)
-            self._build_spatial_indices()
+            # Build spatial indices unless caller opts out (#204)
+            if build_spatial_indices:
+                self._build_spatial_indices()
     
     def _ensure_ccw_orientation( self ) -> None:
         """Ensure counter-clockwise orientation of every element.
@@ -513,7 +525,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return tri_elems, quad_elems
     
-    def _build_adjacencies( self ) -> None:
+    def _build_adjacencies( self, validate: bool = True ) -> None:
         """Build adjacency lists for the mesh (vectorized)."""
         from .mesh_topology import EdgeMap
 
@@ -610,7 +622,8 @@ class CHILmesh(CHILmeshPlotMixin):
             "Vert2Elem": vert2elem,
             "Edge2Elem": edge2elem,
         }
-        self._validate_adjacencies()
+        if validate:
+            self._validate_adjacencies()
 
     def _validate_adjacencies(self) -> None:
         """
