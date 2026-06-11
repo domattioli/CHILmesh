@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 from typing import Optional as Opt, Tuple
 from .CHILmesh import CHILmesh
+from .mesh_topology import quad_from_tri_pair
 
 
 class MutableMesh:
@@ -1005,26 +1006,13 @@ class MutableMesh:
         existing triangles as ``[v0, v1, v2, v2]``; the caller's subsequent
         ``_build_adjacencies()`` normalises padding and flips ``mesh.type``.
         """
-        conn = self.mesh.connectivity_list
+        quad = quad_from_tri_pair(self.mesh.points, self.mesh.connectivity_list[elem_a, :3], self.mesh.connectivity_list[elem_b, :3])
 
-        shared = self.mesh.edge2vert(np.array([shared_edge]))[0]
-        s0, s1 = int(shared[0]), int(shared[1])
+        if self.mesh.connectivity_list.shape[1] == 3:
+            self.mesh.connectivity_list = np.column_stack([self.mesh.connectivity_list, self.mesh.connectivity_list[:, 2]])
 
-        apex_a = next(int(v) for v in conn[elem_a, :3] if int(v) not in (s0, s1))
-        apex_b = next(int(v) for v in conn[elem_b, :3] if int(v) not in (s0, s1))
-
-        # Quad boundary walks apex_a -> s0 -> apex_b -> s1; the shared edge
-        # (s0, s1) is the diagonal, not a boundary edge. Enforce CCW winding.
-        quad = [apex_a, s0, apex_b, s1]
-        if self._polygon_signed_area(self.mesh.points[quad, :2]) < 0:
-            quad = [apex_a, s1, apex_b, s0]
-
-        if conn.shape[1] == 3:
-            self.mesh.connectivity_list = np.column_stack([conn, conn[:, 2]])
-            conn = self.mesh.connectivity_list
-
-        conn[elem_a, :] = quad
-        conn[elem_b, :] = [-1, -1, -1, -1]
+        self.mesh.connectivity_list[elem_a, :] = quad
+        self.mesh.connectivity_list[elem_b, :] = [-1, -1, -1, -1]
 
         return elem_a
 

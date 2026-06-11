@@ -17,7 +17,7 @@ from importlib import metadata
 
 from .CHILmesh import CHILmesh, write_fort14
 from .gmsh_io import read_msh, write_msh, GmshParseError
-from .mesh_topology import EdgeMap
+from .mesh_topology import EdgeMap, quad_from_tri_pair, quads_from_tri_pairs
 from .mutations import MutableMesh
 from .quality import element_quality
 from . import examples
@@ -89,6 +89,8 @@ __all__ = [
     "CHILmesh",  # legacy alias, kept for backward compat
     # Topology / I/O
     "EdgeMap",
+    "quad_from_tri_pair",
+    "quads_from_tri_pairs",
     "MutableMesh",
     "write_fort14",
     "read_msh",
