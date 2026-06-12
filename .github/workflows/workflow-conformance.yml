@@ -57,7 +57,7 @@ jobs:
             if grep -E 'branches|^[[:space:]]*-[[:space:]]' "$wf" | grep -qE "$DEAD_RE"; then issues="${issues}references dead branch; "; violations=1; fi
             if grep -qE "$OLD_ACT_RE" "$wf"; then issues="${issues}outdated action versions; "; violations=1; fi
             grep -q "^permissions:" "$wf" || { issues="${issues}missing permissions block; "; violations=1; }
-            if grep -v '^ *#' "$wf" | grep -q "$SETUP_PY_LIT" && ! grep -q "$PIP_CACHE_LIT" "$wf"; then issues="${issues}setup-python without pip cache; "; violations=1; fi
+            if grep -v '^ *#' "$wf" | grep -q "$SETUP_PY_LIT" && ! grep -q "$PIP_CACHE_LIT" "$wf"; then issues="${issues}missing pip cache on py-setup; "; violations=1; fi
             if grep -q "$PATHS_LIT" "$wf" && grep -q "$PATHS_IGN_LIT" "$wf"; then issues="${issues}paths + paths-ignore same event; "; violations=1; fi
             # v3 creation gate: not managed → must be registered in LOCAL.md
             if [ "$managed" -eq 0 ]; then
@@ -73,6 +73,7 @@ jobs:
               fi
             else
               echo "- $name: ✗ ${issues%; }" >> "$GITHUB_STEP_SUMMARY"
+              echo "VIOLATION: $name: ${issues%; }"
             fi
           done
           [ -z "$changed_wfs" ] && echo "No workflow changes in PR" >> "$GITHUB_STEP_SUMMARY"
