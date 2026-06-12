@@ -20,19 +20,7 @@ if [[ "$_remote_url" =~ ^http://(.+@)?127\.0\.0\.1:([0-9]+)/ ]]; then
     if [ -n "${GITHUB_TOKEN:-}" ]; then
       git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/domattioli/CHILmesh.git"
       echo "⚠ Local git proxy dead on :$_port — switched origin to github.com via GITHUB_TOKEN"
-      # Resync local with remote (covers case where prior session pushed via MCP)
-      if git fetch origin daily-maintenance 2>/dev/null; then
-        _local_sha=$(git rev-parse HEAD 2>/dev/null || echo "")
-        _remote_sha=$(git rev-parse origin/daily-maintenance 2>/dev/null || echo "")
-        if [ -n "$_local_sha" ] && [ -n "$_remote_sha" ] && [ "$_local_sha" != "$_remote_sha" ]; then
-          if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
-            git reset --hard origin/daily-maintenance >/dev/null
-            echo "  ↳ Resynced HEAD: $_local_sha → $_remote_sha"
-          else
-            echo "  ↳ Dirty tree; not resyncing. Local=$_local_sha Remote=$_remote_sha"
-          fi
-        fi
-      fi
+      echo "⚠ proxy dead — manual recovery: git fetch origin development && git status"
     else
       echo "⚠ Local git proxy dead on :$_port and no GITHUB_TOKEN — push will fail" >&2
     fi
