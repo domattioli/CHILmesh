@@ -33,6 +33,7 @@ prune src/chilmesh_cpp/build_local
 prune src/chilmesh_cpp/build
 exclude .domi-pin
 exclude .gitignore
+exclude AGENTS.md
 
 # README image assets must be re-included after `prune output`
 include output/annulus_quickstart.png
