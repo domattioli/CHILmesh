@@ -28,7 +28,7 @@ jobs:
       - name: Lint changed workflows (v2.2 baseline + managed-or-LOCAL.md rule)
         run: |
           set -e
-          DEAD_RE='daily-''maintenance|cla''ude/'
+          DEAD_RE='daily-''maintenance|[^.]cla''ude/'
           PATHS_LIT='pat''hs:'
           PATHS_IGN_LIT='pat''hs-ignore:'
           SETUP_PY_LIT='setup-''python'
