@@ -1,0 +1,79 @@
+# DomI-managed workflow (spec-010 v3) — DO NOT EDIT IN THIS REPO.
+# Source: domattioli/DomI templates/workflows/workflow-conformance.yml @ v1 — edit upstream, then sync.
+# Drift: sync-from-domi session gate + DomI notify-downstream sync issues.
+name: workflow-conformance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-conformance-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint workflows (v2.2 + v3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Lint changed workflows (v2.2 baseline + managed-or-LOCAL.md rule)
+        run: |
+          set -e
+          DEAD_RE='daily-''maintenance|cla''ude/'
+          PATHS_LIT='pat''hs:'
+          PATHS_IGN_LIT='pat''hs-ignore:'
+          SETUP_PY_LIT='setup-''python'
+          PIP_CACHE_LIT='cache: ''pip'
+          OLD_ACT_RE='checkout@v[0-4]|setup-''python@v[0-5]'
+          MANAGED_RE='DomI-managed ''workflow'
+          STUB_RE='uses: domattioli/DomI/.github/workflows/'
+
+          git fetch origin "$GITHUB_BASE_REF"
+          changed_wfs=$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD -- '.github/workflows/*.yml' | sort || true)
+
+          echo "## Changed-workflow lint (spec-010 v2.2 + v3, blocking)" >> "$GITHUB_STEP_SUMMARY"
+          violations=0
+          for wf in $changed_wfs; do
+            [ -f "$wf" ] || continue
+            name=$(basename "$wf")
+            issues=""
+            managed=0
+            if grep -q "$MANAGED_RE" "$wf" || grep -q "$STUB_RE" "$wf"; then managed=1; fi
+            # v2.2 baseline (applies to managed copies too)
+            grep -q "timeout-minutes:" "$wf" || { issues="${issues}missing timeout-minutes; "; violations=1; }
+            # concurrency required only on push/PR-triggered CI (schedule/dispatch/issues exempt)
+            if grep -qE '^[[:space:]]*(push|pull_request):' "$wf"; then
+              grep -q "concurrency:" "$wf" || { issues="${issues}missing concurrency; "; violations=1; }
+            fi
+            if grep -E 'branches|^[[:space:]]*-[[:space:]]' "$wf" | grep -qE "$DEAD_RE"; then issues="${issues}references dead branch; "; violations=1; fi
+            if grep -qE "$OLD_ACT_RE" "$wf"; then issues="${issues}outdated action versions; "; violations=1; fi
+            grep -q "^permissions:" "$wf" || { issues="${issues}missing permissions block; "; violations=1; }
+            if grep -v '^ *#' "$wf" | grep -q "$SETUP_PY_LIT" && ! grep -q "$PIP_CACHE_LIT" "$wf"; then issues="${issues}setup-python without pip cache; "; violations=1; fi
+            if grep -q "$PATHS_LIT" "$wf" && grep -q "$PATHS_IGN_LIT" "$wf"; then issues="${issues}paths + paths-ignore same event; "; violations=1; fi
+            # v3 creation gate: not managed → must be registered in LOCAL.md
+            if [ "$managed" -eq 0 ]; then
+              if [ ! -f .github/workflows/LOCAL.md ] || ! grep -qF "$name" .github/workflows/LOCAL.md; then
+                issues="${issues}local workflow not registered in LOCAL.md (spec-010 v3); "; violations=1
+              fi
+            fi
+            if [ -z "$issues" ]; then
+              if [ "$managed" -eq 1 ]; then
+                echo "- $name: ✓ (managed)" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "- $name: ✓" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              echo "- $name: ✗ ${issues%; }" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          [ -z "$changed_wfs" ] && echo "No workflow changes in PR" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$violations" -ne 0 ]; then echo "::error::workflow conformance violations — see job summary"; exit 1; fi
