@@ -26,12 +26,41 @@ _Avoid_: selector, filter, prompt (reserve "prompt" for the SAM2 analogy in pros
 
 **grow**:
 Ring expansion / morphological *dilation* — expand a seed set outward by `n_rings`
-of dual-graph adjacency. This is what the original issue called `by_layer`.
+of dual-graph adjacency (mode set by **Adjacency mode**). This is what the original
+issue called `by_layer`.
 _Avoid_: by_layer, ring (the issue's collided name — see Flagged ambiguities), expand.
 
+**Adjacency mode**:
+What "neighboring elements" means for a dual-graph op — `"edge"` (share an edge,
+`Edge2Elem`) or `"vertex"` (share ≥1 vertex, `Vert2Elem`). A per-call `connectivity=`
+kwarg on every mechanism; **default `"edge"`** (no corner-bleed at pinch points).
+`"vertex"` grows wider per ring and bleeds through one-vertex touches — opt-in only.
+_Avoid_: connectivity (in prose), 4/8-connectivity (image-domain term).
+
+**Component**:
+A maximal **edge-connected** subset of a Selection. A Selection may hold several
+(e.g. a `by_threshold` depth mask spanning two basins). `Selection.components()`
+yields one sub-Selection per component. Perimeter walks are per-component.
+_Avoid_: island, blob, region.
+
+**Crossing predicate**:
+The formal `by_click` stop-criterion: `fn(from_elem, to_elem) -> bool`, where `True`
+means *stop* (don't expand across that edge). Expresses jumps / gradients / BC-changes
+(needs both sides). Named shortcuts wrap it (`"connected"`, `("field_jump", field,
+delta)`). The v2 learned model slots in as just another crossing predicate.
+_Avoid_: criterion (alone), stopping function, mask predicate.
+
+**Field**:
+A plain numpy array carrying a per-entity scalar — length `n_nodes` or `n_elements`
+(auto-detected; nodal reduces via **Reduction rule**). Sources: mesh-attached
+(bathymetry), chilmesh-computed (quality / edge-length / area), or passed in by the
+**Umbrella** (admesh size-field components). Arrays are the lingua franca — "all
+information available" reaches the segmenter as a Field, never as an admesh import.
+_Avoid_: signal, channel, feature (reserve for v2 ML).
+
 **Reduction rule**:
-How a per-node signal (bathymetry, curvature) collapses onto the canonical element
-mask. Default conservative *"all vertices in range"*; opt-in `any` / `mean`.
+How a per-node **Field** collapses onto the canonical element mask. Default
+conservative *"all vertices in range"*; opt-in `any` / `mean`.
 _Avoid_: aggregation, projection.
 
 **Neutral artifact**:

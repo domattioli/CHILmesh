@@ -72,6 +72,41 @@ finishes that thread by naming the package, its engine, and its dependency rules
      `by_click(criterion=size_field_gradient)` is already region-growing bounded by
      the size field — the deterministic MVP of the SAM2 idea.
 
+### v1 mechanism contracts (grill round 2)
+
+7. **Adjacency is a per-call kwarg, edge default.** Every dual-graph mechanism
+   (`grow`, `by_click`, components, boundary walk) takes `connectivity="edge"|
+   "vertex"`, defaulting to `"edge"` (`Edge2Elem`). Edge avoids corner-bleed at
+   pinch points / narrow inlets — the right default for click-selection in
+   estuaries. `"vertex"` (`Vert2Elem`) is opt-in for wider dilation. **Component
+   connectivity and `Selection.boundary` perimeters are edge-only** — a
+   vertex-connected selection can have a non-manifold perimeter, so the boundary
+   contract is defined over edge-components regardless of how the mask was grown.
+
+8. **`Selection.boundary` is per-component, never auto-cleaned.** Returns a list of
+   components, each `(outer_ring, holes[])` as numpy rings. A `Selection` may be
+   multi-component (a depth threshold spanning two basins) — surfaced, not hidden.
+   `Selection.components()` yields per-component sub-Selections so the umbrella can
+   re-mesh patches individually. Pinch-touching rings are *flagged* (warning), never
+   silently merged or morphologically closed — a mask must not self-edit (SAM2
+   fidelity).
+
+9. **`by_click` criterion = an edge-crossing predicate.** Canonical form
+   `fn(from_elem, to_elem) -> bool` (`True` = stop, don't cross). Both-sided, so it
+   expresses gradients / jumps / BC-changes (the gulf shelf-break case). Named
+   shortcuts wrap it: `"connected"`, `("field_jump", field, delta)`, or any
+   callable. The v2 learned model is just another crossing predicate — no API churn.
+
+10. **Fields are plain arrays; "all information" flows in without an import.** A
+    field is a numpy array of length `n_nodes` or `n_elements` (auto-detected; nodal
+    reduces per item 4). Three sources: mesh-attached (bathymetry),
+    chilmesh-computed (quality / edge-length / area), and **umbrella-supplied admesh
+    size-field components**. This reconciles "use all information available to us
+    including admesh and chilmesh" with the leaf rule (item 3): the segmenter
+    consumes admesh-derived signal **as an array passed by the umbrella**, never by
+    importing admesh. Should a future need require the segmenter to compute admesh
+    size-fields itself, that overrides item 3 and must amend this ADR.
+
 ## Consequences
 
 **Enables**
