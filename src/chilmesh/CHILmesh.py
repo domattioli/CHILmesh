@@ -16,11 +16,13 @@ from copy import deepcopy
 
 __all__ = ['CHILmesh', 'write_fort14']
 
-# One-time warn state for the source-install pure-Python perf cliff (#202).
-# When no compiled C++/Rust backend is present, skeletonizing a large mesh on the
-# pure-Python path is dramatically slow (Block_O ~5k elems > 200s). Warn once.
+# One-time warn state for the source-install pure-Python perf gap (#202).
+# When no compiled C++/Rust backend is present, skeletonization runs the
+# pure-Python path. It is linear in element count (~1s per 60k elems;
+# Block_O ~5k elems is ~0.2s) — slower than the compiled backend but not
+# catastrophic. Warn once, only for large meshes where the gap is material.
 _SLOW_PATH_WARNED = False
-_SLOW_PATH_ELEM_THRESHOLD = 2000
+_SLOW_PATH_ELEM_THRESHOLD = 50000
 
 class CHILmesh(CHILmeshPlotMixin):
     """
@@ -380,11 +382,12 @@ class CHILmesh(CHILmeshPlotMixin):
                         warnings.warn(
                             f"chilmesh: skeletonizing a {self.n_elems}-element mesh "
                             "on the pure-Python backend (no compiled C++/Rust extension "
-                            "found). This is dramatically slower than the compiled path "
-                            "(e.g. Block_O ~5k elems can exceed 200s). Build the extension "
-                            "(pip install ./src/chilmesh_cpp) or pass compute_layers=False "
-                            "for fast metadata-only loading. Introspect with "
-                            "chilmesh.backend_info(). See CHILmesh #202.",
+                            "found). The pure-Python path is linear in element count "
+                            "(~1s per 60k elements) but slower than the compiled backend; "
+                            "the gap grows with mesh size and repeated re-inits. Build the "
+                            "extension (pip install ./src/chilmesh_cpp) or pass "
+                            "compute_layers=False for fast metadata-only loading. Introspect "
+                            "with chilmesh.backend_info(). See CHILmesh #202.",
                             UserWarning,
                             stacklevel=2,
                         )
@@ -936,13 +939,16 @@ class CHILmesh(CHILmeshPlotMixin):
         self._centroid_tree = cKDTree(self._get_centroids())
 
     def _get_centroids(self) -> np.ndarray:
-        """Compute element centroids (mean of vertex coordinates)."""
+        """Compute element centroids (mean of vertex coordinates).
+
+        Vectorized over all elements. For padded triangles (``[v0,v1,v2,v0]``)
+        the repeated column is included in the mean — exactly matching the
+        prior per-element loop (bit-identical) — so layer / skeleton behaviour
+        is unchanged.
+        """
         n_cols = self.connectivity_list.shape[1]
-        centroids = np.zeros((self.n_elems, 2))
-        for i, elem in enumerate(self.connectivity_list):
-            verts = self.points[elem[:n_cols], :2]
-            centroids[i] = np.mean(verts, axis=0)
-        return centroids
+        verts = self.points[self.connectivity_list[:, :n_cols], :2]
+        return verts.mean(axis=1)
 
     @property
     def centroids(self) -> np.ndarray:
