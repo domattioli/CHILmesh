@@ -16,6 +16,12 @@ from copy import deepcopy
 
 __all__ = ['CHILmesh', 'write_fort14']
 
+# One-time warn state for the source-install pure-Python perf cliff (#202).
+# When no compiled C++/Rust backend is present, skeletonizing a large mesh on the
+# pure-Python path is dramatically slow (Block_O ~5k elems > 200s). Warn once.
+_SLOW_PATH_WARNED = False
+_SLOW_PATH_ELEM_THRESHOLD = 2000
+
 class CHILmesh(CHILmeshPlotMixin):
     """
     A 2D mesh class supporting triangular, quadrilateral, and mixed-element meshes.
@@ -364,6 +370,24 @@ class CHILmesh(CHILmeshPlotMixin):
             if compute_adjacencies:
                 self._build_adjacencies( validate=validate )
             if compute_layers:
+                global _SLOW_PATH_WARNED
+                if (not _SLOW_PATH_WARNED
+                        and self.n_elems >= _SLOW_PATH_ELEM_THRESHOLD):
+                    from .backends.cpp_backend import CPP_AVAILABLE
+                    from .backends.rust_backend import RUST_AVAILABLE
+                    if not (CPP_AVAILABLE or RUST_AVAILABLE):
+                        _SLOW_PATH_WARNED = True
+                        warnings.warn(
+                            f"chilmesh: skeletonizing a {self.n_elems}-element mesh "
+                            "on the pure-Python backend (no compiled C++/Rust extension "
+                            "found). This is dramatically slower than the compiled path "
+                            "(e.g. Block_O ~5k elems can exceed 200s). Build the extension "
+                            "(pip install ./src/chilmesh_cpp) or pass compute_layers=False "
+                            "for fast metadata-only loading. Introspect with "
+                            "chilmesh.backend_info(). See CHILmesh #202.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                 self._skeletonize(
                     seed_boundary_kinds=seed_boundary_kinds,
                     seed_ibtypes=seed_ibtypes,
