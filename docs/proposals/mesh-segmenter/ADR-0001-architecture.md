@@ -127,6 +127,7 @@ finishes that thread by naming the package, its engine, and its dependency rules
 
 - [ ] Operator: create the `mesh-segmenter` repo; lift this folder in as `docs/adr/`
       + `CONTEXT.md`.
-- [ ] Confirm package/import name (`mesh_segmenter`? `meshseg`?).
-- [ ] Note in ADMESH ADR-001 that the anticipated sibling is chilmesh-engined.
+- [x] Package/import name — **provisional `mesh_segmenter`** (operator, 2026-06-13);
+      a cooler final name is wanted before first publish. Low priority now.
+- [x] ~~Back-reference in ADMESH ADR-001~~ — declined by operator (2026-06-13).
 - [ ] v2: separate research spec before any training/transfer-learning work.
