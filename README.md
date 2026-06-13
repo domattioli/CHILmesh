@@ -34,7 +34,7 @@
 **The stable backbone for hydrodynamic mesh tooling.** Sibling projects [ADMESH](https://github.com/domattioli/ADMESH), [ADMESH-Domains](https://github.com/domattioli/ADMESH-Domains), and [QuADMesh](https://github.com/domattioli/QuADMesh) build on top of it.
 
 - **Pythonic API** — `from chilmesh import Mesh`; backwards-compatible `CHILmesh` alias preserved.
-- **C++ acceleration, bit-identical output** — half-edge extension is **~24× faster than pure Python** on full init, verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
+- **C++ acceleration, bit-identical output** — half-edge extension is **~15× faster than pure Python** on full init, verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
 - **One interface for all topologies** — triangles, quadrilaterals, and mixed meshes share the same call surface.
 - **Stable v1.x API** — sibling projects can pin `chilmesh>=1.0,<2`.
 
@@ -70,7 +70,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 
 ## Features
 
-- **Fast** — full init + quality analysis on a 98,365-element mesh in ~1.7 s (4.6× faster than v0.2.0)
+- **Fast** — C++ backend does full init + quality analysis on a 98,365-element mesh in ~0.11 s (~15× faster than pure Python)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — Balendran direct FEM, Zhou-Shimada angle-based, and ADMESH Spring-Based Truss
 - **Analysis** — element quality, interior angles, layer-based skeletonization (medial axis)
@@ -81,17 +81,16 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 
 ### Performance
 
-Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3 trials. **v1.0.0 backends are output-equivalent** — the C++ extension produces bit-identical skeletonization layers to Python, verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements · 151,248 edges · 30 layers). v1.1.0 medians, single machine. **Backends are output-equivalent** — the C++ extension produces bit-identical skeletonization layers to Python (`n_layers = 30` on all three), verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
 
-| Metric | v0.1.0 MATLAB ‡ | v0.2.0 Python Port | v0.3.0 Python Optimized | v0.4.0 Rust † | v1.0.0 C++ |
-|---|---:|---:|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 0.27 s | ~3.9 s | 1.31 s | 0.029 s | 0.036 s |
-| Skeletonization only | 0.67 s | ~3.8 s | 0.32 s | 0.20 s | 0.033 s |
-| Full init (adj + skeletonization) | 1.04 s | 7.7 s | 1.65 s | 0.23 s | 0.069 s |
-| Quality analysis | 12 ms | 6.6 s | 6.4 ms | <1 ms | <1 ms |
-| Vertex-edge lookup (per call) | ~2200 μs | ~700 μs | 0.34 μs | 0.02 μs | 0.04 μs |
+| Stage | MATLAB (Octave) ‡ | Python | C++ |
+|---|---:|---:|---:|
+| Fast init (adj, no skeletonization) | 0.27 s | 1.31 s | 0.060 s |
+| Skeletonization only | 0.67 s | 0.32 s | 0.052 s |
+| Full init (adj + skeletonization) | 1.04 s | 1.65 s | 0.112 s |
+| Quality analysis | 12 ms | 6.4 ms | 1.3 ms |
 
-**C++ is ~24× faster than Python on full init.** ‡ MATLAB v0.1.0 measured under GNU Octave 8.4 — treat as the original-algorithm baseline, not a MATLAB-vs-Octave claim. † Rust (v0.4.0) skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)); its full-init figure reflects a partial peel. Full methodology and raw data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+**C++ is ~15× faster than Python on full init** (1.65 s → 0.112 s) and ~9× faster than the original Octave implementation. ‡ MATLAB measured under GNU Octave 8.4 (interpreter, not MATLAB JIT) — the original-algorithm baseline, not a MATLAB-vs-Octave claim. Rust is excluded — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
 <p align="center">
   <img src="docs/gallery/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
@@ -134,7 +133,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 
 ### Backends
 
-`pip install chilmesh` gives you the pure-Python implementation — zero compiled dependencies, runs everywhere, and is the canonical reference every other backend is validated against. The C++ extension is the high-performance opt-in: same algorithms, bit-identical output, ~24× faster on full init.
+`pip install chilmesh` gives you the pure-Python implementation — zero compiled dependencies, runs everywhere, and is the canonical reference every other backend is validated against. The C++ extension is the high-performance opt-in: same algorithms, bit-identical output, ~15× faster on full init.
 
 | Language | Role | How to get it |
 |---|---|---|
@@ -193,7 +192,7 @@ CHILmesh is the core engine for the ADCIRC mesh ecosystem. Sibling projects buil
 
 ## Status & Roadmap
 
-- **Shipped (v1.0.0)**: C++ half-edge backend (~24× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm I/O; mixed-element support.
+- **Shipped (v1.1.0)**: C++ half-edge backend (~15× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm I/O; mixed-element support.
 - **In flight**: Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows) · Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)) · Full mutation suite ([#94](https://github.com/domattioli/CHILmesh/issues/94))
 - **Next**: conda-forge packaging · mkdocs API site · advancing-front element mutation
 
@@ -221,7 +220,7 @@ CHILmesh originated in MATLAB as the data structure backing a skeletonization-dr
                quadrilateral, and mixed-element grids},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {1.0.0},
+  version   = {1.1.0},
   doi       = {10.5281/zenodo.20263854},
   url       = {https://github.com/domattioli/CHILmesh}
 }
