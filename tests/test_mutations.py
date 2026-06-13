@@ -851,3 +851,160 @@ class TestIncrementalAdjacency:
         mutable.smooth_topology(max_passes=200)
         elapsed = time.perf_counter() - start
         assert elapsed < 10.0, f"smooth_topology took {elapsed:.2f}s (expected < 10s)"
+
+
+class TestPaddedTrianglePaddingConvention:
+    """Regression tests for padded triangle padding convention fix (issue #211).
+
+    Bug: split_triangle / split_triangles / _point_in_element wrongly used
+    elem[3]==elem[2] to detect a padded triangle, when the actual convention
+    is elem[3]==elem[0] (4th slot duplicates FIRST vertex, not 3rd).
+
+    These tests verify the fix: padded triangles are no longer spuriously
+    rejected, and point-in-element correctly classifies them.
+    """
+
+    def test_split_triangle_padded_triangle_not_rejected(self, triangle_mesh):
+        """split_triangle accepts a padded triangle [v0, v1, v2, v0] without error.
+
+        Regression: old code wrongly checked elem[3] != elem[2] and raised
+        "is not a triangle" spuriously for valid padded triangles with padding
+        convention [v0, v1, v2, v0].
+        """
+        # Take first two adjacent triangles and merge into a quad to convert to 4-col.
+        mutable = MutableMesh(triangle_mesh)
+        n_cols_before = triangle_mesh.connectivity_list.shape[1]
+
+        if n_cols_before == 4:
+            # Already mixed. Find a padded triangle (one with only 3 unique verts).
+            padded_tri_id = None
+            for eid in range(triangle_mesh.n_elems):
+                row = triangle_mesh.connectivity_list[eid]
+                unique_verts = len(set(int(v) for v in row if int(v) >= 0))
+                if unique_verts == 3:  # Padded triangle
+                    padded_tri_id = eid
+                    break
+            if padded_tri_id is None:
+                pytest.skip("no padded triangle in this mixed fixture")
+        else:
+            # Merge first two adjacent triangles to get a quad, padding remaining tris.
+            try:
+                quad_id = mutable.merge_elements(0, 1)
+            except ValueError as e:
+                if "not adjacent" in str(e):
+                    pytest.skip("elements 0 and 1 not adjacent in this fixture")
+                raise
+            # After merge, connectivity is 4-col and other triangles are padded.
+            padded_tri_id = 2
+            # Sanity: element 2 (if it exists) should now be a padded triangle.
+            if padded_tri_id >= triangle_mesh.n_elems:
+                pytest.skip("not enough elements to find padded triangle after merge")
+
+        # Attempt split on the padded triangle — should NOT raise.
+        try:
+            new_ids = mutable.split_triangle(elem_id=padded_tri_id)
+            assert len(new_ids) > 0  # Should succeed and return element IDs.
+            # Connectivity should now have one more row.
+            assert triangle_mesh.n_elems > padded_tri_id
+        except ValueError as e:
+            if "is not a triangle" in str(e):
+                pytest.fail(f"split_triangle wrongly rejected padded triangle: {e}")
+            raise
+
+    def test_split_triangles_padded_triangles_not_rejected(self, triangle_mesh):
+        """split_triangles accepts padded triangles [v0, v1, v2, v0] in bulk.
+
+        Regression: old code wrongly checked elem[3] != elem[2] in the bulk path.
+        """
+        mutable = MutableMesh(triangle_mesh)
+        n_cols_before = triangle_mesh.connectivity_list.shape[1]
+
+        if n_cols_before == 4:
+            # Find padded triangles (exactly 3 unique verts).
+            padded_ids = []
+            for eid in range(min(3, triangle_mesh.n_elems)):
+                row = triangle_mesh.connectivity_list[eid]
+                unique_verts = len(set(int(v) for v in row if int(v) >= 0))
+                if unique_verts == 3:
+                    padded_ids.append(eid)
+            if len(padded_ids) < 2:
+                pytest.skip("not enough padded triangles in mixed fixture")
+        else:
+            # Merge two pairs to get padded triangles.
+            try:
+                mutable.merge_elements(0, 1)
+            except ValueError as e:
+                if "not adjacent" in str(e):
+                    pytest.skip("elements 0 and 1 not adjacent")
+                raise
+            # Elements 2, 3 should be padded now (if they exist).
+            padded_ids = [eid for eid in [2, 3] if eid < triangle_mesh.n_elems]
+            if len(padded_ids) < 2:
+                pytest.skip("not enough elements after merge")
+
+        try:
+            new_ids = mutable.split_triangles(np.array(padded_ids, dtype=int))
+            assert len(new_ids) > 0
+            assert triangle_mesh.n_elems > padded_ids[-1]
+        except ValueError as e:
+            if "is not a triangle" in str(e):
+                pytest.fail(f"split_triangles wrongly rejected padded triangle: {e}")
+            raise
+
+    def test_point_in_element_padded_triangle_classification(self, triangle_mesh, monkeypatch):
+        """_point_in_element correctly identifies padded triangle [v0, v1, v2, v0] as tri, not quad.
+
+        Regression: old code wrongly used elem[3]==elem[2] to detect padded tri,
+        causing mislassification and wrong point-in-test routing.
+
+        This test asserts WHICH BRANCH is taken: padded triangles must route
+        through _point_in_triangle, never _point_in_quad (even though the latter
+        would degenerate to the same answer).
+        """
+        mutable = MutableMesh(triangle_mesh)
+        n_cols_before = triangle_mesh.connectivity_list.shape[1]
+
+        if n_cols_before == 4:
+            # Find a padded triangle.
+            padded_tri_id = None
+            for eid in range(triangle_mesh.n_elems):
+                row = triangle_mesh.connectivity_list[eid]
+                unique_verts = len(set(int(v) for v in row if int(v) >= 0))
+                if unique_verts == 3:
+                    padded_tri_id = eid
+                    break
+            if padded_tri_id is None:
+                pytest.skip("no padded triangle in mixed fixture")
+        else:
+            # Merge to create padded triangles.
+            try:
+                mutable.merge_elements(0, 1)
+            except ValueError as e:
+                if "not adjacent" in str(e):
+                    pytest.skip("elements not adjacent")
+                raise
+            padded_tri_id = 2
+            if padded_tri_id >= triangle_mesh.n_elems:
+                pytest.skip("not enough elements")
+
+        # Get centroid of the padded triangle.
+        elem = triangle_mesh.connectivity_list[padded_tri_id]
+        tri_verts = elem[:3]
+        centroid = triangle_mesh.points[tri_verts, :2].mean(axis=0)
+
+        # Spy on _point_in_quad to detect wrong-branch routing.
+        called = {"quad": False}
+        orig_quad = triangle_mesh._point_in_quad
+        def spy_quad(*a, **k):
+            called["quad"] = True
+            return orig_quad(*a, **k)
+        monkeypatch.setattr(triangle_mesh, "_point_in_quad", spy_quad)
+
+        # Call _point_in_element DIRECTLY on the known padded-triangle id.
+        result = triangle_mesh._point_in_element(centroid, padded_tri_id)
+
+        # Assertions:
+        # 1. Centroid is inside its own triangle.
+        assert result, f"centroid of padded triangle {padded_tri_id} should be inside it"
+        # 2. Padded triangle MUST route through triangle branch, not quad branch.
+        assert called["quad"] is False, "padded triangle wrongly routed to _point_in_quad"
