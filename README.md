@@ -1,8 +1,4 @@
 <p align="center">
-  <video src="docs/assets/quadmesh_logo.mp4" autoplay loop muted playsinline width="680"></video>
-</p>
-
-<p align="center">
   <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
 </p>
 
@@ -17,16 +13,19 @@
   <sup>†</sup>Corresponding author | <sup>1</sup>Unaffiliated | <sup>2</sup>Ohio State University (CHIL)
 </p>
 
+---
+
+## Badges
+
 <p align="center">
   <a href="https://ceg.osu.edu/computational-hydrodynamics-and-informatics-laboratory"><img src="https://img.shields.io/badge/CHIL%20Lab%20@%20OSU-a7b1b7?logo=academia&logoColor=ba0c2f&labelColor=ba0c2f" alt="CHIL Lab @ OSU"></a>
-  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/github/v/release/domattioli/CHILmesh?include_prereleases&label=PyPI&logo=python&logoColor=white&color=blue&cacheSeconds=300" alt="PyPI"></a>
   <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
-  <a href="https://doi.org/10.5281/zenodo.20263854"><img src=".github/badges/zenodo-doi.svg" alt="DOI"></a>
+  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?logo=python&logoColor=white&color=blue" alt="PyPI"></a>
+  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/pyversions/chilmesh" alt="Python Versions"></a>
+  <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20263854-blue" alt="DOI"></a>
   <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License"></a>
 </p>
-
-> **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on [MathWorks](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh/files/src/@CHILmesh/CHILmesh.m).
 
 ---
 
@@ -38,6 +37,8 @@
 - **C++ acceleration, bit-identical output** — half-edge extension is **~24× faster than pure Python** on full init, verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
 - **One interface for all topologies** — triangles, quadrilaterals, and mixed meshes share the same call surface.
 - **Stable v1.x API** — sibling projects can pin `chilmesh>=1.0,<2`.
+
+> **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on [MathWorks](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh/files/src/@CHILmesh/CHILmesh.m).
 
 ---
 
@@ -78,12 +79,6 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 - **Mesh alterations** — `insert_vertex`, coord moves, advancing-front element addition; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
 - **ADMESH-Domains integration** — `from_admesh_domain()` adapter
 
-<p align="center">
-  <img src="docs/gallery/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
-  <br>
-  <sub><em><strong>Figure 1.</strong> Scale demo on WNAT_Hagen (52,774 vertices · 98,365 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_wnat_showcase.py</code>.</em></sub>
-</p>
-
 ### Performance
 
 Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3 trials. **v1.0.0 backends are output-equivalent** — the C++ extension produces bit-identical skeletonization layers to Python, verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
@@ -97,6 +92,12 @@ Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements). Median of 3
 | Vertex-edge lookup (per call) | ~2200 μs | ~700 μs | 0.34 μs | 0.02 μs | 0.04 μs |
 
 **C++ is ~24× faster than Python on full init.** ‡ MATLAB v0.1.0 measured under GNU Octave 8.4 — treat as the original-algorithm baseline, not a MATLAB-vs-Octave claim. † Rust (v0.4.0) skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)); its full-init figure reflects a partial peel. Full methodology and raw data: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+
+<p align="center">
+  <img src="docs/gallery/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
+  <br>
+  <sub><em><strong>Figure 1.</strong> Scale demo on WNAT_Hagen (52,774 vertices · 98,365 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_wnat_showcase.py</code>.</em></sub>
+</p>
 
 ### Validation
 
@@ -126,7 +127,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 | **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based')` | Iterative, angle-maximising | Difficult mixed meshes where FEM stalls |
 | **ADMESH Spring-Based Truss** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, ...)` | Spring/force relaxation against SDF | Quality gains with SDF-respecting boundary nodes |
 
-**References.**
+**References:**
 - Balendran (1999). *A direct smoothing method for surface meshes.* Proc. 8th IMR, pp. 189–193.
 - Zhou & Shimada (2000). *An angle-based approach to two-dimensional mesh smoothing.* Proc. 9th IMR, pp. 373–384.
 - Conroy et al. (2012). *ADMESH: An advanced, automatic unstructured mesh generator for shallow water models.* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
@@ -152,8 +153,6 @@ chilmesh.backend_info()
 ```
 
 Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
-
-> **Source / editable installs run pure-Python.** `pip install -e .` (or installing the `chilmesh` sibling checkout as a downstream hard dep) ships **no compiled C++/Rust extension** unless you build it explicitly (`pip install ./src/chilmesh_cpp`). `backend_info()` reports honestly in that case (`selected: 'python'`, no `cpp`/`rust` in `available`) — an importable-but-empty namespace stub is **not** counted as available ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Skeletonizing a large mesh on the pure-Python path is dramatically slower (Block_O ~5k elems can exceed 200s); CHILmesh emits a one-time `UserWarning` pointing here when that happens. Pass `compute_layers=False` for fast metadata-only loading ([#202](https://github.com/domattioli/CHILmesh/issues/202)).
 
 ### Examples
 
@@ -251,8 +250,4 @@ Issues and PRs welcome at [github.com/domattioli/CHILmesh](https://github.com/do
 
 ## License
 
-**Noncommercial / research use only.** Licensed under the PolyForm Noncommercial
-License 1.0.0 **with an additional No-AI/ML-training restriction** — see
-[LICENSE](LICENSE) and [.claude/AI-USAGE.md](.claude/AI-USAGE.md). No commercial use and no use
-as AI/ML training data without a separate written license. Commercial or
-AI-training licenses: domburner@duck.com
+**Noncommercial / research use only.** Licensed under the PolyForm Noncommercial License 1.0.0 **with an additional No-AI/ML-training restriction** — see [LICENSE](LICENSE) and [.claude/AI-USAGE.md](.claude/AI-USAGE.md). No commercial use and no use as AI/ML training data without a separate written license. Commercial or AI-training licenses: domburner@duck.com
