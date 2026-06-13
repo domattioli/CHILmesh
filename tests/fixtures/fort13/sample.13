@@ -1,0 +1,18 @@
+sample_grid
+4
+2
+primitive_weighting_in_continuity_equation
+unitless
+1
+0.03
+surface_directional_effective_roughness_length
+m
+3
+0.0 0.0 0.0
+primitive_weighting_in_continuity_equation
+1
+2 0.02
+surface_directional_effective_roughness_length
+2
+1 0.1 0.2 0.3
+4 0.4 0.5 0.6
