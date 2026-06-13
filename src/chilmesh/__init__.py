@@ -17,6 +17,7 @@ from importlib import metadata
 
 from .CHILmesh import CHILmesh, write_fort14
 from .gmsh_io import read_msh, write_msh, GmshParseError
+from .fort13_io import Fort13, NodalAttribute, read_fort13, write_fort13, Fort13ParseError
 from .mesh_topology import EdgeMap, quad_from_tri_pair, quads_from_tri_pairs
 from .mutations import MutableMesh
 from .quality import element_quality
@@ -96,6 +97,11 @@ __all__ = [
     "read_msh",
     "write_msh",
     "GmshParseError",
+    "Fort13",
+    "NodalAttribute",
+    "read_fort13",
+    "write_fort13",
+    "Fort13ParseError",
     # Standalone quality computation
     "element_quality",
     # Backend introspection
