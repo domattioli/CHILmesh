@@ -77,7 +77,7 @@ class MutableMesh:
         n_cols = self.mesh.connectivity_list.shape[1]
 
         # Check element is triangle (3 vertices or padded quad with repeated vertex)
-        if n_cols == 4 and elem[2] != elem[3]:
+        if n_cols == 4 and elem[3] != elem[0]:
             raise ValueError(f"Element {elem_id} is not a triangle")
 
         tri_verts = elem[:3]
@@ -485,7 +485,7 @@ class MutableMesh:
                     raise IndexError(f"Element {eid} out of range [0, {self.mesh.n_elems})")
                 elem = self.mesh.connectivity_list[eid]
                 n_cols = self.mesh.connectivity_list.shape[1]
-                if n_cols == 4 and elem[2] != elem[3]:
+                if n_cols == 4 and elem[3] != elem[0]:
                     raise ValueError(f"Element {eid} is not a triangle")
                 tri_verts = elem[:3]
                 p0, p1, p2 = self.mesh.points[tri_verts, :2]

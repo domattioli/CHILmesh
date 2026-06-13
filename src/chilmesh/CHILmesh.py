@@ -970,7 +970,7 @@ class CHILmesh(CHILmeshPlotMixin):
         """Check if point is inside element (handles tri and quad)."""
         elem = self.connectivity_list[elem_id]
         verts = self.points[elem, :2]
-        if elem.size == 3 or elem[3] == elem[2]:
+        if elem.size == 3 or elem[3] == elem[0]:
             return self._point_in_triangle(point, verts[0], verts[1], verts[2])
         else:
             return self._point_in_quad(point, verts[0], verts[1], verts[2], verts[3])
