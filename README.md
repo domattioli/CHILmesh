@@ -153,6 +153,8 @@ chilmesh.backend_info()
 
 Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
 
+> **Source / editable installs run pure-Python.** `pip install -e .` (or installing the `chilmesh` sibling checkout as a downstream hard dep) ships **no compiled C++/Rust extension** unless you build it explicitly (`pip install ./src/chilmesh_cpp`). `backend_info()` reports honestly in that case (`selected: 'python'`, no `cpp`/`rust` in `available`) — an importable-but-empty namespace stub is **not** counted as available ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Skeletonizing a large mesh on the pure-Python path is dramatically slower (Block_O ~5k elems can exceed 200s); CHILmesh emits a one-time `UserWarning` pointing here when that happens. Pass `compute_layers=False` for fast metadata-only loading ([#202](https://github.com/domattioli/CHILmesh/issues/202)).
+
 ### Examples
 
 ```bash
