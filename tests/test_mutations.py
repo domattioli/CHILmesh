@@ -1008,3 +1008,45 @@ class TestPaddedTrianglePaddingConvention:
         assert result, f"centroid of padded triangle {padded_tri_id} should be inside it"
         # 2. Padded triangle MUST route through triangle branch, not quad branch.
         assert called["quad"] is False, "padded triangle wrongly routed to _point_in_quad"
+
+
+def test_insert_vertex_quad_mesh():
+    """Verify insert_vertex works on 4-column quad meshes.
+
+    Regression test for mixed-element insert_vertex bug: dead ternaries,
+    missing quad-edge enumeration, and unpadded new elements.
+    """
+    pts = np.array([
+        [0, 0], [1, 0], [2, 0],
+        [0, 1], [1, 1], [2, 1],
+        [0, 2], [1, 2], [2, 2]
+    ], dtype=float)
+    pts = np.c_[pts, np.zeros(len(pts))]  # Add z-column
+
+    # 2x2 quad mesh: CCW-oriented quadrilaterals (0-indexed)
+    conn = np.array([
+        [0, 1, 4, 3],  # quad 0: bottom-left
+        [1, 2, 5, 4],  # quad 1: bottom-right
+        [3, 4, 7, 6],  # quad 2: top-left
+        [4, 5, 8, 7]   # quad 3: top-right
+    ], dtype=int)
+
+    m = CHILmesh(conn, pts)
+    mm = MutableMesh(m)
+
+    # Insert vertex at center of quad 0 (interior point (0.5, 0.5))
+    nid = mm.insert_vertex(np.array([0.5, 0.5]))
+
+    # Assertions: (a) no exception, (b) correct vertex ID, (c) vertex count, (d) re-triangulation
+    assert nid == 9, f"Expected new vertex ID 9, got {nid}"
+    assert mm.mesh.n_verts == 10, f"Expected 10 vertices, got {mm.mesh.n_verts}"
+    assert mm.mesh.n_elems > 4, f"Expected >4 elements after re-triangulation, got {mm.mesh.n_elems}"
+
+    # (e) New vertex has at least one incident element
+    incident = mm.mesh.get_vertex_elements(nid)
+    assert len(incident) > 0, f"New vertex {nid} has no incident elements"
+
+    # (f) All elements have non-negative signed area
+    signed_areas = mm.mesh.signed_area()
+    assert (signed_areas >= -1e-9).all(), \
+        f"Some elements have negative area: min={signed_areas.min()}"
