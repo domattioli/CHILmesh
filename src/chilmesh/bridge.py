@@ -1,7 +1,7 @@
 """Bridge adapters for downstream projects.
 
 This module provides convenient interfaces for integrating CHILmesh
-with MADMESHR, ADMESH, and ADMESH-Domains. Each adapter adds
+with MADMESHR, ADMESH, and Valence. Each adapter adds
 domain-specific convenience methods while delegating to the base
 CHILmesh public API (CAI).
 """
@@ -270,10 +270,10 @@ class MeshAdapterForADMESH:
 
 class MeshAdapterForADMESHDomains:
     """
-    Adapter for ADMESH-Domains multi-domain handling.
+    Adapter for Valence multi-domain handling.
 
     Provides convenience methods for domain-level queries and
-    boundary extraction specific to ADMESH-Domains.
+    boundary extraction specific to Valence.
 
     Example:
         >>> from chilmesh import CHILmesh

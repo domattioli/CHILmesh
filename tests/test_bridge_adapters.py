@@ -1,6 +1,6 @@
 """Integration tests for bridge adapters.
 
-Tests verify that bridge adapters (MADMESHR, ADMESH, ADMESH-Domains)
+Tests verify that bridge adapters (MADMESHR, ADMESH, Valence)
 work correctly with realistic downstream workflows and all mesh fixtures.
 """
 
@@ -215,7 +215,7 @@ class TestADMESHBridge:
 
 
 class TestADMESHDomainsBridge:
-    """Integration tests for ADMESH-Domains bridge adapter."""
+    """Integration tests for Valence bridge adapter."""
 
     @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "structured"])
     def test_adapter_initialization(self, fixture_name):
@@ -392,7 +392,7 @@ class TestBridgeAdaptersCommonWorkflows:
             assert angles["elements_with_acute"] >= 0
 
     def test_admesh_domains_multi_domain_setup(self):
-        """Simulate ADMESH-Domains domain initialization."""
+        """Simulate Valence domain initialization."""
         from pathlib import Path
 
         mesh = CHILmesh.read_from_fort14(

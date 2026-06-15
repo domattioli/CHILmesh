@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-**CAI** defines stable, documented public API that downstream projects (MADMESHR, ADMESH, ADMESH-Domains) can depend on. All methods listed here maintain signatures, return types, and semantics through v1.0. Breaking changes require major version bump + minimum 2-week advance notice.
+**CAI** defines stable, documented public API that downstream projects (MADMESHR, ADMESH, Valence) can depend on. All methods listed here maintain signatures, return types, and semantics through v1.0. Breaking changes require major version bump + minimum 2-week advance notice.
 
 ---
 
@@ -127,7 +127,7 @@ def read_from_2dm(full_file_name: Path, compute_layers: bool = True) -> "CHILmes
 @staticmethod
 def from_admesh_domain(record, compute_layers: bool = True) -> "CHILmesh":
     """
-    Create from ADMESH-Domains catalog record (duck-typed, zero imports).
+    Create from Valence catalog record (duck-typed, zero imports).
     Record must have 'fort14_path' attribute.
     """
 
@@ -145,7 +145,7 @@ def copy(self) -> "CHILmesh":
 
 def admesh_metadata(self) -> Dict[str, Any]:
     """
-    ADMESH-Domains compatible metadata.
+    Valence compatible metadata.
     Returns: node_count, element_count, element_type ('tri'/'quad'/'mixed'), bounding_box.
     """
 ```

@@ -5,7 +5,7 @@ Usage:
     python scripts/benchmark_wnat_hagen.py [MESH_PATH] [--json OUTPUT.json]
 
 If MESH_PATH is omitted the script looks for the mesh in the default
-ADMESH-Domains clone location (/tmp/admesh-domains/registry_data/meshes/).
+Valence clone location (/tmp/valence-domains/registry_data/meshes/).
 
 Outputs a markdown table suitable for pasting into docs/BENCHMARK.md and,
 optionally, a JSON file for CI archival / diff-over-time comparisons.
@@ -47,17 +47,17 @@ def _measure(label: str, fn, *, n: int = 1) -> tuple[str, float]:
 def _locate_mesh(explicit: str | None) -> Path:
     candidates = [
         explicit,
-        "/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14",
-        "/tmp/admesh-domains/WNAT_Hagen.14",
+        "/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14",
+        "/tmp/valence-domains/WNAT_Hagen.14",
         str(Path.home() / "WNAT_Hagen.14"),
     ]
     for c in candidates:
         if c and Path(c).exists():
             return Path(c)
     raise FileNotFoundError(
-        "WNAT_Hagen mesh not found. Clone ADMESH-Domains:\n"
-        "  git clone https://github.com/domattioli/ADMESH-Domains "
-        "/tmp/admesh-domains\n"
+        "WNAT_Hagen mesh not found. Clone Valence:\n"
+        "  git clone https://github.com/domattioli/Valence "
+        "/tmp/valence-domains\n"
         "then re-run this script."
     )
 

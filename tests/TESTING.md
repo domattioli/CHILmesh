@@ -153,7 +153,7 @@ pytest -vv -s tests/test_smoothing.py::TestTriangleSmoother::test_fem_smoother_t
 ## Known Issues & Skipped Tests
 
 **52 tests skipped (fast PR mode).** Skips are environment- or geometry-conditional, not failures:
-- **External MATLAB parity** (`test_skeletonization_matlab_parity_external.py`): require `admesh-domains` + large mesh files not bundled. Run manually: `pip install admesh-domains && pytest tests/test_skeletonization_matlab_parity_external.py -v`
+- **External MATLAB parity** (`test_skeletonization_matlab_parity_external.py`): require `valence-domains` + large mesh files not bundled. Run manually: `pip install valence-domains && pytest tests/test_skeletonization_matlab_parity_external.py -v`
 - **C++ backend equivalence** (`test_backend_equivalence.py`): skipped when `chilmesh_cpp` extension is not built (`pip install -e ".[cpp]"` or build the extension to exercise these).
 - **Geometry-conditional** (e.g. `test_spatial_indexing.py`): point-location cases that don't apply to holed fixtures (annulus/donut/block_o).
 

@@ -1,12 +1,12 @@
-"""MATLAB-parity tests for skeletonization on external (ADMESH-Domains) meshes.
+"""MATLAB-parity tests for skeletonization on external (Valence) meshes.
 
 This is a sibling of ``tests/test_skeletonization_matlab_parity.py`` that pins
-expected layer counts for meshes from the external ADMESH-Domains catalog,
+expected layer counts for meshes from the external Valence catalog,
 rather than the bundled fixtures.
 
 Why a separate file? Bundled-fixture parity is a fast, always-on guardrail
 (every CI push runs it). External-mesh parity requires installing the
-``admesh-domains`` package and downloading mesh files, so it is opt-in. Keeping
+``valence-domains`` package and downloading mesh files, so it is opt-in. Keeping
 the two concerns in separate files lets the fast tests stay cheap while still
 documenting the broader correctness expectation for the maintainer.
 
@@ -19,7 +19,7 @@ as the MATLAB reference.
 Reference values were captured from the original QuADMesh+ ``meshLayers``
 algorithm in ``00_CHILMesh_Class/@CHILmesh/CHILmesh.m``. The seven values tagged
 "F12 captured 2026-05-23" were produced by running that MATLAB class under
-GNU Octave 8.4 on the ADMESH-Domains catalog meshes (connectivity + points fed
+GNU Octave 8.4 on the Valence catalog meshes (connectivity + points fed
 to the 2-arg ``CHILmesh(ConnectivityList, Points)`` constructor, bypassing the
 MATLAB ``readFort14`` reader). The harness was validated first against the three
 already-known references — delaware-bay@default (17), lake-erie@5k (17),
@@ -29,7 +29,7 @@ all ten meshes. To run these tests locally:
 
 .. code-block:: bash
 
-   pip install admesh-domains
+   pip install valence-domains
    CHILMESH_RUN_EXTERNAL_PARITY=1 python -m pytest \\
        tests/test_skeletonization_matlab_parity_external.py -v
 
@@ -55,7 +55,7 @@ import pytest
 
 
 # Maintainer-provided reference layer counts from external MATLAB ``meshLayers`` runs.
-# Each entry is keyed by ADMESH-Domains identifier (catalog mesh name + variant tag).
+# Each entry is keyed by Valence identifier (catalog mesh name + variant tag).
 # Values:
 #   - int: exact n_layers known
 #   - (int, int) tuple: range (lo, hi) when source mesh variant is unconfirmed
@@ -88,11 +88,11 @@ def _admesh_domains_available() -> bool:
 
 
 def _load_mesh(catalog_id: str):
-    """Resolve an ADMESH-Domains catalog ID to a loaded CHILmesh.
+    """Resolve an Valence catalog ID to a loaded CHILmesh.
 
     Catalog ID convention: ``"<mesh-name>@<variant>-v<version>"``, e.g.
     ``"italy@default-v1"``. The exact resolution depends on the
-    ``admesh-domains`` Python loader; we use a placeholder that will be wired
+    ``valence-domains`` Python loader; we use a placeholder that will be wired
     up once the loader API is finalized.
     """
     import admesh_domains  # type: ignore
@@ -101,7 +101,7 @@ def _load_mesh(catalog_id: str):
     variant, _, version = variant_with_version.rpartition("-v")
 
     record = admesh_domains.get(mesh_name, variant=variant, version=int(version))
-    record.load()  # ADMESH-Domains lazy-load contract
+    record.load()  # Valence lazy-load contract
 
     from chilmesh import CHILmesh
     return CHILmesh.from_admesh_domain(record, compute_layers=True)
@@ -110,21 +110,21 @@ def _load_mesh(catalog_id: str):
 _RUN_EXTERNAL = bool(os.environ.get("CHILMESH_RUN_EXTERNAL_PARITY"))
 _SKIP_REASON_EXTERNAL = (
     "Set CHILMESH_RUN_EXTERNAL_PARITY=1 to run the external MATLAB-parity tests "
-    "against the ADMESH-Domains catalog. Requires `pip install admesh-domains`."
+    "against the Valence catalog. Requires `pip install valence-domains`."
 )
 
 
 @pytest.mark.skipif(not _RUN_EXTERNAL, reason=_SKIP_REASON_EXTERNAL)
 @pytest.mark.skipif(
     not _admesh_domains_available(),
-    reason="admesh-domains package not installed; `pip install admesh-domains`",
+    reason="valence-domains package not installed; `pip install valence-domains`",
 )
 @pytest.mark.parametrize(
     "catalog_id,expected",
     [(cid, exp) for cid, exp in MATLAB_REFERENCE_LAYER_COUNTS.items() if exp is not None],
 )
 def test_layer_count_matches_matlab_reference(catalog_id: str, expected) -> None:
-    """For each ADMESH-Domains mesh with a known MATLAB ``n_layers``,
+    """For each Valence mesh with a known MATLAB ``n_layers``,
     the Python port must produce the same value (or fall in the documented range).
     """
     mesh = _load_mesh(catalog_id)
@@ -145,17 +145,17 @@ def test_layer_count_matches_matlab_reference(catalog_id: str, expected) -> None
 @pytest.mark.skipif(not _RUN_EXTERNAL, reason=_SKIP_REASON_EXTERNAL)
 @pytest.mark.skipif(
     not _admesh_domains_available(),
-    reason="admesh-domains package not installed; `pip install admesh-domains`",
+    reason="valence-domains package not installed; `pip install valence-domains`",
 )
 def test_uncovered_meshes_have_fixme() -> None:
-    """Meta-test: every ADMESH-Domains entry without a captured MATLAB count
+    """Meta-test: every Valence entry without a captured MATLAB count
     must remain in the table with ``None`` so it is visible as a FIXME during
     review.
     """
     uncovered = [k for k, v in MATLAB_REFERENCE_LAYER_COUNTS.items() if v is None]
     if uncovered:
         pytest.skip(
-            f"{len(uncovered)} ADMESH-Domains meshes lack a MATLAB reference layer "
+            f"{len(uncovered)} Valence meshes lack a MATLAB reference layer "
             f"count. Capture via QuADMesh+ and add to MATLAB_REFERENCE_LAYER_COUNTS: "
             f"{', '.join(uncovered)}"
         )

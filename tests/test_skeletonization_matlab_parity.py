@@ -12,8 +12,8 @@ External ground-truth from MATLAB runs (provided by maintainer):
   WNAT_Hagen, WNAT_Onur, WNAT_Test, or WNAT_NC_inundation_v6c)
 - Wetting-and-drying test mesh: 15 layers
 
-(These meshes are not bundled with CHILmesh; they live in the ADMESH-Domains
-catalog. Add them to EXPECTED below once the loader for ADMESH-Domains meshes
+(These meshes are not bundled with CHILmesh; they live in the Valence
+catalog. Add them to EXPECTED below once the loader for Valence meshes
 exposes a programmatic fetch.)
 """
 from __future__ import annotations
