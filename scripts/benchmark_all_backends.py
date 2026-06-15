@@ -23,7 +23,7 @@ def _fmt(seconds: float, unit: str = "s") -> str:
 def _locate_mesh(explicit: str | None) -> Path:
     candidates = [
         explicit,
-        "/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14",
+        "/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14",
         "/tmp/WNAT_Hagen.14",
         str(Path.home() / "WNAT_Hagen.14"),
     ]

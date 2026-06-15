@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.2] — 2026-06-15
+
+### Changed
+- Renamed registry references `ADMESH-Domains` → `Valence` / `valence-domains` (registry was renamed). Public API names (`from_admesh_domain`, `admesh_metadata`) unchanged.
+- Removed internal design proposals from the published source tree.
+
 ## [1.2.0] — 2026-05-24
 
 ### ✨ Added
@@ -88,7 +94,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [1.0.0] — 2026-05-22
 
 First **stable** release. CHILmesh is now the production backbone for ADMESH,
-MADMESHR, and ADMESH-Domains.
+MADMESHR, and Valence.
 
 ### 🚀 Headline
 
@@ -441,7 +447,7 @@ These numbers carry forward unchanged into v0.4.0 — Phase 5 spatial queries an
 #### Enhanced Test Coverage
 - `test_skeletonization_invariant.py`: Layer separation invariant validation across all fixtures
 - `test_skeletonization_matlab_parity.py`: MATLAB reference layer count validation
-- `test_skeletonization_matlab_parity_external.py`: External ADMESH-Domains catalog parity validation
+- `test_skeletonization_matlab_parity_external.py`: External Valence catalog parity validation
 - `test_smoothing.py`: Comprehensive FEM smoother tests for triangles, quads, and mixed-element meshes
 
 ## [0.2.0] — 2026-04-27 (Modernization Release)
@@ -510,7 +516,7 @@ pinches = mesh.pinch_points(width_threshold=0.3)
 #### Documentation & Release Infrastructure
 - `API.md` - Complete 25+ method reference with stability guarantees
 - `BENCHMARK.md` - Performance comparison v0.1.1 vs v0.2.0 with real-world impact
-- `DOWNSTREAM_MIGRATION_GUIDE.md` - Integration guide for MADMESHR, ADMESH, ADMESH-Domains
+- `DOWNSTREAM_MIGRATION_GUIDE.md` - Integration guide for MADMESHR, ADMESH, Valence
 - `docs/CHILmesh_Access_Interface.md` - Stability guarantees and usage patterns
 - Stable API contract (CAI) through v1.0
 

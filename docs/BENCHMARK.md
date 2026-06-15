@@ -276,14 +276,14 @@ Total:             14.7s ✅ Interactive development
 ## How to Reproduce
 
 ```bash
-git clone https://github.com/domattioli/ADMESH-Domains /tmp/admesh-domains
+git clone https://github.com/domattioli/Valence /tmp/valence-domains
 
 python3 << 'PYTHON'
 from chilmesh import CHILmesh
 from pathlib import Path
 import time
 
-mesh_path = Path("/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14")
+mesh_path = Path("/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14")
 
 start = time.time()
 mesh = CHILmesh.read_from_fort14(mesh_path, compute_layers=False)

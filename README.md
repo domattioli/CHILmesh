@@ -31,7 +31,7 @@
 
 ## Why CHILmesh
 
-**The stable backbone for hydrodynamic mesh tooling.** Sibling projects [ADMESH](https://github.com/domattioli/ADMESH), [ADMESH-Domains](https://github.com/domattioli/ADMESH-Domains), and [QuADMesh](https://github.com/domattioli/QuADMesh) build on top of it.
+**The stable backbone for hydrodynamic mesh tooling.** Sibling projects [ADMESH](https://github.com/domattioli/ADMESH), [Valence](https://github.com/domattioli/Valence), and [QuADMesh](https://github.com/domattioli/QuADMesh) build on top of it.
 
 - **Pythonic API** — `from chilmesh import Mesh`; backwards-compatible `CHILmesh` alias preserved.
 - **C++ acceleration, bit-identical output** — half-edge extension is **~15× faster than pure Python** on full init, verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
@@ -77,7 +77,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 - **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS Aquaveo](https://www.aquaveo.com/sms) `.2dm` read/write
 - **Spatial queries** — point-in-element, k-nearest vertices, radius search at O(log n)
 - **Mesh alterations** — `insert_vertex`, coord moves, advancing-front element addition; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
-- **ADMESH-Domains integration** — `from_admesh_domain()` adapter
+- **Valence integration** — `from_admesh_domain()` adapter
 
 ### Performance
 
@@ -100,7 +100,7 @@ Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements · 151,248 ed
 
 ### Validation
 
-Python, C++, and the original MATLAB/Octave implementation all produce identical `n_layers` (medial-axis skeletonization) across the ADMESH-Domains catalog, from 557 to 132k vertices. Identical connectivity + points are fed to both implementations; only the layering algorithm is compared.
+Python, C++, and the original MATLAB/Octave implementation all produce identical `n_layers` (medial-axis skeletonization) across the Valence catalog, from 557 to 132k vertices. Identical connectivity + points are fed to both implementations; only the layering algorithm is compared.
 
 | Mesh | Vertices | Elements | MATLAB | Python | C++ | Match |
 |---|--:|--:|--:|--:|--:|:--:|
@@ -182,7 +182,7 @@ CHILmesh is the core engine for the ADCIRC mesh ecosystem. Sibling projects buil
 | Repo | Role |
 |---|---|
 | [ADMESH](https://github.com/domattioli/ADMESH) | Unstructured triangle mesh generator; consumes CHILmesh for adjacency, smoothing, and quality analysis |
-| [ADMESH-Domains](https://github.com/domattioli/ADMESH-Domains) | Curated ADCIRC mesh registry; `Mesh.from_admesh_domain()` reads from it directly |
+| [Valence](https://github.com/domattioli/Valence) | Curated ADCIRC mesh registry; `Mesh.from_admesh_domain()` reads from it directly |
 | [QuADMesh](https://github.com/domattioli/QuADMesh) | Quad mesh generator (MATLAB → Python port, in progress); CHILmesh data structure descends from the original QuADMesh+ |
 | [MADMESHing](https://github.com/domattioli/MADMESHing) | Benchmark harness comparing ADMESH triangulation vs quad generators; uses CHILmesh for quality analysis |
 

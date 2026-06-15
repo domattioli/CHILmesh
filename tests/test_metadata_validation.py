@@ -133,7 +133,7 @@ class TestMetadataValidation:
 
     def test_metadata_via_from_admesh_domain_for_validation(self):
         """Test contributor validation via from_admesh_domain entry point."""
-        # Contributor receives a mesh record from ADMESH-Domains
+        # Contributor receives a mesh record from Valence
         fixture_path = chilmesh.examples.fixture_path("quad_2x2.fort.14")
         record = SimpleNamespace(filename=str(fixture_path), type="ADCIRC")
 
