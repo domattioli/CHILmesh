@@ -77,7 +77,7 @@ class MutableMesh:
         n_cols = self.mesh.connectivity_list.shape[1]
 
         # Check element is triangle (3 vertices or padded quad with repeated vertex)
-        if n_cols == 4 and elem[2] != elem[3]:
+        if n_cols == 4 and elem[3] != elem[0]:
             raise ValueError(f"Element {elem_id} is not a triangle")
 
         tri_verts = elem[:3]
@@ -485,7 +485,7 @@ class MutableMesh:
                     raise IndexError(f"Element {eid} out of range [0, {self.mesh.n_elems})")
                 elem = self.mesh.connectivity_list[eid]
                 n_cols = self.mesh.connectivity_list.shape[1]
-                if n_cols == 4 and elem[2] != elem[3]:
+                if n_cols == 4 and elem[3] != elem[0]:
                     raise ValueError(f"Element {eid} is not a triangle")
                 tri_verts = elem[:3]
                 p0, p1, p2 = self.mesh.points[tri_verts, :2]
@@ -1125,7 +1125,7 @@ class MutableMesh:
         # Find cavity: all elements sharing vertices with containing element
         containing_elem = self.mesh.connectivity_list[elem_id]
         n_cols = self.mesh.connectivity_list.shape[1]
-        elem_verts = containing_elem[:3] if (n_cols == 3 or containing_elem[2] != containing_elem[3]) else containing_elem[:3]
+        elem_verts = containing_elem[:3] if self._is_triangle(elem_id) else containing_elem[:4]
 
         cavity_elems = set([elem_id])
         for v in elem_verts:
@@ -1138,10 +1138,8 @@ class MutableMesh:
         boundary_edges = []
         for elem_id_cav in cavity_elems:
             elem = self.mesh.connectivity_list[elem_id_cav]
-            tri_verts = elem[:3] if n_cols == 3 or elem[2] != elem[3] else elem[:3]
-            edges = [(tri_verts[0], tri_verts[1]),
-                    (tri_verts[1], tri_verts[2]),
-                    (tri_verts[2], tri_verts[0])]
+            elem_verts_cav = elem[:3] if self._is_triangle(elem_id_cav) else elem[:4]
+            edges = self._ring_to_edges(elem_verts_cav)
 
             for e in edges:
                 edge_key = tuple(sorted(e))
@@ -1155,9 +1153,7 @@ class MutableMesh:
         boundary_edges = [e for e in boundary_edges if e[0] != e[1]]
 
         if not boundary_edges:
-            boundary_edges = [(elem_verts[0], elem_verts[1]),
-                             (elem_verts[1], elem_verts[2]),
-                             (elem_verts[2], elem_verts[0])]
+            boundary_edges = self._ring_to_edges(elem_verts)
 
         # Delete cavity elements (mark as zeros)
         for elem_id_del in cavity_elems:
@@ -1195,7 +1191,10 @@ class MutableMesh:
                 # Swap to ensure positive area
                 v1, v2 = v2, v1
 
-            new_elem = np.array([[v1, v2, new_vert_id]])
+            if n_cols == 4:
+                new_elem = np.array([[v1, v2, new_vert_id, v1]])
+            else:
+                new_elem = np.array([[v1, v2, new_vert_id]])
             self.mesh.connectivity_list = np.vstack([self.mesh.connectivity_list, new_elem])
 
         self.mesh.n_elems = self.mesh.connectivity_list.shape[0]
@@ -1208,17 +1207,39 @@ class MutableMesh:
         return new_vert_id
 
     def _get_edge_set(self, elem_id: int, n_cols: int) -> set:
-        """Get edge set for an element."""
+        """Get edge set for an element (3 or 4 edges depending on triangle/quad)."""
         first_vert = self.mesh.connectivity_list[elem_id, 0]
         if elem_id >= self.mesh.n_elems or first_vert == 0 or first_vert < 0:
             return set()
 
         elem = self.mesh.connectivity_list[elem_id]
-        tri_verts = elem[:3] if n_cols == 3 or elem[2] != elem[3] else elem[:3]
-        edges = [(tri_verts[0], tri_verts[1]),
-                (tri_verts[1], tri_verts[2]),
-                (tri_verts[2], tri_verts[0])]
-        return set([tuple(sorted(e)) for e in edges if e[0] != e[1]])
+        is_tri = self._is_triangle(elem_id)
+        verts = elem[:3] if is_tri else elem[:4]
+
+        edges = []
+        for i in range(len(verts)):
+            e = (verts[i], verts[(i + 1) % len(verts)])
+            if e[0] != e[1]:
+                edges.append(tuple(sorted(e)))
+        return set(edges)
+
+    def _ring_to_edges(self, ring_verts) -> list:
+        """Turn a vertex ring (3 or 4 verts) into its closed edge list.
+
+        Parameters
+        ----------
+        ring_verts : array-like
+            Ordered vertices forming a closed ring (3 for triangle, 4 for quad).
+
+        Returns
+        -------
+        list of tuples
+            List of (v_i, v_{i+1 % n}) edges closing the ring.
+        """
+        edges = []
+        for i in range(len(ring_verts)):
+            edges.append((ring_verts[i], ring_verts[(i + 1) % len(ring_verts)]))
+        return edges
 
     def _signed_area(self, p0: np.ndarray, p1: np.ndarray, p2: np.ndarray) -> float:
         """Compute signed area of triangle (p0, p1, p2)."""

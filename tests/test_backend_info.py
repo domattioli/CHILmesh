@@ -90,3 +90,94 @@ def test_rust_placement_when_available():
         if CPP_AVAILABLE:
             cpp_idx = info["available"].index("cpp")
             assert cpp_idx < rust_idx, "cpp should come before rust"
+
+
+import importlib
+import sys
+import types
+
+import numpy as np
+import pytest
+
+
+def test_namespace_stub_reports_cpp_unavailable():
+    """#163/#202: importable-but-API-less chilmesh_cpp must report unavailable."""
+    import chilmesh.backends.cpp_backend as cpp_backend
+    stub = types.ModuleType("chilmesh_cpp")  # no full_init attribute
+    saved = sys.modules.get("chilmesh_cpp")
+    sys.modules["chilmesh_cpp"] = stub
+    try:
+        reloaded = importlib.reload(cpp_backend)
+        assert reloaded.CPP_AVAILABLE is False
+        assert reloaded._cpp is None
+    finally:
+        if saved is not None:
+            sys.modules["chilmesh_cpp"] = saved
+        else:
+            sys.modules.pop("chilmesh_cpp", None)
+        importlib.reload(cpp_backend)  # restore real detection
+
+
+def test_namespace_stub_reports_rust_unavailable():
+    """#163/#202: importable-but-API-less chilmesh_core must report unavailable."""
+    import chilmesh.backends.rust_backend as rust_backend
+    stub = types.ModuleType("chilmesh_core")  # no RustMesh attribute
+    saved = sys.modules.get("chilmesh_core")
+    sys.modules["chilmesh_core"] = stub
+    try:
+        reloaded = importlib.reload(rust_backend)
+        assert reloaded.RUST_AVAILABLE is False
+        assert reloaded._rust is None
+    finally:
+        if saved is not None:
+            sys.modules["chilmesh_core"] = saved
+        else:
+            sys.modules.pop("chilmesh_core", None)
+        importlib.reload(rust_backend)  # restore real detection
+
+
+def test_stub_with_api_reports_cpp_available():
+    """Guard is not over-eager: a module exposing full_init reports available."""
+    import chilmesh.backends.cpp_backend as cpp_backend
+    stub = types.ModuleType("chilmesh_cpp")
+    stub.full_init = lambda *a, **k: None
+    saved = sys.modules.get("chilmesh_cpp")
+    sys.modules["chilmesh_cpp"] = stub
+    try:
+        reloaded = importlib.reload(cpp_backend)
+        assert reloaded.CPP_AVAILABLE is True
+    finally:
+        if saved is not None:
+            sys.modules["chilmesh_cpp"] = saved
+        else:
+            sys.modules.pop("chilmesh_cpp", None)
+        importlib.reload(cpp_backend)  # restore real detection
+
+
+def test_slow_path_warning_when_pure_python(monkeypatch):
+    """#202: pure-Python skeletonization of a large mesh warns once (non-silent)."""
+    if CPP_AVAILABLE or RUST_AVAILABLE:
+        pytest.skip("compiled fast backend present; slow-path warning N/A")
+    import chilmesh.CHILmesh  # ensure submodule imported
+    cm = sys.modules["chilmesh.CHILmesh"]
+    monkeypatch.setattr(cm, "_SLOW_PATH_ELEM_THRESHOLD", 1)
+    monkeypatch.setattr(cm, "_SLOW_PATH_WARNED", False)
+    pts = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+    conn = np.array([[0, 1, 2], [0, 2, 3]])
+    with pytest.warns(UserWarning, match="pure-Python backend"):
+        cm.CHILmesh(connectivity=conn, points=pts, compute_layers=True)
+
+
+def test_no_slow_path_warning_below_threshold(monkeypatch, recwarn):
+    """Small meshes never trigger the slow-path warning."""
+    if CPP_AVAILABLE or RUST_AVAILABLE:
+        pytest.skip("compiled fast backend present; slow-path warning N/A")
+    import chilmesh.CHILmesh  # ensure submodule imported
+    cm = sys.modules["chilmesh.CHILmesh"]
+    monkeypatch.setattr(cm, "_SLOW_PATH_ELEM_THRESHOLD", 10_000)
+    monkeypatch.setattr(cm, "_SLOW_PATH_WARNED", False)
+    pts = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+    conn = np.array([[0, 1, 2], [0, 2, 3]])
+    cm.CHILmesh(connectivity=conn, points=pts, compute_layers=True)
+    slow = [w for w in recwarn.list if "pure-Python backend" in str(w.message)]
+    assert slow == []

@@ -16,6 +16,14 @@ from copy import deepcopy
 
 __all__ = ['CHILmesh', 'write_fort14']
 
+# One-time warn state for the source-install pure-Python perf gap (#202).
+# When no compiled C++/Rust backend is present, skeletonization runs the
+# pure-Python path. It is linear in element count (~1s per 60k elems;
+# Block_O ~5k elems is ~0.2s) — slower than the compiled backend but not
+# catastrophic. Warn once, only for large meshes where the gap is material.
+_SLOW_PATH_WARNED = False
+_SLOW_PATH_ELEM_THRESHOLD = 50000
+
 class CHILmesh(CHILmeshPlotMixin):
     """
     A 2D mesh class supporting triangular, quadrilateral, and mixed-element meshes.
@@ -364,6 +372,25 @@ class CHILmesh(CHILmeshPlotMixin):
             if compute_adjacencies:
                 self._build_adjacencies( validate=validate )
             if compute_layers:
+                global _SLOW_PATH_WARNED
+                if (not _SLOW_PATH_WARNED
+                        and self.n_elems >= _SLOW_PATH_ELEM_THRESHOLD):
+                    from .backends.cpp_backend import CPP_AVAILABLE
+                    from .backends.rust_backend import RUST_AVAILABLE
+                    if not (CPP_AVAILABLE or RUST_AVAILABLE):
+                        _SLOW_PATH_WARNED = True
+                        warnings.warn(
+                            f"chilmesh: skeletonizing a {self.n_elems}-element mesh "
+                            "on the pure-Python backend (no compiled C++/Rust extension "
+                            "found). The pure-Python path is linear in element count "
+                            "(~1s per 60k elements) but slower than the compiled backend; "
+                            "the gap grows with mesh size and repeated re-inits. Build the "
+                            "extension (pip install ./src/chilmesh_cpp) or pass "
+                            "compute_layers=False for fast metadata-only loading. Introspect "
+                            "with chilmesh.backend_info(). See CHILmesh #202.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                 self._skeletonize(
                     seed_boundary_kinds=seed_boundary_kinds,
                     seed_ibtypes=seed_ibtypes,
@@ -912,13 +939,16 @@ class CHILmesh(CHILmeshPlotMixin):
         self._centroid_tree = cKDTree(self._get_centroids())
 
     def _get_centroids(self) -> np.ndarray:
-        """Compute element centroids (mean of vertex coordinates)."""
+        """Compute element centroids (mean of vertex coordinates).
+
+        Vectorized over all elements. For padded triangles (``[v0,v1,v2,v0]``)
+        the repeated column is included in the mean — exactly matching the
+        prior per-element loop (bit-identical) — so layer / skeleton behaviour
+        is unchanged.
+        """
         n_cols = self.connectivity_list.shape[1]
-        centroids = np.zeros((self.n_elems, 2))
-        for i, elem in enumerate(self.connectivity_list):
-            verts = self.points[elem[:n_cols], :2]
-            centroids[i] = np.mean(verts, axis=0)
-        return centroids
+        verts = self.points[self.connectivity_list[:, :n_cols], :2]
+        return verts.mean(axis=1)
 
     @property
     def centroids(self) -> np.ndarray:
@@ -946,7 +976,7 @@ class CHILmesh(CHILmeshPlotMixin):
         """Check if point is inside element (handles tri and quad)."""
         elem = self.connectivity_list[elem_id]
         verts = self.points[elem, :2]
-        if elem.size == 3 or elem[3] == elem[2]:
+        if elem.size == 3 or elem[3] == elem[0]:
             return self._point_in_triangle(point, verts[0], verts[1], verts[2])
         else:
             return self._point_in_quad(point, verts[0], verts[1], verts[2], verts[3])

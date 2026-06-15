@@ -419,8 +419,6 @@ These labels are CHILmesh-specific — they have no equivalent in DomI's canonic
 
 ## Coding dispatch — Haiku subagent default
 
-All coding work (writing or editing source code) MUST be dispatched to a subagent running the Haiku model (`claude-haiku-4-5`) — not written inline by the main session. The orchestrator session plans, reviews, and integrates; implementation is delegated to the Haiku subagent.
+**Binding:** all code writing/editing MUST be dispatched to a Haiku subagent (`model: haiku`); the main session plans/reviews/integrates and verifies subagent output before commit. Non-code work (planning, research, docs, git/PR, review, editing memory) stays on main. Exception only on explicit operator instruction — never assumed.
 
-- **Default**: for any code-writing/editing task, spawn a subagent with `model: haiku`.
-- **Exception**: only when the operator explicitly directs otherwise (e.g. "do it inline", "use Sonnet/Opus for this"). Explicit operator instruction only — never assumed.
-- **Scope**: applies to code. Non-coding work (planning, research, docs, git/PR orchestration, review) stays on the main session.
+Canonical policy + rationale: DomI [`.claude/policies/coding-dispatch.md`](https://github.com/domattioli/DomI/blob/main/.claude/policies/coding-dispatch.md) (governance authority; #83). This is the binding summary.

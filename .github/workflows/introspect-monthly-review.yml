@@ -1,12 +1,12 @@
+# DomI-managed workflow (spec-010 v3) — DO NOT EDIT IN THIS REPO.
+# Source: domattioli/DomI templates/workflows/introspect-monthly-review.yml @ v1 — edit upstream, then sync.
+# Drift: sync-from-domi session gate + DomI notify-downstream sync issues.
+# Template body embedded (consumers cannot read private DomI from Actions).
 name: Introspect Monthly Review
-
-# Self-sustaining monthly cadence for the introspect skill (DomI #120, follow-up to #9).
-# Opens one dated "introspect skill monthly review" issue from the skill's template.
-# Idempotent: skips if an open issue for the current month already exists.
 
 on:
   schedule:
-    - cron: '0 0 1 * *'   # 00:00 UTC on the 1st of each month
+    - cron: '0 0 1 * *'
   workflow_dispatch:
 
 permissions:
@@ -17,23 +17,17 @@ jobs:
   open-review-issue:
     name: Open monthly introspect review issue
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-
       - name: Open or skip monthly review issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TEMPLATE: skills/introspect/templates/monthly-review.md
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
           MONTH="$(date -u +%Y-%m)"
-          TITLE="chore: introspect skill monthly review — ${MONTH}"
-
-          if [ ! -f "${TEMPLATE}" ]; then
-            echo "::error::template ${TEMPLATE} missing"
-            exit 1
-          fi
+          TITLE="chore: introspect monthly review — ${MONTH}"
 
           EXISTING="$(gh issue list --state open --search "in:title \"${TITLE}\"" --json number --jq '.[0].number // empty')"
           if [ -n "${EXISTING}" ]; then
@@ -41,10 +35,23 @@ jobs:
             exit 0
           fi
 
-          BODY="$(sed "s/{{MONTH}}/${MONTH}/g" "${TEMPLATE}")"
+          BODY="$(printf '%s\n' \
+            "# introspect — monthly review (${MONTH})" \
+            "" \
+            "Recurring per-repo review of the introspection corpus. Keep it useful, not unbounded. Tracks DomI #120." \
+            "" \
+            "## Checklist" \
+            "" \
+            "- [ ] Scan \`docs/introspections/*.md\` entries since last review. Record count + date range." \
+            "- [ ] Prune stale/duplicate lessons. List each pruned entry (file + reason). None → say so." \
+            "- [ ] Recurring pain across entries → route to a DomI \`request: skill\` issue via request-from-domi." \
+            "- [ ] Confirm CLAUDE.md lessons still match real behavior. Fix drift in same PR." \
+            "" \
+            "## Outcome" \
+            "" \
+            "<2-4 line summary: corpus count, prunes, pains routed, drift fixes.>" \
+            "" \
+            "---" \
+            "_Auto-opened monthly. Close after the checklist lands. Model-authored follow-ups carry the standard \`[model:…, repo:…, session:…]\` footer._")"
 
-          gh issue create \
-            --title "${TITLE}" \
-            --body "${BODY}" \
-            --label "type: chore" \
-            --label "priority: someday"
+          gh issue create --title "${TITLE}" --body "${BODY}" --label "type: chore" --label "priority: someday"
