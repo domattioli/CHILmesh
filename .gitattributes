@@ -1,4 +1,12 @@
-# Exclude Claude-specific files from source distributions (git archive, PyPI sdist, Zenodo).
-# Keeps .claude/ off PyPI wheels and Zenodo snapshots without removing from the repo.
-.claude/  export-ignore
-CLAUDE.md export-ignore
+# Exclude Claude/agent + dev-process files from source archives
+# (git archive, PyPI sdist, GitHub release tarball, Zenodo snapshot).
+# Strictly library-running code ships downstream; these stay in the repo.
+.claude/             export-ignore
+CLAUDE.md            export-ignore
+AGENTS.md            export-ignore
+.specify/            export-ignore
+.planning/           export-ignore
+specs/               export-ignore
+docs/sessions/       export-ignore
+docs/introspections/ export-ignore
+.domi-pin            export-ignore
