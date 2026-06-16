@@ -5,7 +5,7 @@ import chilmesh
 
 
 class TestADMESHMetadataAccuracy:
-    """Test that admesh_metadata() returns accurate, ADMESH-Domains-compatible values."""
+    """Test that admesh_metadata() returns accurate, Valence-compatible values."""
 
     @pytest.mark.parametrize("fixture_name", ["annulus", "donut", "block_o", "structured", "quad_2x2"])
     def test_metadata_completeness(self, fixture_name):

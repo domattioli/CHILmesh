@@ -2,7 +2,7 @@
 
 **Version:** 2.0 (revised for CHILmesh v1.0.0)
 **CHILmesh Version:** 1.0.0+
-**Target Projects:** MADMESHR, ADMESH, ADMESH-Domains
+**Target Projects:** MADMESHR, ADMESH, Valence
 
 ---
 
@@ -173,7 +173,7 @@ print(f"Mean quality: {report['mean']:.3f}")
 print(f"Poor elements: {report['poor_count']}")
 ```
 
-### ADMESH-Domains Quick Start
+### Valence Quick Start
 
 #### Before (v0.1.1)
 ```python
@@ -406,7 +406,7 @@ report = adapter.get_mesh_quality_report()
 angle_summary = adapter.get_element_angles_summary()
 ```
 
-### ADMESH-Domains: Domain Decomposition
+### Valence: Domain Decomposition
 
 **Relevant CAI Methods:**
 ```python
@@ -435,7 +435,7 @@ Include:
 - Python version: `python --version`
 - Minimal reproducible example
 - Full error traceback
-- Downstream project name (MADMESHR/ADMESH/ADMESH-Domains)
+- Downstream project name (MADMESHR/ADMESH/Valence)
 
 Report at: https://github.com/domattioli/CHILmesh/issues
 
@@ -443,7 +443,7 @@ Report at: https://github.com/domattioli/CHILmesh/issues
 
 ## Version Compatibility
 
-| CHILmesh | MADMESHR | ADMESH | ADMESH-Domains | Notes |
+| CHILmesh | MADMESHR | ADMESH | Valence | Notes |
 |----------|----------|--------|----------------|-------|
 | 0.1.1    | ✅ Legacy | ✅ Legacy | ✅ Legacy | Old version, still works |
 | 0.2.0    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Current, use this |
@@ -479,7 +479,7 @@ None required. Migration completely optional.
 See `examples/` directory for complete working examples:
 - `madmeshr_refinement.py` - MADMESHR mesh adaptation workflow
 - `admesh_quality.py` - ADMESH quality assessment
-- `admesh_domains_setup.py` - ADMESH-Domains domain initialization
+- `admesh_domains_setup.py` - Valence domain initialization
 
 ---
 

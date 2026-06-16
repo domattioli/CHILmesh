@@ -2,7 +2,7 @@
   "chilmesh_version": "0.4.1",
   "python": "3.11.15",
   "os": "Linux x86_64",
-  "mesh": "/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14",
+  "mesh": "/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14",
   "init": {
     "fast_init_s": 1.2139215900000409,
     "full_init_s": 4.567989638999961,

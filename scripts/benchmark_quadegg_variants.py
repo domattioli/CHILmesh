@@ -24,7 +24,7 @@ from chilmesh import CHILmesh
 
 BACKENDS = ['edgemap', 'halfedge', 'quadegg']
 OPERATIONS = ['fast_init', 'full_init', 'quality_analysis', 'query_latency']
-WNAT_HAGEN_PATH = "/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14"
+WNAT_HAGEN_PATH = "/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14"
 
 
 def measure_operation(op_name: str, op_fn, n_trials: int = 2) -> Tuple[float, float, float]:

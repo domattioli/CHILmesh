@@ -61,7 +61,7 @@ success = mesh.write_to_fort14("output.fort.14", grid_name="My Mesh")
 #### `from_admesh_domain(record, compute_layers: bool = True) -> CHILmesh`
 **Stability:** Stable | **Complexity:** O(n log n)
 
-Load mesh from ADMESH-Domains catalog record (duck-typed).
+Load mesh from Valence catalog record (duck-typed).
 
 ---
 
