@@ -2,7 +2,7 @@
 
 **Version:** 1.2.2
 **Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers) — continental-scale ADCIRC mesh from the [Valence](https://github.com/domattioli/Valence) registry.
-**Parity reference mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers) — the largest mesh at which the MATLAB/Octave baseline is re-run.
+**Parity reference mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers) — retained as the historical cross-language baseline.
 
 > **Reproduce:** every number below regenerates from the committed harness —
 > `python scripts/benchmark.py --matlab` (Octave column needs `octave` on PATH;
@@ -39,24 +39,26 @@ incomplete (#163). Absolute times are machine-dependent.
 ## v1.2.2 — cross-language at continental scale (EasternPacific_ENPAC2003, medians)
 
 Medians of three runs, single machine, chilmesh 1.2.2, via
-`python scripts/benchmark_all_backends.py EasternPacific_ENPAC2003.14`. The mesh
-(272,913 vertices, 531,680 elements, 804,728 edges) is ~5× WNAT_Hagen — the
-largest single-domain mesh profiled cross-language to date.
+`python scripts/benchmark.py --matlab --mesh EasternPacific_ENPAC2003.14 --max-elements 600000`
+(`octave` on PATH for the MATLAB column). The mesh (272,913 vertices, 531,680
+elements, 804,728 edges) is ~5× WNAT_Hagen — the largest single-domain mesh
+profiled cross-language to date.
 
-| Stage | Python | C++ | C++ speedup |
+| Stage | MATLAB (Octave) | Python | C++ |
 |---|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 2.533 s | 0.670 s | 3.8× |
-| Skeletonization only | 11.401 s | 0.633 s | 18.0× |
-| Full init (adj + skeletonization) | 13.917 s | 1.288 s | 10.8× |
-| Quality analysis | 347 ms | 7 ms | ~50× |
+| Fast init (adj, no skeletonization) | 2.504 s | 2.533 s | 0.670 s |
+| Skeletonization only | 13.026 s | 11.401 s | 0.633 s |
+| Full init (adj + skeletonization) | 16.608 s | 13.917 s | 1.288 s |
+| Quality analysis | 75 ms | 347 ms | 7 ms |
 
-`n_layers = 75` on Python and C++ (parity ✅, asserted bit-identical by
-`tests/test_backend_equivalence.py`). The MATLAB/Octave column is absent: Octave
-is not installed in this environment, and the original `src/@CHILmesh` interpreter
-cost is prohibitive at 272k vertices — cross-language parity against the
-MATLAB/Octave baseline stays pinned at WNAT scale (above). The C++ full-init lead
-widens from ~15× at WNAT scale to a still-dominant 10.8× here; skeletonization,
-the medial-axis layer peel, holds an 18.0× lead. Absolute times are
+`n_layers = 75` on all three backends (parity ✅, asserted bit-identical by
+`tests/test_backend_equivalence.py`). The original `src/@CHILmesh` class runs
+under GNU Octave 8.4 fed in-memory arrays (its `textscan` fort.14 reader is
+Octave-incompatible and excluded); its `sparse()`-accumulated adjacency and
+vectorized (`ismember`/`unique`) layer peel keep it within ~20% of pure-Python on
+initialization — the heavy work lands in compiled built-ins, not the interpreter.
+C++ leads throughout: ~13× over Octave and 10.8× over Python on full init, ~20×
+over Octave on skeletonization, the medial-axis layer peel. Absolute times are
 machine-dependent.
 
 ---
