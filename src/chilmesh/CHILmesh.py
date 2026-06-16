@@ -17,7 +17,7 @@ from copy import deepcopy
 __all__ = ['CHILmesh', 'write_fort14']
 
 # One-time warn state for the source-install pure-Python perf gap (#202).
-# When no compiled C++/Rust backend is present, skeletonization runs the
+# When no compiled C++/Rust backend is present, layerization runs the
 # pure-Python path. It is linear in element count (~1s per 60k elems;
 # Block_O ~5k elems is ~0.2s) — slower than the compiled backend but not
 # catastrophic. Warn once, only for large meshes where the gap is material.
@@ -35,18 +35,18 @@ class CHILmesh(CHILmeshPlotMixin):
 
     Key Features:
     - Element Types: Triangles, quads, and mixed-element meshes (padded convention)
-    - Fast Init: Optional skeletonization for <2s bulk loading (compute_layers=False)
+    - Fast Init: Optional layerization for <2s bulk loading (compute_layers=False)
     - Metadata: Node count, element count, element type, bounding box (Valence compatible)
     - Entry Point: CHILmesh.from_admesh_domain() for catalog integration (duck-typed, zero deps)
     - File I/O: Read ADCIRC `.fort.14` and SMS `.2dm` formats; roundtrip lossless
-    - Analysis: Layers (skeletonization), element quality, interior angles
+    - Analysis: Layers (concentric layer peel), element quality, interior angles
 
     Based on the MATLAB CHILmesh class from the Computational Hydrodynamics &
     Informatics Laboratory (CHIL) at The Ohio State University, focusing on the
     mesh layers approach described in Mattioli's thesis.
 
-    Layer Structure (Skeletonization):
-        After initialization, the mesh is decomposed into concentric layers via skeletonization.
+    Layer Structure (Layerization):
+        After initialization, the mesh is decomposed into concentric layers via layerization.
         Access layers via the ``layers`` property (or ``Layers`` for backwards compatibility):
 
         - mesh.layers['OE'][i]: Array of **element indices** in the outer boundary of layer i
@@ -121,7 +121,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
     def elements_in_layer(self, layer_idx: int) -> np.ndarray:
         """
-        Get all element indices for a given skeletonization layer.
+        Get all element indices for a given layerization layer.
 
         This is a convenience method that returns the union of outer and inner
         elements for the specified layer.
@@ -162,7 +162,7 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             elem_ids: Indices of elements to include. May contain duplicates; the
                 method deduplicates internally. Must be non-empty.
-            compute_layers: Whether to skeletonize the sub-mesh (default: True).
+            compute_layers: Whether to layerize the sub-mesh (default: True).
                 Forwarded to :class:`CHILmesh` constructor.
             compute_adjacencies: Whether to build adjacency dicts on the sub-mesh.
                 ``None`` tracks ``compute_layers``. See :meth:`__init__`.
@@ -187,7 +187,7 @@ class CHILmesh(CHILmeshPlotMixin):
               sub-mesh when their partner element falls outside the selection.
 
         Example:
-            >>> # Extract the outermost skeletonization layer as its own mesh.
+            >>> # Extract the outermost layerization layer as its own mesh.
             >>> outer = mesh.submesh(mesh.elements_in_layer(0))
             >>> outer.n_elems
             42
@@ -248,8 +248,8 @@ class CHILmesh(CHILmeshPlotMixin):
             connectivity: Element connectivity list (n_elems × 3 for triangles, n_elems × 4 for quads/mixed)
             points: Vertex coordinates (n_verts × 3, with z=0 for 2D meshes)
             grid_name: Name of the mesh
-            compute_layers: If False, skip skeletonization for fast init (default: True).
-                Skeletonization requires adjacencies, so when True, adjacencies are
+            compute_layers: If False, skip layerization for fast init (default: True).
+                Layerization requires adjacencies, so when True, adjacencies are
                 always built regardless of ``compute_adjacencies``.
             compute_adjacencies: Whether to build adjacency dicts (Vert2Edge, Vert2Elem,
                 Edge2Vert, Edge2Elem, Elem2Edge, EdgeMap). If None (default), tracks
@@ -257,7 +257,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 with ``compute_layers=False`` to obtain a mesh with usable adjacency
                 queries (``get_vertex_edges``, ``edge2vert``, ``boundary_edges`` etc.)
                 but no layer sweep — useful when downstream consumers need topology
-                without paying the skeletonization cost (#134).
+                without paying the layerization cost (#134).
             seed_boundary_kinds: When provided, layer-0 peeling seeds only from boundary
                 edges whose nodes belong to segments with a matching ``kind`` value
                 (``'open'`` or ``'flow'``). ``None`` (default) uses all boundary edges
@@ -276,13 +276,13 @@ class CHILmesh(CHILmeshPlotMixin):
                 on large meshes. (#204)
 
         Attributes set during initialization:
-            layers (dict): Skeletonization result with keys:
+            layers (dict): Layerization result with keys:
                 - 'OE': List of arrays (outer elements per layer, **element indices**)
                 - 'IE': List of arrays (inner elements per layer, **element indices**)
                 - 'OV': List of arrays (outer vertices per layer, **vertex indices**)
                 - 'IV': List of arrays (inner vertices per layer, **vertex indices**)
                 - 'bEdgeIDs': List of arrays (boundary edges per layer, **edge indices**)
-            n_layers (int): Number of skeletonization layers
+            n_layers (int): Number of layerization layers
         """
         # Public properties
         self.grid_name = grid_name
@@ -340,12 +340,12 @@ class CHILmesh(CHILmeshPlotMixin):
         """Initialize the mesh properties.
 
         Parameters:
-            compute_layers: If False, skip skeletonization (default: True)
+            compute_layers: If False, skip layerization (default: True)
             compute_adjacencies: If False, skip adjacency dict construction (default: True).
                 Cannot be False when ``compute_layers`` is True — caller is responsible
                 for that consistency (enforced in ``__init__``).
-            seed_boundary_kinds: Forwarded to ``_skeletonize``; see ``__init__`` docs. (#129)
-            seed_ibtypes: Forwarded to ``_skeletonize``; see ``__init__`` docs. (#129)
+            seed_boundary_kinds: Forwarded to ``_layerize``; see ``__init__`` docs. (#129)
+            seed_ibtypes: Forwarded to ``_layerize``; see ``__init__`` docs. (#129)
             build_spatial_indices: If False, skip spatial index build (default: True). (#204)
             validate: If False, skip adjacency validation (default: True). (#204)
         """
@@ -380,7 +380,7 @@ class CHILmesh(CHILmeshPlotMixin):
                     if not (CPP_AVAILABLE or RUST_AVAILABLE):
                         _SLOW_PATH_WARNED = True
                         warnings.warn(
-                            f"chilmesh: skeletonizing a {self.n_elems}-element mesh "
+                            f"chilmesh: layerizing a {self.n_elems}-element mesh "
                             "on the pure-Python backend (no compiled C++/Rust extension "
                             "found). The pure-Python path is linear in element count "
                             "(~1s per 60k elements) but slower than the compiled backend; "
@@ -391,7 +391,7 @@ class CHILmesh(CHILmeshPlotMixin):
                             UserWarning,
                             stacklevel=2,
                         )
-                self._skeletonize(
+                self._layerize(
                     seed_boundary_kinds=seed_boundary_kinds,
                     seed_ibtypes=seed_ibtypes,
                 )
@@ -913,8 +913,8 @@ class CHILmesh(CHILmeshPlotMixin):
                 metadata changed without geometry shifts.
 
         Notes:
-            - Does NOT recompute skeletonization layers. If the topology
-              change altered the peel structure, also call ``_skeletonize()``
+            - Does NOT recompute layerization layers. If the topology
+              change altered the peel structure, also call ``_layerize()``
               or invalidate layers separately.
             - Preserves ``grid_name``, ``type``, and other metadata.
         """
@@ -943,7 +943,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Vectorized over all elements. For padded triangles (``[v0,v1,v2,v0]``)
         the repeated column is included in the mean — exactly matching the
-        prior per-element loop (bit-identical) — so layer / skeleton behaviour
+        prior per-element loop (bit-identical) — so layer / layerization behaviour
         is unchanged.
         """
         n_cols = self.connectivity_list.shape[1]
@@ -1106,9 +1106,13 @@ class CHILmesh(CHILmeshPlotMixin):
             )
         return np.unique(np.concatenate([seg["nodes"] for seg in matching]))
 
-    def _skeletonize(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> None:
+    def _layerize(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> None:
         """
-        Skeletonize the mesh by iteratively peeling concentric layers inward.
+        Layerize the mesh by iteratively peeling concentric layers inward.
+
+        Peels the mesh into concentric layers (``OE``/``IE``/``OV``/``IV``).
+        This approximates but is distinct from the geometric medial axis and
+        from a topological skeleton (see issue #221).
 
         Faithful Python port of the MATLAB ``meshLayers`` function.  Each
         iteration of layer ``iL`` produces:
@@ -1154,7 +1158,7 @@ class CHILmesh(CHILmeshPlotMixin):
         while np.any(edge2elem_work >= 0):
             if iL > max_layers:
                 raise RuntimeError(
-                    f"_skeletonize did not converge: exceeded max layer count "
+                    f"_layerize did not converge: exceeded max layer count "
                     f"({max_layers}). The layer peel is not shrinking the active "
                     f"element set, indicating a malformed or non-manifold mesh."
                 )
@@ -1224,6 +1228,8 @@ class CHILmesh(CHILmeshPlotMixin):
             iL += 1
 
         self.n_layers = iL
+
+    _skeletonize = _layerize  # backward-compat alias; this op is layerization, not skeletonization (see #221)
 
     def get_layer( self, layer_idx: int ) -> Dict[str, np.ndarray]:
         """
@@ -1416,7 +1422,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Parameters:
             full_file_name: Path to the .msh file
-            compute_layers: If False, skip skeletonization for fast init (default: False)
+            compute_layers: If False, skip layerization for fast init (default: False)
             compute_adjacencies: See ``CHILmesh.__init__``. If None (default), tracks
                 ``compute_layers``.
 
@@ -2325,7 +2331,7 @@ class CHILmesh(CHILmeshPlotMixin):
             record: An object with ``.connectivity`` and ``.points`` attributes,
                 or a ``type`` and ``filename`` attribute for file-based loading.
                 Optionally ``.grid_name`` (str) for naming the mesh.
-            compute_layers: If False, skip skeletonization for fast init.
+            compute_layers: If False, skip layerization for fast init.
             compute_adjacencies: Forwarded to the file reader / constructor. (#192)
 
         Returns:
@@ -2416,7 +2422,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Parameters:
             filename: Input file path.
-            compute_layers: If False, skip skeletonization for fast init.
+            compute_layers: If False, skip layerization for fast init.
             compute_adjacencies: Forwarded to the reader. (#192)
 
         Returns:
@@ -2460,7 +2466,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Parameters:
             filename: Path to the 2dm file.
-            compute_layers: If False, skip skeletonization for fast init.
+            compute_layers: If False, skip layerization for fast init.
             compute_adjacencies: See :meth:`read_from_fort14`. (#192)
 
         Returns:
@@ -2533,7 +2539,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Parameters:
             filename: Path to the fort.14 file.
-            compute_layers: If False, skip skeletonization for fast init.
+            compute_layers: If False, skip layerization for fast init.
             compute_adjacencies: Whether to build adjacency dicts. ``None``
                 (default) tracks ``compute_layers``; set True with
                 ``compute_layers=False`` for a fast adjacency-only load, or
@@ -2633,10 +2639,10 @@ class CHILmesh(CHILmeshPlotMixin):
         if compute_layers:
             compute_adjacencies = True
 
-        # Now run adjacencies + skeletonization with segments in place.
+        # Now run adjacencies + layerization with segments in place.
         if compute_layers:
             mesh._build_adjacencies()
-            mesh._skeletonize()
+            mesh._layerize()
         elif compute_adjacencies:
             mesh._build_adjacencies()
         mesh._build_spatial_indices()

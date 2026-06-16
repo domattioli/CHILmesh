@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
+  <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → layerized" width="720">
 </p>
 
 <h1 align="center">CHILmesh</h1>
@@ -89,7 +89,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 - **Fast** — C++ backend full-inits the 531,680-element ENPAC2003 mesh in ~1.4 s — 8.6× over pure Python (up to ~15× on smaller meshes)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — Balendran direct FEM, Zhou-Shimada angle-based, and ADMESH Spring-Based Truss
-- **Analysis** — element quality, interior angles, layer-based skeletonization (medial axis)
+- **Analysis** — element quality, interior angles, layer-based decomposition (layerize)
 - **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS Aquaveo](https://www.aquaveo.com/sms) `.2dm` read/write
 - **Spatial queries** — point-in-element, k-nearest vertices, radius search at O(log n)
 - **Mesh alterations** — advancing-front element addition (`add_advancing_front_element`), coordinate moves; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
@@ -101,16 +101,16 @@ Reference workload: **EasternPacific_ENPAC2003** — 272,913 vertices · 531,680
 
 | Stage | MATLAB (Octave) ‡ | Python | C++ | Rust |
 |---|---:|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 2.738 s | 6.454 s | 0.769 s | tbd |
-| Skeletonization only | 12.771 s | 5.814 s | 0.669 s | tbd |
-| Full init (adj + skeletonization) | 16.677 s | 12.300 s | 1.438 s | tbd |
+| Fast init (adj, no layerize) | 2.738 s | 6.454 s | 0.769 s | tbd |
+| Layerize only | 12.771 s | 5.814 s | 0.669 s | tbd |
+| Full init (adj + layerize) | 16.677 s | 12.300 s | 1.438 s | tbd |
 | Quality (signed area) | 75 ms | 51 ms | 7 ms | tbd |
 
 Like-for-like: every backend runs the same operation on the same in-memory arrays. No fort.14 parse, signed-area quality. All resolve `n_layers = 75`; Python↔C++ layers are bit-identical ([`test_backend_equivalence.py`](tests/test_backend_equivalence.py)).
 
 - **C++ leads every stage** — full init 8.6× over Python, 11.6× over Octave.
 - **Octave builds adjacency 2.4× faster than Python** — `sparse()`-accumulated, in compiled built-ins.
-- **Python skeletonizes 2.2× faster than Octave** — ~26% ahead on full init overall.
+- **Python layerizes 2.2× faster than Octave** — ~26% ahead on full init overall.
 - **Rust pending** (`tbd`) — skeletonization incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
 
 ‡ Octave 8.4, interpreter. Times are in-memory compute only — fort.14 parse and rendering excluded. Machine-dependent. Full method: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
@@ -132,7 +132,7 @@ Like-for-like: every backend runs the same operation on the same in-memory array
 | Quality (signed area) | 41 ms | over 531,680 elements |
 | Render | 11.49 s | `plot()` → PNG; dominates wall-clock |
 
-The timed stage is **layerization** — `_skeletonize` peels the mesh into 75 concentric layers (`OE`/`IE`/`OV`/`IV`). Medial-axis extraction and a signed-distance field are related but distinct operations: the layers approximate the medial axis, and no distance transform is computed today. At this scale rendering, not topology, is the wall-clock bottleneck.
+The timed stage is **layerization** — `_layerize` peels the mesh into 75 concentric layers (`OE`/`IE`/`OV`/`IV`). Medial-axis extraction and a signed-distance field are related but distinct operations: the layers approximate the medial axis, and no distance transform is computed today. At this scale rendering, not topology, is the wall-clock bottleneck.
 
 <p align="center">
   <img src="docs/gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
@@ -142,7 +142,7 @@ The timed stage is **layerization** — `_skeletonize` peels the mesh into 75 co
 
 ### Validation
 
-All three backends produce identical `n_layers` (skeletonization) across the Valence catalog, 557 → 273k vertices. Same connectivity and points in; only layering compared.
+All three backends produce identical `n_layers` (layerize) across the Valence catalog, 557 → 273k vertices. Same connectivity and points in; only layering compared.
 
 | Mesh | Vertices | Elements | MATLAB | Python | C++ | Match |
 |---|--:|--:|--:|--:|--:|:--:|
@@ -224,7 +224,7 @@ CHILmesh treats the mesh as a **graph**: vertices, edges, and elements are nodes
 |---|---|---|
 | Edge lookup / dedup | **O(1)** | `EdgeMap` hash (was O(n²) pre-v0.2 — the 937× init speedup) |
 | Adjacency build | **O(n log n)** | vectorized `np.unique` / argsort |
-| Layerization (`_skeletonize`) | **O(n)** | concentric layer peel, ~1 s / 60k elems in Python; ~15× faster in C++ |
+| Layerization (`_layerize`) | **O(n)** | concentric layer peel, ~1 s / 60k elems in Python; ~15× faster in C++ |
 | Spatial query (`find_element`, `nearest_vertices`) | **O(log n)** | `cKDTree` |
 | Vertex valence / 1-ring | **O(1) + O(degree)** | dict lookup |
 
