@@ -607,3 +607,22 @@ class TestSmootherIntegration:
 
         # Should not raise
         mesh_copy.smooth_mesh(method="fem", acknowledge_change=True)
+
+
+def test_smooth_mesh_sdf_method():
+    # donut fixture is triangular (annulus geometry: outer R=1, inner r=0.3)
+    m = examples.donut()
+    n_elems_before = m.n_elems
+    sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
+    out = m.smooth_mesh('sdf', acknowledge_change=True, sdf=sdf)
+    assert isinstance(out, np.ndarray)
+    assert out.shape[1] in (2, 3)
+    assert m.n_elems > 0
+    # mesh stays usable after the in-place rebuild
+    q, ang, stats = m.elem_quality()
+    assert np.isfinite(stats['mean'])
+
+
+def test_smooth_mesh_sdf_requires_sdf():
+    with pytest.raises(ValueError):
+        examples.donut().smooth_mesh('sdf', acknowledge_change=True)
