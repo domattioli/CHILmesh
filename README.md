@@ -32,16 +32,14 @@
 - [Why CHILmesh](#why-chilmesh)
 - [Installation](#installation)
 - [Quick start](#quick-start)
-- [Pipeline](#pipeline)
 - [Performance](#performance)
-- [Examples](examples)
+- [Examples](#examples)
 - [Citation](#citation)
 - [Contributing](#contributing) · [Documentation](#documentation) · [License](#license)
 
 ## Status & Roadmap
 
-**Current status (June 2026): Stable and actively-maintained.
-** ++ half-edge backend (~15× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm I/O; mixed-element support.
+**Current status (June 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm I/O; mixed-element support.
 
 - **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)); Full mutation suite ([#94](https://github.com/domattioli/CHILmesh/issues/94)).
 - **Next:** performance optimization; parallelization; conda-forge packaging;  mkdocs API site
@@ -54,7 +52,7 @@
 **The stable backbone for hydrodynamic mesh generation & tooling.**
 
 - **Pythonic API** — `from chilmesh import Mesh`; backwards-compatible `CHILmesh` alias preserved.
-- **C++ acceleration, bit-identical output** — half-edge extension is **~15× faster than pure Python** on full init, verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
+- **C++ acceleration, bit-identical output** — half-edge extension is **up to ~15× faster than pure Python** on full init (8.6× on the 272k-element ENPAC mesh below), verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
 - **One interface for all topologies** — triangles, quadrilaterals, and mixed meshes share the same call surface.
 - **Stable v1.x API** — downstream projects can pin `chilmesh>=1.0,<2`.
 
@@ -94,7 +92,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 - **Analysis** — element quality, interior angles, layer-based skeletonization (medial axis)
 - **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS Aquaveo](https://www.aquaveo.com/sms) `.2dm` read/write
 - **Spatial queries** — point-in-element, k-nearest vertices, radius search at O(log n)
-- **Mesh alterations** — `insert_vertex`, coord moves, advancing-front element addition; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
+- **Mesh alterations** — advancing-front element addition (`add_advancing_front_element`), coordinate moves; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
 - **Valence integration** — `from_admesh_domain()` adapter
 
 ### Performance
@@ -153,7 +151,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 
 ### Backends
 
-`pip install chilmesh` gives you the pure-Python implementation — zero compiled dependencies, runs everywhere, and is the canonical reference every other backend is validated against. The C++ extension is the high-performance opt-in: same algorithms, bit-identical output, ~15× faster on full init.
+`pip install chilmesh` gives you the pure-Python implementation — zero compiled dependencies, runs everywhere, and is the canonical reference every other backend is validated against. The C++ extension is the high-performance opt-in: same algorithms, bit-identical output, up to ~15× faster on full init.
 
 | Language | Role | How to get it |
 |---|---|---|
@@ -168,7 +166,7 @@ import chilmesh
 chilmesh.backend_info()
 # {'available': ['cpp', 'python'],
 #  'selected': 'cpp',
-#  'versions': {'cpp': '0.6.0.dev0', 'python': '1.1.0'}}
+#  'versions': {'cpp': '0.6.0.dev0', 'python': '1.2.2'}}
 ```
 
 Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
@@ -216,7 +214,7 @@ CHILmesh originated in MATLAB as the data structure backing a skeletonization-dr
                quadrilateral, and mixed-element grids},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {1.1.0},
+  version   = {1.2.2},
   doi       = {10.5281/zenodo.20263854},
   url       = {https://github.com/domattioli/CHILmesh}
 }
