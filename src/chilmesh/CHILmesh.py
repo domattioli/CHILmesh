@@ -1612,15 +1612,25 @@ class CHILmesh(CHILmeshPlotMixin):
         # Invalidate spatial indices after moving points
         self._build_spatial_indices()
 
-    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *kwargs) -> np.ndarray:
+    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *kwargs, sdf=None, size_fn=None) -> np.ndarray:
         """
         Perform mesh smoothing using a modified FEM-based approach.
 
         Parameters:
-            method: Smoothing method ('FEM','angle-based')
+            method: Smoothing method ('FEM','angle-based','sdf')
+                'sdf': spring-based truss optimization against a signed-distance
+                function (ADMESH warm-start). Requires sdf=<callable>; triangle-only;
+                rebuilds the mesh (geometry + topology).
             acknowledge_change: If True, acknowledges the change in the mesh
         """
         assert acknowledge_change, "acknowledge_change must be True to change mesh -- this will change the mesh, make sure you understand this before using this method within a broader algorithm."
+        if method.lower() == 'sdf':
+            if sdf is None:
+                raise ValueError("method='sdf' requires sdf=<callable>")
+            from .admesh_warmstart import optimize_with_admesh_truss
+            optimized = optimize_with_admesh_truss(self, sdf, size_fn=size_fn)
+            self.__dict__.update(optimized.__dict__)
+            return self.points
         if method.lower() == 'fem':
             new_points = self.direct_smoother( *kwargs )
         elif method.lower() == 'angle-based':

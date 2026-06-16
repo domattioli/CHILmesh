@@ -42,7 +42,7 @@
 **Current status (June 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm I/O; mixed-element support.
 
 - **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)); Full mutation suite ([#94](https://github.com/domattioli/CHILmesh/issues/94)).
-- **Next:** performance optimization; parallelization; conda-forge packaging;  mkdocs API site
+- **Next:** performance optimization; parallelization; conda-forge packaging; mkdocs API site; native `.chil` file format
 - **Future:** formal integration within a unified ecoystem including <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMiAyMSBMMTIgMiBMMjIgMjEgWiBNMTIgMiBMNyAyMSBNMTIgMiBMMTcgMjEgTTcgMjEgTDEyIDEyIEwxNyAyMSBNMTIgMTIgTDEyIDIiLz48L3N2Zz4=" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0iTTMgNCBIMjEgTTMgMTIgSDIxIE0zIDIwIEgyMSBNNCAzIFYyMSBNMTIgMyBWMjEgTTIwIDMgVjIxIi8%2BPC9zdmc%2B" alt="QuADMESH PyPI version"></a>
 
 ---
@@ -86,7 +86,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 
 ## Features
 
-- **Fast** — C++ backend does full init + quality analysis on a 98,365-element mesh in ~0.11 s (~15× faster than pure Python)
+- **Fast** — C++ backend full-inits the 531,680-element ENPAC2003 mesh in ~1.4 s — 8.6× over pure Python (up to ~15× on smaller meshes)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — Balendran direct FEM, Zhou-Shimada angle-based, and ADMESH Spring-Based Truss
 - **Analysis** — element quality, interior angles, layer-based skeletonization (medial axis)
@@ -121,6 +121,19 @@ Like-for-like: every backend runs the same operation on the same in-memory array
   <sub><em><strong>Figure 1.</strong> Scale demo on EasternPacific_ENPAC2003 (272,913 vertices · 531,680 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_enpac_showcase.py</code>.</em></sub>
 </p>
 
+**Full Python pipeline** (ENPAC2003, single machine, medians of 3) — the end-to-end cost the cross-language table omits, including I/O and rendering:
+
+| Stage | Time | Engine |
+|---|---:|---|
+| fort.14 parse | 2.11 s | file → arrays |
+| Adjacency build | 5.26 s | `EdgeMap` hash, O(1) edge lookup |
+| Layerize | 5.03 s | concentric layer peel → 75 layers |
+| Spatial index | 0.29 s | `cKDTree` (vertex + centroid) |
+| Quality (signed area) | 41 ms | over 531,680 elements |
+| Render | 11.49 s | `plot()` → PNG; dominates wall-clock |
+
+The timed stage is **layerization** — `_skeletonize` peels the mesh into 75 concentric layers (`OE`/`IE`/`OV`/`IV`). Medial-axis extraction and a signed-distance field are related but distinct operations: the layers approximate the medial axis, and no distance transform is computed today. At this scale rendering, not topology, is the wall-clock bottleneck.
+
 ### Validation
 
 All three backends produce identical `n_layers` (skeletonization) across the Valence catalog, 557 → 273k vertices. Same connectivity and points in; only layering compared.
@@ -139,6 +152,20 @@ All three backends produce identical `n_layers` (skeletonization) across the Val
 | Great Lakes | 132,162 | 250,905 | 46 | 46 | 46 | ✅ |
 | EasternPacific_ENPAC2003 | 272,913 | 531,680 | 75 | 75 | 75 | ✅ |
 
+### Quality metrics
+
+Element and connectivity quality on ENPAC2003 (531,680 mostly-triangular elements):
+
+| Metric | Value | Call |
+|---|---:|---|
+| Angular skew — mean / min | 0.875 / 0.15 | `elem_quality()` |
+| Min interior angle — worst / per-elem mean | 8.98° / 52.5° | `interior_angles()` |
+| Aspect ratio — mean / min | 0.972 / 0.081 | `element_quality(metric='aspect_ratio')` |
+| Irregular interior vertices (valence ≠ 6) | 3.9% | `adjacencies['Vert2Elem']` degree |
+| Mean interior valence | 6.0 | — |
+
+Skew and aspect ratio apply to triangles and quads; valence regularity compares each interior vertex against its ideal degree (6 for triangles, 4 for quads), so the irregular-vertex fraction flags topological defects independent of geometry.
+
 ### Smoothing
 
 Three algorithms — each preserves boundary nodes, leaves topology unchanged, and accepts mixed-element meshes.
@@ -147,7 +174,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 |---|---|---|---|
 | **[Balendran direct FEM](https://www.researchgate.net/publication/221561841_A_Direct_Smoothing_Method_for_Surface_Meshes)** | `smooth_mesh(method='fem')` | One-shot sparse solve | General-purpose default; stable on tri/quad/mixed |
 | **[Zhou-Shimada angle-based](https://www.researchgate.net/publication/221561796_An_Angle-Based_Approach_to_Two-Dimensional_Mesh_Smoothing/citations)** | `smooth_mesh(method='angle-based')` | Iterative, angle-maximising | Difficult mixed meshes where FEM stalls |
-| **[ADMESH Spring-Based Truss](https://doi.org/10.1007/s10236-012-0574-0)** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, ...)` | Spring/force relaxation against SDF | Quality gains with SDF-respecting boundary nodes |
+| **[ADMESH Spring-Based Truss](https://doi.org/10.1007/s10236-012-0574-0)** | `smooth_mesh(method='sdf', sdf=...)` | Spring/force relaxation against SDF | Quality gains with SDF-respecting boundary nodes (triangle-only) |
 
 ### Backends
 
@@ -170,6 +197,32 @@ chilmesh.backend_info()
 ```
 
 Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
+
+### Engine
+
+CHILmesh treats the mesh as a **graph**: vertices, edges, and elements are nodes, and the adjacency tables are the edges between them. `_build_adjacencies` assembles seven tables once; every query, smoother, and the layerizer then reads them in constant or linear time.
+
+| Table | Shape | Maps |
+|---|---|---|
+| `Elem2Vert` | (n_elems, 3\|4) | element → vertices |
+| `Edge2Vert` | (n_edges, 2) | edge → endpoints (canonical) |
+| `Elem2Edge` | (n_elems, 3\|4) | element → edges |
+| `Edge2Elem` | (n_edges, 2) | edge → elements (−1 = boundary) |
+| `Vert2Edge` | dict[int → set] | vertex → incident edges |
+| `Vert2Elem` | dict[int → set] | vertex → incident elements |
+| `EdgeMap` | hash | (v₀, v₁) → edge id |
+
+**Complexities** (n = element count):
+
+| Operation | Cost | How |
+|---|---|---|
+| Edge lookup / dedup | **O(1)** | `EdgeMap` hash (was O(n²) pre-v0.2 — the 937× init speedup) |
+| Adjacency build | **O(n log n)** | vectorized `np.unique` / argsort |
+| Layerization (`_skeletonize`) | **O(n)** | concentric layer peel, ~1 s / 60k elems in Python; ~15× faster in C++ |
+| Spatial query (`find_element`, `nearest_vertices`) | **O(log n)** | `cKDTree` |
+| Vertex valence / 1-ring | **O(1) + O(degree)** | dict lookup |
+
+The C++ half-edge backend reproduces these tables bit-for-bit — `n_layers` parity holds across both backends (see [Performance](#performance)).
 
 ### Examples
 
