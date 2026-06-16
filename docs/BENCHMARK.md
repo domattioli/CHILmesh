@@ -49,7 +49,12 @@ profiled cross-language to date.
 | Fast init (adj, no skeletonization) | 2.504 s | 2.533 s | 0.670 s |
 | Skeletonization only | 13.026 s | 11.401 s | 0.633 s |
 | Full init (adj + skeletonization) | 16.608 s | 13.917 s | 1.288 s |
-| Quality analysis | 75 ms | 347 ms | 7 ms |
+| Quality analysis § | 75 ms | 347 ms | 7 ms |
+
+§ The quality row is not like-for-like: Python times `elem_quality(quality_type='skew')`
+(full skew metric); Octave `signedArea()` and C++ `quality_analysis()`
+(`mesh.signed_areas()`) time signed area only. Two operations across three
+numbers — reconciliation tracked in [#216](https://github.com/domattioli/CHILmesh/issues/216).
 
 `n_layers = 75` on all three backends (parity ✅, asserted bit-identical by
 `tests/test_backend_equivalence.py`). The original `src/@CHILmesh` class runs
