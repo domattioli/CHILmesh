@@ -10,35 +10,53 @@
 
 <p align="center">
   <strong><a href="https://scholar.google.com/citations?user=IBFSkOcAAAAJ&hl=en">Dominik Mattioli</a><sup>1†</sup>, <a href="https://scholar.google.com/citations?user=mYPzjIwAAAAJ&hl=en">Ethan Kubatko</a><sup>2</sup></strong><br>
-  <sup>†</sup>Corresponding author | <sup>1</sup>Unaffiliated | <sup>2</sup>Ohio State University (CHIL)
+  <sup>†</sup>Corresponding author | <sup>1</sup>Unaffiliated | <sup>2</sup>Ohio State University (<a href="https://ceg.osu.edu/computational-hydrodynamics-and-informatics-laboratory"><img src="https://img.shields.io/badge/The CHIL-a7b1b7?labelColor=ba0c2f&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iNCIgeT0iMiIgd2lkdGg9IjE2IiBoZWlnaHQ9IjIwIiByeD0iNyIgZmlsbD0iI2ZmZmZmZiIvPjxyZWN0IHg9IjguNSIgeT0iNyIgd2lkdGg9IjciIGhlaWdodD0iMTAiIHJ4PSIzIiBmaWxsPSIjYmEwYzJmIi8+PC9zdmc+" alt="The CHIL"></a>)
 </p>
+
+<p align="center">
+  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?logo=python&logoColor=white&color=orange" alt="PyPI"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+"></a>
+  <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
+  <a href="https://github.com/domattioli/CHILmesh/issues"><img src="https://img.shields.io/github/issues/domattioli/CHILmesh.svg" alt="Open issues"></a>
+  <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20263854-blue" alt="DOI"></a>
+  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License"></a>
+</p>
+
+> **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>
 
 ---
 
-## Badges
+## Table of Contents
 
-<p align="center">
-  <a href="https://ceg.osu.edu/computational-hydrodynamics-and-informatics-laboratory"><img src="https://img.shields.io/badge/CHIL%20Lab%20@%20OSU-a7b1b7?logo=academia&logoColor=ba0c2f&labelColor=ba0c2f" alt="CHIL Lab @ OSU"></a>
-  <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
-  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?logo=python&logoColor=white&color=blue" alt="PyPI"></a>
-  <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/pyversions/chilmesh" alt="Python Versions"></a>
-  <a href="https://doi.org/10.5281/zenodo.20263854"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20263854-blue" alt="DOI"></a>
-  <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>
-  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License"></a>
-</p>
+- [Status & roadmap](#status--roadmap)
+- [Why CHILmesh](#why-chilmesh)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Pipeline](#pipeline)
+- [Performance](#performance)
+- [Examples](examples)
+- [Citation](#citation)
+- [Contributing](#contributing) · [Documentation](#documentation) · [License](#license)
+
+## Status & Roadmap
+
+**Current status (June 2026): Stable and actively-maintained.
+** ++ half-edge backend (~15× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm I/O; mixed-element support.
+
+- **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)); Full mutation suite ([#94](https://github.com/domattioli/CHILmesh/issues/94)).
+- **Next:** performance optimization; parallelization; conda-forge packaging;  mkdocs API site
+- **Future:** formal integration within a unified ecoystem including <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMiAyMSBMMTIgMiBMMjIgMjEgWiBNMTIgMiBMNyAyMSBNMTIgMiBMMTcgMjEgTTcgMjEgTDEyIDEyIEwxNyAyMSBNMTIgMTIgTDEyIDIiLz48L3N2Zz4=" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0iTTMgNCBIMjEgTTMgMTIgSDIxIE0zIDIwIEgyMSBNNCAzIFYyMSBNMTIgMyBWMjEgTTIwIDMgVjIxIi8%2BPC9zdmc%2B" alt="QuADMESH PyPI version"></a>
 
 ---
 
 ## Why CHILmesh
 
-**The stable backbone for hydrodynamic mesh tooling.** Sibling projects [ADMESH](https://github.com/domattioli/ADMESH), [Valence](https://github.com/domattioli/Valence), and [QuADMesh](https://github.com/domattioli/QuADMesh) build on top of it.
+**The stable backbone for hydrodynamic mesh generation & tooling.**
 
 - **Pythonic API** — `from chilmesh import Mesh`; backwards-compatible `CHILmesh` alias preserved.
 - **C++ acceleration, bit-identical output** — half-edge extension is **~15× faster than pure Python** on full init, verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
 - **One interface for all topologies** — triangles, quadrilaterals, and mixed meshes share the same call surface.
-- **Stable v1.x API** — sibling projects can pin `chilmesh>=1.0,<2`.
-
-> **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on [MathWorks](https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh/files/src/@CHILmesh/CHILmesh.m).
+- **Stable v1.x API** — downstream projects can pin `chilmesh>=1.0,<2`.
 
 ---
 
@@ -83,14 +101,14 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 
 Reference workload: EasternPacific_ENPAC2003 (272,913 vertices · 531,680 elements · 804,728 edges · 75 layers), a continental-scale ADCIRC mesh from the [Valence](https://github.com/domattioli/Valence) registry. Medians of three runs, single machine, chilmesh 1.2.2. The C++ extension and the pure-Python backend are output-equivalent — both resolve `n_layers = 75`, with bit-identical skeletonization layers verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
 
-| Stage | MATLAB (Octave) ‡ | Python | C++ |
-|---|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 2.738 s | 6.454 s | 0.769 s |
-| Skeletonization only | 12.771 s | 5.814 s | 0.669 s |
-| Full init (adj + skeletonization) | 16.677 s | 12.300 s | 1.438 s |
-| Quality (signed area) | 75 ms | 51 ms | 7 ms |
+| Stage | MATLAB (Octave) ‡ | Python | C++ | Rust |
+|---|---:|---:|---:|---:|
+| Fast init (adj, no skeletonization) | 2.738 s | 6.454 s | 0.769 s | tbd |
+| Skeletonization only | 12.771 s | 5.814 s | 0.669 s | tbd |
+| Full init (adj + skeletonization) | 16.677 s | 12.300 s | 1.438 s | tbd |
+| Quality (signed area) | 75 ms | 51 ms | 7 ms | tbd |
 
-Every stage times the **same operation on the same in-memory `(connectivity, points)` arrays** — adjacency build, skeletonization, full init (adjacency + skeletonization), and signed-area quality — and all three backends resolve `n_layers = 75` (parity ✅; the Python↔C++ skeletonization layers are bit-identical, verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py)). **C++ leads every stage** — full init 8.6× faster than Python and 11.6× faster than Octave (12.300 s / 16.677 s → 1.438 s). The two interpreted backends split the initialization work: Octave's `sparse()`-accumulated adjacency builds 2.4× faster than Python's (2.738 s vs 6.454 s), while Python's skeletonization — the medial-axis layer peel — runs 2.2× faster than Octave's (5.814 s vs 12.771 s), leaving Python ~26% ahead on full init overall. ‡ MATLAB measured under GNU Octave 8.4 (interpreter, not MATLAB JIT). All four stages measure in-memory compute only on identical arrays — fort.14 parsing (`textscan`) and mesh rendering (`patch`/`trisurf`) are outside the comparison, though both dominate interactive use at this scale. Rust is excluded — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+Every stage times the **same operation on the same in-memory `(connectivity, points)` arrays** — adjacency build, skeletonization, full init (adjacency + skeletonization), and signed-area quality — and all three backends resolve `n_layers = 75` (parity ✅; the Python↔C++ skeletonization layers are bit-identical, verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py)). **C++ leads every stage** — full init 8.6× faster than Python and 11.6× faster than Octave (12.300 s / 16.677 s → 1.438 s). The two interpreted backends split the initialization work: Octave's `sparse()`-accumulated adjacency builds 2.4× faster than Python's (2.738 s vs 6.454 s), while Python's skeletonization — the medial-axis layer peel — runs 2.2× faster than Octave's (5.814 s vs 12.771 s), leaving Python ~26% ahead on full init overall. ‡ MATLAB measured under GNU Octave 8.4 (interpreter, not MATLAB JIT). All four stages measure in-memory compute only on identical arrays — fort.14 parsing (`textscan`) and mesh rendering (`patch`/`trisurf`) are outside the comparison, though both dominate interactive use at this scale. Rust is pending — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)), so its column reads `tbd`. Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
 <p align="center">
   <img src="docs/gallery/enpac2003_showcase.png?v=1" alt="EasternPacific_ENPAC2003 quality plot and distribution">
@@ -122,14 +140,9 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 
 | Algorithm | API call | Style | Best for |
 |---|---|---|---|
-| **Balendran direct FEM** | `smooth_mesh(method='fem')` | One-shot sparse solve | General-purpose default; stable on tri/quad/mixed |
-| **Zhou-Shimada angle-based** | `smooth_mesh(method='angle-based')` | Iterative, angle-maximising | Difficult mixed meshes where FEM stalls |
-| **ADMESH Spring-Based Truss** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, ...)` | Spring/force relaxation against SDF | Quality gains with SDF-respecting boundary nodes |
-
-**References:**
-- Balendran (1999). *A direct smoothing method for surface meshes.* Proc. 8th IMR, pp. 189–193.
-- Zhou & Shimada (2000). *An angle-based approach to two-dimensional mesh smoothing.* Proc. 9th IMR, pp. 373–384.
-- Conroy et al. (2012). *ADMESH: An advanced, automatic unstructured mesh generator for shallow water models.* [doi:10.1007/s10236-012-0574-0](https://doi.org/10.1007/s10236-012-0574-0).
+| **[Balendran direct FEM](https://www.researchgate.net/publication/221561841_A_Direct_Smoothing_Method_for_Surface_Meshes)** | `smooth_mesh(method='fem')` | One-shot sparse solve | General-purpose default; stable on tri/quad/mixed |
+| **[Zhou-Shimada angle-based](https://www.researchgate.net/publication/221561796_An_Angle-Based_Approach_to_Two-Dimensional_Mesh_Smoothing/citations)** | `smooth_mesh(method='angle-based')` | Iterative, angle-maximising | Difficult mixed meshes where FEM stalls |
+| **[ADMESH Spring-Based Truss](https://doi.org/10.1007/s10236-012-0574-0)** | `chilmesh.optimize_with_admesh_truss(mesh, sdf, ...)` | Spring/force relaxation against SDF | Quality gains with SDF-respecting boundary nodes |
 
 ### Backends
 
@@ -175,30 +188,6 @@ Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 ---
 
-## Ecosystem
-
-CHILmesh is the core engine for the ADCIRC mesh ecosystem. Sibling projects build on it; CHILmesh depends on none of them.
-
-| Repo | Role |
-|---|---|
-| [ADMESH](https://github.com/domattioli/ADMESH) | Unstructured triangle mesh generator; consumes CHILmesh for adjacency, smoothing, and quality analysis |
-| [Valence](https://github.com/domattioli/Valence) | Curated ADCIRC mesh registry; `Mesh.from_admesh_domain()` reads from it directly |
-| [QuADMesh](https://github.com/domattioli/QuADMesh) | Quad mesh generator (MATLAB → Python port, in progress); CHILmesh data structure descends from the original QuADMesh+ |
-| [MADMESHing](https://github.com/domattioli/MADMESHing) | Benchmark harness comparing ADMESH triangulation vs quad generators; uses CHILmesh for quality analysis |
-
-*[DomI](https://github.com/domattioli/DomI) provides dev-session skills and governance infrastructure for all repos.*
-
----
-
-## Status & Roadmap
-
-- **Shipped (v1.1.0)**: C++ half-edge backend (~15× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm I/O; mixed-element support.
-- **In flight**: Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows) · Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)) · Full mutation suite ([#94](https://github.com/domattioli/CHILmesh/issues/94))
-- **Next**: conda-forge packaging · mkdocs API site · advancing-front element mutation
-
-Open issues: [github.com/domattioli/CHILmesh/issues](https://github.com/domattioli/CHILmesh/issues)
-
----
 
 ## Documentation
 
@@ -211,8 +200,8 @@ Open issues: [github.com/domattioli/CHILmesh/issues](https://github.com/domattio
 
 ## Citation
 
-CHILmesh originated in MATLAB as the data structure backing a skeletonization-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc [thesis](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf), 2017). This Python library is the actively-developed successor.
-
+CHILmesh originated in MATLAB as the data structure backing a skeletonization-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc Thesis, 2017) <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf">
+    <img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis"></a>
 ```bibtex
 @software{mattioli_chilmesh,
   author    = {Mattioli, Dominik O. and Kubatko, Ethan J.},
@@ -226,7 +215,7 @@ CHILmesh originated in MATLAB as the data structure backing a skeletonization-dr
 }
 ```
 
-**MATLAB source (Mattioli, 2017).** [Read thesis (PDF)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
+**Thesis source (Mattioli, 2017).** [Read thesis (PDF)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 ```bibtex
 @mastersthesis{mattioli2017quadmesh,
@@ -249,4 +238,4 @@ Issues and PRs welcome at [github.com/domattioli/CHILmesh](https://github.com/do
 
 ## License
 
-**Noncommercial / research use only.** Licensed under the PolyForm Noncommercial License 1.0.0 **with an additional No-AI/ML-training restriction** — see [LICENSE](LICENSE) and [.claude/AI-USAGE.md](.claude/AI-USAGE.md). No commercial use and no use as AI/ML training data without a separate written license. Commercial or AI-training licenses: domburner@duck.com
+**Noncommercial / research use only.** Licensed under the PolyForm Noncommercial License 1.0.0 **with an additional No-AI/ML-training restriction** — see [LICENSE](LICENSE) and [.claude/AI-USAGE.md](.claude/AI-USAGE.md). No commercial use and no use as AI/ML training data without a separate written license. Commercial or AI-training licenses: [https://github.com/domattioli](https://github.com/domattioli)
