@@ -137,7 +137,7 @@ The timed stage is **layerization** — `_layerize` peels the mesh into 75 conce
 <p align="center">
   <img src="docs/gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
   <br>
-  <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh layerizes). Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
+  <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh layerizes). Full write-up: <a href="docs/CONCEPTS.md">docs/CONCEPTS.md</a>. Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
 </p>
 
 ### Validation
@@ -257,6 +257,7 @@ Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 - [`docs/API.md`](docs/API.md) — full API reference
 - [`docs/BENCHMARK.md`](docs/BENCHMARK.md) — benchmark methodology and raw data
+- [`docs/CONCEPTS.md`](docs/CONCEPTS.md) — distance vs medial axis vs skeleton vs layers (definitions, algorithms, math, synonyms)
 - [`tests/TESTING.md`](tests/TESTING.md) — test guide (pytest markers, local commands)
 - [`examples/`](examples/) — runnable scripts (quickstart, fort.14 round-trip, smoothing, spatial queries)
 
