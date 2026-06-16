@@ -44,27 +44,30 @@ Medians of three runs, single machine, chilmesh 1.2.2, via
 elements, 804,728 edges) is ~5× WNAT_Hagen — the largest single-domain mesh
 profiled cross-language to date.
 
+All three backends time the **same operation on the same in-memory
+`(connectivity, points)` arrays** for every row — `_build_adjacencies` (fast
+init), `_skeletonize` (skeletonization), the two combined (full init), and
+`signed_area` (quality). No backend reads the fort.14 file inside the timed
+region.
+
 | Stage | MATLAB (Octave) | Python | C++ |
 |---|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 2.504 s | 2.533 s | 0.670 s |
-| Skeletonization only | 13.026 s | 11.401 s | 0.633 s |
-| Full init (adj + skeletonization) | 16.608 s | 13.917 s | 1.288 s |
-| Quality analysis § | 75 ms | 347 ms | 7 ms |
+| Fast init (adj, no skeletonization) | 2.738 s | 6.454 s | 0.769 s |
+| Skeletonization only | 12.771 s | 5.814 s | 0.669 s |
+| Full init (adj + skeletonization) | 16.677 s | 12.300 s | 1.438 s |
+| Quality (signed area) | 75 ms | 51 ms | 7 ms |
 
-§ The quality row is not like-for-like: Python times `elem_quality(quality_type='skew')`
-(full skew metric); Octave `signedArea()` and C++ `quality_analysis()`
-(`mesh.signed_areas()`) time signed area only. Two operations across three
-numbers — reconciliation tracked in [#216](https://github.com/domattioli/CHILmesh/issues/216).
-
-`n_layers = 75` on all three backends (parity ✅, asserted bit-identical by
-`tests/test_backend_equivalence.py`). The original `src/@CHILmesh` class runs
-under GNU Octave 8.4 fed in-memory arrays (its `textscan` fort.14 reader is
-Octave-incompatible and excluded); its `sparse()`-accumulated adjacency and
-vectorized (`ismember`/`unique`) layer peel keep it within ~20% of pure-Python on
-initialization — the heavy work lands in compiled built-ins, not the interpreter.
-C++ leads throughout: ~13× over Octave and 10.8× over Python on full init, ~20×
-over Octave on skeletonization, the medial-axis layer peel. Absolute times are
-machine-dependent.
+`n_layers = 75` on all three backends (parity ✅, Python↔C++ layers asserted
+bit-identical by `tests/test_backend_equivalence.py`). **C++ leads every stage** —
+full init 8.6× over Python and 11.6× over Octave. The two interpreted backends
+split the initialization work: Octave's `sparse()`-accumulated adjacency builds
+2.4× faster than Python's (2.738 s vs 6.454 s — `sparse`/`sort` are compiled
+built-ins), while Python's skeletonization runs 2.2× faster than Octave's
+(5.814 s vs 12.771 s), so Python finishes full init ~26% ahead of Octave. With
+the quality row now signed-area on every backend, Python (51 ms) edges out Octave
+(75 ms); the earlier 4.6× "Python slower" gap was an apples-to-oranges artifact
+of timing Python's skew metric against the others' signed area (#216, resolved).
+Absolute times are machine-dependent.
 
 ---
 
