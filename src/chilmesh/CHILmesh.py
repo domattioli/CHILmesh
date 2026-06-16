@@ -29,14 +29,14 @@ class CHILmesh(CHILmeshPlotMixin):
     A 2D mesh class supporting triangular, quadrilateral, and mixed-element meshes.
 
     Supports multiple file formats (ADCIRC `.fort.14`, SMS `.2dm`) and integrates
-    with ADMESH-Domains catalog. Provides mesh analysis (layer structure, element
+    with Valence catalog. Provides mesh analysis (layer structure, element
     quality, interior angles), geometric operations (smoothing), and fast metadata
     queries for bulk loading.
 
     Key Features:
     - Element Types: Triangles, quads, and mixed-element meshes (padded convention)
     - Fast Init: Optional skeletonization for <2s bulk loading (compute_layers=False)
-    - Metadata: Node count, element count, element type, bounding box (ADMESH-Domains compatible)
+    - Metadata: Node count, element count, element type, bounding box (Valence compatible)
     - Entry Point: CHILmesh.from_admesh_domain() for catalog integration (duck-typed, zero deps)
     - File I/O: Read ADCIRC `.fort.14` and SMS `.2dm` formats; roundtrip lossless
     - Analysis: Layers (skeletonization), element quality, interior angles
@@ -84,7 +84,7 @@ class CHILmesh(CHILmeshPlotMixin):
         >>> elem_ids = mesh.edge2elem(edge_id)
 
     Examples:
-        Load from ADMESH-Domains catalog:
+        Load from Valence catalog:
             mesh = CHILmesh.from_admesh_domain(record)
 
         Fast metadata query:
@@ -1992,14 +1992,6 @@ class CHILmesh(CHILmeshPlotMixin):
         original sizing. For size-respecting smoothing, supply anisotropic
         targets (not yet implemented) or run a separate sizing pass afterward.
 
-        Note (size-field behavior, #168): this smoother is **isotropic**. The
-        Balendran stiffness targets a uniform equilateral triangle (60 deg) /
-        square quad (90 deg) and takes **no size-field input** — it equalizes
-        element *shape*, not *size*. Applied to a graded mesh it grows fine
-        (e.g. coastal) edges and shrinks coarse (offshore) edges, eroding the
-        original sizing. For size-respecting smoothing, supply anisotropic
-        targets (not yet implemented) or run a separate sizing pass afterward.
-
         Parameters:
             kinf: Large stiffness value for fixed (pinned) vertices.
             freeze_quad_nodes: When True, pin every vertex that is a corner of any
@@ -2270,9 +2262,9 @@ class CHILmesh(CHILmeshPlotMixin):
 
     def admesh_metadata(self) -> dict:
         """
-        Return a metadata dictionary compatible with the ADMESH-Domains catalog schema.
+        Return a metadata dictionary compatible with the Valence catalog schema.
 
-        The returned dict contains all fields that ADMESH-Domains expects from a
+        The returned dict contains all fields that Valence expects from a
         mesh record: node count, element count, element type, and bounding box.
         Designed to be callable on a ``compute_layers=False`` mesh for fast bulk
         loading.
@@ -2307,7 +2299,7 @@ class CHILmesh(CHILmeshPlotMixin):
     @classmethod
     def from_admesh_domain(cls, record: object, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
         """
-        Construct a CHILmesh from an ADMESH-Domains catalog record.
+        Construct a CHILmesh from an Valence catalog record.
 
         The catalog record is duck-typed: any object with ``connectivity``
         (ndarray, n_elems × 3|4) and ``points`` (ndarray, n_verts × 2|3)
@@ -2341,7 +2333,7 @@ class CHILmesh(CHILmeshPlotMixin):
             if not filepath.exists():
                 raise FileNotFoundError(
                     f"File not found: {filepath}. "
-                    "If using ADMESH-Domains, call mesh_record.load() first."
+                    "If using Valence, call mesh_record.load() first."
                 )
 
             record_type = getattr(record, "type", None)

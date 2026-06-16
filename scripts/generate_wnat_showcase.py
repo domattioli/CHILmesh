@@ -8,7 +8,7 @@ WNAT_Hagen is not bundled with the wheel. Configure its path via:
 
 - ``--mesh /path/to/WNAT_Hagen.14``, or
 - environment variable ``WNAT_HAGEN_PATH``, or
-- ADMESH-Domains catalog at ``/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14``.
+- Valence catalog at ``/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14``.
 
 If none of those resolve, falls back to the largest bundled fixture
 (``block_o``) so the script always produces an image; caption in the
@@ -30,8 +30,8 @@ def _candidate_paths() -> list[Path]:
     env = os.environ.get("WNAT_HAGEN_PATH")
     if env:
         out.append(Path(env))
-    out.append(Path("/tmp/admesh-domains/registry_data/meshes/WNAT_Hagen.14"))
-    out.append(Path.home() / "admesh-domains/registry_data/meshes/WNAT_Hagen.14")
+    out.append(Path("/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14"))
+    out.append(Path.home() / "valence-domains/registry_data/meshes/WNAT_Hagen.14")
     return out
 
 
