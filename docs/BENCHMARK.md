@@ -1,7 +1,8 @@
 # CHILmesh Performance Benchmarks
 
-**Version:** 1.1.0
-**Reference Mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers)
+**Version:** 1.2.2
+**Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers) — continental-scale ADCIRC mesh from the [Valence](https://github.com/domattioli/Valence) registry.
+**Parity reference mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers) — retained as the historical cross-language baseline.
 
 > **Reproduce:** every number below regenerates from the committed harness —
 > `python scripts/benchmark.py --matlab` (Octave column needs `octave` on PATH;
@@ -32,6 +33,41 @@ class under GNU Octave 8.4 (interpreter, not MATLAB JIT); Python's
 skeletonization now beats Octave, with adjacency build (pure-Python loops) the
 remaining gap; C++ leads throughout. Rust is excluded — its skeletonization is
 incomplete (#163). Absolute times are machine-dependent.
+
+---
+
+## v1.2.2 — cross-language at continental scale (EasternPacific_ENPAC2003, medians)
+
+Medians of three runs, single machine, chilmesh 1.2.2, via
+`python scripts/benchmark.py --matlab --mesh EasternPacific_ENPAC2003.14 --max-elements 600000`
+(`octave` on PATH for the MATLAB column). The mesh (272,913 vertices, 531,680
+elements, 804,728 edges) is ~5× WNAT_Hagen — the largest single-domain mesh
+profiled cross-language to date.
+
+All three backends time the **same operation on the same in-memory
+`(connectivity, points)` arrays** for every row — `_build_adjacencies` (fast
+init), `_skeletonize` (skeletonization), the two combined (full init), and
+`signed_area` (quality). No backend reads the fort.14 file inside the timed
+region.
+
+| Stage | MATLAB (Octave) | Python | C++ |
+|---|---:|---:|---:|
+| Fast init (adj, no skeletonization) | 2.738 s | 6.454 s | 0.769 s |
+| Skeletonization only | 12.771 s | 5.814 s | 0.669 s |
+| Full init (adj + skeletonization) | 16.677 s | 12.300 s | 1.438 s |
+| Quality (signed area) | 75 ms | 51 ms | 7 ms |
+
+`n_layers = 75` on all three backends (parity ✅, Python↔C++ layers asserted
+bit-identical by `tests/test_backend_equivalence.py`). **C++ leads every stage** —
+full init 8.6× over Python and 11.6× over Octave. The two interpreted backends
+split the initialization work: Octave's `sparse()`-accumulated adjacency builds
+2.4× faster than Python's (2.738 s vs 6.454 s — `sparse`/`sort` are compiled
+built-ins), while Python's skeletonization runs 2.2× faster than Octave's
+(5.814 s vs 12.771 s), so Python finishes full init ~26% ahead of Octave. With
+the quality row now signed-area on every backend, Python (51 ms) edges out Octave
+(75 ms); the earlier 4.6× "Python slower" gap was an apples-to-oranges artifact
+of timing Python's skew metric against the others' signed area (#216, resolved).
+Absolute times are machine-dependent.
 
 ---
 
@@ -69,6 +105,7 @@ STOFS-2D-Global mesh (24.9M elems, 1.73 GB) remains out-of-environment.
 | WNAT_Hagen | 52,774 | 98,365 | 1.07 s | 332 ms | 30 | 37.5 s (3 it) |
 | WNAT_Onur | 127,572 | 246,186 | 6.87 s | (incl.) | 39 | 32.6 s |
 | Great_Lakes | 132,162 | 250,905 | 7.03 s | (incl.) | 46 | — |
+| EasternPacific_ENPAC2003 | 272,913 | 531,680 | 13.92 s | 11.40 s | 75 | — _(skipped: >--max-elements gate)_ |
 
 WNAT_Hagen full lifecycle (FEM direct smoother 4.38 s + angle smoother 37.5 s,
 3 iters each) completes in ~45 s end-to-end — the first full-lifecycle run on a

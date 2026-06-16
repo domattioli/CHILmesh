@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Benchmark all backends (Python, Rust, C++) on WNAT_Hagen.
 
+.. deprecated::
+    Superseded by ``scripts/benchmark.py --matlab`` for cross-language
+    comparison. This script is NOT like-for-like: its Python path calls
+    ``read_from_fort14`` (includes fort.14 parsing) and ``elem_quality``
+    (skew metric), while its C++ path uses in-memory arrays and signed
+    area — so Python rows are inflated by file I/O and a heavier quality
+    op. Use ``benchmark.py``, which times identical operations on shared
+    ``(connectivity, points)`` arrays across all backends. See #216.
+
 Usage:
     python scripts/benchmark_all_backends.py [MESH_PATH]
 """
