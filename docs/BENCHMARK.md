@@ -1,7 +1,8 @@
 # CHILmesh Performance Benchmarks
 
-**Version:** 1.1.0
-**Reference Mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers)
+**Version:** 1.2.2
+**Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers) — continental-scale ADCIRC mesh from the [Valence](https://github.com/domattioli/Valence) registry.
+**Parity reference mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers) — the largest mesh at which the MATLAB/Octave baseline is re-run.
 
 > **Reproduce:** every number below regenerates from the committed harness —
 > `python scripts/benchmark.py --matlab` (Octave column needs `octave` on PATH;
@@ -32,6 +33,31 @@ class under GNU Octave 8.4 (interpreter, not MATLAB JIT); Python's
 skeletonization now beats Octave, with adjacency build (pure-Python loops) the
 remaining gap; C++ leads throughout. Rust is excluded — its skeletonization is
 incomplete (#163). Absolute times are machine-dependent.
+
+---
+
+## v1.2.2 — cross-language at continental scale (EasternPacific_ENPAC2003, medians)
+
+Medians of three runs, single machine, chilmesh 1.2.2, via
+`python scripts/benchmark_all_backends.py EasternPacific_ENPAC2003.14`. The mesh
+(272,913 vertices, 531,680 elements, 804,728 edges) is ~5× WNAT_Hagen — the
+largest single-domain mesh profiled cross-language to date.
+
+| Stage | Python | C++ | C++ speedup |
+|---|---:|---:|---:|
+| Fast init (adj, no skeletonization) | 2.533 s | 0.670 s | 3.8× |
+| Skeletonization only | 11.401 s | 0.633 s | 18.0× |
+| Full init (adj + skeletonization) | 13.917 s | 1.288 s | 10.8× |
+| Quality analysis | 347 ms | 7 ms | ~50× |
+
+`n_layers = 75` on Python and C++ (parity ✅, asserted bit-identical by
+`tests/test_backend_equivalence.py`). The MATLAB/Octave column is absent: Octave
+is not installed in this environment, and the original `src/@CHILmesh` interpreter
+cost is prohibitive at 272k vertices — cross-language parity against the
+MATLAB/Octave baseline stays pinned at WNAT scale (above). The C++ full-init lead
+widens from ~15× at WNAT scale to a still-dominant 10.8× here; skeletonization,
+the medial-axis layer peel, holds an 18.0× lead. Absolute times are
+machine-dependent.
 
 ---
 
@@ -69,6 +95,7 @@ STOFS-2D-Global mesh (24.9M elems, 1.73 GB) remains out-of-environment.
 | WNAT_Hagen | 52,774 | 98,365 | 1.07 s | 332 ms | 30 | 37.5 s (3 it) |
 | WNAT_Onur | 127,572 | 246,186 | 6.87 s | (incl.) | 39 | 32.6 s |
 | Great_Lakes | 132,162 | 250,905 | 7.03 s | (incl.) | 46 | — |
+| EasternPacific_ENPAC2003 | 272,913 | 531,680 | 13.92 s | 11.40 s | 75 | — _(skipped: >--max-elements gate)_ |
 
 WNAT_Hagen full lifecycle (FEM direct smoother 4.38 s + angle smoother 37.5 s,
 3 iters each) completes in ~45 s end-to-end — the first full-lifecycle run on a

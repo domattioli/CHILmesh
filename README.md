@@ -81,39 +81,26 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 
 ### Performance
 
-Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements · 151,248 edges · 30 layers). v1.1.0 medians, single machine. **Backends are output-equivalent** — the C++ extension produces bit-identical skeletonization layers to Python (`n_layers = 30` on all three), verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
+Reference workload: EasternPacific_ENPAC2003 (272,913 vertices · 531,680 elements · 804,728 edges · 75 layers), a continental-scale ADCIRC mesh from the [Valence](https://github.com/domattioli/Valence) registry. Medians of three runs, single machine, chilmesh 1.2.2. The C++ extension and the pure-Python backend are output-equivalent — both resolve `n_layers = 75`, with bit-identical skeletonization layers verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
 
-| Stage | MATLAB (Octave) ‡ | Python | C++ |
+| Stage | Python | C++ | C++ speedup |
 |---|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 0.27 s | 1.31 s | 0.060 s |
-| Skeletonization only | 0.67 s | 0.32 s | 0.052 s |
-| Full init (adj + skeletonization) | 1.04 s | 1.65 s | 0.112 s |
-| Quality analysis | 12 ms | 6.4 ms | 1.3 ms |
+| Fast init (adj, no skeletonization) | 2.533 s | 0.670 s | 3.8× |
+| Skeletonization only | 11.401 s | 0.633 s | 18.0× |
+| Full init (adj + skeletonization) | 13.917 s | 1.288 s | 10.8× |
+| Quality analysis | 347 ms | 7 ms | ~50× |
 
-**C++ is ~15× faster than Python on full init** (1.65 s → 0.112 s) and ~9× faster than the original Octave implementation. ‡ MATLAB measured under GNU Octave 8.4 (interpreter, not MATLAB JIT) — the original-algorithm baseline, not a MATLAB-vs-Octave claim. Rust is excluded — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
-
-### Performance
-
-Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements · 151,248 edges · 30 layers). v1.1.0 medians, single machine. **Backends are output-equivalent** — the C++ extension produces bit-identical skeletonization layers to Python (`n_layers = 30` on all three), verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
-
-| Stage | MATLAB (Octave) ‡ | Python | C++ |
-|---|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 0.27 s | 1.31 s | 0.060 s |
-| Skeletonization only | 0.67 s | 0.32 s | 0.052 s |
-| Full init (adj + skeletonization) | 1.04 s | 1.65 s | 0.112 s |
-| Quality analysis | 12 ms | 6.4 ms | 1.3 ms |
-
-**C++ is ~15× faster than Python on full init** (1.65 s → 0.112 s) and ~9× faster than the original Octave implementation. ‡ MATLAB measured under GNU Octave 8.4 (interpreter, not MATLAB JIT) — the original-algorithm baseline, not a MATLAB-vs-Octave claim. Rust is excluded — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+**C++ completes full initialization 10.8× faster than Python at continental scale** (13.917 s → 1.288 s), and the medial-axis skeletonization layer peel 18.0× faster (11.401 s → 0.633 s). The original `src/@CHILmesh` Octave implementation is not re-run at 272k vertices — Octave is absent from this environment and the interpreter cost is prohibitive at this scale — so cross-language parity against the MATLAB/Octave baseline remains pinned at WNAT scale by the Validation catalog below and `test_backend_equivalence.py`. Rust is excluded — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
 <p align="center">
-  <img src="docs/gallery/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
+  <img src="docs/gallery/enpac2003_showcase.png?v=1" alt="EasternPacific_ENPAC2003 quality plot and distribution">
   <br>
-  <sub><em><strong>Figure 1.</strong> Scale demo on WNAT_Hagen (52,774 vertices · 98,365 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_wnat_showcase.py</code>.</em></sub>
+  <sub><em><strong>Figure 1.</strong> Scale demo on EasternPacific_ENPAC2003 (272,913 vertices · 531,680 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_enpac_showcase.py</code>.</em></sub>
 </p>
 
 ### Validation
 
-Python, C++, and the original MATLAB/Octave implementation all produce identical `n_layers` (medial-axis skeletonization) across the Valence catalog, from 557 to 132k vertices. Identical connectivity + points are fed to both implementations; only the layering algorithm is compared.
+Python and C++ produce identical `n_layers` (medial-axis skeletonization) across the Valence catalog, from 557 to 273k vertices; the original MATLAB/Octave implementation matches on every mesh through Great Lakes (132k vertices, the largest at which Octave was run). Identical connectivity and points are fed to each implementation; only the layering algorithm is compared.
 
 | Mesh | Vertices | Elements | MATLAB | Python | C++ | Match |
 |---|--:|--:|--:|--:|--:|:--:|
@@ -125,9 +112,11 @@ Python, C++, and the original MATLAB/Octave implementation all produce identical
 | Delaware Bay | 14,449 | 26,698 | 17 | 17 | 17 | ✅ |
 | Delaware Bay (h 100–20000) | 14,449 | 26,697 | 17 | 17 | 17 | ✅ |
 | Lake Michigan | 21,981 | 41,887 | 25 | 25 | 25 | ✅ |
-| WNAT (Hagen) | 52,774 | 98,365 | 30 | 30 | 30 | ✅ |
 | Chesapeake Bay | 83,388 | 160,734 | 55 | 55 | 55 | ✅ |
 | Great Lakes | 132,162 | 250,905 | 46 | 46 | 46 | ✅ |
+| EasternPacific_ENPAC2003 | 272,913 | 531,680 | n/r † | 75 | 75 | ✅ |
+
+<sub>† Octave was not re-run at ENPAC scale (272k vertices); the row reports Python ↔ C++ layer parity. The MATLAB/Octave baseline is verified through Great Lakes (132k).</sub>
 
 ### Smoothing
 
