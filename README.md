@@ -92,6 +92,19 @@ Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements · 151,248 ed
 
 **C++ is ~15× faster than Python on full init** (1.65 s → 0.112 s) and ~9× faster than the original Octave implementation. ‡ MATLAB measured under GNU Octave 8.4 (interpreter, not MATLAB JIT) — the original-algorithm baseline, not a MATLAB-vs-Octave claim. Rust is excluded — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
+### Performance
+
+Reference workload: WNAT_Hagen (52,774 vertices · 98,365 elements · 151,248 edges · 30 layers). v1.1.0 medians, single machine. **Backends are output-equivalent** — the C++ extension produces bit-identical skeletonization layers to Python (`n_layers = 30` on all three), verified by [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py).
+
+| Stage | MATLAB (Octave) ‡ | Python | C++ |
+|---|---:|---:|---:|
+| Fast init (adj, no skeletonization) | 0.27 s | 1.31 s | 0.060 s |
+| Skeletonization only | 0.67 s | 0.32 s | 0.052 s |
+| Full init (adj + skeletonization) | 1.04 s | 1.65 s | 0.112 s |
+| Quality analysis | 12 ms | 6.4 ms | 1.3 ms |
+
+**C++ is ~15× faster than Python on full init** (1.65 s → 0.112 s) and ~9× faster than the original Octave implementation. ‡ MATLAB measured under GNU Octave 8.4 (interpreter, not MATLAB JIT) — the original-algorithm baseline, not a MATLAB-vs-Octave claim. Rust is excluded — its skeletonization is incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Absolute times are machine-dependent; full methodology and the regenerating harness: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+
 <p align="center">
   <img src="docs/gallery/wnat_hagen_showcase.png?v=3" alt="WNAT_Hagen quality plot and distribution">
   <br>
