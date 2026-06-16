@@ -134,6 +134,12 @@ Like-for-like: every backend runs the same operation on the same in-memory array
 
 The timed stage is **layerization** — `_skeletonize` peels the mesh into 75 concentric layers (`OE`/`IE`/`OV`/`IV`). Medial-axis extraction and a signed-distance field are related but distinct operations: the layers approximate the medial axis, and no distance transform is computed today. At this scale rendering, not topology, is the wall-clock bottleneck.
 
+<p align="center">
+  <img src="docs/gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
+  <br>
+  <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh layerizes). Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
+</p>
+
 ### Validation
 
 All three backends produce identical `n_layers` (skeletonization) across the Valence catalog, 557 → 273k vertices. Same connectivity and points in; only layering compared.
