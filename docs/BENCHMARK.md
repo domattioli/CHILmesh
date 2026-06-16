@@ -362,3 +362,52 @@ As of 2026-05-21, Phase 5 is investigating two optimization paths:
 2. **Language Optimization** — Conditional on half-edge showing >2× performance gain; may pursue Rust/C++ bindings in Phase 6.
 
 Current baseline (v0.4.1) serves as the reference for optimization decisions.
+
+---
+
+## ENPAC2003 — full Python pipeline (parse → render)
+
+End-to-end cost including I/O and rendering, which the cross-language table omits. Single machine, medians of 3, chilmesh 1.2.2.
+
+| Stage | Time | Engine |
+|---|---:|---|
+| fort.14 parse | 2.11 s | file → arrays |
+| Adjacency build | 5.26 s | `EdgeMap` hash, O(1) edge lookup |
+| Layerize | 5.03 s | concentric layer peel → 75 layers |
+| Spatial index | 0.29 s | `cKDTree` (vertex + centroid) |
+| Quality (signed area) | 41 ms | over 531,680 elements |
+| Render | 11.49 s | `plot()` → PNG; dominates wall-clock |
+
+The timed compute stage is **layerization** (`_layerize`), distinct from medial axis / skeleton / distance — see [`CONCEPTS.md`](CONCEPTS.md) and [#221](https://github.com/domattioli/CHILmesh/issues/221). At this scale rendering, not topology, is the wall-clock bottleneck.
+
+## Cross-backend layer parity (Valence catalog)
+
+All three backends produce identical `n_layers` (layerize) across the Valence catalog, 557 → 273k vertices. Identical connectivity + points in; only the layering is compared.
+
+| Mesh | Vertices | Elements | MATLAB | Python | C++ | Match |
+|---|--:|--:|--:|--:|--:|:--:|
+| Baranja Hill (ADMESH v2) | 557 | 1,011 | 10 | 10 | 10 | ✅ |
+| Baranja Hill | 645 | 1,193 | 12 | 12 | 12 | ✅ |
+| Wetting/Drying test | 2,716 | 4,978 | 15 | 15 | 15 | ✅ |
+| Lake Erie (refined) | 5,095 | 9,688 | 20 | 20 | 20 | ✅ |
+| Lake Erie (5k) | 13,266 | 24,910 | 17 | 17 | 17 | ✅ |
+| Delaware Bay | 14,449 | 26,698 | 17 | 17 | 17 | ✅ |
+| Delaware Bay (h 100–20000) | 14,449 | 26,697 | 17 | 17 | 17 | ✅ |
+| Lake Michigan | 21,981 | 41,887 | 25 | 25 | 25 | ✅ |
+| Chesapeake Bay | 83,388 | 160,734 | 55 | 55 | 55 | ✅ |
+| Great Lakes | 132,162 | 250,905 | 46 | 46 | 46 | ✅ |
+| EasternPacific_ENPAC2003 | 272,913 | 531,680 | 75 | 75 | 75 | ✅ |
+
+## ENPAC2003 — mesh quality
+
+Element + connectivity quality on ENPAC2003 (531,680 mostly-triangular elements).
+
+| Metric | Value | Call |
+|---|---:|---|
+| Angular skew — mean / min | 0.875 / 0.15 | `elem_quality()` |
+| Min interior angle — worst / per-elem mean | 8.98° / 52.5° | `interior_angles()` |
+| Aspect ratio — mean / min | 0.972 / 0.081 | `element_quality(metric='aspect_ratio')` |
+| Irregular interior vertices (valence ≠ 6) | 3.9% | `adjacencies['Vert2Elem']` degree |
+| Mean interior valence | 6.0 | — |
+
+Skew and aspect ratio apply to triangles and quads; valence regularity compares each interior vertex against its ideal degree (6 for triangles, 4 for quads), so the irregular-vertex fraction flags topological defects independent of geometry.

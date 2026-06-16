@@ -121,56 +121,13 @@ Like-for-like: every backend runs the same operation on the same in-memory array
   <sub><em><strong>Figure 1.</strong> Scale demo on EasternPacific_ENPAC2003 (272,913 vertices · 531,680 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_enpac_showcase.py</code>.</em></sub>
 </p>
 
-**Full Python pipeline** (ENPAC2003, single machine, medians of 3) — the end-to-end cost the cross-language table omits, including I/O and rendering:
-
-| Stage | Time | Engine |
-|---|---:|---|
-| fort.14 parse | 2.11 s | file → arrays |
-| Adjacency build | 5.26 s | `EdgeMap` hash, O(1) edge lookup |
-| Layerize | 5.03 s | concentric layer peel → 75 layers |
-| Spatial index | 0.29 s | `cKDTree` (vertex + centroid) |
-| Quality (signed area) | 41 ms | over 531,680 elements |
-| Render | 11.49 s | `plot()` → PNG; dominates wall-clock |
-
-The timed stage is **layerization** — `_layerize` peels the mesh into 75 concentric layers (`OE`/`IE`/`OV`/`IV`). Medial-axis extraction and a signed-distance field are related but distinct operations: the layers approximate the medial axis, and no distance transform is computed today. At this scale rendering, not topology, is the wall-clock bottleneck.
+Full pipeline cost (parse · adjacency · layerize · spatial-index · quality · render — render dominates), the cross-backend layer-parity catalog (557 → 273k vertices), and mesh-quality metrics: [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Layerization is distinct from medial axis / skeleton / distance — [`docs/CONCEPTS.md`](docs/CONCEPTS.md):
 
 <p align="center">
   <img src="docs/gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
   <br>
   <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh layerizes). Full write-up: <a href="docs/CONCEPTS.md">docs/CONCEPTS.md</a>. Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
 </p>
-
-### Validation
-
-All three backends produce identical `n_layers` (layerize) across the Valence catalog, 557 → 273k vertices. Same connectivity and points in; only layering compared.
-
-| Mesh | Vertices | Elements | MATLAB | Python | C++ | Match |
-|---|--:|--:|--:|--:|--:|:--:|
-| Baranja Hill (ADMESH v2) | 557 | 1,011 | 10 | 10 | 10 | ✅ |
-| Baranja Hill | 645 | 1,193 | 12 | 12 | 12 | ✅ |
-| Wetting/Drying test | 2,716 | 4,978 | 15 | 15 | 15 | ✅ |
-| Lake Erie (refined) | 5,095 | 9,688 | 20 | 20 | 20 | ✅ |
-| Lake Erie (5k) | 13,266 | 24,910 | 17 | 17 | 17 | ✅ |
-| Delaware Bay | 14,449 | 26,698 | 17 | 17 | 17 | ✅ |
-| Delaware Bay (h 100–20000) | 14,449 | 26,697 | 17 | 17 | 17 | ✅ |
-| Lake Michigan | 21,981 | 41,887 | 25 | 25 | 25 | ✅ |
-| Chesapeake Bay | 83,388 | 160,734 | 55 | 55 | 55 | ✅ |
-| Great Lakes | 132,162 | 250,905 | 46 | 46 | 46 | ✅ |
-| EasternPacific_ENPAC2003 | 272,913 | 531,680 | 75 | 75 | 75 | ✅ |
-
-### Quality metrics
-
-Element and connectivity quality on ENPAC2003 (531,680 mostly-triangular elements):
-
-| Metric | Value | Call |
-|---|---:|---|
-| Angular skew — mean / min | 0.875 / 0.15 | `elem_quality()` |
-| Min interior angle — worst / per-elem mean | 8.98° / 52.5° | `interior_angles()` |
-| Aspect ratio — mean / min | 0.972 / 0.081 | `element_quality(metric='aspect_ratio')` |
-| Irregular interior vertices (valence ≠ 6) | 3.9% | `adjacencies['Vert2Elem']` degree |
-| Mean interior valence | 6.0 | — |
-
-Skew and aspect ratio apply to triangles and quads; valence regularity compares each interior vertex against its ideal degree (6 for triangles, 4 for quads), so the irregular-vertex fraction flags topological defects independent of geometry.
 
 ### Smoothing
 
@@ -206,29 +163,7 @@ Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset
 
 ### Engine
 
-CHILmesh treats the mesh as a **graph**: vertices, edges, and elements are nodes, and the adjacency tables are the edges between them. `_build_adjacencies` assembles seven tables once; every query, smoother, and the layerizer then reads them in constant or linear time.
-
-| Table | Shape | Maps |
-|---|---|---|
-| `Elem2Vert` | (n_elems, 3\|4) | element → vertices |
-| `Edge2Vert` | (n_edges, 2) | edge → endpoints (canonical) |
-| `Elem2Edge` | (n_elems, 3\|4) | element → edges |
-| `Edge2Elem` | (n_edges, 2) | edge → elements (−1 = boundary) |
-| `Vert2Edge` | dict[int → set] | vertex → incident edges |
-| `Vert2Elem` | dict[int → set] | vertex → incident elements |
-| `EdgeMap` | hash | (v₀, v₁) → edge id |
-
-**Complexities** (n = element count):
-
-| Operation | Cost | How |
-|---|---|---|
-| Edge lookup / dedup | **O(1)** | `EdgeMap` hash (was O(n²) pre-v0.2 — the 937× init speedup) |
-| Adjacency build | **O(n log n)** | vectorized `np.unique` / argsort |
-| Layerization (`_layerize`) | **O(n)** | concentric layer peel, ~1 s / 60k elems in Python; ~15× faster in C++ |
-| Spatial query (`find_element`, `nearest_vertices`) | **O(log n)** | `cKDTree` |
-| Vertex valence / 1-ring | **O(1) + O(degree)** | dict lookup |
-
-The C++ half-edge backend reproduces these tables bit-for-bit — `n_layers` parity holds across both backends (see [Performance](#performance)).
+CHILmesh is a **graph over the mesh** — seven adjacency tables (built once) back O(1) edge lookup, O(n log n) adjacency build, O(n) layerize, and O(log n) spatial queries. The C++ half-edge backend reproduces them bit-for-bit. Full table + complexities: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Examples
 
