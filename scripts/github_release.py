@@ -125,10 +125,13 @@ def create_release(version: str, repo: str, notes: str) -> Tuple[bool, str]:
     rc, stdout, stderr = run(cmd)
 
     if rc == 0:
-        # Extract URL from output
+        # Extract release URL from output; validate host exactly (no substring match)
+        from urllib.parse import urlparse
         for line in stdout.split('\n'):
-            if 'github.com' in line and 'releases' in line:
-                return True, line.strip()
+            candidate = line.strip()
+            parsed = urlparse(candidate)
+            if parsed.scheme in ('https', 'http') and parsed.netloc == 'github.com' and 'releases' in parsed.path:
+                return True, candidate
         return True, stdout
 
     return False, stderr
