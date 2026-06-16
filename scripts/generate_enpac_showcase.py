@@ -1,14 +1,14 @@
-"""Regenerate ``docs/gallery/wnat_hagen_showcase.png``.
+"""Regenerate ``docs/gallery/enpac2003_showcase.png``.
 
-Top panel: ``plot_quality()`` colormap on the full WNAT_Hagen mesh.
+Top panel: ``plot_quality()`` colormap on the full EasternPacific_ENPAC2003 mesh.
 Bottom panel: ``plot_quality_histogram()`` (100 bins, cool_r-coded
 bars matching the top panel's colormap).
 
-WNAT_Hagen is not bundled with the wheel. Configure its path via:
+EasternPacific_ENPAC2003 is not bundled with the wheel. Configure its path via:
 
-- ``--mesh /path/to/WNAT_Hagen.14``, or
-- environment variable ``WNAT_HAGEN_PATH``, or
-- Valence catalog at ``/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14``.
+- ``--mesh /path/to/EasternPacific_ENPAC2003.14``, or
+- environment variable ``ENPAC_PATH``, or
+- Valence catalog at ``/tmp/valence-domains/registry_data/meshes/EasternPacific_ENPAC2003.14``.
 
 If none of those resolve, falls back to the largest bundled fixture
 (``block_o``) so the script always produces an image; caption in the
@@ -27,11 +27,11 @@ from chilmesh import CHILmesh, examples
 
 def _candidate_paths() -> list[Path]:
     out: list[Path] = []
-    env = os.environ.get("WNAT_HAGEN_PATH")
+    env = os.environ.get("ENPAC_PATH")
     if env:
         out.append(Path(env))
-    out.append(Path("/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14"))
-    out.append(Path.home() / "valence-domains/registry_data/meshes/WNAT_Hagen.14")
+    out.append(Path("/tmp/valence-domains/registry_data/meshes/EasternPacific_ENPAC2003.14"))
+    out.append(Path.home() / "valence-domains/registry_data/meshes/EasternPacific_ENPAC2003.14")
     return out
 
 
@@ -40,9 +40,9 @@ def _resolve_mesh(cli_path: str | None) -> CHILmesh:
         return CHILmesh.read_from_fort14(Path(cli_path))
     for candidate in _candidate_paths():
         if candidate.is_file():
-            print(f"[mesh] using WNAT_Hagen at {candidate}")
+            print(f"[mesh] using EasternPacific_ENPAC2003 at {candidate}")
             return CHILmesh.read_from_fort14(candidate)
-    print("[mesh] WNAT_Hagen not found; falling back to block_o fixture")
+    print("[mesh] EasternPacific_ENPAC2003 not found; falling back to block_o fixture")
     return examples.block_o()
 
 
@@ -50,8 +50,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mesh", help="Path to fort.14 file (overrides discovery)")
     parser.add_argument(
-        "--output", default="docs/gallery/wnat_hagen_showcase.png",
-        help="Output image path (default: docs/gallery/wnat_hagen_showcase.png)",
+        "--output", default="docs/gallery/enpac2003_showcase.png",
+        help="Output image path (default: docs/gallery/enpac2003_showcase.png)",
     )
     parser.add_argument("--bins", type=int, default=100,
                         help="Histogram bin count (default: 100)")

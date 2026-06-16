@@ -130,7 +130,7 @@ void HalfEdgeMesh::build_adjacency() {
     }
 
     // elem2edge: [n_elems, max_vpe]
-    elem2edge.assign(n_elems * max_vpe, -1);
+    elem2edge.assign(static_cast<size_t>(n_elems) * max_vpe, -1);
     for (int e = 0; e < n_elems; ++e) {
         int base_he = face_he[e];
         int k = max_vpe;
