@@ -611,7 +611,7 @@ class TestSmootherIntegration:
 
 def test_smooth_mesh_sdf_method():
     # donut fixture is triangular (annulus geometry: outer R=1, inner r=0.3)
-    m = examples.donut()
+    m = examples.donut().copy()
     n_elems_before = m.n_elems
     sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
     out = m.smooth_mesh('sdf', acknowledge_change=True, sdf=sdf)
@@ -626,3 +626,14 @@ def test_smooth_mesh_sdf_method():
 def test_smooth_mesh_sdf_requires_sdf():
     with pytest.raises(ValueError):
         examples.donut().smooth_mesh('sdf', acknowledge_change=True)
+
+
+def test_smooth_mesh_sdf_preserves_grid_name():
+    """In-place sdf smoothing must preserve the mesh's grid_name (regression:
+    __dict__.update from the unnamed internal truss mesh used to clobber it to
+    None, poisoning fixture-cached meshes shared across tests)."""
+    m = examples.donut().copy()
+    assert m.grid_name == "donut"
+    sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
+    m.smooth_mesh('sdf', acknowledge_change=True, sdf=sdf)
+    assert m.grid_name == "donut", "sdf smoothing dropped grid_name"
