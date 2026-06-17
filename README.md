@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → skeletonized" width="720">
+  <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → layerized" width="720">
 </p>
 
 <h1 align="center">CHILmesh</h1>
@@ -28,12 +28,11 @@
 
 ## Table of Contents
 
-- [Status & roadmap](#status--roadmap)
+- [Status & Roadmap](#status--roadmap)
 - [Why CHILmesh](#why-chilmesh)
 - [Installation](#installation)
 - [Quick start](#quick-start)
-- [Performance](#performance)
-- [Examples](#examples)
+- [Features](#features) — [Performance](#performance) · [Smoothing](#smoothing) · [Backends](#backends) · [Engine](#engine) · [Examples](#examples) · [CLI](#cli)
 - [Citation](#citation)
 - [Contributing](#contributing) · [Documentation](#documentation) · [License](#license)
 
@@ -43,7 +42,7 @@
 
 - **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)); Full mutation suite ([#94](https://github.com/domattioli/CHILmesh/issues/94)).
 - **Next:** performance optimization; parallelization; conda-forge packaging; mkdocs API site; native `.chil` file format
-- **Future:** formal integration within a unified ecoystem including <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMiAyMSBMMTIgMiBMMjIgMjEgWiBNMTIgMiBMNyAyMSBNMTIgMiBMMTcgMjEgTTcgMjEgTDEyIDEyIEwxNyAyMSBNMTIgMTIgTDEyIDIiLz48L3N2Zz4=" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0iTTMgNCBIMjEgTTMgMTIgSDIxIE0zIDIwIEgyMSBNNCAzIFYyMSBNMTIgMyBWMjEgTTIwIDMgVjIxIi8%2BPC9zdmc%2B" alt="QuADMESH PyPI version"></a>
+- **Future:** formal integration within a unified ecosystem including <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMiAyMSBMMTIgMiBMMjIgMjEgWiBNMTIgMiBMNyAyMSBNMTIgMiBMMTcgMjEgTTcgMjEgTDEyIDEyIEwxNyAyMSBNMTIgMTIgTDEyIDIiLz48L3N2Zz4=" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0iTTMgNCBIMjEgTTMgMTIgSDIxIE0zIDIwIEgyMSBNNCAzIFYyMSBNMTIgMyBWMjEgTTIwIDMgVjIxIi8%2BPC9zdmc%2B" alt="QuADMESH PyPI version"></a>
 
 ---
 
@@ -89,7 +88,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 - **Fast** — C++ backend full-inits the 531,680-element ENPAC2003 mesh in ~1.4 s — 8.6× over pure Python (up to ~15× on smaller meshes)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — Balendran direct FEM, Zhou-Shimada angle-based, and ADMESH Spring-Based Truss
-- **Analysis** — element quality, interior angles, layer-based skeletonization (medial axis)
+- **Analysis** — element quality, interior angles, layer-based decomposition (layerize)
 - **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS Aquaveo](https://www.aquaveo.com/sms) `.2dm` read/write
 - **Spatial queries** — point-in-element, k-nearest vertices, radius search at O(log n)
 - **Mesh alterations** — advancing-front element addition (`add_advancing_front_element`), coordinate moves; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
@@ -101,16 +100,16 @@ Reference workload: **EasternPacific_ENPAC2003** — 272,913 vertices · 531,680
 
 | Stage | MATLAB (Octave) ‡ | Python | C++ | Rust |
 |---|---:|---:|---:|---:|
-| Fast init (adj, no skeletonization) | 2.738 s | 6.454 s | 0.769 s | tbd |
-| Skeletonization only | 12.771 s | 5.814 s | 0.669 s | tbd |
-| Full init (adj + skeletonization) | 16.677 s | 12.300 s | 1.438 s | tbd |
+| Fast init (adj, no layerize) | 2.738 s | 6.454 s | 0.769 s | tbd |
+| Layerize only | 12.771 s | 5.814 s | 0.669 s | tbd |
+| Full init (adj + layerize) | 16.677 s | 12.300 s | 1.438 s | tbd |
 | Quality (signed area) | 75 ms | 51 ms | 7 ms | tbd |
 
 Like-for-like: every backend runs the same operation on the same in-memory arrays. No fort.14 parse, signed-area quality. All resolve `n_layers = 75`; Python↔C++ layers are bit-identical ([`test_backend_equivalence.py`](tests/test_backend_equivalence.py)).
 
 - **C++ leads every stage** — full init 8.6× over Python, 11.6× over Octave.
 - **Octave builds adjacency 2.4× faster than Python** — `sparse()`-accumulated, in compiled built-ins.
-- **Python skeletonizes 2.2× faster than Octave** — ~26% ahead on full init overall.
+- **Python layerizes 2.2× faster than Octave** — ~26% ahead on full init overall.
 - **Rust pending** (`tbd`) — skeletonization incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
 
 ‡ Octave 8.4, interpreter. Times are in-memory compute only — fort.14 parse and rendering excluded. Machine-dependent. Full method: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
@@ -121,56 +120,13 @@ Like-for-like: every backend runs the same operation on the same in-memory array
   <sub><em><strong>Figure 1.</strong> Scale demo on EasternPacific_ENPAC2003 (272,913 vertices · 531,680 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_enpac_showcase.py</code>.</em></sub>
 </p>
 
-**Full Python pipeline** (ENPAC2003, single machine, medians of 3) — the end-to-end cost the cross-language table omits, including I/O and rendering:
-
-| Stage | Time | Engine |
-|---|---:|---|
-| fort.14 parse | 2.11 s | file → arrays |
-| Adjacency build | 5.26 s | `EdgeMap` hash, O(1) edge lookup |
-| Layerize | 5.03 s | concentric layer peel → 75 layers |
-| Spatial index | 0.29 s | `cKDTree` (vertex + centroid) |
-| Quality (signed area) | 41 ms | over 531,680 elements |
-| Render | 11.49 s | `plot()` → PNG; dominates wall-clock |
-
-The timed stage is **layerization** — `_skeletonize` peels the mesh into 75 concentric layers (`OE`/`IE`/`OV`/`IV`). Medial-axis extraction and a signed-distance field are related but distinct operations: the layers approximate the medial axis, and no distance transform is computed today. At this scale rendering, not topology, is the wall-clock bottleneck.
+Full pipeline cost (parse · adjacency · layerize · spatial-index · quality · render — render dominates), the cross-backend layer-parity catalog (557 → 273k vertices), and mesh-quality metrics: [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Layerization is distinct from medial axis / skeleton / distance — [`docs/CONCEPTS.md`](docs/CONCEPTS.md):
 
 <p align="center">
   <img src="docs/gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
   <br>
-  <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh layerizes). Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
+  <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh layerizes). Full write-up: <a href="docs/CONCEPTS.md">docs/CONCEPTS.md</a>. Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
 </p>
-
-### Validation
-
-All three backends produce identical `n_layers` (skeletonization) across the Valence catalog, 557 → 273k vertices. Same connectivity and points in; only layering compared.
-
-| Mesh | Vertices | Elements | MATLAB | Python | C++ | Match |
-|---|--:|--:|--:|--:|--:|:--:|
-| Baranja Hill (ADMESH v2) | 557 | 1,011 | 10 | 10 | 10 | ✅ |
-| Baranja Hill | 645 | 1,193 | 12 | 12 | 12 | ✅ |
-| Wetting/Drying test | 2,716 | 4,978 | 15 | 15 | 15 | ✅ |
-| Lake Erie (refined) | 5,095 | 9,688 | 20 | 20 | 20 | ✅ |
-| Lake Erie (5k) | 13,266 | 24,910 | 17 | 17 | 17 | ✅ |
-| Delaware Bay | 14,449 | 26,698 | 17 | 17 | 17 | ✅ |
-| Delaware Bay (h 100–20000) | 14,449 | 26,697 | 17 | 17 | 17 | ✅ |
-| Lake Michigan | 21,981 | 41,887 | 25 | 25 | 25 | ✅ |
-| Chesapeake Bay | 83,388 | 160,734 | 55 | 55 | 55 | ✅ |
-| Great Lakes | 132,162 | 250,905 | 46 | 46 | 46 | ✅ |
-| EasternPacific_ENPAC2003 | 272,913 | 531,680 | 75 | 75 | 75 | ✅ |
-
-### Quality metrics
-
-Element and connectivity quality on ENPAC2003 (531,680 mostly-triangular elements):
-
-| Metric | Value | Call |
-|---|---:|---|
-| Angular skew — mean / min | 0.875 / 0.15 | `elem_quality()` |
-| Min interior angle — worst / per-elem mean | 8.98° / 52.5° | `interior_angles()` |
-| Aspect ratio — mean / min | 0.972 / 0.081 | `element_quality(metric='aspect_ratio')` |
-| Irregular interior vertices (valence ≠ 6) | 3.9% | `adjacencies['Vert2Elem']` degree |
-| Mean interior valence | 6.0 | — |
-
-Skew and aspect ratio apply to triangles and quads; valence regularity compares each interior vertex against its ideal degree (6 for triangles, 4 for quads), so the irregular-vertex fraction flags topological defects independent of geometry.
 
 ### Smoothing
 
@@ -206,29 +162,7 @@ Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset
 
 ### Engine
 
-CHILmesh treats the mesh as a **graph**: vertices, edges, and elements are nodes, and the adjacency tables are the edges between them. `_build_adjacencies` assembles seven tables once; every query, smoother, and the layerizer then reads them in constant or linear time.
-
-| Table | Shape | Maps |
-|---|---|---|
-| `Elem2Vert` | (n_elems, 3\|4) | element → vertices |
-| `Edge2Vert` | (n_edges, 2) | edge → endpoints (canonical) |
-| `Elem2Edge` | (n_elems, 3\|4) | element → edges |
-| `Edge2Elem` | (n_edges, 2) | edge → elements (−1 = boundary) |
-| `Vert2Edge` | dict[int → set] | vertex → incident edges |
-| `Vert2Elem` | dict[int → set] | vertex → incident elements |
-| `EdgeMap` | hash | (v₀, v₁) → edge id |
-
-**Complexities** (n = element count):
-
-| Operation | Cost | How |
-|---|---|---|
-| Edge lookup / dedup | **O(1)** | `EdgeMap` hash (was O(n²) pre-v0.2 — the 937× init speedup) |
-| Adjacency build | **O(n log n)** | vectorized `np.unique` / argsort |
-| Layerization (`_skeletonize`) | **O(n)** | concentric layer peel, ~1 s / 60k elems in Python; ~15× faster in C++ |
-| Spatial query (`find_element`, `nearest_vertices`) | **O(log n)** | `cKDTree` |
-| Vertex valence / 1-ring | **O(1) + O(degree)** | dict lookup |
-
-The C++ half-edge backend reproduces these tables bit-for-bit — `n_layers` parity holds across both backends (see [Performance](#performance)).
+CHILmesh is a **graph over the mesh** — seven adjacency tables (built once) back O(1) edge lookup, O(n log n) adjacency build, O(n) layerize, and O(log n) spatial queries. The C++ half-edge backend reproduces them bit-for-bit. Full table + complexities: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Examples
 
@@ -257,6 +191,7 @@ Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 - [`docs/API.md`](docs/API.md) — full API reference
 - [`docs/BENCHMARK.md`](docs/BENCHMARK.md) — benchmark methodology and raw data
+- [`docs/CONCEPTS.md`](docs/CONCEPTS.md) — distance vs medial axis vs skeleton vs layers (definitions, algorithms, math, synonyms)
 - [`tests/TESTING.md`](tests/TESTING.md) — test guide (pytest markers, local commands)
 - [`examples/`](examples/) — runnable scripts (quickstart, fort.14 round-trip, smoothing, spatial queries)
 
