@@ -1634,8 +1634,14 @@ class CHILmesh(CHILmeshPlotMixin):
             if sdf is None:
                 raise ValueError("method='sdf' requires sdf=<callable>")
             from .admesh_warmstart import optimize_with_admesh_truss
+            saved_grid_name = self.grid_name
             optimized = optimize_with_admesh_truss(self, sdf, size_fn=size_fn)
             self.__dict__.update(optimized.__dict__)
+            # In-place smooth preserves mesh identity: the internal truss mesh is
+            # unnamed, so __dict__.update would clobber grid_name to None. Restore
+            # it so a named mesh keeps its name across smoothing (matches copy()).
+            if optimized.grid_name is None:
+                self.grid_name = saved_grid_name
             return self.points
         if method.lower() == 'fem':
             new_points = self.direct_smoother( *kwargs )
