@@ -43,7 +43,9 @@ def _triangle_quality(
 
     if metric == "aspect_ratio":
         s = (la + lb + lc) / 2
-        area = abs(np.cross(v1 - v0, v2 - v0)) / 2
+        d1 = v1 - v0
+        d2 = v2 - v0
+        area = abs(d1[0] * d2[1] - d1[1] * d2[0]) / 2
 
         # Degenerate cases: collinear, zero area, or invalid side length
         if s <= 0 or la <= 0 or lb <= 0 or lc <= 0 or area <= 0:

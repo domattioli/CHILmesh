@@ -1313,7 +1313,9 @@ class CHILmesh(CHILmeshPlotMixin):
             la, lb, lc = np.linalg.norm(a), np.linalg.norm(b), np.linalg.norm(c)
             if metric == "aspect_ratio":
                 s = (la + lb + lc) / 2
-                area = abs(np.cross(verts[1] - verts[0], verts[2] - verts[0])) / 2
+                d1 = verts[1] - verts[0]
+                d2 = verts[2] - verts[0]
+                area = abs(d1[0] * d2[1] - d1[1] * d2[0]) / 2
                 if s <= 0 or la <= 0 or lb <= 0 or lc <= 0:
                     qualities[i] = 0.0
                 else:
