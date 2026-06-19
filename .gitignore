@@ -77,3 +77,7 @@ src/chilmesh_core/target/
 # C++ build artifacts
 src/chilmesh_cpp/build/
 src/chilmesh_cpp/build_local/
+
+# Symlink to /workspace/CHILmesh created by the remote-exec harness at session
+# start (points outside the repo) — never track it.
+/CHILmesh
