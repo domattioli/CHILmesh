@@ -121,6 +121,88 @@ adversarial review says belongs upstream in the registry, not here.
 
 ---
 
+## 6. Frontmatter / split-payload so LLMs never read the bulk arrays
+
+> Operator ask (#201, 2026-06-14): *"use a context-management technique like
+> frontmatter so we don't have LLM models reading and writing the mesh data
+> (which can be huge) themselves — let the .py files do it."*
+
+**Problem.** A WNAT-scale mesh is ~10⁶–10⁷ nodes. A single `cat mesh.14` blows
+an LLM context window, costs tokens, and risks the MCP base64-corruption hazard
+already logged in CLAUDE.md. An agent should never load array bytes into
+context; only Python should touch them.
+
+**Pattern — frontmatter (text, LLM-owned) + payload (binary, Python-owned).**
+
+| Layer | Content | Who reads/writes | Size |
+|---|---|---|---|
+| **Frontmatter** | `manifest.toml`: counts (NP/NE), bbox, per-field stats (min/max/mean of depth, quality), layer summary (`n_layers`, per-layer counts), `provenance`/`lineage`, sha256 of each payload, CRS | LLM + Python | ~1 KB |
+| **Payload** | points / connectivity / nodal-attribute arrays (`.npy`/`.npz`, or referenced `fort.14`+`fort.13` by path+sha) | **Python only** | MB–GB |
+
+This is the same **"stdlib-queryable `manifest.toml` as first archive entry"**
+already recommended in the Fable review (comment 4680372228 §3). The new framing
+is the *agent contract*, not just the format: an agent inspecting a mesh reads
+**only** the frontmatter; any operation on the arrays goes through a Python
+entry point.
+
+**Already half-built.** A `fort.14` header line (`NE NP`) is proto-frontmatter,
+and `CHILmesh` already computes everything a manifest needs (`elem_quality`,
+bbox, `layers`, boundary counts). The missing piece is a single
+`summarize(mesh) -> dict` / `chilmesh summary <file>` that emits the
+frontmatter **without** the agent ever opening the raw file.
+
+**Concrete steps (additive, no constitution touch):**
+1. `chilmesh.summary(path_or_mesh) -> dict` + `python -m chilmesh summary <file>`
+   CLI — parses header/metadata only (lazy; never loads the full array block for
+   counts that live in the header).
+2. Emit that dict as the `.chil` `manifest.toml` frontmatter when the
+   `write_chil` export adapter (§5.1) lands.
+3. **Agent guardrail** (repo convention, optionally a PreToolUse hook): refuse a
+   raw `Read`/`cat` of `*.14`/`*.2dm`/`*.npy` over N KB; route to
+   `chilmesh summary`. Mirrors the existing `mcp-binary-push` refuse-and-reroute
+   pattern in DomI.
+
+**Net:** the format already points this way (manifest-first); formalizing
+`summarize()` + the read-only-frontmatter agent contract is the cheap win and is
+useful immediately (mesh inspection in routine sessions) independent of `.chil`.
+
+---
+
+## 7. Can we borrow from `admesh/admesh` (the STL library)?
+
+> Operator ask (#201, 2026-06-14): *"can we borrow any smart data structures,
+> I/O, anything from https://github.com/admesh/admesh"*
+
+`admesh/admesh` (Anthony Martin's ADMesh — **unrelated** to `domattioli/ADMESH`)
+is a C library for **repairing STL triangle-soup** for 3-D printing.
+
+**License blocker first.** admesh/admesh is **GPL-2.0**; CHILmesh is **PolyForm
+Noncommercial 1.0.0**. GPL code **cannot** be vendored/copied into CHILmesh —
+incompatible licenses. So this is *borrow ideas/algorithms* (not copyrightable)
+only — **never copy source**.
+
+**What it has, and the overlap:**
+
+| admesh/admesh | CHILmesh equivalent | Verdict |
+|---|---|---|
+| `stl_hash_edge {key[6]; facet_number; which_edge; *next}` — hash table matching shared edges from coordinate keys, O(1) | **`EdgeMap`** (Phase-1, hash O(1) edge lookup) | **Already independently adopted.** Same idea; nothing to borrow. |
+| `stl_neighbors {neighbor[3]; which_vertex_not[3]}` — per-facet compact face-adjacency | `Edge2Elem` + `Elem2Edge` | Equivalent info; admesh's encoding is tri-only/denser but CHILmesh is mixed tri/quad → not portable. |
+| **Mesh repair**: unconnected-edge stitching (tolerance match) + hole-filling by facet insertion + degenerate-facet removal + normal repair | **None** — CHILmesh assumes watertight input (fort.14/ADMESH output is watertight by construction) | **The only genuinely additive idea.** Low value *today* (inputs are clean), but the *algorithm* (tolerance edge-stitch → hole-fill) is the recipe if CHILmesh ever ingests dirty soup (CAD/STL import, untrusted `.2dm`). |
+| I/O: ASCII/binary **STL**, **OFF**, DXF, VRML export | fort.14, `.2dm`, gmsh `.msh`, fort.13 | Different domain — STL is **3-D single-precision surface** (`float x,y,z`); CHILmesh is **2-D double-precision** planar hydro mesh. STL is lossy (single-precision, no boundary types, no depth). `OFF` is the only cheap, plausibly-useful export bridge; STL/DXF/VRML are out of scope. |
+
+**Mismatch summary:** admesh is `float`-precision, 3-D, **tri-only** surface
+repair with no layers/skeletonization/quad/smoothing. CHILmesh is double-precision
+2-D mixed-element with topology + skeleton + FEM smoothing. Different problem.
+
+**Recommendation:** borrow **one idea, not code** — file a *future* `request:
+research` note for a tolerance-based **mesh-heal pass** (unconnected-edge stitch +
+hole-fill) **iff** a dirty-input ingest path appears (STL/CAD or untrusted
+`.2dm`). The hash-edge connectivity admesh is famous for, CHILmesh already has
+(`EdgeMap`). No code, no dependency, no license entanglement.
+
+---
+
 _Investigation for #201. References: #154 (`.chil` design + RESHAPE verdict),
 constitution Principles V/VI/VII, `CHILmesh.py` I/O surface, `gmsh_io.py`
-adapter precedent._
+adapter precedent, `admesh/admesh` (GPL-2.0, STL repair), CLAUDE.md
+token-hygiene + `mcp-binary-push` reroute precedent._
