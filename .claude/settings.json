@@ -45,6 +45,11 @@
             "type": "command",
             "command": "bash scripts/hooks/commit_msg_guard.sh",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/mesh_read_guard.sh",
+            "timeout": 3
           }
         ]
       },
@@ -54,6 +59,16 @@
           {
             "type": "command",
             "command": "bash scripts/hooks/secret_path_guard.sh",
+            "timeout": 3
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/mesh_read_guard.sh",
             "timeout": 3
           }
         ]
