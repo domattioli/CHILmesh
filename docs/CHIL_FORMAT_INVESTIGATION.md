@@ -157,10 +157,15 @@ frontmatter **without** the agent ever opening the raw file.
    counts that live in the header).
 2. Emit that dict as the `.chil` `manifest.toml` frontmatter when the
    `write_chil` export adapter (§5.1) lands.
-3. **Agent guardrail** (repo convention, optionally a PreToolUse hook): refuse a
-   raw `Read`/`cat` of `*.14`/`*.2dm`/`*.npy` over N KB; route to
-   `chilmesh summary`. Mirrors the existing `mcp-binary-push` refuse-and-reroute
-   pattern in DomI.
+3. **Agent guardrail** — ✅ shipped as the `scripts/hooks/mesh_read_guard.sh`
+   PreToolUse hook (wired into `.claude/settings.json` for the `Bash` and `Read`
+   matchers, same class as `branch_guard`/`secret_path_guard`). Refuses a raw
+   `Read`/`cat`/`head`/`tail`/… of `*.14`/`*.grd`/`*.2dm`/`*.13`/`*.msh`/`*.npy`/
+   `*.npz`/`fort.NNN` over `CHILMESH_MESH_READ_MAX_KB` (default 64 KB) and reroutes
+   to `chilmesh summary <file>`; bypass with `CHILMESH_MESH_READ_GUARD_BYPASS=1`
+   (logged to `~/.claude/hook-bypass.log`). Mirrors the `mcp-binary-push`
+   refuse-and-reroute pattern in DomI. Smoke test:
+   `scripts/hooks/tests/mesh_read_guard_smoke.sh` (11 scenarios).
 
 **Net:** the format already points this way (manifest-first); formalizing
 `summarize()` + the read-only-frontmatter agent contract is the cheap win and is
