@@ -1,0 +1,52 @@
+# DomI-managed workflow (spec-010) — DO NOT EDIT IN THIS REPO.
+# Source: domattioli/DomI templates/workflows/release-integrity.yml — edit upstream, then sync.
+# Drift: sync-from-domi session gate + DomI notify-downstream sync issues.
+# Publish guard (C5): consumer publish workflows must depend on the release-consistency job below
+# (needs:/workflow_run) or run `release_integrity.py release-check --pypi` before any twine upload.
+name: release-integrity
+
+on:
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  api-gate:
+    name: API semver gate (warn-first)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install griffe
+        run: python -m pip install --upgrade pip griffe
+      - name: API break gate
+        run: python skills/release-integrity/scripts/release_integrity.py api-gate --package "${{ vars.RELEASE_INTEGRITY_PACKAGE }}" --src "${{ vars.RELEASE_INTEGRITY_SRC || 'src' }}" --mode warn
+      - name: Changelog presence (warn)
+        run: python skills/release-integrity/scripts/release_integrity.py pr-changelog --src "${{ vars.RELEASE_INTEGRITY_SRC || 'src' }}" --base "origin/${{ github.base_ref }}"
+
+  release-consistency:
+    name: Release consistency (enforce)
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install twine
+        run: python -m pip install --upgrade pip twine build
+      - name: Build (for twine check)
+        run: python -m build
+      - name: Release consistency
+        run: python skills/release-integrity/scripts/release_integrity.py release-check --pypi

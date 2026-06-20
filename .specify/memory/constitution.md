@@ -153,11 +153,11 @@ Any change requiring downstream code modification. Policy:
 
 ### Versioning
 
-`MAJOR.MINOR.PATCH` (semantic versioning).
-
-- **MAJOR:** Reserved for v1.0.0 when API stabilizes.
-- **MINOR:** New features, internal refactoring, performance improvements.
-- **PATCH:** Bug fixes, tests, documentation.
+**Governed upstream — defers to DomI Constitution Article VIII-A (Package Release & SemVer Governance).**
+This repo does not restate SemVer rules locally (a prior local clause — "MAJOR reserved for v1.0.0" —
+contradicted SemVer and is removed; see DomI ADR 012 / PR #313). In brief, per Article VIII-A: post-1.0
+a breaking public-API change requires a **MAJOR** bump; MINOR = additive; PATCH = fixes/docs/tests.
+Enforcement is mechanical via the synced `release-integrity` workflow.
 
 ### Release Checklist
 
