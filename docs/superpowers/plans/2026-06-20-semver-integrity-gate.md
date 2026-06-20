@@ -207,7 +207,14 @@ cd ~/Developer/CHILmesh
 python -m pip install griffe >/dev/null 2>&1
 python scripts/api_semver_gate.py; echo "exit=$?"
 ```
-Expected: prints either "No baseline tag found; skipping semver gate." (exit=0) or a griffe diff + a decision line. Either way the script runs to completion without a traceback. (Forward-looking gate — a clean exit here is correct; it catches *future* breaks.)
+Expected: **exit=1**. Baseline tag is `v1.2.1`, which predates the `write_fort14`
+break (it shipped in untagged 1.2.2). At this point the working tree is still
+version 1.x, so the gate correctly reports the breaking change **without a major
+bump** and fails — proving the gate detects the real break end-to-end. After
+Task 2 bumps the version to 2.0.0, re-running this command yields exit=0
+(breaking change present, but major bumped 1→2). If instead it prints "No
+baseline tag found; skipping semver gate." or a traceback, the helper is wrong —
+investigate before committing.
 
 - [ ] **Step 7: Commit**
 
@@ -295,4 +302,4 @@ Claude-Session: https://claude.ai/code/session_01W1SjM79TLgQEeG9D4NvaD2"
 ## Notes / Risks
 
 - `griffe check` exits nonzero both on detected breakages **and** on tool/load errors (e.g. package not found). First cut treats any nonzero as "breaking"; if false positives appear, refine `main()` to distinguish (inspect stderr / use `--format`). Out of scope for this plan.
-- The gate is forward-looking: if the latest tag already contains the `write_fort14` break, griffe vs HEAD shows no break — correct. The gate prevents the *next* silent break; the *existing* one is owned by Task 2.
+- Baseline tag is `v1.2.1` (predates the `write_fort14` break, which shipped in untagged 1.2.2). So the gate flags the existing break until Task 2 bumps the major — red after Task 1, green after Task 2. This doubles as the end-to-end proof. (If a future baseline tag already contained a break, griffe vs HEAD would show no break for it — the gate prevents the *next* silent break.)
