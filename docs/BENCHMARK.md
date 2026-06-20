@@ -18,6 +18,15 @@
 > still report. `N=0` (default) runs every stage, so local/manual profiling is
 > unaffected — CI passes a finite `N` to keep WNAT-scale meshes manual-only.
 > Example: `python scripts/benchmark.py --mesh wnat.14 --max-elements 500000`.
+>
+> **Low-memory FEM solver (`--fem-solver iterative`, #168):** instead of
+> skipping the FEM stage on heavy meshes, run it with a Jacobi-preconditioned
+> MINRES Krylov solver (`direct_smoother(solver="iterative")`) which avoids the
+> LU fill-in that OOM-kills the default direct `spsolve`. Pass
+> `--fem-solver iterative` to profile the FEM stage at scale without the gate
+> skip (parity with the direct result to ~1e-5 on small meshes; tighten `tol`
+> for stricter agreement). Example:
+> `python scripts/benchmark.py --mesh wnat.14 --fem-solver iterative`.
 
 ## v1.1.0 — cross-language (single machine, WNAT_Hagen, medians)
 
