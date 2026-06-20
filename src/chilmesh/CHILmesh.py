@@ -1996,7 +1996,9 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return rows, cols, data
 
-    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False) -> np.ndarray:
+    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False,
+                        solver: str = "direct", tol: float = 1e-8,
+                        maxiter: int | None = None) -> np.ndarray:
         """
         Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
         Supports triangle, quad, and mixed-element meshes.
@@ -2020,13 +2022,18 @@ class CHILmesh(CHILmeshPlotMixin):
             kinf: Large stiffness value for fixed (pinned) vertices.
             freeze_quad_nodes: When True, pin every vertex that is a corner of any
                 quad element in addition to the boundary.
+            solver: Linear solver choice. 'direct' (default) uses scipy spsolve (dense LU);
+                'iterative' or 'minres' uses a Jacobi-preconditioned MINRES Krylov solve
+                with far lower peak memory for large meshes (#168).
+            tol: Convergence tolerance for the iterative solver (ignored if solver='direct').
+            maxiter: Iteration cap for the iterative solver; None uses scipy default.
 
         Reference:
             Balendran, B. (1999).
             "A direct smoothing method for surface meshes".
             Proceedings of the 8th International Meshing Roundtable, 189-193.
         """
-        from scipy.sparse import csr_matrix
+        from scipy.sparse import csr_matrix, diags
         from scipy.sparse.linalg import spsolve
 
         p = self.points[:, :2]
@@ -2069,7 +2076,25 @@ class CHILmesh(CHILmeshPlotMixin):
             K[2*v, 2*v] = kinf
             K[2*v+1, 2*v+1] = kinf
 
-        c = spsolve(K, F)
+        if solver == "direct":
+            c = spsolve(K, F)
+        elif solver in ("iterative", "minres"):
+            from scipy.sparse.linalg import minres
+            # Jacobi (diagonal) preconditioner — K has a strictly positive
+            # diagonal, so M = diag(1/diag(K)) is SPD and a valid MINRES
+            # preconditioner. Krylov path avoids the LU fill-in that OOM-kills
+            # the direct solver at WNAT scale (#168).
+            diag_vals = K.diagonal()
+            diag_vals = np.where(diag_vals != 0.0, diag_vals, 1.0)
+            M = diags(1.0 / diag_vals)
+            try:
+                c, _info = minres(K, F, rtol=tol, maxiter=maxiter, M=M)
+            except TypeError:
+                # scipy < 1.12 uses `tol` instead of `rtol`
+                c, _info = minres(K, F, tol=tol, maxiter=maxiter, M=M)
+        else:
+            raise ValueError(
+                f"unknown solver {solver!r}; expected 'direct' or 'iterative'")
         new_xy = c.reshape(-1, 2)
         domain_diag = float(np.linalg.norm(np.ptp(p, axis=0)))
         max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))
