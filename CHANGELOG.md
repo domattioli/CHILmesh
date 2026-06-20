@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Documentation — SemVer record correction
+
+- **`write_fort14` signature change (retroactive note).** The public
+  `write_fort14` was changed from `write_fort14(path, points, elements, name)`
+  (free function over raw arrays) to `write_fort14(mesh, filename)` (CHILmesh
+  object form; also writes ADCIRC NOPE/NBOU boundary sections) in
+  [#184](https://github.com/domattioli/CHILmesh/issues/184) (2026-06-08). This was a
+  **breaking public-API change that shipped in a patch/minor release rather than a
+  major bump** — a SemVer violation, recorded here for the record. Callers passing
+  raw arrays must construct a `CHILmesh(connectivity=..., points=..., grid_name=...)`
+  first, then call `write_fort14(mesh, filename)`. The new `api-semver-gate` CI job
+  (this branch) prevents a recurrence going forward.
+
 ## [1.2.2] — 2026-06-15
 
 ### Changed
