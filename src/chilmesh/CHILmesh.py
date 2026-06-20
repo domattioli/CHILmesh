@@ -2024,7 +2024,9 @@ class CHILmesh(CHILmeshPlotMixin):
                 quad element in addition to the boundary.
             solver: Linear solver choice. 'direct' (default) uses scipy spsolve (dense LU);
                 'iterative' or 'minres' uses a Jacobi-preconditioned MINRES Krylov solve
-                with far lower peak memory for large meshes (#168).
+                with far lower peak memory for large meshes (#168). The iterative path
+                eliminates pinned DOFs (Dirichlet reduction) so it converges to the same
+                solution as the direct path (parity ~1e-4 absolute at WNAT scale).
             tol: Convergence tolerance for the iterative solver (ignored if solver='direct').
             maxiter: Iteration cap for the iterative solver; None uses scipy default.
 
@@ -2071,27 +2073,52 @@ class CHILmesh(CHILmeshPlotMixin):
             quad_corner_nodes = np.unique(self.connectivity_list[quad_indices, :4].flatten())
             pinned |= set(int(v) for v in quad_corner_nodes)
 
-        for v in pinned:
-            F[2*v:2*v+2] = kinf * p[v]
-            K[2*v, 2*v] = kinf
-            K[2*v+1, 2*v+1] = kinf
-
         if solver == "direct":
+            # Penalty (large-stiffness) Dirichlet enforcement — byte-identical
+            # to the prior shared-penalty path. spsolve handles the resulting
+            # ill-conditioning via exact LU.
+            for v in pinned:
+                F[2*v:2*v+2] = kinf * p[v]
+                K[2*v, 2*v] = kinf
+                K[2*v+1, 2*v+1] = kinf
             c = spsolve(K, F)
         elif solver in ("iterative", "minres"):
             from scipy.sparse.linalg import minres
-            # Jacobi (diagonal) preconditioner — K has a strictly positive
-            # diagonal, so M = diag(1/diag(K)) is SPD and a valid MINRES
-            # preconditioner. Krylov path avoids the LU fill-in that OOM-kills
-            # the direct solver at WNAT scale (#168).
-            diag_vals = K.diagonal()
+            # Dirichlet elimination (#168 follow-up): rather than the kinf
+            # penalty (which gives K a ~1e12 condition number and makes MINRES'
+            # residual stop converge to a different solution than spsolve at
+            # scale), remove the pinned DOFs and solve the well-conditioned
+            # reduced system K_ff x_f = -K_fp x_p. Pinned coords are known
+            # (= original positions), so the free-DOF MINRES converges to the
+            # true Dirichlet solution — parity with the direct path is restored
+            # while staying matrix-free (no LU fill-in, no OOM at WNAT scale).
+            pin_idx = np.array(sorted(2 * v + d for v in pinned for d in (0, 1)),
+                               dtype=int)
+            is_pinned = np.zeros(2 * n, dtype=bool)
+            is_pinned[pin_idx] = True
+            free = np.where(~is_pinned)[0]
+            x_full = np.zeros(2 * n)
+            flat_p = p.reshape(-1)
+            x_full[pin_idx] = flat_p[pin_idx]
+            K_ff = K[free][:, free].tocsr()
+            # F[free] is the zero interior RHS; only the eliminated coupling remains.
+            rhs = F[free] - K[free][:, pin_idx] @ x_full[pin_idx]
+            diag_vals = K_ff.diagonal()
             diag_vals = np.where(diag_vals != 0.0, diag_vals, 1.0)
             M = diags(1.0 / diag_vals)
             try:
-                c, _info = minres(K, F, rtol=tol, maxiter=maxiter, M=M)
+                c_free, info = minres(K_ff, rhs, rtol=tol, maxiter=maxiter, M=M)
             except TypeError:
                 # scipy < 1.12 uses `tol` instead of `rtol`
-                c, _info = minres(K, F, tol=tol, maxiter=maxiter, M=M)
+                c_free, info = minres(K_ff, rhs, tol=tol, maxiter=maxiter, M=M)
+            if info != 0:
+                import warnings
+                warnings.warn(
+                    f"MINRES did not converge (info={info}) in direct_smoother; "
+                    "result may be inaccurate — raise maxiter or loosen tol.",
+                    RuntimeWarning, stacklevel=2)
+            x_full[free] = c_free
+            c = x_full
         else:
             raise ValueError(
                 f"unknown solver {solver!r}; expected 'direct' or 'iterative'")
