@@ -22,11 +22,28 @@
 > **Low-memory FEM solver (`--fem-solver iterative`, #168):** instead of
 > skipping the FEM stage on heavy meshes, run it with a Jacobi-preconditioned
 > MINRES Krylov solver (`direct_smoother(solver="iterative")`) which avoids the
-> LU fill-in that OOM-kills the default direct `spsolve`. Pass
-> `--fem-solver iterative` to profile the FEM stage at scale without the gate
-> skip (parity with the direct result to ~1e-5 on small meshes; tighten `tol`
-> for stricter agreement). Example:
+> LU fill-in that OOM-kills the default direct `spsolve`. The iterative path
+> enforces the fixed boundary by **Dirichlet elimination** (it removes the
+> pinned DOFs and solves the well-conditioned reduced system `K_ff x_f = -K_fp x_p`),
+> *not* the `kinf=1e12` penalty the direct path uses — a penalised system has
+> condition number ~1e12, so MINRES' residual-based stop would converge to a
+> visibly different mesh at scale. Pass `--fem-solver iterative` to profile the
+> FEM stage at scale without the gate skip. Example:
 > `python scripts/benchmark.py --mesh wnat.14 --fem-solver iterative`.
+>
+> **Direct vs. iterative, real WNAT scale (WNAT_Hagen, 52,774 verts / 98,365
+> tri):** wall-clock comparable (direct `spsolve` ~4.7 s, elimination+MINRES
+> ~4.6 s; peak RSS equal here, MINRES wins on memory only at the ~4M-DOF STOFS
+> scale where `spsolve` OOMs). Solution parity, direct − iterative:
+>
+> | metric | penalty MINRES (pre-fix) | elimination MINRES (#168 follow-up) |
+> |---|---:|---:|
+> | max ‖Δxy‖ | 5.4e-1 (1.0% of domain) | **1.9e-4 (3.8e-6 of domain)** |
+> | mean ‖Δxy‖ | 3.0e-2 | **1.1e-5** |
+> | nodes ‖Δxy‖ > 1e-2 | 31,154 / 52,774 (59%) | **0** |
+>
+> The elimination path makes `solver="iterative"` a drop-in for the direct
+> result (was a meaningfully different mesh under the old shared-penalty path).
 
 ## v1.1.0 — cross-language (single machine, WNAT_Hagen, medians)
 
