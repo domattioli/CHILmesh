@@ -52,6 +52,28 @@ jobs:
           MPLBACKEND: Agg
         run: python -m pytest -n auto -v --cov=src/chilmesh --cov-report=term --cov-fail-under=80
 
+  api-semver-gate:
+    name: API semver gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install griffe
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install griffe
+
+      - name: Check public API vs semver
+        run: python scripts/api_semver_gate.py
+
   build-and-smoke:
     name: build sdist+wheel + smoke install
     if: github.event_name != 'pull_request'
