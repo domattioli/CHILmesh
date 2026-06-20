@@ -149,7 +149,7 @@ def main() -> int:
     if tag is None:
         print("No baseline tag found; skipping semver gate.")
         return 0
-    griffe = _run(["griffe", "check", "chilmesh", "-s", "src", "-a", tag])
+    griffe = _run([sys.executable, "-m", "griffe", "check", "chilmesh", "-s", "src", "-a", tag])
     breaking = griffe.returncode != 0
     if griffe.stdout:
         print(griffe.stdout)
@@ -207,14 +207,16 @@ cd ~/Developer/CHILmesh
 python -m pip install griffe >/dev/null 2>&1
 python scripts/api_semver_gate.py; echo "exit=$?"
 ```
-Expected: **exit=1**. Baseline tag is `v1.2.1`, which predates the `write_fort14`
-break (it shipped in untagged 1.2.2). At this point the working tree is still
-version 1.x, so the gate correctly reports the breaking change **without a major
-bump** and fails — proving the gate detects the real break end-to-end. After
-Task 2 bumps the version to 2.0.0, re-running this command yields exit=0
-(breaking change present, but major bumped 1→2). If instead it prints "No
-baseline tag found; skipping semver gate." or a traceback, the helper is wrong —
-investigate before committing.
+Expected: **exit=0** with "No breaking public-API change vs baseline." The latest
+tag `v1.2.1` (2026-06-15) already contains the 2-arg `write_fort14` — the break
+(#184, 2026-06-08) predates the tag — so griffe sees no break in the v1.2.1→HEAD
+range. The gate is forward-looking: it prevents the *next* silent break; the
+historical one is already inside the baseline tag. A traceback or "No baseline
+tag found" means the helper is wrong — investigate before committing.
+
+> **Subprocess form:** the script invokes griffe as `[sys.executable, "-m", "griffe", ...]`
+> so it uses the running interpreter's griffe — no PATH dependency (a bare `griffe`
+> call raises `FileNotFoundError` when the venv bin isn't on PATH).
 
 - [ ] **Step 7: Commit**
 
@@ -229,77 +231,72 @@ Claude-Session: https://claude.ai/code/session_01W1SjM79TLgQEeG9D4NvaD2"
 
 ---
 
-### Task 2: Own the `write_fort14` break — version + CHANGELOG
+### Task 2: Document the historical `write_fort14` break — CHANGELOG only
+
+**Decision (revised):** the `write_fort14` break (#184) is already baked into the
+latest tag `v1.2.1`; there is no API delta in the v1.2.1→HEAD range, so a 2.0.0
+bump is **not** semver-warranted (it would be a major bump with no breaking change
+since the last tag). Component 2 is therefore a **CHANGELOG-only correction**: record
+the historical break and that it shipped as a patch/minor in error. No version bump,
+no code change.
 
 **Files:**
-- Modify: `pyproject.toml` (`version`)
-- Modify: `CHANGELOG.md` (new `[2.0.0]` section at top of the entries)
+- Modify: `CHANGELOG.md` (new `[Unreleased]` correction note at the top of the entries)
 
 **Interfaces:**
-- Produces: `pyproject.toml` version `2.0.0`; a `[2.0.0]` CHANGELOG section documenting the `write_fort14` break. No code/API change (the new `write_fort14(mesh, filename)` is already the intended API).
+- Produces: a CHANGELOG note documenting the `write_fort14(path, points, elements, name)` → `write_fort14(mesh, filename)` break. No version/code/API change.
 
-- [ ] **Step 1: Bump the version**
-
-In `pyproject.toml`, change the project version line from:
-```toml
-version = "1.2.2"
-```
-to:
-```toml
-version = "2.0.0"
-```
-
-- [ ] **Step 2: Add the CHANGELOG section**
+- [ ] **Step 1: Add the CHANGELOG note**
 
 In `CHANGELOG.md`, insert immediately above the existing `## [1.2.2] — 2026-06-15` line:
 
 ```markdown
-## [2.0.0] — 2026-06-20
+## [Unreleased]
 
-### Changed — BREAKING
+### Documentation — SemVer record correction
 
-- **`write_fort14` signature** — `write_fort14(path, points, elements, name)`
-  (free function over raw arrays) → `write_fort14(mesh, filename)` (CHILmesh
-  object form; also writes ADCIRC NOPE/NBOU boundary sections). This change
-  actually landed in 1.2.2 ([#184](https://github.com/domattioli/CHILmesh/issues/184))
-  without a major bump; 2.0.0 corrects the SemVer record. Callers passing raw
-  arrays must construct a `CHILmesh(connectivity=..., points=..., grid_name=...)`
-  first, then call `write_fort14(mesh, filename)`.
+- **`write_fort14` signature change (retroactive note).** The public
+  `write_fort14` was changed from `write_fort14(path, points, elements, name)`
+  (free function over raw arrays) to `write_fort14(mesh, filename)` (CHILmesh
+  object form; also writes ADCIRC NOPE/NBOU boundary sections) in
+  [#184](https://github.com/domattioli/CHILmesh/issues/184) (2026-06-08). This was a
+  **breaking public-API change that shipped in a patch/minor release rather than a
+  major bump** — a SemVer violation, recorded here for the record. Callers passing
+  raw arrays must construct a `CHILmesh(connectivity=..., points=..., grid_name=...)`
+  first, then call `write_fort14(mesh, filename)`. The new `api-semver-gate` CI job
+  (this branch) prevents a recurrence going forward.
 
 ```
 
-- [ ] **Step 3: Verify the edits**
+- [ ] **Step 2: Verify the edit**
 
 Run:
 ```bash
 cd ~/Developer/CHILmesh
-python -c "import tomllib; assert tomllib.load(open('pyproject.toml','rb'))['project']['version']=='2.0.0'; print('version OK')"
-grep -n "## \[2.0.0\]" CHANGELOG.md
-grep -n "write_fort14 signature" CHANGELOG.md
+grep -n "## \[Unreleased\]" CHANGELOG.md
+grep -n "write_fort14 signature change" CHANGELOG.md
 ```
-Expected: prints `version OK`, and two grep hits (the heading + the bullet).
+Expected: two grep hits (the heading + the note).
 
-- [ ] **Step 4: Verify the suite still passes**
-
-Run: `cd ~/Developer/CHILmesh && python -m pytest -n auto -m "not slow"`
-Expected: PASS (no test depends on the version string; this confirms nothing regressed).
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 cd ~/Developer/CHILmesh
-git add pyproject.toml CHANGELOG.md
-git commit -m "release: 2.0.0 — own write_fort14 breaking change (semver correction)
+git add CHANGELOG.md
+git commit -m "docs: changelog — record historical write_fort14 semver violation (#184)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01W1SjM79TLgQEeG9D4NvaD2"
 ```
 
-> **Deferred (operator-gated, NOT in this plan):** tag `v2.0.0`, GitHub release → `publish-pypi.yml`, and the valence consumer update (Component 3). All blocked by the local-only constraint.
+> **Deferred (operator-gated, NOT in this plan):** the valence consumer update
+> (Component 3 — fix the generator to the 2-arg API + contract test). No CHILmesh
+> tag/publish is needed for this CHANGELOG-only correction.
 
 ---
 
 ## Notes / Risks
 
 - `griffe check` exits nonzero both on detected breakages **and** on tool/load errors (e.g. package not found). First cut treats any nonzero as "breaking"; if false positives appear, refine `main()` to distinguish (inspect stderr / use `--format`). Out of scope for this plan.
-- Baseline tag is `v1.2.1` (predates the `write_fort14` break, which shipped in untagged 1.2.2). So the gate flags the existing break until Task 2 bumps the major — red after Task 1, green after Task 2. This doubles as the end-to-end proof. (If a future baseline tag already contained a break, griffe vs HEAD would show no break for it — the gate prevents the *next* silent break.)
+- The latest tag `v1.2.1` already contains the 2-arg `write_fort14` (the #184 break, 2026-06-08, predates the v1.2.1 tag of 2026-06-15). So griffe v1.2.1→HEAD shows no break and the gate is correctly green now. The gate is **forward-looking** — it prevents the *next* silent break. The historical #184 break (which shipped as a patch/minor, not a major — the real semver violation) is already baked into the baseline tag and cannot be retroactively flagged by griffe between the two latest tags.
+- The script invokes griffe as `[sys.executable, "-m", "griffe", ...]` (module form) so it uses the running interpreter's griffe and has no PATH dependency. Validated locally: exit=0 against v1.2.1 with no PATH munging.
