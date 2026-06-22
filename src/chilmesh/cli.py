@@ -17,6 +17,7 @@ from typing import Optional, Sequence
 
 from . import __version__
 from .CHILmesh import CHILmesh
+from .summary_io import summary
 
 _READERS = {
     "fort14": "read_from_fort14",
@@ -177,6 +178,39 @@ def cmd_plot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_summary(args: argparse.Namespace) -> int:
+    """Print lazy header-only mesh metadata (counts, no layers/quality)."""
+    data = summary(Path(args.input), deep=args.deep)
+
+    # Pretty-print with human-friendly format
+    grid_name = data.get("grid_name", "Mesh")
+    print(f"Summary: {grid_name}")
+    print(f"  Format:     {data.get('format', 'N/A')}")
+
+    file_bytes = data.get("file_bytes")
+    if file_bytes is not None:
+        print(f"  File bytes: {file_bytes}")
+    else:
+        print(f"  File bytes: N/A")
+
+    print(f"  Nodes:      {data.get('n_nodes', 'N/A')}")
+    print(f"  Elements:   {data.get('n_elems', 'N/A')}")
+
+    # Optional fields (present when deep=True or for mesh objects)
+    if "element_type" in data:
+        print(f"  Type:       {data['element_type']}")
+
+    if "bbox" in data:
+        bbox = data["bbox"]
+        min_x = bbox.get("min_x", "N/A")
+        max_x = bbox.get("max_x", "N/A")
+        min_y = bbox.get("min_y", "N/A")
+        max_y = bbox.get("max_y", "N/A")
+        print(f"  Bbox:       x[{min_x}..{max_x}] y[{min_y}..{max_y}]")
+
+    return 0
+
+
 # ----------------------------------------------------------------------
 # Parser
 # ----------------------------------------------------------------------
@@ -219,6 +253,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip quality statistics (faster).",
     )
     p_info.set_defaults(func=cmd_info)
+
+    p_summary = sub.add_parser(
+        "summary",
+        help="Print lazy header-only mesh metadata (counts, no layers/quality).",
+        description=(
+            "Read only the file header to report counts without loading the full "
+            "mesh. Use --deep to also load points for bbox + element type.\n\n"
+            "Example:\n  chilmesh summary path/to/mesh.fort.14"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_summary.add_argument("input", help="Input mesh path (.14, .fort.14, .grd, .2dm).")
+    p_summary.add_argument(
+        "--deep",
+        action="store_true",
+        help="Also load points for bbox + element type.",
+    )
+    p_summary.set_defaults(func=cmd_summary)
 
     p_conv = sub.add_parser(
         "convert",

@@ -274,7 +274,7 @@ def _gate_heavy(n_elems: int, max_elements: int) -> tuple[bool, str]:
 
 def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
                     smooth_iters: int, skip_fem: bool = False,
-                    skip_skel: bool = False) -> dict:
+                    skip_skel: bool = False, fem_solver: str = "direct") -> dict:
     """Time the post-generation mesh lifecycle stages (Python; #155).
 
     Generation is intentionally excluded. Each repeat rebuilds the mesh so the
@@ -288,6 +288,9 @@ def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
     ``skip_skel`` omits skeletonization (``skel_s`` is then ``None``) — used by
     the ``--max-elements`` gate when C++ backend is unavailable and Python
     skeletonization would hang on large meshes.
+
+    ``fem_solver`` selects the FEM linear solver ('direct' or 'iterative'; iterative
+    is low-memory for large meshes, #168).
     """
     from chilmesh import CHILmesh
 
@@ -301,7 +304,7 @@ def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
             t = time.perf_counter(); m._skeletonize(); skel.append(time.perf_counter() - t)
         t = time.perf_counter(); m.signed_area(); qual.append(time.perf_counter() - t)
         if not skip_fem:
-            t = time.perf_counter(); m.direct_smoother(); fem.append(time.perf_counter() - t)
+            t = time.perf_counter(); m.direct_smoother(solver=fem_solver); fem.append(time.perf_counter() - t)
         t = time.perf_counter(); m.angle_based_smoother(n_iter=smooth_iters)
         ang.append(time.perf_counter() - t)
         mesh = m
@@ -372,6 +375,8 @@ def main() -> int:
                          "smoother + ADMESH truss) when the mesh exceeds this "
                          "element count; 0 (default) runs every stage. CI sets a "
                          "finite value so WNAT-scale meshes stay manual-only (#155, #168)")
+    ap.add_argument("--fem-solver", choices=["direct", "iterative"], default="direct",
+                    help="FEM linear solver: direct spsolve (default) or low-memory iterative MINRES (#168)")
     args = ap.parse_args()
 
     if not os.environ.get("CHILMESH_RUN_BENCH") and args.emit is None:
@@ -460,7 +465,7 @@ def main() -> int:
     skip_heavy, gate_reason = _gate_heavy(n_elems_raw, args.max_elements)
     print("  [lifecycle] Running lifecycle bench...", file=sys.stderr, flush=True)
     life = bench_lifecycle(conn, pts, args.repeats, args.smooth_iters,
-                           skip_fem=skip_heavy, skip_skel=skip_heavy)
+                           skip_fem=skip_heavy, skip_skel=skip_heavy, fem_solver=args.fem_solver)
     sdf_name, sdf = _resolve_sdf(args.mesh, args.sdf)
     truss = (bench_truss(conn, pts, sdf, args.repeats, args.truss_iters)
              if (sdf and not skip_heavy) else None)
