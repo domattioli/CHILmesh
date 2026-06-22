@@ -1313,7 +1313,9 @@ class CHILmesh(CHILmeshPlotMixin):
             la, lb, lc = np.linalg.norm(a), np.linalg.norm(b), np.linalg.norm(c)
             if metric == "aspect_ratio":
                 s = (la + lb + lc) / 2
-                area = abs(np.cross(verts[1] - verts[0], verts[2] - verts[0])) / 2
+                d1 = verts[1] - verts[0]
+                d2 = verts[2] - verts[0]
+                area = abs(d1[0] * d2[1] - d1[1] * d2[0]) / 2
                 if s <= 0 or la <= 0 or lb <= 0 or lc <= 0:
                     qualities[i] = 0.0
                 else:
@@ -1994,7 +1996,9 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return rows, cols, data
 
-    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False) -> np.ndarray:
+    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False,
+                        solver: str = "direct", tol: float = 1e-8,
+                        maxiter: int | None = None) -> np.ndarray:
         """
         Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
         Supports triangle, quad, and mixed-element meshes.
@@ -2018,13 +2022,20 @@ class CHILmesh(CHILmeshPlotMixin):
             kinf: Large stiffness value for fixed (pinned) vertices.
             freeze_quad_nodes: When True, pin every vertex that is a corner of any
                 quad element in addition to the boundary.
+            solver: Linear solver choice. 'direct' (default) uses scipy spsolve (dense LU);
+                'iterative' or 'minres' uses a Jacobi-preconditioned MINRES Krylov solve
+                with far lower peak memory for large meshes (#168). The iterative path
+                eliminates pinned DOFs (Dirichlet reduction) so it converges to the same
+                solution as the direct path (parity ~1e-4 absolute at WNAT scale).
+            tol: Convergence tolerance for the iterative solver (ignored if solver='direct').
+            maxiter: Iteration cap for the iterative solver; None uses scipy default.
 
         Reference:
             Balendran, B. (1999).
             "A direct smoothing method for surface meshes".
             Proceedings of the 8th International Meshing Roundtable, 189-193.
         """
-        from scipy.sparse import csr_matrix
+        from scipy.sparse import csr_matrix, diags
         from scipy.sparse.linalg import spsolve
 
         p = self.points[:, :2]
@@ -2062,12 +2073,55 @@ class CHILmesh(CHILmeshPlotMixin):
             quad_corner_nodes = np.unique(self.connectivity_list[quad_indices, :4].flatten())
             pinned |= set(int(v) for v in quad_corner_nodes)
 
-        for v in pinned:
-            F[2*v:2*v+2] = kinf * p[v]
-            K[2*v, 2*v] = kinf
-            K[2*v+1, 2*v+1] = kinf
-
-        c = spsolve(K, F)
+        if solver == "direct":
+            # Penalty (large-stiffness) Dirichlet enforcement — byte-identical
+            # to the prior shared-penalty path. spsolve handles the resulting
+            # ill-conditioning via exact LU.
+            for v in pinned:
+                F[2*v:2*v+2] = kinf * p[v]
+                K[2*v, 2*v] = kinf
+                K[2*v+1, 2*v+1] = kinf
+            c = spsolve(K, F)
+        elif solver in ("iterative", "minres"):
+            from scipy.sparse.linalg import minres
+            # Dirichlet elimination (#168 follow-up): rather than the kinf
+            # penalty (which gives K a ~1e12 condition number and makes MINRES'
+            # residual stop converge to a different solution than spsolve at
+            # scale), remove the pinned DOFs and solve the well-conditioned
+            # reduced system K_ff x_f = -K_fp x_p. Pinned coords are known
+            # (= original positions), so the free-DOF MINRES converges to the
+            # true Dirichlet solution — parity with the direct path is restored
+            # while staying matrix-free (no LU fill-in, no OOM at WNAT scale).
+            pin_idx = np.array(sorted(2 * v + d for v in pinned for d in (0, 1)),
+                               dtype=int)
+            is_pinned = np.zeros(2 * n, dtype=bool)
+            is_pinned[pin_idx] = True
+            free = np.where(~is_pinned)[0]
+            x_full = np.zeros(2 * n)
+            flat_p = p.reshape(-1)
+            x_full[pin_idx] = flat_p[pin_idx]
+            K_ff = K[free][:, free].tocsr()
+            # F[free] is the zero interior RHS; only the eliminated coupling remains.
+            rhs = F[free] - K[free][:, pin_idx] @ x_full[pin_idx]
+            diag_vals = K_ff.diagonal()
+            diag_vals = np.where(diag_vals != 0.0, diag_vals, 1.0)
+            M = diags(1.0 / diag_vals)
+            try:
+                c_free, info = minres(K_ff, rhs, rtol=tol, maxiter=maxiter, M=M)
+            except TypeError:
+                # scipy < 1.12 uses `tol` instead of `rtol`
+                c_free, info = minres(K_ff, rhs, tol=tol, maxiter=maxiter, M=M)
+            if info != 0:
+                import warnings
+                warnings.warn(
+                    f"MINRES did not converge (info={info}) in direct_smoother; "
+                    "result may be inaccurate — raise maxiter or loosen tol.",
+                    RuntimeWarning, stacklevel=2)
+            x_full[free] = c_free
+            c = x_full
+        else:
+            raise ValueError(
+                f"unknown solver {solver!r}; expected 'direct' or 'iterative'")
         new_xy = c.reshape(-1, 2)
         domain_diag = float(np.linalg.norm(np.ptp(p, axis=0)))
         max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))

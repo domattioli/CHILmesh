@@ -6,10 +6,23 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege default: CI only reads the checkout; no write scopes needed.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref so rapid rotation pushes / PR
+# syncs don't pile up redundant full-matrix (ubuntu+macOS+windows × 3 py)
+# jobs and burn runner minutes. Each ref gets an independent group, so an
+# in-progress main-branch run is never cancelled by activity on another ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: pytest (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -25,10 +38,10 @@ jobs:
       MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           check-latest: true
@@ -57,11 +70,12 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           check-latest: true
