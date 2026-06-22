@@ -38,7 +38,8 @@ class CHILmesh(CHILmeshPlotMixin):
     - Fast Init: Optional layerization for <2s bulk loading (compute_layers=False)
     - Metadata: Node count, element count, element type, bounding box (Valence compatible)
     - Entry Point: CHILmesh.from_admesh_domain() for catalog integration (duck-typed, zero deps)
-    - File I/O: Read ADCIRC `.fort.14` and SMS `.2dm` formats; roundtrip lossless
+    - File I/O: Read/write ADCIRC `.fort.14` (lossless roundtrip) and SMS `.2dm`
+      (geometry + topology only — boundary/nodestring metadata is not serialized)
     - Analysis: Layers (concentric layer peel), element quality, interior angles
 
     Based on the MATLAB CHILmesh class from the Computational Hydrodynamics &
@@ -2506,7 +2507,13 @@ class CHILmesh(CHILmeshPlotMixin):
             raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
 
     def _write_2dm(self, filename: str) -> None:
-        """Write mesh to SMS 2dm format."""
+        """Write mesh to SMS 2dm format.
+
+        Serializes node coordinates (ND) and element connectivity (E3T/E4Q)
+        only. Boundary-segment / nodestring metadata is NOT written, so a
+        ``save('.2dm')`` -> ``read_from_2dm`` roundtrip is lossless for
+        geometry and topology but drops boundary records (see issue #228).
+        """
         with open(filename, 'w') as f:
             f.write("MESH2D\n")
             for i, elem in enumerate(self.connectivity_list):
