@@ -1,112 +1,49 @@
-# CHILmesh v1.0.0 Security Audit
+# Security Policy
 
-**Date:** 2026-05-22  
-**Auditor:** Adversarial code review (gsd-security-auditor agent)  
-**Status:** 5 threats identified; 3 mitigations complete, 2 pending C++ rebuild verification
+## Supported versions
 
----
+CHILmesh is maintained on a rolling basis; only the latest published release
+receives security fixes.
 
-## Threat Summary
+| Version | Supported |
+|---------|-----------|
+| 1.0.x   | ✅ |
+| < 1.0   | ❌ |
 
-| ID | Category | Severity | Component | Disposition |
-|----|----------|----------|-----------|-------------|
-| A1 | Tampering / DoS | **CRITICAL** | C++ `HalfEdgeMesh::build()` | Vertex bounds check (code added, unverified) |
-| A2 | Denial of Service | **HIGH** | Fort14 parser | File-size + count cap (✅ implemented) |
-| A3 | Denial of Service | **HIGH** | 2dm parser | File-size + record limit (✅ implemented) |
-| A5 | Memory Leak | MEDIUM | pybind11 `full_init` | Try/catch cleanup (code added, unverified) |
-| A6 | Tampering / DoS | MEDIUM | cpp_backend validation | Float rejection + index validation (✅ implemented) |
+## Reporting a vulnerability
 
----
+**Please do not open a public issue or pull request for security
+vulnerabilities.** Public disclosure before a fix is available puts every user
+at risk.
 
-## Critical Finding: A1 Out-of-Bounds Vertex Index
+Report privately through one of:
 
-Any untrusted fort14 file with a vertex index ≥ n_verts will crash the C++ backend:
+1. **GitHub private vulnerability reporting** (preferred) — on this repository,
+   go to the **Security** tab → **Report a vulnerability**. This opens a private
+   advisory visible only to you and the maintainers.
+2. Contact the maintainer directly via the GitHub profile
+   [@domattioli](https://github.com/domattioli) if private reporting is
+   unavailable.
 
-```cpp
-// OLD CODE: no bounds check
-he.vert = row[i];  // row[i] could be 5, n_verts could be 3
-...
-vert_he[v] = h;  // v=5 → out-of-bounds vector subscript → heap corruption
-```
+Please include, where possible:
 
-**Mitigation code added to halfedge.cpp (line 58+):**
-```cpp
-if (v != -1 && (v < 0 || v >= n_verts)) {
-    throw std::out_of_range("vertex index ... out of range");
-}
-```
+- the affected version / commit;
+- a minimal reproduction (e.g. a crafted `fort.14` / `.2dm` input, a code
+  snippet, and the observed vs. expected behavior);
+- the impact you believe it has (crash / DoS, memory corruption, data
+  tampering, etc.).
 
-**Status:** Code present in repo but C++ build couldn't be verified in this environment.
+## What to expect
 
----
+- **Acknowledgement:** we aim to respond within a few days.
+- **Assessment:** we triage severity and confirm the issue.
+- **Fix & disclosure:** once a fix is ready we coordinate a release and, where
+  appropriate, publish a GitHub Security Advisory (GHSA) crediting the reporter
+  (unless you prefer to remain anonymous).
 
-## Implemented Mitigations
+## Scope notes
 
-### A2: Fort14 File-Size DoS (HIGH)
-✅ Prevents 2B-element crafted headers from causing 48GB allocation
-
-```python
-MAX_FILE_SIZE = 1_000_000_000  # 1 GB
-if file_size > MAX_FILE_SIZE:
-    raise ValueError("FORT.14 file too large")
-```
-
-### A3: 2dm Record-Count DoS (HIGH)
-✅ Prevents unlimited record parsing from exhausting memory
-
-```python
-MAX_RECORDS = 100_000_000
-for line in f:
-    record_count += 1
-    if record_count > MAX_RECORDS:
-        raise ValueError("too many records")
-```
-
-### A6: Float Array Truncation (MEDIUM)
-✅ Rejects float connectivity (silent truncation is unsafe)
-
-```python
-if np.issubdtype(conn.dtype, np.floating):
-    raise TypeError("connectivity must be integer dtype")
-
-if np.any(conn < -1):
-    raise ValueError("negative indices other than -1")
-```
-
----
-
-## Unverified Mitigations (C++ Build Pending)
-
-### A1: Vertex Index Bounds Check
-- Code: halfedge.cpp lines 58-64
-- Status: Added but couldn't verify compilation/exception propagation
-- Action: Rebuild in CI with `pip install -e .` on Linux/Mac/Windows
-
-### A5: Memory Leak Cleanup
-- Code: bindings.cpp try/catch around build_adjacency() + skeletonize()
-- Status: Added but couldn't verify exception handling
-- Action: Test with degenerate mesh causing std::bad_alloc
-
----
-
-## Recommendation for v1.0.0 Release
-
-**Ship with Python-first positioning:**
-- Python-only tests pass (876/877 + equivalence suite)
-- C++ backend marked experimental until A1/A5 verified
-- All Python-level mitigations deployed (A2, A3, A6)
-- Rust backend source in sdist for rebuild capability
-
-**Update README:**
-```markdown
-### Backends
-- **Python** (production-ready, no dependencies)
-- **C++** (experimental, requires pybind11/CMake rebuild)
-- **Rust** (experimental, requires Cargo rebuild)
-
-Force Python backend: `export CHILMESH_BACKEND=python`
-```
-
----
-
-**Threat Model Complete.** All findings documented. Ready for v1.0.0 release with Python-first policy pending C++ verification in CI.
+CHILmesh parses untrusted mesh files (`fort.14`, `.2dm`). Parser-level
+robustness (size/record caps, dtype and index validation) is in scope. The
+optional C++/Rust backends are **experimental**; to run the pure-Python backend
+only, set `CHILMESH_BACKEND=python`.
