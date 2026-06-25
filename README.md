@@ -165,10 +165,13 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 import chilmesh
 
 chilmesh.backend_info()
+# After a source build of the C++ extension:
 # {'available': ['cpp', 'python'],
 #  'selected': 'cpp',
 #  'versions': {'cpp': '0.6.0.dev0', 'python': '1.2.2'}}
 ```
+
+> **PyPI installs are pure-Python.** The example above reflects a **source build** of the C++ extension. A plain `pip install chilmesh` from PyPI currently ships **no compiled extension**, so `backend_info()` reports `{'available': ['python'], 'selected': 'python'}` ([#229](https://github.com/domattioli/CHILmesh/issues/229)). Build from source (`pip install ./src/chilmesh_cpp`) for the C++ path until pre-built binary wheels land.
 
 Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
 
