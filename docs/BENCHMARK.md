@@ -18,6 +18,9 @@
 > still report. `N=0` (default) runs every stage, so local/manual profiling is
 > unaffected — CI passes a finite `N` to keep WNAT-scale meshes manual-only.
 > Example: `python scripts/benchmark.py --mesh wnat.14 --max-elements 500000`.
+> With `--fem-solver iterative`, the FEM stage is profiled even above
+> `--max-elements` (the MINRES/Dirichlet path is memory-safe, #168); only the
+> ADMESH truss stays gated.
 >
 > **Low-memory FEM solver (`--fem-solver iterative`, #168):** instead of
 > skipping the FEM stage on heavy meshes, run it with a Jacobi-preconditioned

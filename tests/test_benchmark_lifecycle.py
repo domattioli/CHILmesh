@@ -63,6 +63,16 @@ def test_gate_heavy_decision(bench):
     assert "4,000,000" in reason and "500,000" in reason
 
 
+def test_fem_gated_is_solver_aware(bench):
+    # heavy mesh + direct solver → FEM gated out (OOM risk)
+    assert bench._fem_gated(True, "direct") is True
+    # heavy mesh + iterative MINRES (#168) → FEM NOT gated (memory-safe)
+    assert bench._fem_gated(True, "iterative") is False
+    # within budget (not heavy) → never gated regardless of solver
+    assert bench._fem_gated(False, "direct") is False
+    assert bench._fem_gated(False, "iterative") is False
+
+
 @pytest.mark.slow
 def test_max_elements_gate_skips_fem(bench, donut_arrays):
     conn, pts = donut_arrays

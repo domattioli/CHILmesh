@@ -272,6 +272,17 @@ def _gate_heavy(n_elems: int, max_elements: int) -> tuple[bool, str]:
                   f"{max_elements:,} gate (FEM solver OOMs at scale, #168)")
 
 
+def _fem_gated(skip_heavy: bool, fem_solver: str) -> bool:
+    """Decide whether the FEM lifecycle stage should be skipped (#155, #168).
+
+    The ``--max-elements`` gate exists because the FEM **direct** sparse solver
+    OOM-kills at WNAT scale. The iterative MINRES path (Dirichlet elimination,
+    #168) is low-memory and safe at that scale, so an iterative FEM run is NOT
+    gated out — it profiles the stage on large meshes where direct would abort.
+    """
+    return skip_heavy and fem_solver == "direct"
+
+
 def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
                     smooth_iters: int, skip_fem: bool = False,
                     skip_skel: bool = False, fem_solver: str = "direct") -> dict:
@@ -284,6 +295,8 @@ def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
     ``skip_fem`` omits the FEM direct smoother stage (``fem_smooth_s`` is then
     ``None``) — used by the ``--max-elements`` gate to keep the OOM-prone solver
     off heavy meshes while the scalable stages still report (#155, #168).
+    When ``fem_solver='iterative'``, FEM is NOT gated out even above
+    ``--max-elements`` (the MINRES/Dirichlet path is memory-safe).
 
     ``skip_skel`` omits skeletonization (``skel_s`` is then ``None``) — used by
     the ``--max-elements`` gate when C++ backend is unavailable and Python
@@ -315,6 +328,7 @@ def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
         "quality_s": statistics.median(qual),
         "fem_smooth_s": None if skip_fem else statistics.median(fem),
         "fem_skipped": skip_fem,
+        "fem_solver": fem_solver,
         "angle_smooth_s": statistics.median(ang),
         "smooth_iters": smooth_iters,
         "n_verts": int(mesh.n_verts),
@@ -465,7 +479,7 @@ def main() -> int:
     skip_heavy, gate_reason = _gate_heavy(n_elems_raw, args.max_elements)
     print("  [lifecycle] Running lifecycle bench...", file=sys.stderr, flush=True)
     life = bench_lifecycle(conn, pts, args.repeats, args.smooth_iters,
-                           skip_fem=skip_heavy, skip_skel=skip_heavy, fem_solver=args.fem_solver)
+                           skip_fem=_fem_gated(skip_heavy, args.fem_solver), skip_skel=skip_heavy, fem_solver=args.fem_solver)
     sdf_name, sdf = _resolve_sdf(args.mesh, args.sdf)
     truss = (bench_truss(conn, pts, sdf, args.repeats, args.truss_iters)
              if (sdf and not skip_heavy) else None)
@@ -487,7 +501,10 @@ def main() -> int:
         f"| Quality (signed area) | {_fmt_s(life['quality_s'])} |",
     ]
     if life["fem_skipped"]:
-        lines.append("| FEM direct smoother | — _(skipped: --max-elements gate)_ |")
+        lines.append("| FEM direct smoother | — _(skipped: --max-elements gate; "
+                     "pass `--fem-solver iterative` to profile at scale, #168)_ |")
+    elif life.get("fem_solver") == "iterative":
+        lines.append(f"| FEM smoother (iterative MINRES, #168) | {_fmt_s(life['fem_smooth_s'])} |")
     else:
         lines.append(f"| FEM direct smoother | {_fmt_s(life['fem_smooth_s'])} |")
     lines.append(f"| Angle-based smoother | {_fmt_s(life['angle_smooth_s'])} |")

@@ -183,3 +183,43 @@ def test_plot_layers_overlay(annulus_path, tmp_path):
 def test_plot_requires_output(annulus_path):
     result = _run(["plot", str(annulus_path)])
     assert result.returncode != 0
+
+
+# ----------------------------------------------------------------------
+# summary
+# ----------------------------------------------------------------------
+
+
+def test_summary_happy_path():
+    """summary subcommand on quad_2x2: returns metadata without layers/quality."""
+    quad_path = examples.fixture_path("quad_2x2.fort.14")
+    result = _run(["summary", str(quad_path)])
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+
+    assert "Summary:" in out, f"'Summary:' not in output: {out}"
+    assert "Format:" in out, f"'Format:' not in output: {out}"
+    assert "Nodes:" in out, f"'Nodes:' not in output: {out}"
+    assert "Elements:" in out, f"'Elements:' not in output: {out}"
+
+
+def test_summary_deep_flag():
+    """summary --deep includes Type and Bbox fields."""
+    quad_path = examples.fixture_path("quad_2x2.fort.14")
+    result = _run(["summary", str(quad_path), "--deep"])
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+
+    assert "Type:" in out, f"'Type:' not in output with --deep: {out}"
+    assert "Bbox:" in out, f"'Bbox:' not in output with --deep: {out}"
+
+
+def test_summary_unknown_format_error(tmp_path):
+    """summary on .xyz file errors with format-related message."""
+    bogus = tmp_path / "mesh.xyz"
+    bogus.write_text("not a real mesh")
+    result = _run(["summary", str(bogus)])
+    assert result.returncode != 0
+    assert "format" in (result.stderr + result.stdout).lower(), (
+        f"'format' not mentioned in error output: {result.stderr}{result.stdout}"
+    )
