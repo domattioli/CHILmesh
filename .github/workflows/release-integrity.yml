@@ -1,8 +1,16 @@
 # DomI-managed workflow (spec-010) — DO NOT EDIT IN THIS REPO.
 # Source: domattioli/DomI templates/workflows/release-integrity.yml — edit upstream, then sync.
 # Drift: sync-from-domi session gate + DomI notify-downstream sync issues.
+#
+# DE-VENDORED (#326): the release-integrity tool is NO LONGER copied into this repo.
+#   It is fetched from domattioli/DomI at runtime via a read-only sparse checkout.
+#   Set repo/org secret DOMI_RO_TOKEN (a PAT with read access to domattioli/DomI) to enable.
+#   No token? The gate steps SKIP with a warning — never a hard failure — so a consumer
+#   without the secret is not blocked. Full enforcement returns the moment the token is added.
+#   This removes the silently-drifting vendored skill copy that caused #326.
+#
 # Publish guard (C5): consumer publish workflows must depend on the release-consistency job below
-# (needs:/workflow_run) or run `release_integrity.py release-check --pypi` before any twine upload.
+# (needs:/workflow_run) or run release_integrity.py release-check --pypi before any twine upload.
 name: release-integrity
 
 on:
@@ -19,34 +27,68 @@ jobs:
     name: API semver gate (warn-first)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      DOMI_RO_TOKEN: ${{ secrets.DOMI_RO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Skip notice if DomI tool token absent
+        if: env.DOMI_RO_TOKEN == ''
+        run: echo "::warning::release-integrity api-gate skipped — secret DOMI_RO_TOKEN not set. Add a read-only domattioli/DomI PAT to enable the semver/changelog gate."
+      - name: Fetch release-integrity tool from DomI
+        if: env.DOMI_RO_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: domattioli/DomI
+          token: ${{ secrets.DOMI_RO_TOKEN }}
+          path: .domi-tool
+          sparse-checkout: skills/release-integrity
       - uses: actions/setup-python@v5
+        if: env.DOMI_RO_TOKEN != ''
         with:
           python-version: "3.12"
       - name: Install griffe
+        if: env.DOMI_RO_TOKEN != ''
         run: python -m pip install --upgrade pip griffe
       - name: API break gate
-        run: python skills/release-integrity/scripts/release_integrity.py api-gate --package "${{ vars.RELEASE_INTEGRITY_PACKAGE }}" --src "${{ vars.RELEASE_INTEGRITY_SRC || 'src' }}" --mode warn
+        if: env.DOMI_RO_TOKEN != ''
+        run: python .domi-tool/skills/release-integrity/scripts/release_integrity.py api-gate --package "${{ vars.RELEASE_INTEGRITY_PACKAGE }}" --src "${{ vars.RELEASE_INTEGRITY_SRC || 'src' }}" --mode warn
       - name: Changelog presence (warn)
-        run: python skills/release-integrity/scripts/release_integrity.py pr-changelog --src "${{ vars.RELEASE_INTEGRITY_SRC || 'src' }}" --base "origin/${{ github.base_ref }}"
+        if: env.DOMI_RO_TOKEN != ''
+        run: python .domi-tool/skills/release-integrity/scripts/release_integrity.py pr-changelog --src "${{ vars.RELEASE_INTEGRITY_SRC || 'src' }}" --base "origin/${{ github.base_ref }}"
 
   release-consistency:
     name: Release consistency (enforce)
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    env:
+      DOMI_RO_TOKEN: ${{ secrets.DOMI_RO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Skip notice if DomI tool token absent
+        if: env.DOMI_RO_TOKEN == ''
+        run: echo "::warning::release-consistency skipped — secret DOMI_RO_TOKEN not set. Add a read-only domattioli/DomI PAT to restore the release-consistency gate."
+      - name: Fetch release-integrity tool from DomI
+        if: env.DOMI_RO_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: domattioli/DomI
+          token: ${{ secrets.DOMI_RO_TOKEN }}
+          path: .domi-tool
+          sparse-checkout: skills/release-integrity
       - uses: actions/setup-python@v5
+        if: env.DOMI_RO_TOKEN != ''
         with:
           python-version: "3.12"
       - name: Install twine
+        if: env.DOMI_RO_TOKEN != ''
         run: python -m pip install --upgrade pip twine build
       - name: Build (for twine check)
+        if: env.DOMI_RO_TOKEN != ''
         run: python -m build
       - name: Release consistency
-        run: python skills/release-integrity/scripts/release_integrity.py release-check --pypi
+        if: env.DOMI_RO_TOKEN != ''
+        run: python .domi-tool/skills/release-integrity/scripts/release_integrity.py release-check --pypi
