@@ -558,3 +558,705 @@ $EndElements
         assert mesh.points[0, 2] == pytest.approx(-1.0)
         assert mesh.points[1, 2] == pytest.approx(-0.5)
         assert mesh.points[2, 2] == pytest.approx(0.0)
+
+
+class TestGmshErrorBranches:
+    """Test error handling for uncovered branches in gmsh_io.py."""
+
+    # v2.2 Reader Error Tests
+    def test_v2_2_meshformat_last_line(self, tmp_path):
+        """Test v2.2 error: $MeshFormat is last line (nothing after)."""
+        content = "$MeshFormat\n"
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_meshformat_blank_version_line(self, tmp_path):
+        """Test v2.2 error: $MeshFormat followed by blank/empty version line."""
+        content = "$MeshFormat\n\n$Nodes\n3\n1 0 0 0\n"
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="no version line"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_nodes_last_line(self, tmp_path):
+        """Test v2.2 error: $Nodes is last line (incomplete)."""
+        # $Elements must come first so section-scan succeeds; then $Nodes is last with no header.
+        content = "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Elements\n0\n$EndElements\n$Nodes"
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_nodes_count_not_integer(self, tmp_path):
+        """Test v2.2 error: $Nodes count line is not an integer."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+abc
+$EndNodes
+$Elements
+0
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="not an integer"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_nodes_fewer_than_declared(self, tmp_path):
+        """Test v2.2 error: $Nodes count says N but fewer node lines present."""
+        # $Elements comes first; then $Nodes with count 3 but only 1 node line, then file ends mid-parse.
+        content = "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Elements\n0\n$EndElements\n$Nodes\n3\n1 0.0 0.0 0.0"
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="expected 3 nodes"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_node_line_too_few_fields(self, tmp_path):
+        """Test v2.2 error: node line has <4 whitespace fields."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+1
+1 0.0 0.0
+$EndNodes
+$Elements
+0
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Node line malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_node_line_non_numeric_coords(self, tmp_path):
+        """Test v2.2 error: node line 4 fields but non-numeric coords."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+1
+1 x y z
+$EndNodes
+$Elements
+0
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="non-numeric"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_no_nodes_found(self, tmp_path):
+        """Test v2.2 error: nodes count is 0 / no nodes parsed."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+0
+$EndNodes
+$Elements
+1
+1 2 2 0 0 1 2 3
+$EndElements
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="No nodes found"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_elements_last_line(self, tmp_path):
+        """Test v2.2 error: $Elements is last line (incomplete)."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+1
+1 0.0 0.0 0.0
+$EndNodes
+$Elements
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_elements_count_not_integer(self, tmp_path):
+        """Test v2.2 error: $Elements count not an integer."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+1
+1 0.0 0.0 0.0
+$EndNodes
+$Elements
+xyz
+1 2 2 0 0 1 1 1
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="not an integer"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_elements_fewer_than_declared(self, tmp_path):
+        """Test v2.2 error: $Elements count says N but fewer element lines."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+3
+1 0.0 0.0 0.0
+2 1.0 0.0 0.0
+3 1.0 1.0 0.0
+$EndNodes
+$Elements
+2
+1 2 2 0 0 1 2 3
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="expected 2 elements"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_element_line_too_few_fields(self, tmp_path):
+        """Test v2.2 error: element line has <4 fields."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+3
+1 0.0 0.0 0.0
+2 1.0 0.0 0.0
+3 1.0 1.0 0.0
+$EndNodes
+$Elements
+1
+1 2 2
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Element line malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_triangle_element_line_too_short(self, tmp_path):
+        """Test v2.2 error: triangle (type 2) element line too short for nodes."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+3
+1 0.0 0.0 0.0
+2 1.0 0.0 0.0
+3 1.0 1.0 0.0
+$EndNodes
+$Elements
+1
+1 2 2 0 0 1 2
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="too short"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_element_line_non_numeric(self, tmp_path):
+        """Test v2.2 error: element line with non-numeric fields."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+3
+1 0.0 0.0 0.0
+2 1.0 0.0 0.0
+3 1.0 1.0 0.0
+$EndNodes
+$Elements
+1
+1 abc 2 0 0 1 2 3
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="malformed or non-numeric"):
+            chilmesh.read_msh(str(path))
+
+    def test_v2_2_no_supported_elements(self, tmp_path):
+        """Test v2.2 error: only unsupported element types (e.g. lines/points)."""
+        content = """$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$Nodes
+2
+1 0.0 0.0 0.0
+2 1.0 0.0 0.0
+$EndNodes
+$Elements
+1
+1 1 2 0 0 1 2
+"""
+        path = _write_msh_v2_2(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="No supported elements"):
+            chilmesh.read_msh(str(path))
+
+    # v4.1 Reader Error Tests
+    def test_v4_1_nodes_last_line(self, tmp_path):
+        """Test v4.1 error: $Nodes is last line (incomplete)."""
+        # $Elements first, then $Nodes as final line with no header.
+        content = "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n$Elements\n0 0 1 0\n$EndElements\n$Nodes"
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_nodes_header_too_few_fields(self, tmp_path):
+        """Test v4.1 error: $Nodes header has <4 fields."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 2 3
+$EndNodes
+$Elements
+0 0 0 0
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="header malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_nodes_header_non_numeric(self, tmp_path):
+        """Test v4.1 error: $Nodes header non-numeric."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+a b c d
+$EndNodes
+$Elements
+0 0 0 0
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="non-numeric"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_node_block_truncated_before_header(self, tmp_path):
+        """Test v4.1 error: node block truncated before its header."""
+        # $Elements first; then $Nodes header saying 1 block exists, but file ends before block header.
+        content = "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n$Elements\n0 0 1 0\n$EndElements\n$Nodes\n1 1 1 1"
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_node_block_header_too_few_fields(self, tmp_path):
+        """Test v4.1 error: node block header <4 fields."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 2
+$EndNodes
+$Elements
+0 0 0 0
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="header malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_node_block_header_non_numeric(self, tmp_path):
+        """Test v4.1 error: node block header non-numeric."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+a b c d
+$EndNodes
+$Elements
+0 0 0 0
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="non-numeric"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_node_tags_truncated(self, tmp_path):
+        """Test v4.1 error: node-tags truncated before all read."""
+        # $Elements first; block header says 2 tags but only 1 tag line present, file ends.
+        content = "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n$Elements\n0 0 1 0\n$EndElements\n$Nodes\n1 2 1 2\n0 1 0 2\n1"
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="node-tags incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_node_tag_line_non_integer(self, tmp_path):
+        """Test v4.1 error: node tag line non-integer."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+abc
+$EndNodes
+$Elements
+0 0 0 0
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Node tag line malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_coordinates_truncated(self, tmp_path):
+        """Test v4.1 error: coordinates truncated."""
+        # $Elements first; $Nodes header + block header + 1 tag line but no coordinate line, file ends.
+        content = "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n$Elements\n0 0 1 0\n$EndElements\n$Nodes\n1 1 1 1\n0 1 0 1\n1"
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="coordinates incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_coordinate_line_too_few_fields(self, tmp_path):
+        """Test v4.1 error: coordinate line <3 fields."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0
+$EndNodes
+$Elements
+0 0 0 0
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="coordinate line malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_coordinate_line_non_numeric(self, tmp_path):
+        """Test v4.1 error: coordinate line non-numeric."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+x y z
+$EndNodes
+$Elements
+0 0 0 0
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="non-numeric"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_no_nodes_found(self, tmp_path):
+        """Test v4.1 error: no nodes parsed."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+0 0 0 0
+$EndNodes
+$Elements
+1 1 1 1
+2 1 2 1
+1 1 2 3
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="No nodes found"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_elements_last_line(self, tmp_path):
+        """Test v4.1 error: $Elements is last line (incomplete)."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+$Elements
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_elements_header_too_few_fields(self, tmp_path):
+        """Test v4.1 error: $Elements header <4 fields."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+$Elements
+1 2 3
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="header malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_elements_header_non_numeric(self, tmp_path):
+        """Test v4.1 error: $Elements header non-numeric."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+$Elements
+a b c d
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="non-numeric"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_element_block_truncated_before_header(self, tmp_path):
+        """Test v4.1 error: element block truncated before header."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+$Elements
+1 1 1 1
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_element_block_header_too_few_fields(self, tmp_path):
+        """Test v4.1 error: element block header <4 fields."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+$Elements
+1 1 1 1
+2 1 2
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="header malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_element_block_header_non_numeric(self, tmp_path):
+        """Test v4.1 error: element block header non-numeric."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+$Elements
+1 1 1 1
+a b c d
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="non-numeric"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_element_block_truncated_mid_block(self, tmp_path):
+        """Test v4.1 error: element block truncated mid-block."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+$Elements
+1 2 1 1
+2 1 2 2
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="incomplete"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_triangle_element_line_too_short(self, tmp_path):
+        """Test v4.1 error: triangle (type 2) element line too short (<4 fields)."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 3 1 3
+0 1 0 3
+1
+2
+3
+0.0 0.0 0.0
+1.0 0.0 0.0
+1.0 1.0 0.0
+$EndNodes
+$Elements
+1 1 1 1
+2 1 2 1
+1 1 2
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Triangle element line too short"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_quad_element_line_too_short(self, tmp_path):
+        """Test v4.1 error: quad (type 3) element line too short (<5 fields)."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 4 1 4
+0 1 0 4
+1
+2
+3
+4
+0.0 0.0 0.0
+1.0 0.0 0.0
+1.0 1.0 0.0
+0.0 1.0 0.0
+$EndNodes
+$Elements
+1 1 1 1
+2 2 3 1
+1 1 2 3
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Quad element line too short"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_element_line_non_numeric_tag(self, tmp_path):
+        """Test v4.1 error: element line non-numeric tag."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 3 1 3
+0 1 0 3
+1
+2
+3
+0.0 0.0 0.0
+1.0 0.0 0.0
+1.0 1.0 0.0
+$EndNodes
+$Elements
+1 1 1 1
+2 1 2 1
+x 1 2 3
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Element line malformed"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_no_supported_elements(self, tmp_path):
+        """Test v4.1 error: only unsupported element types."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 2 1 2
+0 1 0 2
+1
+2
+0.0 0.0 0.0
+1.0 0.0 0.0
+$EndNodes
+$Elements
+1 1 1 1
+2 1 1 1
+1 1 2
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="No supported elements"):
+            chilmesh.read_msh(str(path))
+
+    # Writer Error Tests (unwritable path)
+    def test_write_msh_v2_2_write_failure(self, tmp_path):
+        """Test v2.2 write failure: unwritable path (nonexistent directory)."""
+        points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
+        conn = np.array([[0, 1, 2]])
+        bad_path = str(tmp_path / "nonexistent_dir" / "out.msh")
+
+        result = chilmesh.write_msh(bad_path, points, conn, version="2.2")
+        assert result is False
+
+    def test_write_msh_v4_1_write_failure(self, tmp_path):
+        """Test v4.1 write failure: unwritable path (nonexistent directory)."""
+        points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
+        conn = np.array([[0, 1, 2]])
+        bad_path = str(tmp_path / "nonexistent_dir" / "out.msh")
+
+        result = chilmesh.write_msh(bad_path, points, conn, version="4.1")
+        assert result is False
+
+    def test_v4_1_missing_nodes_section(self, tmp_path):
+        """Test v4.1 error: Missing $Nodes section."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Elements
+0 0 1 0
+$EndElements
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Missing.*Nodes"):
+            chilmesh.read_msh(str(path))
+
+    def test_v4_1_missing_elements_section(self, tmp_path):
+        """Test v4.1 error: Missing $Elements section."""
+        content = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 1 1 1
+0 1 0 1
+1
+0.0 0.0 0.0
+$EndNodes
+"""
+        path = _write_msh_v4_1(tmp_path, content, "bad.msh")
+
+        with pytest.raises(chilmesh.GmshParseError, match="Missing.*Elements"):
+            chilmesh.read_msh(str(path))
