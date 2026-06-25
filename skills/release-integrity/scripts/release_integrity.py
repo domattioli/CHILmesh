@@ -6,6 +6,7 @@ they unit-test without I/O. main() gathers git/griffe/twine state and dispatches
 from __future__ import annotations
 
 import argparse
+import glob
 import subprocess
 import sys
 from typing import List, Optional, Tuple
@@ -38,6 +39,19 @@ def run_release_check(tag: str, version: str, changelog_text: str, twine_ok: boo
 
 def _run(cmd: List[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def _twine_ok() -> bool:
+    """True iff `twine check` passes for the built distributions in dist/.
+
+    twine requires explicit distribution paths (a bare `twine check` exits non-zero),
+    and an empty dist/ (nothing built) must not pass the release gate, so absence of
+    artifacts is itself a failure.
+    """
+    dist_files = sorted(glob.glob("dist/*"))
+    if not dist_files:
+        return False
+    return _run([sys.executable, "-m", "twine", "check", *dist_files]).returncode == 0
 
 
 def _latest_tag() -> Optional[str]:
@@ -76,7 +90,7 @@ def _cmd_release_check(args) -> int:
         cl = f.read()
     twine_ok = True
     if args.pypi:
-        twine_ok = _run([sys.executable, "-m", "twine", "check"]).returncode == 0
+        twine_ok = _twine_ok()
     code, msg = run_release_check(tag, version, cl, twine_ok)
     print(msg)
     return code

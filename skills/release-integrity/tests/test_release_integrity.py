@@ -51,3 +51,33 @@ def test_release_check_fails_on_twine():
         changelog_text="## [1.2.0] — 2026-05-24\n\n- x\n", twine_ok=False)
     assert code == 1
     assert "twine" in msg.lower()
+
+
+def test_twine_ok_empty_dist_fails_without_invoking_twine(monkeypatch):
+    """An empty dist/ (nothing built) must fail the gate and not call twine."""
+    calls = []
+    monkeypatch.setattr(ri.glob, "glob", lambda pattern: [])
+    monkeypatch.setattr(ri, "_run", lambda cmd: calls.append(cmd))
+    assert ri._twine_ok() is False
+    assert calls == []
+
+
+def test_twine_ok_passes_dist_files_to_twine(monkeypatch):
+    """Regression: twine must be invoked WITH the built dist files, not bare
+    (a bare `twine check` exits non-zero and spuriously fails every release)."""
+    captured = {}
+
+    class _R:
+        returncode = 0
+
+    def fake_run(cmd):
+        captured["cmd"] = cmd
+        return _R()
+
+    monkeypatch.setattr(
+        ri.glob, "glob",
+        lambda pattern: ["dist/pkg-1.0.tar.gz", "dist/pkg-1.0-py3-none-any.whl"])
+    monkeypatch.setattr(ri, "_run", fake_run)
+    assert ri._twine_ok() is True
+    assert captured["cmd"][:4] == [sys.executable, "-m", "twine", "check"]
+    assert captured["cmd"][4:] == ["dist/pkg-1.0-py3-none-any.whl", "dist/pkg-1.0.tar.gz"]
