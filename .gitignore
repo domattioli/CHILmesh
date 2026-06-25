@@ -89,3 +89,4 @@ src/chilmesh_cpp/build_local/
 # guard prevents a session that follows it from re-leaking retros into CHILmesh (#214).
 docs/introspections/
 .introspect/
+.planning/introspections/
