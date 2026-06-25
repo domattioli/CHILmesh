@@ -81,3 +81,11 @@ src/chilmesh_cpp/build_local/
 # Symlink to /workspace/CHILmesh created by the remote-exec harness at session
 # start (points outside the repo) — never track it.
 /CHILmesh
+
+# DomI-owned governance artifacts — must NOT live in this consumer repo.
+# Introspection corpus is DomI-owned (introspect-v2, DomI #296): records belong in
+# DomI .introspect/<repo>/, never here. The deprecated docs/introspections/ path is a
+# stale routine-doc directive (DomI claude_routine_instructions.md drift vs the v2 skill);
+# guard prevents a session that follows it from re-leaking retros into CHILmesh (#214).
+docs/introspections/
+.introspect/
