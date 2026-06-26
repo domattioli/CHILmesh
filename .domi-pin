@@ -4,6 +4,6 @@
 
 upstream: domattioli/DomI
 branch: main
-sha: 10a50514140d63af7b6d8822baa1ff358d8bfcb5
-manifest_sha256: a945928ba3e624895e247a609304f1a9b0aa1c507b56e75cd56c7921ebe5b51a
-pinned_at: 2026-06-25T18:13:14Z
+sha: 1e1f1601308867edcfd661e54e01987b011dad4a
+manifest_sha256: b195ab247c0ad55519ca80c5e021d1851aca88491642108dcba0619e60084ad4
+pinned_at: 2026-06-26T02:13:05Z
