@@ -202,14 +202,14 @@ class TestSummaryFileStatErrors:
     """Test file stat errors (lines 104-105)."""
 
     def test_nonexistent_file_stat_error(self, tmp_path):
-        """Calling summary() on nonexistent file raises SummaryError with 'cannot stat'."""
+        """Calling summary() on nonexistent file raises FileNotFoundError (issue #235)."""
         nonexistent = tmp_path / "nonexistent.14"
 
-        with pytest.raises(SummaryError) as exc_info:
+        with pytest.raises(FileNotFoundError) as exc_info:
             summary(nonexistent)
 
-        assert "cannot stat" in str(exc_info.value).lower(), (
-            f"SummaryError should mention 'cannot stat', got: {exc_info.value}"
+        assert "no such file" in str(exc_info.value).lower(), (
+            f"FileNotFoundError should mention 'no such file', got: {exc_info.value}"
         )
 
 
