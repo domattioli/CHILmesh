@@ -47,6 +47,8 @@ def summary(path_or_mesh, *, deep: bool = False) -> dict:
 
     Raises
     ------
+    FileNotFoundError
+        If the given path does not exist.
     SummaryError
         If file format is unrecognized, file cannot be read, or mesh object
         is invalid.
@@ -86,6 +88,11 @@ def _summary_from_mesh(mesh) -> dict:
 
 def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
     """Extract metadata from a mesh file."""
+    # Missing file → FileNotFoundError so CLI exit code matches `info`
+    # (cli.main catches FileNotFoundError → exit 2). See issue #235.
+    if not path.exists():
+        raise FileNotFoundError(f"No such file: {path}")
+
     # Infer format from file suffix
     suffix = path.suffix.lower()
 

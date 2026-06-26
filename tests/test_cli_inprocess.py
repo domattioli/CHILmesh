@@ -187,16 +187,16 @@ def test_cmd_summary_deep_flag(quad_2x2_path, capsys):
     assert "Bbox:" in out
 
 
-def test_main_summary_missing_file_returns_1(tmp_path, capsys):
-    """main(['summary', nonexistent_path]) raises generic Exception, returns 1.
+def test_main_summary_missing_file_returns_2(tmp_path, capsys):
+    """main(['summary', nonexistent_path]) raises FileNotFoundError, returns 2.
 
-    Note: summary() calls stat() which raises a different exception than
-    FileNotFoundError, so main's generic Exception handler (not the
-    FileNotFoundError handler) catches it and returns 1.
+    Normalized to match `info` command behavior (issue #235): missing file
+    raises FileNotFoundError, which main's FileNotFoundError handler catches
+    and returns exit code 2.
     """
     bogus = tmp_path / "does_not_exist.fort.14"
     result = main(["summary", str(bogus)])
-    assert result == 1
+    assert result == 2
     captured = capsys.readouterr()
     error_out = captured.err + captured.out
     assert "error:" in error_out
