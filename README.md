@@ -157,7 +157,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 | Language | Role | How to get it |
 |---|---|---|
 | **Python** | Reference implementation — the default | `pip install chilmesh` |
-| **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (build from source) |
+| **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (or `bash scripts/build_cpp.sh`) |
 | Rust | Experimental (quad-edge); skeletonization is incomplete — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
 | MATLAB | Original 2017 implementation, archived & unmaintained | [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) |
 
@@ -173,7 +173,7 @@ chilmesh.backend_info()
 
 > **PyPI installs are pure-Python.** The example above reflects a **source build** of the C++ extension. A plain `pip install chilmesh` from PyPI currently ships **no compiled extension**, so `backend_info()` reports `{'available': ['python'], 'selected': 'python'}` ([#229](https://github.com/domattioli/CHILmesh/issues/229)). Build from source (`pip install ./src/chilmesh_cpp`) for the C++ path until pre-built binary wheels land.
 
-Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
+Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. The cpp↔python bit-identity guarantee is gated in CI by the `cpp-equivalence` job (ubuntu), which builds the extension and runs [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py). Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
 
 ### Engine
 
