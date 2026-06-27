@@ -25,12 +25,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as td:
         out_path = Path(td) / "annulus_copy.fort.14"
 
-        write_fort14(
-            out_path,
-            points=src.points,
-            elements=src.connectivity_list,
-            grid_name="annulus-roundtrip",
-        )
+        src.grid_name = "annulus-roundtrip"
+        write_fort14(src, out_path)
         print(f"wrote {out_path.name} ({out_path.stat().st_size:,} bytes)")
 
         loaded = CHILmesh.read_from_fort14(out_path)
