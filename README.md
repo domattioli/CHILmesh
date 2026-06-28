@@ -122,7 +122,7 @@ Like-for-like: every backend runs the same operation on the same in-memory array
 - **C++ leads every stage** — full init 8.6× over Python, 11.6× over Octave.
 - **Octave builds adjacency 2.4× faster than Python** — `sparse()`-accumulated, in compiled built-ins.
 - **Python layerizes 2.2× faster than Octave** — ~26% ahead on full init overall.
-- **Rust pending** (`tbd`) — skeletonization incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
+- **Rust** — skeletonization now matches Python on `n_layers`, layer-member sets (OE/IE/OV/IV), and signed areas, verified by the `rust-equivalence` CI job ([#163](https://github.com/domattioli/CHILmesh/issues/163)); perf timings (`tbd`) and a residual boundary-edge-id ordering divergence are still open on #163.
 
 ‡ Octave 8.4, interpreter. Times are in-memory compute only — fort.14 parse and rendering excluded. Machine-dependent. Full method: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
@@ -158,7 +158,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 |---|---|---|
 | **Python** | Reference implementation — the default | `pip install chilmesh` |
 | **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (or `bash scripts/build_cpp.sh`) |
-| Rust | Experimental (quad-edge); skeletonization is incomplete — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
+| Rust | Experimental (quad-edge); skeletonization reaches `n_layers`/layer-member parity with Python (`rust-equivalence` CI), perf + edge-id ordering still open — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
 | MATLAB | Original 2017 implementation, archived & unmaintained | [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) |
 
 ```python
