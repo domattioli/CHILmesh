@@ -157,6 +157,73 @@ def test_backend_info_reports_cpp_when_available():
     assert "cpp" in info["available"]
 
 
+def _build_rust_mesh(mesh):
+    """Build a chilmesh_core.RustMesh from a Python CHILmesh via the array API."""
+    points, conn = _arrays_for_cpp(mesh)
+    r = chilmesh_core.RustMesh()
+    r.set_points(points)
+    r.set_connectivity(conn)
+    r.build_adjacencies()
+    r.skeletonize()
+    return r
+
+
+# NOTE: Rust parity is asserted on n_layers, the OE/IE/OV/IV layer member sets,
+# and signed areas only. bEdgeIDs and Vert2Edge are intentionally excluded: the
+# Rust backend assigns edge IDs in its own internally-consistent ordering that
+# differs from Python's, so raw boundary-edge IDs are not comparable across
+# backends (CHILmesh #163). Element-id (OE/IE) and vertex-id (OV/IV) membership
+# are stable identities and DO match.
+@pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+def test_rust_layer_count_matches_python(fixture):
+    """Rust skeletonization must produce same number of layers as Python."""
+    mesh = _load_python_mesh(fixture)
+    rust = _build_rust_mesh(mesh)
+    assert mesh.n_layers == rust.get_num_layers(), (
+        f"layer count mismatch on {fixture}: "
+        f"Python={mesh.n_layers}, Rust={rust.get_num_layers()}"
+    )
+
+
+@pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+@pytest.mark.parametrize("layer_key", ["OE", "IE", "OV", "IV"])
+def test_rust_layer_member_sets_match_python(fixture, layer_key):
+    """For each layer, the OE/IE/OV/IV member sets must match Python.
+
+    bEdgeIDs is excluded — Rust uses a backend-private edge-id ordering (#163).
+    """
+    mesh = _load_python_mesh(fixture)
+    rust = _build_rust_mesh(mesh)
+    assert mesh.n_layers == rust.get_num_layers()
+    layers = rust.get_all_layers()
+    for i in range(mesh.n_layers):
+        py_set = set(mesh.Layers[layer_key][i].tolist())
+        rust_set = set(layers[i][layer_key])
+        assert py_set == rust_set, (
+            f"{fixture} layer {i} {layer_key} mismatch: "
+            f"Python {len(py_set)}, Rust {len(rust_set)}, "
+            f"symmetric diff size {len(py_set ^ rust_set)}"
+        )
+
+
+@pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+def test_rust_signed_area_matches_python(fixture):
+    """quality_analysis (signed areas) must match Python to float64 tolerance."""
+    mesh = _load_python_mesh(fixture)
+    rust = _build_rust_mesh(mesh)
+    rust.compute_quality()
+    rust_areas = np.asarray(rust.get_signed_areas())
+    py_areas = mesh.signed_area(np.arange(mesh.n_elems, dtype=np.intp))
+    assert py_areas.shape == rust_areas.shape
+    np.testing.assert_allclose(
+        py_areas, rust_areas, rtol=1e-9, atol=1e-12,
+        err_msg=f"signed areas diverge on {fixture}",
+    )
+
+
 @pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
 def test_backend_info_reports_rust_when_available():
     """When chilmesh_core is importable, backend_info lists 'rust'."""
