@@ -11,7 +11,14 @@ pybind11_add_module(chilmesh_cpp
     src/bindings.cpp
 )
 
-target_compile_options(chilmesh_cpp PRIVATE -O3 -march=native)
+# -march=native bakes the build machine's CPU instruction set into the wheel,
+# which SIGILLs on older consumer CPUs — never use it for distributable wheels.
+# Default to portable -O3; opt in to native tuning only for local builds.
+option(CHILMESH_NATIVE_ARCH "Tune for the build machine's CPU (non-portable; do NOT use for distributable wheels)" OFF)
+target_compile_options(chilmesh_cpp PRIVATE -O3)
+if(CHILMESH_NATIVE_ARCH)
+    target_compile_options(chilmesh_cpp PRIVATE -march=native)
+endif()
 target_include_directories(chilmesh_cpp PRIVATE src)
 
 # scikit-build-core only packages what CMake installs. Without this rule the
