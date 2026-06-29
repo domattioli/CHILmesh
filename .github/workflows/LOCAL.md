@@ -8,3 +8,4 @@ workflows fail the workflow-conformance gate.
 |---|---|
 | `python-package.yml` | full cross-OS test matrix incl. macOS lanes (main-push gated) — macOS gating is repo-local by design (spec-010 v2.2 rule 8) |
 | `publish-pypi.yml` | PyPI release, tag-triggered — repo-specific release pipeline |
+| `build-cpp-wheels.yml` | build-only manylinux wheel validation for the chilmesh_cpp binary backend (workflow_dispatch, artifacts only, no publish) — repo-specific packaging (#229) |
