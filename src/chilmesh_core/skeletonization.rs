@@ -48,15 +48,11 @@ pub fn skeletonize_medial_axis(
     _quality_threshold: Option<f64>,
 ) -> Result<Vec<Layer>, String> {
     let n_elems = connectivity.shape()[0];
-    let n_verts = points.shape()[0];
+    let _n_verts = points.shape()[0];
 
-    // Step 0: Build initial edge2elem adjacency
-    let mut edge2elem = build_edge2elem(connectivity);
-    let mut edge2vert = build_edge2vert(connectivity);
-
-    // Initialize tracking
+    // Step 0: Build initial aligned (edge2vert, edge2elem) — shared edge-id order
     let mut remaining_elems: HashSet<usize> = (0..n_elems).collect();
-    let mut remaining_verts: HashSet<usize> = (0..n_verts).collect();
+    let (mut edge2vert, mut edge2elem) = build_edge_adjacency_subset(connectivity, &remaining_elems);
     let mut layers: Vec<Layer> = Vec::new();
 
     while !remaining_elems.is_empty() {
@@ -127,11 +123,6 @@ pub fn skeletonize_medial_axis(
             remaining_elems.remove(&elem);
         }
 
-        // Step 1h: Remove OV vertices from remaining_verts
-        for &vert in &layer_ov {
-            remaining_verts.remove(&vert);
-        }
-
         // Create and store layer
         layers.push(Layer {
             oe: oe_elems,
@@ -141,10 +132,11 @@ pub fn skeletonize_medial_axis(
             b_edge_ids: boundary_edge_ids,
         });
 
-        // Step 1i: Recompute adjacency for next iteration (only for remaining elements)
+        // Step 1i: Recompute aligned adjacency for the remaining elements
         if !remaining_elems.is_empty() {
-            edge2elem = build_edge2elem_subset(connectivity, &remaining_elems);
-            edge2vert = build_edge2vert_subset(connectivity, &remaining_verts);
+            let (ev, ee) = build_edge_adjacency_subset(connectivity, &remaining_elems);
+            edge2vert = ev;
+            edge2elem = ee;
         }
     }
 
@@ -154,67 +146,21 @@ pub fn skeletonize_medial_axis(
     Ok(layers)
 }
 
-/// Build Edge2Elem adjacency: edge → [elem1, elem2] (or [-1, elem] for boundary)
-fn build_edge2elem(connectivity: &Array2<i32>) -> Vec<Vec<i32>> {
-    let n_elems = connectivity.shape()[0];
-    let mut edge_map: std::collections::HashMap<(i32, i32), Vec<i32>> = std::collections::HashMap::new();
-
-    for elem in 0..n_elems {
-        let edges = get_element_edges(elem, connectivity);
-        for edge in edges {
-            let key = if edge[0] <= edge[1] {
-                (edge[0], edge[1])
-            } else {
-                (edge[1], edge[0])
-            };
-            edge_map.entry(key).or_insert_with(Vec::new).push(elem as i32);
-        }
-    }
-
-    let mut edge2elem_vec = Vec::new();
-    for (_key, elems) in edge_map.into_iter() {
-        if elems.len() == 1 {
-            edge2elem_vec.push(vec![-1, elems[0]]);
-        } else if elems.len() >= 2 {
-            edge2elem_vec.push(vec![elems[0], elems[1]]);
-        }
-    }
-
-    edge2elem_vec
-}
-
-/// Build Edge2Vert adjacency: maps each edge to its two vertices
-fn build_edge2vert(connectivity: &Array2<i32>) -> Vec<(i32, i32)> {
-    let n_elems = connectivity.shape()[0];
-    let mut edge_set: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
-
-    for elem in 0..n_elems {
-        let edges = get_element_edges(elem, connectivity);
-        for edge in edges {
-            let normalized = if edge[0] <= edge[1] {
-                (edge[0], edge[1])
-            } else {
-                (edge[1], edge[0])
-            };
-            edge_set.insert(normalized);
-        }
-    }
-
-    let mut edge_vec: Vec<_> = edge_set.into_iter().collect();
-    edge_vec.sort();
-    edge_vec
-}
-
-/// Build Edge2Elem for only remaining elements
-fn build_edge2elem_subset(
+/// Build aligned (edge2vert, edge2elem) restricted to `remaining` elements.
+///
+/// Both returned vecs share ONE edge ordering: index `i` denotes the same
+/// physical edge in `edge2vert[i]` and `edge2elem[i]`. Order is the sorted
+/// canonical (min,max) vertex key, so it is deterministic and HashMap-order
+/// independent. `edge2elem[i]` is `[elemA, elemB]` for an interior edge or
+/// `[-1, elem]` for a boundary edge (≤1 incident remaining element).
+fn build_edge_adjacency_subset(
     connectivity: &Array2<i32>,
     remaining: &HashSet<usize>,
-) -> Vec<Vec<i32>> {
-    let mut edge_map: std::collections::HashMap<(i32, i32), Vec<i32>> = std::collections::HashMap::new();
-
+) -> (Vec<(i32, i32)>, Vec<Vec<i32>>) {
+    let mut edge_map: std::collections::HashMap<(i32, i32), Vec<i32>> =
+        std::collections::HashMap::new();
     for &elem in remaining {
-        let edges = get_element_edges(elem, connectivity);
-        for edge in edges {
+        for edge in get_element_edges(elem, connectivity) {
             let key = if edge[0] <= edge[1] {
                 (edge[0], edge[1])
             } else {
@@ -223,45 +169,20 @@ fn build_edge2elem_subset(
             edge_map.entry(key).or_insert_with(Vec::new).push(elem as i32);
         }
     }
-
-    let mut edge2elem_vec = Vec::new();
-    for (_key, elems) in edge_map.into_iter() {
+    let mut keys: Vec<(i32, i32)> = edge_map.keys().copied().collect();
+    keys.sort();
+    let mut edge2vert = Vec::with_capacity(keys.len());
+    let mut edge2elem = Vec::with_capacity(keys.len());
+    for key in keys {
+        let elems = &edge_map[&key];
+        edge2vert.push(key);
         if elems.len() == 1 {
-            edge2elem_vec.push(vec![-1, elems[0]]);
-        } else if elems.len() >= 2 {
-            edge2elem_vec.push(vec![elems[0], elems[1]]);
+            edge2elem.push(vec![-1, elems[0]]);
+        } else {
+            edge2elem.push(vec![elems[0], elems[1]]);
         }
     }
-
-    edge2elem_vec
-}
-
-/// Build Edge2Vert for only remaining vertices
-fn build_edge2vert_subset(
-    connectivity: &Array2<i32>,
-    remaining: &HashSet<usize>,
-) -> Vec<(i32, i32)> {
-    let mut edge_set: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
-
-    let n_elems = connectivity.shape()[0];
-    for elem in 0..n_elems {
-        let edges = get_element_edges(elem, connectivity);
-        for edge in edges {
-            // Only include edge if both vertices are in remaining set
-            if remaining.contains(&(edge[0] as usize)) && remaining.contains(&(edge[1] as usize)) {
-                let normalized = if edge[0] <= edge[1] {
-                    (edge[0], edge[1])
-                } else {
-                    (edge[1], edge[0])
-                };
-                edge_set.insert(normalized);
-            }
-        }
-    }
-
-    let mut edge_vec: Vec<_> = edge_set.into_iter().collect();
-    edge_vec.sort();
-    edge_vec
+    (edge2vert, edge2elem)
 }
 
 /// Get edges of an element (handles triangles and quads)
@@ -464,4 +385,62 @@ fn validate_layers(layers: &[Layer], total_elems: usize) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::Array2;
+
+    /// Structured NxN quad grid: nodes (N+1)x(N+1), CCW quads.
+    fn grid(n: usize) -> (Array2<f64>, Array2<i32>) {
+        let np = n + 1;
+        let mut pts = Vec::with_capacity(np * np * 2);
+        for i in 0..np {
+            for j in 0..np {
+                pts.push(i as f64);
+                pts.push(j as f64);
+            }
+        }
+        let points = Array2::from_shape_vec((np * np, 2), pts).unwrap();
+        let mut conn = Vec::with_capacity(n * n * 4);
+        let id = |i: usize, j: usize| (i * np + j) as i32;
+        for i in 0..n {
+            for j in 0..n {
+                conn.push(id(i, j));
+                conn.push(id(i + 1, j));
+                conn.push(id(i + 1, j + 1));
+                conn.push(id(i, j + 1));
+            }
+        }
+        let connectivity = Array2::from_shape_vec((n * n, 4), conn).unwrap();
+        (points, connectivity)
+    }
+
+    #[test]
+    fn skeletonize_peels_multiple_layers() {
+        // Regression for #163: array-fed skeletonize previously returned
+        // n_layers==2 for every mesh due to misaligned edge-id spaces.
+        let (points, connectivity) = grid(8); // 64 quads
+        let layers = skeletonize_medial_axis(&connectivity, &points, None).unwrap();
+        assert!(
+            layers.len() > 2,
+            "expected concentric peel to yield >2 layers, got {}",
+            layers.len()
+        );
+        // Coverage: every element classified exactly once.
+        let total: usize = layers.iter().map(|l| l.oe.len() + l.ie.len()).sum();
+        assert_eq!(total, connectivity.shape()[0]);
+    }
+
+    #[test]
+    fn skeletonize_layer_count_grows_with_size() {
+        let small = skeletonize_medial_axis(&grid(4).1, &grid(4).0, None).unwrap().len();
+        let large = skeletonize_medial_axis(&grid(12).1, &grid(12).0, None).unwrap().len();
+        assert!(
+            large > small,
+            "bigger grid must peel more layers: grid(12)={} !> grid(4)={}",
+            large, small
+        );
+    }
 }

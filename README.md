@@ -122,7 +122,7 @@ Like-for-like: every backend runs the same operation on the same in-memory array
 - **C++ leads every stage** — full init 8.6× over Python, 11.6× over Octave.
 - **Octave builds adjacency 2.4× faster than Python** — `sparse()`-accumulated, in compiled built-ins.
 - **Python layerizes 2.2× faster than Octave** — ~26% ahead on full init overall.
-- **Rust pending** (`tbd`) — skeletonization incomplete ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
+- **Rust** — skeletonization now matches Python on `n_layers`, layer-member sets (OE/IE/OV/IV), and signed areas, verified by the `rust-equivalence` CI job ([#163](https://github.com/domattioli/CHILmesh/issues/163)); perf timings (`tbd`) and a residual boundary-edge-id ordering divergence are still open on #163.
 
 ‡ Octave 8.4, interpreter. Times are in-memory compute only — fort.14 parse and rendering excluded. Machine-dependent. Full method: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
@@ -157,20 +157,23 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 | Language | Role | How to get it |
 |---|---|---|
 | **Python** | Reference implementation — the default | `pip install chilmesh` |
-| **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (build from source) |
-| Rust | Experimental (quad-edge); skeletonization is incomplete — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
+| **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (or `bash scripts/build_cpp.sh`) |
+| Rust | Experimental (quad-edge); skeletonization reaches `n_layers`/layer-member parity with Python (`rust-equivalence` CI), perf + edge-id ordering still open — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
 | MATLAB | Original 2017 implementation, archived & unmaintained | [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) |
 
 ```python
 import chilmesh
 
 chilmesh.backend_info()
+# After a source build of the C++ extension:
 # {'available': ['cpp', 'python'],
 #  'selected': 'cpp',
 #  'versions': {'cpp': '0.6.0.dev0', 'python': '1.2.2'}}
 ```
 
-Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
+> **PyPI installs are pure-Python.** The example above reflects a **source build** of the C++ extension. A plain `pip install chilmesh` from PyPI currently ships **no compiled extension**, so `backend_info()` reports `{'available': ['python'], 'selected': 'python'}` ([#229](https://github.com/domattioli/CHILmesh/issues/229)). Build from source (`pip install ./src/chilmesh_cpp`) for the C++ path until pre-built binary wheels land.
+
+Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset, the fastest available is picked. The cpp↔python bit-identity guarantee is gated in CI by the `cpp-equivalence` job (ubuntu), which builds the extension and runs [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py). Pre-built binary wheels (`manylinux` / `macOS` / `Windows`) via `cibuildwheel` are planned — see [`docs/`](docs/) for build-from-source instructions.
 
 ### Engine
 

@@ -100,3 +100,81 @@ jobs:
           "$VENV_PY" -m pip install --upgrade pip
           "$VENV_PY" -m pip install dist/*.whl
           "$VENV_PY" -c "import chilmesh; m = chilmesh.examples.annulus(); print('OK', m.n_elems)"
+
+  cpp-equivalence:
+    name: cpp backend parity (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          check-latest: true
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package, dev deps, and C++ backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip install ./src/chilmesh_cpp
+
+      - name: Assert C++ backend is active (no silent skip)
+        run: |
+          python - <<'PY'
+          import chilmesh, sys
+          info = chilmesh.backend_info()
+          print("backend_info:", info)
+          if "cpp" not in info["available"]:
+              sys.exit("C++ backend not available — wheel build/install failed; "
+                       "parity suite would silently skip")
+          PY
+
+      - name: Run cross-backend equivalence suite
+        env:
+          MPLBACKEND: Agg
+        run: python -m pytest tests/test_backend_equivalence.py -v
+
+  rust-equivalence:
+    name: rust backend parity (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          check-latest: true
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install package, dev deps, and Rust backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" maturin
+          maturin build --release --manifest-path src/chilmesh_core/Cargo.toml --out wheelhouse
+          python -m pip install --force-reinstall wheelhouse/chilmesh_core-*.whl
+
+      - name: Assert Rust backend is active (no silent skip)
+        run: |
+          python - <<'PY'
+          import chilmesh, sys
+          info = chilmesh.backend_info()
+          print("backend_info:", info)
+          if "rust" not in info["available"]:
+              sys.exit("Rust backend not available — crate build/install failed; "
+                       "parity suite would silently skip")
+          PY
+
+      - name: Run cross-backend equivalence suite
+        env:
+          MPLBACKEND: Agg
+        run: python -m pytest tests/test_backend_equivalence.py -v
