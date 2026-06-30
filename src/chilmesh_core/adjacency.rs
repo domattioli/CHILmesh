@@ -336,7 +336,7 @@ pub fn to_elem2vert(elem2vert: &Array2<i32>) -> Array2<i32> {
 /// `_build_adjacencies` (element-major, slot-minor first-occurrence numbering);
 /// the C++ backend uses the same ordering, so edge IDs — and everything keyed on
 /// them (bEdgeIDs, Vert2Edge) — match across all three backends. (#163)
-fn first_encounter_canonical_edges(elem2vert: &Array2<i32>) -> Vec<(i32, i32)> {
+pub(crate) fn first_encounter_canonical_edges(elem2vert: &Array2<i32>) -> Vec<(i32, i32)> {
     let n_elems = elem2vert.shape()[0];
     let elem_cols = elem2vert.shape()[1];
 

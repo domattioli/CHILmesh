@@ -169,11 +169,10 @@ def _build_rust_mesh(mesh):
 
 
 # NOTE: Rust parity is asserted on n_layers, the OE/IE/OV/IV layer member sets,
-# signed areas, full-mesh edge2vert ordering, and Vert2Edge (CHILmesh #163 —
-# Rust edge IDs were aligned to Python's first-encounter ordering). Only the
-# per-layer bEdgeIDs remain excluded: skeletonization records them in a
-# per-iteration subset edge namespace (Python uses full-mesh edge IDs), a
-# separate sub-task tracked on #163. Element-id (OE/IE) and vertex-id (OV/IV)
+# per-layer bEdgeIDs, signed areas, full-mesh edge2vert ordering, and Vert2Edge
+# (CHILmesh #163 — Rust edge IDs were aligned to Python's first-encounter
+# ordering, and bEdgeIDs are now recorded as full-mesh edge IDs to match Python).
+# Element-id (OE/IE), vertex-id (OV/IV), and full-mesh edge-id (bEdgeIDs)
 # membership are stable identities and DO match.
 @pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
 @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
@@ -189,11 +188,11 @@ def test_rust_layer_count_matches_python(fixture):
 
 @pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
 @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
-@pytest.mark.parametrize("layer_key", ["OE", "IE", "OV", "IV"])
+@pytest.mark.parametrize("layer_key", ["OE", "IE", "OV", "IV", "bEdgeIDs"])
 def test_rust_layer_member_sets_match_python(fixture, layer_key):
-    """For each layer, the OE/IE/OV/IV member sets must match Python.
+    """For each layer, the OE/IE/OV/IV/bEdgeIDs member sets must match Python.
 
-    bEdgeIDs is excluded — Rust uses a backend-private edge-id ordering (#163).
+    bEdgeIDs are full-mesh edge IDs matching Python (#163).
     """
     mesh = _load_python_mesh(fixture)
     rust = _build_rust_mesh(mesh)
@@ -206,6 +205,24 @@ def test_rust_layer_member_sets_match_python(fixture, layer_key):
             f"{fixture} layer {i} {layer_key} mismatch: "
             f"Python {len(py_set)}, Rust {len(rust_set)}, "
             f"symmetric diff size {len(py_set ^ rust_set)}"
+        )
+
+
+@pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+def test_rust_bedge_ids_order_matches_python(fixture):
+    """Per-layer bEdgeIDs must match Python as ascending full-mesh edge-ID
+    arrays, not merely as sets (CHILmesh #163: Rust records full-mesh edge IDs)."""
+    mesh = _load_python_mesh(fixture)
+    rust = _build_rust_mesh(mesh)
+    layers = rust.get_all_layers()
+    assert mesh.n_layers == rust.get_num_layers()
+    for i in range(mesh.n_layers):
+        py_ids = sorted(int(x) for x in mesh.Layers["bEdgeIDs"][i].tolist())
+        rust_ids = sorted(int(x) for x in layers[i]["bEdgeIDs"])
+        assert py_ids == rust_ids, (
+            f"{fixture} layer {i} bEdgeIDs mismatch: "
+            f"Python {len(py_ids)} ids, Rust {len(rust_ids)} ids"
         )
 
 
