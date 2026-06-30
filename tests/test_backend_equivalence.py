@@ -169,11 +169,12 @@ def _build_rust_mesh(mesh):
 
 
 # NOTE: Rust parity is asserted on n_layers, the OE/IE/OV/IV layer member sets,
-# and signed areas only. bEdgeIDs and Vert2Edge are intentionally excluded: the
-# Rust backend assigns edge IDs in its own internally-consistent ordering that
-# differs from Python's, so raw boundary-edge IDs are not comparable across
-# backends (CHILmesh #163). Element-id (OE/IE) and vertex-id (OV/IV) membership
-# are stable identities and DO match.
+# signed areas, full-mesh edge2vert ordering, and Vert2Edge (CHILmesh #163 —
+# Rust edge IDs were aligned to Python's first-encounter ordering). Only the
+# per-layer bEdgeIDs remain excluded: skeletonization records them in a
+# per-iteration subset edge namespace (Python uses full-mesh edge IDs), a
+# separate sub-task tracked on #163. Element-id (OE/IE) and vertex-id (OV/IV)
+# membership are stable identities and DO match.
 @pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
 @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
 def test_rust_layer_count_matches_python(fixture):
@@ -222,6 +223,45 @@ def test_rust_signed_area_matches_python(fixture):
         py_areas, rust_areas, rtol=1e-9, atol=1e-12,
         err_msg=f"signed areas diverge on {fixture}",
     )
+
+
+@pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+def test_rust_edge2vert_order_matches_python(fixture):
+    """Full-mesh Edge2Vert must match Python in both content AND ordering.
+
+    Edge IDs are the index into this array; matching order means Rust edge IDs
+    equal Python's, so everything keyed on them (Vert2Edge) is comparable (#163).
+    """
+    mesh = _load_python_mesh(fixture)
+    rust = _build_rust_mesh(mesh)
+    py_e2v = np.asarray(mesh.adjacencies["Edge2Vert"])
+    rust_e2v = np.asarray(rust.get_edge2vert())
+    assert py_e2v.shape == rust_e2v.shape, (
+        f"{fixture}: Edge2Vert shape mismatch "
+        f"Python={py_e2v.shape}, Rust={rust_e2v.shape}"
+    )
+    assert np.array_equal(py_e2v, rust_e2v), (
+        f"{fixture}: Edge2Vert ordering diverges between Python and Rust"
+    )
+
+
+@pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+def test_rust_vert2edge_consistent_with_python(fixture):
+    """Vert2Edge edge-ID sets per vertex must match Python (#163)."""
+    mesh = _load_python_mesh(fixture)
+    rust = _build_rust_mesh(mesh)
+    py_v2e = mesh.adjacencies["Vert2Edge"]
+    rust_v2e = rust.get_vert2edge()
+    n_check = min(mesh.n_verts, 200)  # spot-check first 200 verts
+    for v in range(n_check):
+        py_edges = set(py_v2e[v].tolist()) if hasattr(py_v2e[v], "tolist") else set(py_v2e[v])
+        rust_edges = set(rust_v2e[v])
+        assert py_edges == rust_edges, (
+            f"{fixture} vert {v}: Vert2Edge mismatch "
+            f"Python={py_edges}, Rust={rust_edges}"
+        )
 
 
 @pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")

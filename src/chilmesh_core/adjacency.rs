@@ -119,45 +119,18 @@ pub fn build_quadegg_from_connectivity(
     edges_array
 }
 
-/// Extract Edge2Vert: sorted undirected edges.
+/// Extract Edge2Vert: unique undirected edges in first-encounter order.
 ///
 /// Returns unique undirected edges in canonical form (min_vert, max_vert),
-/// sorted lexicographically to match Python reference output.
+/// in first-encounter element-traversal order, matching Python/C++ edge IDs.
 pub fn to_edge2vert(elem2vert: &Array2<i32>) -> Array2<i32> {
-    let n_elems = elem2vert.shape()[0];
-    let elem_cols = elem2vert.shape()[1];
-
-    // Collect unique edges in canonical form
-    let mut edges_set: std::collections::BTreeSet<(i32, i32)> =
-        std::collections::BTreeSet::new();
-
-    for elem_idx in 0..n_elems {
-        let elem_type = if elem_cols == 3 {
-            3
-        } else {
-            if elem2vert[[elem_idx, 3]] == elem2vert[[elem_idx, 0]] {
-                3
-            } else {
-                4
-            }
-        };
-
-        for i in 0..elem_type {
-            let v0 = elem2vert[[elem_idx, i]];
-            let v1 = elem2vert[[elem_idx, (i + 1) % elem_type]];
-            let edge = (v0.min(v1), v0.max(v1));
-            edges_set.insert(edge);
-        }
-    }
-
-    // Convert to Array2
-    let mut result_data = Vec::new();
-    for (v0, v1) in edges_set.iter() {
+    let edges = first_encounter_canonical_edges(elem2vert);
+    let n_edges = edges.len();
+    let mut result_data = Vec::with_capacity(n_edges * 2);
+    for (v0, v1) in &edges {
         result_data.push(*v0);
         result_data.push(*v1);
     }
-
-    let n_edges = edges_set.len();
     Array2::from_shape_vec((n_edges, 2), result_data).expect("Edge list shape mismatch")
 }
 
@@ -356,35 +329,48 @@ pub fn to_elem2vert(elem2vert: &Array2<i32>) -> Array2<i32> {
     elem2vert.clone()
 }
 
-/// Extract canonical edge list (sorted tuples).
+/// Unique undirected edges in first-encounter order.
 ///
-/// Returns list of unique undirected edges as (min_vert, max_vert) tuples,
-/// sorted lexicographically to match Python reference output.
-fn to_canonical_edge_list(elem2vert: &Array2<i32>) -> Vec<(i32, i32)> {
+/// Iterates elements in order and slots in order, taking each edge's canonical
+/// (min,max) form the first time it is seen. Mirrors the Python reference
+/// `_build_adjacencies` (element-major, slot-minor first-occurrence numbering);
+/// the C++ backend uses the same ordering, so edge IDs — and everything keyed on
+/// them (bEdgeIDs, Vert2Edge) — match across all three backends. (#163)
+fn first_encounter_canonical_edges(elem2vert: &Array2<i32>) -> Vec<(i32, i32)> {
     let n_elems = elem2vert.shape()[0];
     let elem_cols = elem2vert.shape()[1];
 
-    let mut edges_set: std::collections::BTreeSet<(i32, i32)> =
-        std::collections::BTreeSet::new();
+    let mut edges: Vec<(i32, i32)> = Vec::new();
+    let mut seen: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
 
     for elem_idx in 0..n_elems {
         let elem_type = if elem_cols == 3 {
             3
+        } else if elem2vert[[elem_idx, 3]] == elem2vert[[elem_idx, 0]] {
+            3
         } else {
-            if elem2vert[[elem_idx, 3]] == elem2vert[[elem_idx, 0]] {
-                3
-            } else {
-                4
-            }
+            4
         };
 
         for i in 0..elem_type {
             let v0 = elem2vert[[elem_idx, i]];
             let v1 = elem2vert[[elem_idx, (i + 1) % elem_type]];
+            if v0 < 0 || v1 < 0 || v0 == v1 {
+                continue;
+            }
             let edge = (v0.min(v1), v0.max(v1));
-            edges_set.insert(edge);
+            if seen.insert(edge) {
+                edges.push(edge);
+            }
         }
     }
+    edges
+}
 
-    edges_set.iter().copied().collect()
+/// Extract canonical edge list in first-encounter order.
+///
+/// Returns list of unique undirected edges as (min_vert, max_vert) tuples,
+/// in first-encounter element-traversal order, matching Python/C++ edge IDs.
+fn to_canonical_edge_list(elem2vert: &Array2<i32>) -> Vec<(i32, i32)> {
+    first_encounter_canonical_edges(elem2vert)
 }
