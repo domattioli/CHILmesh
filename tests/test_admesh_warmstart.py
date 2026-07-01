@@ -211,6 +211,61 @@ class TestNonDegradation:
         assert triangles_opt is not None
 
 
+class TestWarmStartNodePreservation:
+    """Warm-start node-position contract (refs #198).
+
+    The ADMESH warm-start is a *non-degrading* optimizer: on a mesh already near
+    truss-equilibrium it returns interior node positions **unchanged**, optimizing
+    connectivity only, and moves nodes solely when doing so improves the tracked
+    quality metric. This is why the README hero animation's raw->truss transition
+    shows no node movement (#198) — there is nothing to interpolate because the
+    warm-start legitimately preserves the good input mesh. Only
+    ``track_best_quality=False`` (with ``enforce_non_degradation=False``) returns
+    the raw truss iterate, which does move nodes (and may degrade quality).
+    """
+
+    def test_good_mesh_nodes_preserved_default(self, annulus_mesh, annulus_sdf):
+        """Default guards: near-optimal annulus returns node positions unchanged."""
+        pts = np.asarray(annulus_mesh.points)[:, :2]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            points_opt, _ = optimize_with_admesh_truss_arrays(
+                annulus_mesh.points, annulus_mesh.connectivity_list,
+                annulus_sdf, size_fn=None, enforce_non_degradation=True, seed=0,
+            )
+        points_opt = np.asarray(points_opt)
+        assert points_opt.shape == pts.shape
+        np.testing.assert_array_equal(
+            points_opt, pts,
+            err_msg="warm-start must preserve a near-optimal mesh's node positions (#198)",
+        )
+
+    def test_best_quality_tracking_preserves_nodes(self, annulus_mesh, annulus_sdf):
+        """track_best_quality default preserves nodes even with enforce_non_degradation=False."""
+        pts = np.asarray(annulus_mesh.points)[:, :2]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            points_opt, _ = optimize_with_admesh_truss_arrays(
+                annulus_mesh.points, annulus_mesh.connectivity_list,
+                annulus_sdf, size_fn=None, enforce_non_degradation=False, seed=0,
+            )
+        assert float(np.abs(np.asarray(points_opt) - pts).max()) == 0.0
+
+    def test_raw_iterate_moves_nodes(self, annulus_mesh, annulus_sdf):
+        """track_best_quality=False + enforce_non_degradation=False returns the raw iterate: nodes move."""
+        pts = np.asarray(annulus_mesh.points)[:, :2]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            points_opt, _ = optimize_with_admesh_truss_arrays(
+                annulus_mesh.points, annulus_mesh.connectivity_list,
+                annulus_sdf, size_fn=None, enforce_non_degradation=False,
+                track_best_quality=False, seed=0,
+            )
+        points_opt = np.asarray(points_opt)
+        assert np.isfinite(points_opt).all()
+        assert float(np.abs(points_opt - pts).max()) > 0.0
+
+
 # ============================================================================
 # Error Handling Tests (FR-005-007, FR-014)
 # ============================================================================
