@@ -78,6 +78,15 @@ conda install -c conda-forge chilmesh       # conda-forge (pending)
 pip install -e .                            # from source
 ```
 
+> **Backends & the PyPI wheel.** The published PyPI wheel is currently
+> **pure-Python** — it does not bundle the compiled C++/Rust extensions, so a
+> plain `pip install chilmesh` runs the (correct, but slower) Python backend and
+> `chilmesh.backend_info()` reports `available: ['python']`. The C++/Rust
+> speedups advertised below require a source build of the extension
+> (`pip install ./src/chilmesh_cpp` with a C++ toolchain; `cargo build --release`
+> in `src/chilmesh_core` for Rust). Pre-built binary wheels are tracked in
+> [#229](https://github.com/domattioli/CHILmesh/issues/229).
+
 ---
 
 ## Quick Start
