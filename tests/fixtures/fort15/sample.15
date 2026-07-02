@@ -1,0 +1,23 @@
+Sample WNAT tidal run                    ! RUNDES  32 CHARACTER ALPHANUMERIC RUN DESCRIPTION
+sample01                                 ! RUNID  24 CHARACTER ALPHANUMERIC RUN IDENTIFICATION
+1                                        ! NFOVER - NONFATAL ERROR OVERRIDE OPTION
+1                                        ! NABOUT - ABBREVIATED OUTPUT OPTION
+1                                        ! NSCREEN - SCREEN OUTPUT OPTION
+0                                        ! IHOT - HOT START OPTION
+2                                        ! ICS - COORDINATE SYSTEM (2 = SPHERICAL)
+0                                        ! IM - MODEL TYPE (0 = 2DDI BAROTROPIC)
+0                                        ! NOLIBF - BOTTOM FRICTION
+1                                        ! NOLIFA - FINITE AMPLITUDE
+1                                        ! NOLICA - SPATIAL DERIVATIVE
+1                                        ! NOLICAT - TIME DERIVATIVE
+0                                        ! NWP - NUMBER OF NODAL ATTRIBUTES
+1                                        ! NCOR - CORIOLIS
+0                                        ! NTIP - TIDAL POTENTIAL
+0                                        ! NWS - WIND STRESS
+1                                        ! NRAMP - RAMP FUNCTION
+9.81                                     ! G - GRAVITATIONAL CONSTANT
+0.0                                      ! TAU0
+2.0                                      ! DTDP - TIME STEP (SECONDS)
+0.0                                      ! STATIM - STARTING TIME
+0.0                                      ! REFTIM - REFERENCE TIME
+5.0                                      ! RNDAY - TOTAL LENGTH OF SIMULATION (DAYS)
