@@ -106,6 +106,110 @@ class MutableMesh:
         self._validate_invariants()
         return new_elem_ids
 
+    def split_edge(self, u: int, v: int, at: float = 0.5) -> np.ndarray:
+        """Split interior edge ``(u, v)`` into 4 triangles via a midpoint vertex.
+
+        The two triangles incident to interior edge ``(u, v)`` are each bisected
+        by a new vertex at ``u + at*(v - u)`` (midpoint when ``at == 0.5``),
+        turning 2 triangles into 4. The new vertex has valence 4 (even), adding
+        even-valence topology without the odd-valence injection that a
+        point-in-triangle ``insert_vertex`` would cause (ref #237).
+
+        Parameters
+        ----------
+        u, v : int
+            Endpoint vertex IDs of an existing interior edge shared by exactly
+            two triangles.
+        at : float, optional
+            Parametric position of the new vertex along ``u -> v``, open (0, 1).
+            Defaults to 0.5 (midpoint).
+
+        Returns
+        -------
+        ndarray
+            The four element IDs after the split (two reused originals + two
+            newly appended).
+
+        Raises
+        ------
+        ValueError
+            If ``at`` is not in (0, 1), ``(u, v)`` is not an edge, the edge is
+            on the boundary, or either incident element is not a triangle.
+        """
+        if not (0.0 < at < 1.0):
+            raise ValueError(f"at={at} must be in the open interval (0, 1)")
+
+        u, v = int(u), int(v)
+        edge_id = self._find_edge_by_verts(u, v)
+        if edge_id is None:
+            raise ValueError(f"No edge connects vertices {u} and {v}")
+
+        elems = self.mesh.edge2elem()[edge_id]
+        if elems[0] == -1 or elems[1] == -1:
+            raise ValueError(f"Edge ({u}, {v}) is on the boundary; cannot split")
+
+        elem_a_id, elem_b_id = int(elems[0]), int(elems[1])
+        if not (self._is_triangle(elem_a_id) and self._is_triangle(elem_b_id)):
+            raise ValueError("Both incident elements must be triangles")
+
+        tri_a = self.mesh.connectivity_list[elem_a_id, :3]
+        tri_b = self.mesh.connectivity_list[elem_b_id, :3]
+        w = int([x for x in tri_a if x not in (u, v)][0])
+        x = int([x for x in tri_b if x not in (u, v)][0])
+
+        pu = self.mesh.points[u, :2]
+        pv = self.mesh.points[v, :2]
+        midpoint = pu + at * (pv - pu)
+        m = self._insert_vertex_internal(midpoint)
+
+        # Rewrite the two originals; append the two new triangles. Winding is
+        # fixed per-triangle via signed area (mirrors _swap_edge_internal).
+        self._set_triangle(elem_a_id, u, m, w)
+        self._set_triangle(elem_b_id, u, m, x)
+        id_c = self._append_triangle(m, v, w)
+        id_d = self._append_triangle(m, v, x)
+
+        self.mesh.n_elems = self.mesh.connectivity_list.shape[0]
+        self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
+        self._validate_invariants()
+        return np.array([elem_a_id, elem_b_id, id_c, id_d])
+
+    def _find_edge_by_verts(self, u: int, v: int) -> Opt[int]:
+        """Return the edge ID joining vertices ``u`` and ``v``, or None."""
+        e2v = self.mesh.edge2vert()
+        target = {int(u), int(v)}
+        for eid in range(e2v.shape[0]):
+            if {int(e2v[eid, 0]), int(e2v[eid, 1])} == target:
+                return eid
+        return None
+
+    def _tri_ccw(self, a: int, b: int, c: int) -> list:
+        """Return [a, b, c] reordered to counter-clockwise winding."""
+        pts = self.mesh.points
+        if self._signed_area(pts[a, :2], pts[b, :2], pts[c, :2]) < 0:
+            return [a, c, b]
+        return [a, b, c]
+
+    def _set_triangle(self, elem_id: int, a: int, b: int, c: int) -> None:
+        """Overwrite ``elem_id`` with CCW triangle (a, b, c), padding if 4-col."""
+        tri = self._tri_ccw(a, b, c)
+        self.mesh.connectivity_list[elem_id, :3] = tri
+        if self.mesh.connectivity_list.shape[1] == 4:
+            self.mesh.connectivity_list[elem_id, 3] = tri[2]
+
+    def _append_triangle(self, a: int, b: int, c: int) -> int:
+        """Append a new CCW triangle (a, b, c); return its element ID."""
+        tri = self._tri_ccw(a, b, c)
+        if self.mesh.connectivity_list.shape[1] == 4:
+            row = [tri[0], tri[1], tri[2], tri[2]]
+        else:
+            row = tri
+        self.mesh.connectivity_list = np.vstack(
+            [self.mesh.connectivity_list, np.array([row])]
+        )
+        return self.mesh.connectivity_list.shape[0] - 1
+
     def swap_edge(self, edge_id: int) -> Tuple[int, int]:
         """Flip an edge shared by two triangles (Lawson swap).
 
