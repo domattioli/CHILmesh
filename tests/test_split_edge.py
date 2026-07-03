@@ -130,3 +130,71 @@ def test_split_edge_bad_at_raises(triangle_mesh):
     _, u, v = _first_interior_edge(triangle_mesh)
     with pytest.raises(ValueError):
         mutable.split_edge(u, v, at=1.5)
+
+
+def _first_boundary_edge(mesh):
+    e2e = mesh.edge2elem()
+    for eid in range(mesh.n_edges):
+        a, b = int(e2e[eid, 0]), int(e2e[eid, 1])
+        if a == -1 or b == -1:
+            verts = mesh.edge2vert(np.array([eid]))[0]
+            return eid, int(verts[0]), int(verts[1])
+    raise AssertionError("no boundary edge found")
+
+
+def test_split_boundary_edge_1_to_2(triangle_mesh):
+    mutable = MutableMesh(triangle_mesh)
+    n_elems0, n_verts0 = triangle_mesh.n_elems, triangle_mesh.n_verts
+    _, u, v = _first_boundary_edge(triangle_mesh)
+
+    new_ids = mutable.split_boundary_edge(u, v)
+
+    assert len(new_ids) == 2
+    assert triangle_mesh.n_elems == n_elems0 + 1   # 1 -> 2
+    assert triangle_mesh.n_verts == n_verts0 + 1
+
+
+def test_split_boundary_edge_midpoint_location(triangle_mesh):
+    mutable = MutableMesh(triangle_mesh)
+    _, u, v = _first_boundary_edge(triangle_mesh)
+    pu = triangle_mesh.points[u, :2].copy()
+    pv = triangle_mesh.points[v, :2].copy()
+
+    mutable.split_boundary_edge(u, v)
+
+    m = triangle_mesh.n_verts - 1
+    np.testing.assert_allclose(triangle_mesh.points[m, :2], (pu + pv) / 2.0, rtol=1e-10)
+
+
+def test_split_boundary_edge_new_vertex_valence_3(triangle_mesh):
+    mutable = MutableMesh(triangle_mesh)
+    _, u, v = _first_boundary_edge(triangle_mesh)
+
+    mutable.split_boundary_edge(u, v)
+
+    m = triangle_mesh.n_verts - 1
+    assert _valence(triangle_mesh, m) == 3
+
+
+def test_split_boundary_edge_watertight_positive_area(triangle_mesh):
+    mutable = MutableMesh(triangle_mesh)
+    _, u, v = _first_boundary_edge(triangle_mesh)
+
+    new_ids = mutable.split_boundary_edge(u, v)
+
+    for eid in new_ids:
+        assert _positive_area(triangle_mesh, eid) > 1e-12, f"element {eid} non-positive area"
+
+
+def test_split_boundary_edge_interior_raises(triangle_mesh):
+    mutable = MutableMesh(triangle_mesh)
+    _, u, v = _first_interior_edge(triangle_mesh)
+    with pytest.raises(ValueError):
+        mutable.split_boundary_edge(u, v)
+
+
+def test_split_boundary_edge_bad_at_raises(triangle_mesh):
+    mutable = MutableMesh(triangle_mesh)
+    _, u, v = _first_boundary_edge(triangle_mesh)
+    with pytest.raises(ValueError):
+        mutable.split_boundary_edge(u, v, at=1.5)
