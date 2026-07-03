@@ -175,6 +175,70 @@ class MutableMesh:
         self._validate_invariants()
         return np.array([elem_a_id, elem_b_id, id_c, id_d])
 
+    def split_boundary_edge(self, u: int, v: int, at: float = 0.5) -> np.ndarray:
+        """Split boundary edge ``(u, v)`` into 2 triangles via an edge vertex.
+
+        The single triangle incident to boundary edge ``(u, v)`` is bisected by
+        a new vertex at ``u + at*(v - u)`` (midpoint when ``at == 0.5``), turning
+        1 triangle into 2. Companion to :meth:`split_edge` for the boundary case
+        (ref #237, secondary acceptance item). The new vertex has valence 3 (two
+        boundary edges to ``u``/``v`` plus one interior edge to the apex).
+
+        Parameters
+        ----------
+        u, v : int
+            Endpoint vertex IDs of an existing boundary edge (exactly one
+            incident triangle).
+        at : float, optional
+            Parametric position of the new vertex along ``u -> v``, open (0, 1).
+            Defaults to 0.5 (midpoint).
+
+        Returns
+        -------
+        ndarray
+            The two element IDs after the split (one reused original + one
+            newly appended).
+
+        Raises
+        ------
+        ValueError
+            If ``at`` is not in (0, 1), ``(u, v)`` is not an edge, the edge is
+            interior (two incident triangles), or the incident element is not a
+            triangle.
+        """
+        if not (0.0 < at < 1.0):
+            raise ValueError(f"at={at} must be in the open interval (0, 1)")
+
+        u, v = int(u), int(v)
+        edge_id = self._find_edge_by_verts(u, v)
+        if edge_id is None:
+            raise ValueError(f"No edge connects vertices {u} and {v}")
+
+        elems = self.mesh.edge2elem()[edge_id]
+        if elems[0] != -1 and elems[1] != -1:
+            raise ValueError(f"Edge ({u}, {v}) is interior; use split_edge")
+
+        elem_id = int(elems[0]) if elems[0] != -1 else int(elems[1])
+        if not self._is_triangle(elem_id):
+            raise ValueError("Incident element must be a triangle")
+
+        tri = self.mesh.connectivity_list[elem_id, :3]
+        w = int([x for x in tri if x not in (u, v)][0])
+
+        pu = self.mesh.points[u, :2]
+        pv = self.mesh.points[v, :2]
+        midpoint = pu + at * (pv - pu)
+        m = self._insert_vertex_internal(midpoint)
+
+        self._set_triangle(elem_id, u, m, w)
+        id_b = self._append_triangle(m, v, w)
+
+        self.mesh.n_elems = self.mesh.connectivity_list.shape[0]
+        self.mesh._build_adjacencies()
+        self.mesh._build_spatial_indices()
+        self._validate_invariants()
+        return np.array([elem_id, id_b])
+
     def _find_edge_by_verts(self, u: int, v: int) -> Opt[int]:
         """Return the edge ID joining vertices ``u`` and ``v``, or None."""
         e2v = self.mesh.edge2vert()
