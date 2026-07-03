@@ -26,6 +26,21 @@ pub struct Layer {
     pub b_edge_ids: Vec<usize>, // Boundary edges defining this layer's frontier
 }
 
+/// Translate per-iteration subset boundary-edge indices into full-mesh edge IDs,
+/// sorted ascending to match Python's `np.where`-ordered `bEdgeIDs` (#163).
+fn to_full_mesh_edge_ids(
+    subset_boundary_ids: &[usize],
+    subset_edge2vert: &[(i32, i32)],
+    full_edge_id: &std::collections::HashMap<(i32, i32), usize>,
+) -> Vec<usize> {
+    let mut out: Vec<usize> = subset_boundary_ids
+        .iter()
+        .filter_map(|&bid| subset_edge2vert.get(bid).and_then(|key| full_edge_id.get(key).copied()))
+        .collect();
+    out.sort_unstable();
+    out
+}
+
 /// Skeletonize a mesh by layer-by-layer boundary removal.
 ///
 /// Algorithm:
@@ -49,6 +64,16 @@ pub fn skeletonize_medial_axis(
 ) -> Result<Vec<Layer>, String> {
     let n_elems = connectivity.shape()[0];
     let _n_verts = points.shape()[0];
+
+    // Full-mesh canonical edge IDs (first-encounter order; matches Python Edge2Vert
+    // and thus Python Layers["bEdgeIDs"]. Used to translate the per-iteration
+    // subset boundary-edge indices into stable full-mesh edge IDs (#163).
+    let full_edges = crate::adjacency::first_encounter_canonical_edges(connectivity);
+    let mut full_edge_id: std::collections::HashMap<(i32, i32), usize> =
+        std::collections::HashMap::with_capacity(full_edges.len());
+    for (i, &e) in full_edges.iter().enumerate() {
+        full_edge_id.insert(e, i);
+    }
 
     // Step 0: Build initial aligned (edge2vert, edge2elem) — shared edge-id order
     let mut remaining_elems: HashSet<usize> = (0..n_elems).collect();
@@ -124,12 +149,13 @@ pub fn skeletonize_medial_axis(
         }
 
         // Create and store layer
+        let layer_b_edge_ids = to_full_mesh_edge_ids(&boundary_edge_ids, &edge2vert, &full_edge_id);
         layers.push(Layer {
             oe: oe_elems,
             ie: ie_elems,
             ov: layer_ov,
             iv: layer_iv,
-            b_edge_ids: boundary_edge_ids,
+            b_edge_ids: layer_b_edge_ids,
         });
 
         // Step 1i: Recompute aligned adjacency for the remaining elements

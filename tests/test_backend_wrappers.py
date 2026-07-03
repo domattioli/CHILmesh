@@ -5,6 +5,8 @@ exercising error handling and marshalling logic.
 """
 from __future__ import annotations
 
+import importlib
+import sys
 import types
 from typing import Any
 
@@ -354,3 +356,158 @@ class TestRustBackendAvailableViaMonkeypatch:
         # Verify marshalled connectivity
         assert forwarded_conn.dtype == np.int32
         assert forwarded_conn.flags['C_CONTIGUOUS']
+
+
+# ============================================================================
+# NAMESPACE SHADOW GUARD TESTS (CHILmesh #163)
+# ============================================================================
+
+class TestCppNamespaceShadowGuard163:
+    """Test C++ backend guard against importable-but-empty namespace packages.
+
+    Regression tests for CHILmesh #163: an importable chilmesh_cpp without
+    the full_init API should not report as CPP_AVAILABLE. Tests inject a stub
+    module into sys.modules and verify the guard logic via reload.
+    """
+
+    def test_cpp_available_false_when_api_missing(self):
+        """CPP_AVAILABLE is False when chilmesh_cpp lacks full_init attribute.
+
+        Simulates the case where chilmesh_cpp is importable but is an empty
+        namespace package (missing the pybind11 API). Inject stub, reload,
+        verify CPP_AVAILABLE=False and _require_cpp() raises.
+        """
+        # Capture original sys.modules state
+        original_module = sys.modules.get("chilmesh_cpp")
+
+        try:
+            # Inject empty stub (no full_init attribute)
+            stub = types.ModuleType("chilmesh_cpp")
+            sys.modules["chilmesh_cpp"] = stub
+
+            # Reload the wrapper module
+            importlib.reload(cpp_backend)
+
+            # Verify the guard detected missing API
+            assert cpp_backend.CPP_AVAILABLE is False
+            assert cpp_backend._cpp is None
+
+            # Verify _require_cpp() raises ImportError
+            with pytest.raises(ImportError) as exc_info:
+                cpp_backend._require_cpp()
+            assert "chilmesh_cpp C++ extension not available" in str(exc_info.value)
+
+        finally:
+            # Restore sys.modules and reload to real state
+            if original_module is None:
+                sys.modules.pop("chilmesh_cpp", None)
+            else:
+                sys.modules["chilmesh_cpp"] = original_module
+            importlib.reload(cpp_backend)
+
+    def test_cpp_available_true_when_api_present(self):
+        """CPP_AVAILABLE is True when chilmesh_cpp has full_init attribute.
+
+        Simulates the case where chilmesh_cpp is properly built and has the
+        pybind11 API. Inject stub with full_init + fast_init, reload,
+        verify CPP_AVAILABLE=True and _cpp is the stub module.
+        """
+        # Capture original sys.modules state
+        original_module = sys.modules.get("chilmesh_cpp")
+
+        try:
+            # Inject stub WITH full_init and fast_init attributes
+            stub = types.ModuleType("chilmesh_cpp")
+            stub.full_init = lambda *args, **kwargs: None
+            stub.fast_init = lambda *args, **kwargs: None
+            sys.modules["chilmesh_cpp"] = stub
+
+            # Reload the wrapper module
+            importlib.reload(cpp_backend)
+
+            # Verify the guard detected the API
+            assert cpp_backend.CPP_AVAILABLE is True
+            assert cpp_backend._cpp is stub
+
+        finally:
+            # Restore sys.modules and reload to real state
+            if original_module is None:
+                sys.modules.pop("chilmesh_cpp", None)
+            else:
+                sys.modules["chilmesh_cpp"] = original_module
+            importlib.reload(cpp_backend)
+
+
+class TestRustNamespaceShadowGuard163:
+    """Test Rust backend guard against importable-but-empty namespace packages.
+
+    Regression tests for CHILmesh #163: an importable chilmesh_core without
+    the RustMesh API should not report as RUST_AVAILABLE. Tests inject a stub
+    module into sys.modules and verify the guard logic via reload.
+    """
+
+    def test_rust_available_false_when_api_missing(self):
+        """RUST_AVAILABLE is False when chilmesh_core lacks RustMesh attribute.
+
+        Simulates the case where chilmesh_core is importable but is an empty
+        namespace package (missing the PyO3 API). Inject stub, reload,
+        verify RUST_AVAILABLE=False and _require_rust() raises.
+        """
+        # Capture original sys.modules state
+        original_module = sys.modules.get("chilmesh_core")
+
+        try:
+            # Inject empty stub (no RustMesh attribute)
+            stub = types.ModuleType("chilmesh_core")
+            sys.modules["chilmesh_core"] = stub
+
+            # Reload the wrapper module
+            importlib.reload(rust_backend)
+
+            # Verify the guard detected missing API
+            assert rust_backend.RUST_AVAILABLE is False
+            assert rust_backend._rust is None
+
+            # Verify _require_rust() raises ImportError
+            with pytest.raises(ImportError) as exc_info:
+                rust_backend._require_rust()
+            assert "chilmesh_core Rust extension not available" in str(exc_info.value)
+
+        finally:
+            # Restore sys.modules and reload to real state
+            if original_module is None:
+                sys.modules.pop("chilmesh_core", None)
+            else:
+                sys.modules["chilmesh_core"] = original_module
+            importlib.reload(rust_backend)
+
+    def test_rust_available_true_when_api_present(self):
+        """RUST_AVAILABLE is True when chilmesh_core has RustMesh attribute.
+
+        Simulates the case where chilmesh_core is properly built and has the
+        PyO3 API. Inject stub with RustMesh, reload, verify RUST_AVAILABLE=True
+        and _rust is the stub module.
+        """
+        # Capture original sys.modules state
+        original_module = sys.modules.get("chilmesh_core")
+
+        try:
+            # Inject stub WITH RustMesh attribute
+            stub = types.ModuleType("chilmesh_core")
+            stub.RustMesh = object  # RustMesh class/callable
+            sys.modules["chilmesh_core"] = stub
+
+            # Reload the wrapper module
+            importlib.reload(rust_backend)
+
+            # Verify the guard detected the API
+            assert rust_backend.RUST_AVAILABLE is True
+            assert rust_backend._rust is stub
+
+        finally:
+            # Restore sys.modules and reload to real state
+            if original_module is None:
+                sys.modules.pop("chilmesh_core", None)
+            else:
+                sys.modules["chilmesh_core"] = original_module
+            importlib.reload(rust_backend)
