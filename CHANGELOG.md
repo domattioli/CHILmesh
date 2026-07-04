@@ -6,6 +6,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+_Staging for the next release (**1.2.3**). Unblocks Valence #216 + #217 (CHILmesh-adoption umbrella Valence#212). See `.planning/valence-adoption-chilmesh-audit.md`._
+
+### Added
+
+- **`equiangle_skewness` element-quality metric** — `quality.element_quality(..., metric="equiangle_skewness")` (aliases `"equiangle skewness"`, `"eas"`). Returns the raw ANSYS/Fluent equiangle skewness Qeas ∈ [0, 1] (0 = ideal equilateral/rectangular, 1 = degenerate) — the exact complement of the existing `skew` metric (which is 1 = ideal). Lets downstream quality gates use the standard skewness convention without an inverting shim. Purely additive; the existing `skew`/`skewness`/`angular_skewness` metrics are unchanged. (Valence #217)
+
+### Changed
+
+- **`write_fort14` now always emits the trailing NOPE/NBOU boundary block.** A canonical ADCIRC fort.14 carries the boundary block even when the mesh has zero open/flow segments (written as `0`/`0`/`0`/`0`). Previously the block was omitted entirely when `boundary_segments` was empty. The module-level `write_fort14` now **returns `True`** on success (was `-> None`); `CHILmesh.write_to_fort14` continues to return `True`. Round-trips are unaffected — a `0/0/0/0` trailer reads back as an empty `boundary_segments` list. (Valence #216)
+
+### Documentation
+
+- **`signed_area` numeric contract documented.** The method is a float64 shoelace computation: signed (positive = CCW winding), includes the ½ factor (true geometric area), and for a *near*-degenerate (nearly collinear) element returns a tiny non-zero float from floating-point rounding — **not** exactly `0.0`. Callers using an exact `== 0.0` zero-area test must account for this (prefer a tolerance). Documents the boundary that Valence's HARD connectivity gate depends on. (Valence #217)
+
 ### Documentation — SemVer record correction
 
 - **`write_fort14` signature change (retroactive note).** The public
