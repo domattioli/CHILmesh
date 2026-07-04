@@ -31,6 +31,8 @@ unblock each. Read-only against Valence (`spec.md`, `tests/parity/`, `_chilmesh.
 | keep mixed tri/quad element arity | ❌ NOT-STARTED | `:2647-2652` pads triangles to 4 columns `[v0,v1,v2,v0]`; `connectivity_list` then exposes padded quads (`Mixed_Test` → padded-`0` vertex → Valence `NormalizationError`) |
 | parse NBOU barrier/weir columns | ❌ NOT-STARTED | `:2687-2688` reads only column 0 (node id) per boundary node → drops barrier/weir `back_nodes`/`heights`/`coeffs`; open-segment `ibtype` also dropped |
 
+> **Update (this session):** these gaps in the existing `read_from_fort14` remain by design (its CCW-normalizing path is load-bearing for the mesh algorithms); a **new faithful reader `fort14_io.read_fort14_raw` addressing all four** now ships as a separate path — see Task 3.
+
 ### Valence #216 · P5 fort.14 write — **NOT-STARTED** → **implemented this PR**
 
 | chilmesh sub-requirement | Status (audit) | Evidence |
@@ -77,34 +79,35 @@ unblock each. Read-only against Valence (`spec.md`, `tests/parity/`, `_chilmesh.
 - Verified: targeted tests green; full fast suite **1327 passed, 77 skipped, 0 failed**
   (`-k "not block_o"`).
 
-### Proposed, NOT implemented — #214 (high-risk / large)
+### Implemented this session — #214 `fort14_io` faithful reader
 
 The fort.14 reader gaps cannot be fixed by tweaking `read_from_fort14`, because the
 CCW-normalizing `CHILmesh` constructor is load-bearing for the mesh algorithms (skeletonize,
-signed_area orientation, adjacency). Proposal — add a **byte-preserving raw reader**, mirroring
-the existing `fort13_io` / `fort15_io` / `summary_io` precedent:
+signed_area orientation, adjacency). So a **byte-preserving raw reader** was added as a new
+module `src/chilmesh/fort14_io.py` (mirroring the `fort13_io` / `fort15_io` / `summary_io`
+precedent), leaving the existing lossy `read_from_fort14` and the constructor untouched:
 
-- **New module `src/chilmesh/fort14_io.py`**, `read_fort14_raw(path) -> Fort14Raw` dataclass that
-  faithfully preserves: node-id + element-id columns; **file winding** (no CCW reorder);
-  **true per-element arity** (no tri→quad padding — keep a ragged list or an explicit
-  `elem_arity` array); the **full NBOU barrier/weir columns** (`back_nodes`/`heights`/`coeffs`)
-  and open-segment `ibtype`.
-- A separate `.to_mesh()` builds the CCW-normalized `CHILmesh` when algorithms need it — the
-  faithful record and the algorithm-ready mesh are distinct objects. The existing
-  `read_from_fort14` / constructor are untouched.
-- **Tests:** byte-parity across a fixture corpus including CW-wound, mixed tri/quad, and
-  barrier/weir meshes, plus non-contiguous id columns.
-- **Gate:** Valence swaps `parse_fort14` to delegate, then re-runs its 41/41 byte-parity. Only
-  then is #214 truly unblocked (Valence `plan.md:541,566-567` explicitly defers the swap until
-  these upstream fixes land).
+- **`read_fort14_raw(path) -> Fort14Raw`** faithfully preserves: node-id + element-id columns
+  (dicts keyed by original id); **file winding** (no CCW reorder); **true per-element arity**
+  (ragged — 3-tuples for tris, 4-tuples for quads, no padding); and the **full NOPE/NBOU
+  boundary block including barrier/weir columns** (`back_nodes`/`heights`/`coeffs`, plus a raw
+  `node_extra` catch-all) and open-segment `ibtype`. `write_fort14_raw` reproduces the record
+  (barrier columns round-trip via `node_extra`).
+- **Tests (`tests/test_fort14_io_raw.py`, 6 passing):** winding preserved (CW element kept),
+  mixed tri/quad arity + non-contiguous ids preserved, barrier/weir (ibtype 24) columns parsed,
+  legacy no-boundary mesh, read→write→read structural equality, malformed-boundary raises.
+- **Deferred:** a `.to_mesh()` bridge to the CCW-normalized `CHILmesh` (Valence doesn't need it —
+  it consumes the faithful record into its own types).
+- **Gate (unchanged):** Valence swaps `parse_fort14` to delegate to `read_fort14_raw`, then
+  re-runs its 41/41 byte-parity. Only then is #214 truly unblocked (Valence `plan.md:541,566-567`).
 
 ## Task 4 — recommended chilmesh releases
 
 | Release | Contents | Unblocks | Notes |
 |---|---|---|---|
 | **v1.2.2** (tag now) | `fort15_io` + `summary_io` (already on `main`) | **Valence #218** (P4) | = R1 / CHILmesh #242. Tag the **current `main` commit** (it is version 1.2.2). Publish to PyPI. No code work. |
-| **v1.2.3** (after #243 merges) | this PR: #216 writer + #217 `equiangle_skewness` + `signed_area` docs | **Valence #216, #217** (P5, P6) | Additive/low-risk; satisfies the operator's stated #216/#217 requirements. |
-| **v1.3.0** (later) | byte-preserving `fort14_io` reader (#214 proposal) + optionally the U1–U4 upstream gap-fillers (CHILmesh #238–241) | **Valence #214** (P2) + Valence P7–P9 | Larger; needs Valence to re-verify 41/41 after the pin bump. Valence spec earmarks 1.3.0 for U1–U4 — either co-release, or renumber that bundle to 1.4.0. |
+| **v1.2.3** (optional intermediate) | #216 writer + #217 `equiangle_skewness` + `signed_area` docs — tag at commit `80fd021`, before #214 | **Valence #216, #217** (P5, P6) | Optional — cut only if you want #216/#217 out before #214 is parity-verified; otherwise skip straight to v1.3.0. |
+| **v1.3.0** (this session's work) | #216 writer + #217 `equiangle_skewness` + `signed_area` docs + **#214 `fort14_io` faithful reader** | **Valence #216, #217, #214** | The new `fort14_io` module makes this a minor bump. Needs Valence to re-verify 41/41 after the pin bump. Valence spec earmarked 1.3.0 for U1–U4 — renumber that bundle to 1.4.0 (or co-release). |
 
 **Sequencing footgun:** tags point at commits, not at "current HEAD version". Tag `v1.2.2` at the
 existing `main` commit **before or independent of** merging this PR — do not wait for `main` to
