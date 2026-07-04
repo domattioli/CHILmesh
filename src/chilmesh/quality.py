@@ -79,6 +79,27 @@ def _triangle_quality(
         )
         return float(quality)
 
+    elif metric in ("equiangle_skewness", "equiangle skewness", "eas"):
+        # Equiangle skewness Qeas in [0,1]: 0 = ideal (equilateral, all 60deg),
+        # 1 = fully degenerate. Standard ANSYS/Fluent definition; exact
+        # complement of the "skew" quality metric (skew == 1 - Qeas) on
+        # non-degenerate elements. Ideal angle theta_e = 60deg for a tri. (#217)
+        angles_rad = np.array([
+            np.arccos(np.clip(np.dot(-c, a) / (lc * la + 1e-300), -1, 1)),
+            np.arccos(np.clip(np.dot(-a, b) / (la * lb + 1e-300), -1, 1)),
+            np.arccos(np.clip(np.dot(-b, c) / (lb * lc + 1e-300), -1, 1)),
+        ])
+        angles_deg = np.degrees(angles_rad)
+        if np.sum(angles_deg) <= 179.99:
+            return 1.0
+        angle_max = np.max(angles_deg)
+        angle_min = np.min(angles_deg)
+        skewness = np.maximum(
+            (angle_max - 60.0) / 120.0,
+            (60.0 - angle_min) / 60.0,
+        )
+        return float(skewness)
+
     else:  # min_angle or max_angle
         angles = np.array([
             np.arccos(np.clip(np.dot(-c, a) / (lc * la + 1e-300), -1, 1)),
@@ -142,6 +163,30 @@ def _quad_quality(
             (90.0 - angle_min) / 90.0
         )
         return float(quality)
+    elif metric in ("equiangle_skewness", "equiangle skewness", "eas"):
+        # Equiangle skewness Qeas in [0,1] for a quad: 0 = ideal (all 90deg),
+        # 1 = degenerate. theta_e = 90deg. Complement of "skew". (#217)
+        angles_deg = np.zeros(4)
+        verts = np.array([v0, v1, v2, v3])
+        for j in range(4):
+            v_curr = verts[j]
+            v_next = verts[(j + 1) % 4]
+            v_prev = verts[(j - 1) % 4]
+            v_edge1 = v_next - v_curr
+            v_edge2 = v_prev - v_curr
+            n1 = np.linalg.norm(v_edge1) + 1e-12
+            n2 = np.linalg.norm(v_edge2) + 1e-12
+            dot = np.clip(np.dot(v_edge1 / n1, v_edge2 / n2), -1.0, 1.0)
+            angles_deg[j] = np.degrees(np.arccos(dot))
+        if np.sum(angles_deg) <= 359.99:
+            return 1.0
+        angle_max = np.max(angles_deg)
+        angle_min = np.min(angles_deg)
+        skewness = np.maximum(
+            (angle_max - 90.0) / 90.0,
+            (90.0 - angle_min) / 90.0,
+        )
+        return float(skewness)
     else:
         # For other metrics, split quad into two triangles and take min
         q1 = _triangle_quality(v0, v1, v2, metric)
@@ -211,7 +256,7 @@ def element_quality(
     >>> print(q[0])  # Should be 0.0
     0.0
     """
-    if metric not in ("aspect_ratio", "min_angle", "max_angle", "skew", "skewness", "angular_skewness", "angular skewness"):
+    if metric not in ("aspect_ratio", "min_angle", "max_angle", "skew", "skewness", "angular_skewness", "angular skewness", "equiangle_skewness", "equiangle skewness", "eas"):
         raise ValueError(f"Unknown metric: {metric!r}")
 
     verts_array = np.asarray(verts, dtype=float)
@@ -255,7 +300,7 @@ def element_quality(
             v2 = verts_array[elem_valid[2]]
             v3 = verts_array[elem_valid[3]]
 
-            if metric in ("skew", "skewness", "angular_skewness", "angular skewness"):
+            if metric in ("skew", "skewness", "angular_skewness", "angular skewness", "equiangle_skewness", "equiangle skewness", "eas"):
                 # Use dedicated quad skew quality function
                 qualities[i] = _quad_quality(v0, v1, v2, v3, metric)
             else:
