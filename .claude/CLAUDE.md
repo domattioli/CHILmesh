@@ -10,7 +10,7 @@ This document provides context and guidelines for AI-assisted development on CHI
 
 CHILmesh is a Python library for 2D triangular, quadrilateral, and mixed-element mesh generation and manipulation. It implements mesh layer-based skeletonization (medial axis extraction) and serves as a bridge library for downstream research projects: MADMESHR, ADMESH, and ADMESH-Domains.
 
-**Current Version:** 1.0.0 (Production/Stable — Hybrid Python/C++ Release)
+**Current Version:** 1.2.2 (Production/Stable — Hybrid Python/C++ Release)
 **Repository:** https://github.com/domattioli/CHILmesh
 **Author:** Dominik Mattioli
 **Lab:** Computational Hydrodynamics & Informatics Lab (CHIL), Ohio State University
@@ -18,7 +18,7 @@ CHILmesh is a Python library for 2D triangular, quadrilateral, and mixed-element
 ## Current Status: v1.0.0 Shipped ✅
 
 **v1.0.0 Release:** 2026-05-22 (Available on PyPI)
-**Major Achievement:** C++ half-edge backend bit-equivalent to Python; **46× full-init speedup** (WNAT_Hagen: 3.21 s → 0.069 s), **66× skeletonization speedup**, all 4 fixtures pass cross-backend equivalence tests (`tests/test_backend_equivalence.py`, 36 cases).
+**Major Achievement:** C++ half-edge backend bit-equivalent to Python; **up to ~15× faster on full init** (see README for cross-backend benchmarks), all 4 fixtures pass cross-backend equivalence tests (`tests/test_backend_equivalence.py`, 36 cases).
 
 **Historical milestone:** 937× speedup from v0.1.1 (~13,400 s) → v0.2.0 (14.3 s) on Block_O initialization (pure-Python Phase 1-4 optimization, 2026-04-27). v1.0.0 stacks the C++ extension on top.
 
@@ -370,7 +370,7 @@ Auto-detects: credentials (`PYPI_TOKEN` env var or `~/.pypirc`), package name/ve
 **2026-04-27: Phase 1 EdgeMap complete.** Hash O(1) edge lookup. Critical bug: `set()` iteration order is undefined — use `EdgeMap.to_list()` for consistent ordering. Test runtime 115s → 4.6s. Unblocks Phase 2.
 
 ---
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-07-04
 **Document Version:** 1.5
 
 ## Repo-local labels (issue #152 triage)

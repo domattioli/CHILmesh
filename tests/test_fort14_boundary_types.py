@@ -84,9 +84,9 @@ def test_roundtrip_preserves_boundary_segments(tmp_path):
         np.testing.assert_array_equal(before["nodes"], after["nodes"])
 
 
-def test_write_without_boundaries_omits_section(tmp_path):
-    # A mesh with no boundary segments must produce byte-identical legacy output
-    # (no trailing NOPE/NBOU block).
+def test_write_without_boundaries_emits_zero_block(tmp_path):
+    # #216: a canonical fort.14 always carries the trailing NOPE/NBOU block,
+    # even with zero boundary segments (0/0/0/0). Round-trips to empty segments.
     mesh = CHILmesh.read_from_fort14(_write(tmp_path, TYPED_FORT14),
                                      compute_layers=False, compute_adjacencies=False)
     mesh.boundary_segments = []
@@ -95,9 +95,22 @@ def test_write_without_boundaries_omits_section(tmp_path):
     mesh.write_to_fort14(str(dst))
     text = dst.read_text(encoding="utf-8")
 
-    # Last non-empty line is the final element row, not a boundary count.
-    last = [ln for ln in text.splitlines() if ln.strip()][-1]
-    assert last.split()[:2] == ["2", "3"], "expected final element row, no boundary section"
+    nonempty = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    assert nonempty[-4:] == ["0", "0", "0", "0"], (
+        f"expected trailing 0/0/0/0 boundary block, got {nonempty[-4:]}"
+    )
+
+    reloaded = CHILmesh.read_from_fort14(dst, compute_layers=False, compute_adjacencies=False)
+    assert reloaded.boundary_segments == []
+
+
+def test_write_fort14_module_fn_returns_true(tmp_path):
+    # #216: the module-level write_fort14 returns a success signal.
+    from chilmesh.CHILmesh import write_fort14
+    mesh = CHILmesh.read_from_fort14(_write(tmp_path, TYPED_FORT14),
+                                     compute_layers=False, compute_adjacencies=False)
+    dst = tmp_path / "signal.fort.14"
+    assert write_fort14(mesh, str(dst)) is True
 
 
 def test_malformed_boundary_section_warns_not_raises(tmp_path):

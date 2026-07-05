@@ -447,14 +447,29 @@ class CHILmesh(CHILmeshPlotMixin):
     
     def signed_area( self, elem_ids: Opt[Union[int, List[int], np.ndarray]] = None ) -> np.ndarray:
         """
-        Calculate the signed area of elements.
-        
+        Calculate the signed area of elements (float64 shoelace formula).
+
+        Numeric contract (#217):
+            - **Signed:** positive for counter-clockwise (CCW) vertex order,
+              negative for clockwise; use ``abs(signed_area(...))`` for
+              unsigned area. The constructor runs ``_ensure_ccw_orientation``,
+              so a constructed mesh's areas are positive — the sign is
+              meaningful only for hand-built connectivity rows.
+            - **Includes the 1/2 factor** (true geometric area, not 2*area).
+            - **float64 summation:** for a *near*-degenerate (nearly collinear)
+              element the numpy shoelace sum returns a tiny non-zero float from
+              rounding, **not** exactly ``0.0``. Exactly ``0.0`` occurs only
+              when the terms cancel exactly (e.g. exactly-collinear,
+              exactly-representable coords). A caller using an exact
+              ``== 0.0`` zero-area test must account for this (prefer a
+              tolerance for robustness).
+
         Parameters:
             elem_ids: Indices of elements to evaluate.
                 If None, all elements are evaluated.
-        
+
         Returns:
-            Signed areas of elements
+            np.ndarray of signed areas (one per element).
         """
         if elem_ids is None:
             elem_ids = np.arange( self.n_elems )
@@ -2717,7 +2732,7 @@ class CHILmesh(CHILmeshPlotMixin):
         return mesh
 
 
-def write_fort14(mesh, filename: str) -> None:
+def write_fort14(mesh, filename: str) -> bool:
     """
     Write a CHILmesh to ADCIRC fort.14 format.
 
@@ -2725,12 +2740,19 @@ def write_fort14(mesh, filename: str) -> None:
         mesh: CHILmesh object to save.
         filename: Output file path.
 
+    Returns:
+        ``True`` on success. (#216)
+
     Notes:
-        Node, element, and boundary condition records (NOPE/NBOU) are written.
-        Boundary segments are preserved if present on mesh.boundary_segments.
+        Node, element, and boundary records (NOPE/NBOU) are written. The
+        trailing NOPE/NBOU boundary block is **always** emitted — a canonical
+        ADCIRC fort.14 carries it even when the mesh has zero boundary
+        segments (written as ``0``/``0``/``0``/``0``). Segments present on
+        ``mesh.boundary_segments`` are written losslessly. (#216)
 
     Example:
         >>> write_fort14(mesh, "output.14")
+        True
     """
     with open(filename, 'w') as f:
         name = mesh.grid_name or "CHILmesh"
@@ -2746,31 +2768,35 @@ def write_fort14(mesh, filename: str) -> None:
                 verts = elem[:4]
                 f.write(f"{i+1} 4 {' '.join(str(v+1) for v in verts)}\n")
 
-        # Write ADCIRC boundary section (NOPE/NBOU) if segments present
-        if hasattr(mesh, 'boundary_segments') and mesh.boundary_segments:
-            open_segs = [s for s in mesh.boundary_segments if s["kind"] == "open"]
-            flow_segs = [s for s in mesh.boundary_segments if s["kind"] == "flow"]
+        # Write ADCIRC boundary section (NOPE/NBOU). Always emitted — a
+        # canonical fort.14 carries the trailing block even with zero
+        # open/flow segments (written 0/0/0/0). (#216)
+        segs = getattr(mesh, 'boundary_segments', None) or []
+        open_segs = [s for s in segs if s["kind"] == "open"]
+        flow_segs = [s for s in segs if s["kind"] == "flow"]
 
-            # NOPE open boundaries
-            total_open_nodes = sum(len(s["nodes"]) for s in open_segs)
-            f.write(f"{len(open_segs)}\n")
-            f.write(f"{total_open_nodes}\n")
-            for seg in open_segs:
-                f.write(f"{len(seg['nodes'])}\n")
-                for node in seg["nodes"]:
-                    f.write(f"{node + 1}\n")
+        # NOPE open boundaries
+        total_open_nodes = sum(len(s["nodes"]) for s in open_segs)
+        f.write(f"{len(open_segs)}\n")
+        f.write(f"{total_open_nodes}\n")
+        for seg in open_segs:
+            f.write(f"{len(seg['nodes'])}\n")
+            for node in seg["nodes"]:
+                f.write(f"{node + 1}\n")
 
-            # NBOU flow boundaries
-            total_flow_nodes = sum(len(s["nodes"]) for s in flow_segs)
-            f.write(f"{len(flow_segs)}\n")
-            f.write(f"{total_flow_nodes}\n")
-            for seg in flow_segs:
-                f.write(f"{len(seg['nodes'])}")
-                if seg["ibtype"] is not None:
-                    f.write(f" {seg['ibtype']}")
-                f.write("\n")
-                for node in seg["nodes"]:
-                    f.write(f"{node + 1}\n")
+        # NBOU flow boundaries
+        total_flow_nodes = sum(len(s["nodes"]) for s in flow_segs)
+        f.write(f"{len(flow_segs)}\n")
+        f.write(f"{total_flow_nodes}\n")
+        for seg in flow_segs:
+            f.write(f"{len(seg['nodes'])}")
+            if seg["ibtype"] is not None:
+                f.write(f" {seg['ibtype']}")
+            f.write("\n")
+            for node in seg["nodes"]:
+                f.write(f"{node + 1}\n")
+
+    return True
 
 
 def _check_fort14(filename) -> bool:
