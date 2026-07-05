@@ -79,3 +79,26 @@ def test_signed_area_unit_triangle():
     conn = np.array([[0, 1, 2]])
     mesh = CHILmesh(connectivity=conn, points=pts, grid_name="unit_tri")
     np.testing.assert_allclose(mesh.signed_area(), [0.5], atol=1e-12)
+
+
+def test_signed_area_near_degenerate_not_exactly_zero():
+    # #217 numeric contract: a *near*-collinear triangle yields a tiny
+    # non-zero float, not exactly 0.0. Callers must not rely on == 0.0 to
+    # detect near-zero area.
+    pts = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 1e-9]])
+    conn = np.array([[0, 1, 2]])
+    mesh = CHILmesh(connectivity=conn, points=pts, grid_name="near_degen",
+                    compute_layers=False, compute_adjacencies=False)
+    a = mesh.signed_area()
+    assert abs(a[0]) < 1e-6
+
+
+def test_signed_area_exactly_collinear_is_zero():
+    # #217: exactly-collinear, exactly-representable coords -> shoelace terms
+    # cancel to exactly 0.0. The only case where == 0.0 holds.
+    pts = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]])
+    conn = np.array([[0, 1, 2]])
+    mesh = CHILmesh(connectivity=conn, points=pts, grid_name="collinear",
+                    compute_layers=False, compute_adjacencies=False)
+    a = mesh.signed_area()
+    assert a[0] == 0.0

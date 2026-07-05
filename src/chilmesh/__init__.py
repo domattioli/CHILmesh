@@ -19,6 +19,14 @@ from .CHILmesh import CHILmesh, write_fort14
 from .gmsh_io import read_msh, write_msh, GmshParseError
 from .fort13_io import Fort13, NodalAttribute, read_fort13, write_fort13, Fort13ParseError
 from .fort15_io import Fort15, read_fort15, write_fort15, Fort15ParseError
+from .fort14_io import (
+    Fort14Raw,
+    OpenBoundary,
+    FlowBoundary,
+    read_fort14_raw,
+    write_fort14_raw,
+    Fort14ParseError,
+)
 from .summary_io import summary, SummaryError
 from .mesh_topology import EdgeMap, quad_from_tri_pair, quads_from_tri_pairs
 from .mutations import MutableMesh
@@ -108,6 +116,12 @@ __all__ = [
     "read_fort15",
     "write_fort15",
     "Fort15ParseError",
+    "Fort14Raw",
+    "OpenBoundary",
+    "FlowBoundary",
+    "read_fort14_raw",
+    "write_fort14_raw",
+    "Fort14ParseError",
     "summary",
     "SummaryError",
     # Standalone quality computation
