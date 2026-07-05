@@ -50,7 +50,7 @@
 
 ## Status & Roadmap
 
-**Current status (June 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; 36 cross-backend equivalence tests; fort.14 + .2dm + fort.13 I/O; mixed-element support; full mesh-mutation API (split/swap/merge/collapse, [#94](https://github.com/domattioli/CHILmesh/issues/94)); lazy header-only `summary()`.
+**Current status (June 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; cross-backend equivalence tests across C++ and Rust; fort.14 + .2dm + fort.13 I/O; mixed-element support; full mesh-mutation API (split/swap/merge/collapse, [#94](https://github.com/domattioli/CHILmesh/issues/94)); lazy header-only `summary()`.
 
 - **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
 - **Next:** performance optimization; parallelization; conda-forge packaging; mkdocs API site; native `.chil` file format
@@ -63,7 +63,7 @@
 **The stable backbone for hydrodynamic mesh generation & tooling.**
 
 - **Pythonic API** — `from chilmesh import Mesh`; backwards-compatible `CHILmesh` alias preserved.
-- **C++ acceleration, bit-identical output** — half-edge extension is **up to ~15× faster than pure Python** on full init (8.6× on the 272k-element ENPAC mesh below), verified bit-for-bit by [36 cross-backend equivalence tests](tests/test_backend_equivalence.py).
+- **C++ acceleration, bit-identical output** — half-edge extension is **up to ~15× faster than pure Python** on full init (8.6× on the 272k-element ENPAC mesh below), verified bit-for-bit by the [cross-backend equivalence suite](tests/test_backend_equivalence.py) (76 tests across C++ and Rust backends).
 - **One interface for all topologies** — triangles, quadrilaterals, and mixed meshes share the same call surface.
 - **Stable v1.x API** — downstream projects can pin `chilmesh>=1.0,<2`.
 
