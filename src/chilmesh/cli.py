@@ -245,7 +245,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_info.add_argument(
         "--no-layers",
         action="store_true",
-        help="Skip skeletonization (faster, no layer count).",
+        help="Skip the layer peel (faster, no layer count).",
     )
     p_info.add_argument(
         "--no-quality",
@@ -333,7 +333,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_plot.add_argument(
         "--layers",
         action="store_true",
-        help="Color elements by skeletonization layer.",
+        help="Color elements by peel layer.",
     )
     p_plot.add_argument(
         "--quality",

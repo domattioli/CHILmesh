@@ -1,7 +1,7 @@
 # Distance, medial axis, skeleton, layers — four related, distinct constructs
 
 These four terms are routinely conflated (CHILmesh itself shipped a layerization
-routine misnamed `_skeletonize` until #221). They form a chain — each derives
+routine misnamed `_skeletonize` until #221, renamed `_peel` in #187). They form a chain — each derives
 from the one before — but they are **not** interchangeable. This note fixes the
 vocabulary used throughout CHILmesh and explains the differences at a high,
 algorithmic, and mathematical level.
@@ -16,8 +16,8 @@ algorithmic, and mathematical level.
 |---|---|---|---|---|
 | **Distance field** | scalar: distance from each interior point to the boundary | continuous field over the domain | distance transform, EDT, wall distance, `d(x)`; *signed* variant = SDF | not yet (roadmap; lives in ADMESH for generation) |
 | **Medial axis** | the ridge of the distance field: centers of maximal inscribed disks | continuous 1-D curve/graph (the domain's "spine") | MAT (medial axis transform), symmetric axis, grassfire locus | not directly |
-| **Skeleton** | a 1-wide, connectivity-preserving thinning of the shape | discrete 1-px / 1-element curve | thinning, morphological skeleton, centerline | `skeletonize()` (thinning peel) |
-| **Layers** | the mesh's elements grouped into concentric bands peeled boundary-inward | partition of elements (integer layer index) | onion peeling, concentric layering, advancing-front layers | `_layerize()` → `.layers`, `.n_layers` |
+| **Skeleton** | a 1-wide, connectivity-preserving thinning of the shape | discrete 1-px / 1-element curve | thinning, morphological skeleton, centerline | `skeletonize()` — reserved, medial-axis only (#223, unimplemented) |
+| **Layers** | the mesh's elements grouped into concentric bands peeled boundary-inward | partition of elements (integer layer index) | onion peeling, concentric layering, advancing-front layers | `peel_layers()` / `_peel()` → `.layers`, `.n_layers` |
 
 The chain: **distance is a field → its ridge is the medial axis → the skeleton
 is a thinned discrete approximation of that ridge → layers are concentric bands
@@ -78,7 +78,7 @@ of which the innermost approximate the medial region.**
   adjacent to the (receding) boundary. `n_layers = max_e ℓ(e) + 1`. This is a
   *quantized, mesh-discrete analogue of the distance field* — `ℓ(e)` tracks
   graph-distance-to-boundary in elements, not Euclidean distance.
-- **Algorithm.** CHILmesh `_layerize()` (formerly mis-named `_skeletonize`):
+- **Algorithm.** CHILmesh `_peel()` (formerly mis-named `_skeletonize`):
   vectorized boundary-ring removal, `O(n)` in element count, storing
   `OE`/`IE`/`OV`/`IV` (outer/inner elements and vertices) per layer.
 - **Why it is not skeletonization.** Layerization removes **every** boundary
@@ -87,12 +87,12 @@ of which the innermost approximate the medial region.**
   **only** elements whose deletion preserves connectivity, so the active set
   shrinks to a thin *spine* and stops there.
 
-## The two mesh operations: `_layerize` vs `skeletonize`
+## The two mesh operations: `_peel` vs `skeletonize`
 
 Both are iterative inward peels on the same mesh; the **peel rule** is the only
 difference.
 
-| | `_layerize()` | `skeletonize()` |
+| | `_peel()` | `skeletonize()` |
 |---|---|---|
 | Peel rule | remove **all** current boundary elements each pass | remove only **removable** (connectivity-preserving) boundary elements |
 | Topology | not preserved (peels through to nothing) | preserved (homotopy-equivalent thinning) |
@@ -100,9 +100,9 @@ difference.
 | Output | layer index per element; concentric bands | skeleton elements + the peel order that produced them |
 | Discrete analogue of | the distance field (banded) | the medial axis (thinned) |
 
-So `skeletonize()` *mimics* the layerize machinery — peel, record, repeat until
+So `skeletonize()` *mimics* the peel machinery — peel, record, repeat until
 you cannot peel — but with the **skeletonization peel** (drop only simple,
-topology-safe elements) rather than the **layerize peel** (drop the whole ring).
+topology-safe elements) rather than the **peel** (drop the whole ring).
 
 ## Synonyms seen in the wild
 

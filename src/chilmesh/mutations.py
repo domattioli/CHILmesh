@@ -717,17 +717,17 @@ class MutableMesh:
             self.mesh._spatial_dirty = False
         return n_swapped
 
-    def reskeletonize_local(
+    def repeel_local(
         self, elem_ids: np.ndarray, radius: int = 2
     ) -> None:
-        """Re-skeletonize only the neighborhood affected by mutated elements.
+        """Re-peel only the neighborhood affected by mutated elements.
 
         Finds the earliest layer touched by ``elem_ids``, backs up ``radius``
         layers, replays consumption of all earlier layers into fresh working
         arrays, then re-peels from that start point — updating only
         ``layers[start_layer:]`` and ``n_layers``.
 
-        Falls back to a full ``_skeletonize()`` when the affected elements are
+        Falls back to a full ``_peel()`` when the affected elements are
         in the first ``radius`` layers or when no layer data exists yet.
 
         Parameters
@@ -742,7 +742,7 @@ class MutableMesh:
         layers = self.mesh.layers
 
         if not layers.get('OE'):
-            self.mesh._skeletonize()
+            self.mesh._peel()
             return
 
         # Find the first layer that contains any of the changed elements.
@@ -757,12 +757,12 @@ class MutableMesh:
 
         if affected_layer is None:
             # Changed elements not in any existing layer — full rebuild.
-            self.mesh._skeletonize()
+            self.mesh._peel()
             return
 
         start_layer = max(0, affected_layer - radius)
         if start_layer == 0:
-            self.mesh._skeletonize()
+            self.mesh._peel()
             return
 
         # Replay consumption of layers 0..(start_layer-1) to restore the
@@ -838,8 +838,8 @@ class MutableMesh:
         self.mesh.layers = new_layers
         self.mesh.n_layers = len(new_layers['OE'])
 
-    def skeletonize_diff(self, prev_layers: dict) -> dict:
-        """Run full re-skeletonization and return which elements changed layer.
+    def layers_diff(self, prev_layers: dict) -> dict:
+        """Run a full re-peel and return which elements changed layer.
 
         Parameters
         ----------
@@ -863,7 +863,7 @@ class MutableMesh:
             for e in ie:
                 prev_map[int(e)] = ('IE', iL)
 
-        self.mesh._skeletonize()
+        self.mesh._peel()
 
         new_map: dict = {}
         for iL, (oe, ie) in enumerate(zip(self.mesh.layers['OE'],
@@ -882,7 +882,7 @@ class MutableMesh:
         return changed
 
     def _snapshot_layers(self) -> dict:
-        """Snapshot current layer arrays for ``skeletonize_diff``."""
+        """Snapshot current layer arrays for ``layers_diff``."""
         return {
             key: [arr.copy() for arr in val]
             for key, val in self.mesh.layers.items()

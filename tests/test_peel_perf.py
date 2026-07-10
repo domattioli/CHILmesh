@@ -1,8 +1,8 @@
-"""Perf-regression guard for the pure-Python skeletonize path (#202).
+"""Perf-regression guard for the pure-Python peel path (#202).
 
 #202 reported a >200s pure-Python full-init cliff on Block_O (~5k elems).
 Re-measurement on current ``development`` shows that cliff is gone: Block_O
-full init (read + adjacency + skeletonize + spatial index) is ~0.2-0.3s and
+full init (read + adjacency + peel + spatial index) is ~0.2-0.3s and
 scaling is linear (~1s per 60k elems). This test pins that — a regression
 back toward the cliff trips the generous 30s ceiling well before it becomes
 a >200s hang. The ceiling is a tripwire, not a target; it is deliberately

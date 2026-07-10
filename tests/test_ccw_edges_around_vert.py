@@ -97,7 +97,7 @@ class TestCCWEdgesAroundVert:
             mesh.ccw_edges_around_vert(0)
 
     def test_works_with_compute_adjacencies_only(self):
-        """Works without skeletonization as long as adjacencies were built (#133 + #134)."""
+        """Works without the layer peel as long as adjacencies were built (#133 + #134)."""
         fixture_path = chilmesh.examples.fixture_path("annulus_200pts.fort.14")
         mesh = chilmesh.CHILmesh.read_from_fort14(
             fixture_path, compute_layers=False, compute_adjacencies=True

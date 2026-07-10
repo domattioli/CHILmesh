@@ -75,7 +75,7 @@ profiled cross-language to date.
 
 All three backends time the **same operation on the same in-memory
 `(connectivity, points)` arrays** for every row — `_build_adjacencies` (fast
-init), `_skeletonize` (skeletonization), the two combined (full init), and
+init), `_peel` (layer peel), the two combined (full init), and
 `signed_area` (quality). No backend reads the fort.14 file inside the timed
 region.
 
@@ -140,13 +140,13 @@ WNAT_Hagen full lifecycle (FEM direct smoother 4.38 s + angle smoother 37.5 s,
 3 iters each) completes in ~45 s end-to-end — the first full-lifecycle run on a
 real WNAT mesh.
 
-> **Skeletonization regression fixed (this session):** `_skeletonize()` hung
+> **Skeletonization regression fixed (this session):** `_peel()` (then named `_skeletonize`) hung
 > indefinitely on every non-trivial mesh after the #129 boundary-seeding rewrite
 > (boundary-edge selection checked only `Edge2Elem[:,1]==-1` instead of the
 > active-element count, so newly-exposed `[-1, b]` boundary edges were never
 > peeled while consumed `[-1,-1]` edges looped forever). Restored the vectorized
 > `active_count == 1` peel from a3ce406; the #129 seed-node layer-0 filter is
-> preserved. Regression guarded by `tests/test_skeletonize_termination.py`.
+> preserved. Regression guarded by `tests/test_peel_termination.py`.
 
 > **Reproduce:** `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh <valence>/registry_data/meshes/WNAT_Hagen.14 --sdf none --smooth-iters 3 --truss-iters 3`
 
@@ -407,7 +407,7 @@ End-to-end cost including I/O and rendering, which the cross-language table omit
 | Quality (signed area) | 41 ms | over 531,680 elements |
 | Render | 11.49 s | `plot()` → PNG; dominates wall-clock |
 
-The timed compute stage is **layerization** (`_layerize`), distinct from medial axis / skeleton / distance — see [`CONCEPTS.md`](CONCEPTS.md) and [#221](https://github.com/domattioli/CHILmesh/issues/221). At this scale rendering, not topology, is the wall-clock bottleneck.
+The timed compute stage is the **layer peel** (`_peel`), distinct from medial axis / skeleton / distance — see [`CONCEPTS.md`](CONCEPTS.md) and [#221](https://github.com/domattioli/CHILmesh/issues/221). At this scale rendering, not topology, is the wall-clock bottleneck.
 
 ## Cross-backend layer parity (Valence catalog)
 

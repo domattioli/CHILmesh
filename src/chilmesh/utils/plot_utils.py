@@ -79,7 +79,7 @@ class CHILmeshPlotMixin:
 
     def plot_layer(self, layers=None, cmap='viridis',
                    ax=None) -> Tuple[plt.Figure, plt.Axes]:
-        """Plot skeletonization layers as filled elements colored by layer index."""
+        """Plot peel layers as filled elements colored by layer index."""
         return _cp.plot_layer(self, layers=layers, cmap=cmap, ax=ax)
 
     def plot_quality(self, elem_ids=None, cmap='cool',

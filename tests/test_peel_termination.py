@@ -1,5 +1,5 @@
 """
-Regression test for infinite-loop bug in _skeletonize() (#129 fix).
+Regression test for infinite-loop bug in _peel() (#129 fix).
 
 The bug: broken per-element loop selected boundary edges via `edge2elem_work[:, 1] == -1`,
 which only checks slot 1. After an outer ring was consumed, newly-exposed boundary edges
@@ -15,9 +15,9 @@ selects edges with `active_count == 1` for layers > 0.
 import chilmesh
 
 
-def test_skeletonize_terminates_on_donut():
+def test_peel_terminates_on_donut():
     """
-    Test that _skeletonize() terminates quickly on the bundled donut fixture.
+    Test that _peel() terminates quickly on the bundled donut fixture.
 
     Before fix: hangs forever.
     After fix: completes in <1s with n_layers > 0.
@@ -25,7 +25,7 @@ def test_skeletonize_terminates_on_donut():
     fixture_path = chilmesh.examples.fixture_path("donut_domain.fort.14")
     mesh = chilmesh.CHILmesh.read_from_fort14(fixture_path, compute_layers=True)
 
-    # Basic checks: skeletonization completed with reasonable layer count
+    # Basic checks: peel completed with reasonable layer count
     assert mesh.n_layers > 0, "Donut should have multiple layers"
     assert len(mesh.layers["OV"]) == mesh.n_layers
     assert len(mesh.layers["OE"]) == mesh.n_layers
@@ -34,8 +34,8 @@ def test_skeletonize_terminates_on_donut():
     assert len(mesh.layers["bEdgeIDs"]) == mesh.n_layers
 
 
-def test_skeletonize_terminates_on_mixed_tri_quad():
-    """Mixed tri+quad mesh must skeletonize and terminate (#203).
+def test_peel_terminates_on_mixed_tri_quad():
+    """Mixed tri+quad mesh must peel and terminate (#203).
 
     The #155 hang originally surfaced on mixed-element meshes (QuADMesh's
     10-element Mixed_Test.14). The donut test above covers the pure-tri case;

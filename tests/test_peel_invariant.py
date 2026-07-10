@@ -1,4 +1,4 @@
-"""Regression test for issue #74: skeletonization layer separation invariant.
+"""Regression test for issue #74: peel-layer separation invariant.
 
 A vertex appearing in any element of layer k MUST NOT appear in any element
 of layer m where |k - m| >= 2. This is the medial-axis layer separation

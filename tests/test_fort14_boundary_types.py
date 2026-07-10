@@ -3,7 +3,7 @@
 CHILmesh historically read only the node + element blocks of a fort.14 file and
 discarded the trailing NOPE/NBOU boundary section, so open-ocean vs land
 boundary types never survived the I/O pipeline. These tests pin the foundation
-for type-aware skeletonization: boundary segments are parsed, exposed on
+for type-aware layer peeling: boundary segments are parsed, exposed on
 ``mesh.boundary_segments``, and written back losslessly.
 """
 from __future__ import annotations

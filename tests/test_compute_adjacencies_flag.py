@@ -2,7 +2,7 @@
 
 When set to True with compute_layers=False, the constructor must build adjacency
 dicts (Vert2Edge, Vert2Elem, Edge2Vert, Edge2Elem, Elem2Edge, EdgeMap) without
-running the skeletonization pass. This lets downstream consumers
+running the layer-peel pass. This lets downstream consumers
 (quadmesh-matlab, MADMESHR) use the public adjacency API without paying the
 layer-sweep cost or calling private methods.
 """

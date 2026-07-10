@@ -1,4 +1,4 @@
-"""Ordered vertex paths along the outer boundary of a skeletonization layer.
+"""Ordered vertex paths along the outer boundary of a peel layer.
 
 Idiomatic Python port of MATLAB ``PathsOnOV.m`` from the legacy
 ``QuADMesh-MATLAB/02_QuADMESH_Library/03_Layer_Paths`` library.
@@ -84,7 +84,7 @@ def _build_outer_vertex_subgraph(
 
     Per-layer cost: ``O(|OE|+|IE|+|E_layer|)`` -- scans only the layer's
     elements and their incident edges, not the full mesh. Summed across
-    all layers this is ``O(m)`` because the skeletonization invariant
+    all layers this is ``O(m)`` because the peel-layer invariant
     guarantees each element belongs to exactly one layer.
 
     Returns
