@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — **3 markers open (FR-001 suppression method, FR-006 histogram start state, FR-007 red-line metric); routed to /speckit-clarify**
+- [x] No [NEEDS CLARIFICATION] markers remain — all 3 resolved 2026-07-10 (Q1: C solver-side, Q2: A convert-in-place, Q3: A mean=red); see spec Clarifications section
 - [x] Requirements are testable and unambiguous (aside from the 3 marked items)
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,5 +31,5 @@
 
 ## Notes
 
-- The 3 open clarifications are the interactive gate for the pipeline run; all other
-  items pass. Items marked incomplete require spec updates before `/speckit-plan`.
+- All items pass; operator answered the 3 clarifications at the pipeline gate
+  (2026-07-10). Spec is ready for `/speckit-plan`.
