@@ -71,6 +71,8 @@ def distmesh2d_warmstart(
     quality_check_interval: int = 5,
     quality_drop_threshold: float = 0.10,
     track_best_quality: bool = True,
+    history_out: Optional[list] = None,
+    history_every: int = 1,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Warm-start variant of ADMESH's distmesh2d truss loop.
@@ -276,6 +278,12 @@ def distmesh2d_warmstart(
         max_interior_move = interior_movement.max() if len(interior_movement) > 0 else 0.0
 
         p = p_new
+
+        # Optional per-iteration snapshot capture (post-update, current
+        # triangulation). Additive viz/diagnostic hook — no behavior change
+        # when history_out is None (the default).
+        if history_out is not None and (iteration % max(1, history_every) == 0):
+            history_out.append((p.copy(), t.copy()))
 
         if max_interior_move / h0 < dptol:
             # Final quality update at converged state (next iteration won't run)
