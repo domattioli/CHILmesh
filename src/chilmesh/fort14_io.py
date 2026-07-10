@@ -26,6 +26,24 @@ _IBTYPE_1SIDED_BARRIER = frozenset({3, 13, 23})
 _IBTYPE_2SIDED_BARRIER = frozenset({4, 24, 64, 5, 25})
 
 
+def _lead_int(tokens, idx):
+    """Return int(tokens[idx]) if that token is an integer literal, else None.
+
+    Tolerates ADCIRC headers with trailing prose ('24 = Number of nodes ...')
+    by extracting only the leading integer token and discarding the rest.
+    """
+    if idx >= len(tokens):
+        return None
+    tok = tokens[idx]
+    try:
+        return int(tok)
+    except (TypeError, ValueError):
+        try:
+            return int(float(tok))
+        except (TypeError, ValueError):
+            return None
+
+
 class Fort14ParseError(ValueError):
     """Raised when parsing a fort.14 file encounters an error."""
 
@@ -131,48 +149,59 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
             nope = int(lines[i].split()[0]); i += 1
             i += 1  # NETA (total open nodes) — recomputed on write
             for _ in range(nope):
+                if i >= len(lines):
+                    break
                 parts = lines[i].split(); i += 1
                 nvdll = int(parts[0])
-                ibtypee = int(parts[1]) if len(parts) > 1 else None
+                ibtypee = _lead_int(parts, 1)
                 nodes = []
                 for _ in range(nvdll):
+                    if i >= len(lines):
+                        break
                     nodes.append(int(lines[i].split()[0])); i += 1
                 open_boundaries.append(OpenBoundary(nodes=nodes, ibtype=ibtypee))
 
-            nbou = int(lines[i].split()[0]); i += 1
-            i += 1  # NVEL (total flow nodes)
-            for _ in range(nbou):
-                parts = lines[i].split(); i += 1
-                nvell = int(parts[0])
-                ibtype = int(parts[1]) if len(parts) > 1 else None
-                nodes = []
-                back_nodes = []
-                heights = []
-                coeffs = []
-                node_extra = []
-                for _ in range(nvell):
-                    toks = lines[i].split(); i += 1
-                    nodes.append(int(toks[0]))
-                    rest = toks[1:]
-                    node_extra.append(rest)
-                    if ibtype in _IBTYPE_2SIDED_BARRIER:
-                        if len(rest) >= 1:
-                            back_nodes.append(int(float(rest[0])))
-                        if len(rest) >= 2:
-                            heights.append(float(rest[1]))
-                        coeffs.append([float(t) for t in rest[2:]])
-                    elif ibtype in _IBTYPE_1SIDED_BARRIER:
-                        if len(rest) >= 1:
-                            heights.append(float(rest[0]))
-                        coeffs.append([float(t) for t in rest[1:]])
-                flow_boundaries.append(FlowBoundary(
-                    ibtype=ibtype,
-                    nodes=nodes,
-                    back_nodes=back_nodes or None,
-                    heights=heights or None,
-                    coeffs=coeffs or None,
-                    node_extra=node_extra,
-                ))
+            # Guard: if file truncated after open boundaries, skip flow boundaries
+            if i < len(lines):
+                nbou = int(lines[i].split()[0]); i += 1
+                if i < len(lines):
+                    i += 1  # NVEL (total flow nodes)
+                for _ in range(nbou):
+                    if i >= len(lines):
+                        break
+                    parts = lines[i].split(); i += 1
+                    nvell = int(parts[0])
+                    ibtype = _lead_int(parts, 1)
+                    nodes = []
+                    back_nodes = []
+                    heights = []
+                    coeffs = []
+                    node_extra = []
+                    for _ in range(nvell):
+                        if i >= len(lines):
+                            break
+                        toks = lines[i].split(); i += 1
+                        nodes.append(int(toks[0]))
+                        rest = toks[1:]
+                        node_extra.append(rest)
+                        if ibtype in _IBTYPE_2SIDED_BARRIER:
+                            if len(rest) >= 1:
+                                back_nodes.append(int(float(rest[0])))
+                            if len(rest) >= 2:
+                                heights.append(float(rest[1]))
+                            coeffs.append([float(t) for t in rest[2:]])
+                        elif ibtype in _IBTYPE_1SIDED_BARRIER:
+                            if len(rest) >= 1:
+                                heights.append(float(rest[0]))
+                            coeffs.append([float(t) for t in rest[1:]])
+                    flow_boundaries.append(FlowBoundary(
+                        ibtype=ibtype,
+                        nodes=nodes,
+                        back_nodes=back_nodes or None,
+                        heights=heights or None,
+                        coeffs=coeffs or None,
+                        node_extra=node_extra,
+                    ))
         except (IndexError, ValueError) as e:
             raise Fort14ParseError(f"{path}: malformed boundary block near line {i}: {e}") from e
 
