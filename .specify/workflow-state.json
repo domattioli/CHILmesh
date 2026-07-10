@@ -1,0 +1,13 @@
+{
+  "feature": "002-hero-gif-refinement",
+  "pipeline": "speckit-pipeline",
+  "phases": {
+    "specify": "succeeded",
+    "clarify": "in_progress"
+  },
+  "analyze_cycles": 0,
+  "notes": [
+    "no feature branch created \u2014 CHILmesh single-branch policy (development)",
+    "ultracode session: FR-024 parallel fan-out authorized by operator keyword"
+  ]
+}
