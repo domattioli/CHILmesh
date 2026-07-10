@@ -69,8 +69,14 @@ class Fort14Raw:
     flow_boundaries: list = field(default_factory=list)
 
 
-def read_fort14_raw(filename) -> Fort14Raw:
+def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
     """Read an ADCIRC fort.14 preserving ids, winding, arity, and boundaries.
+
+    Parameters:
+        filename: path to the fort.14 file.
+        parse_boundaries: if False, skip the boundary block and return empty
+            ``open_boundaries`` / ``flow_boundaries``. Default True preserves
+            all boundary data for byte-faithful I/O.
 
     Raises:
         Fort14ParseError: on a malformed header, node/element block, or
@@ -110,7 +116,7 @@ def read_fort14_raw(filename) -> Fort14Raw:
         for _ in range(n_elems):
             p = lines[i].split(); i += 1
             eid = int(p[0]); nhy = int(p[1])
-            verts = tuple(int(v) for v in p[2:2 + nhy])
+            verts = tuple(int(float(v)) for v in p[2:2 + nhy])
             if len(verts) != nhy:
                 raise ValueError(f"element {eid} declares {nhy} nodes, found {len(verts)}")
             elem_ids.append(eid)
@@ -120,7 +126,7 @@ def read_fort14_raw(filename) -> Fort14Raw:
 
     open_boundaries: list = []
     flow_boundaries: list = []
-    if i < len(lines) and lines[i].strip():
+    if parse_boundaries and i < len(lines) and lines[i].strip():
         try:
             nope = int(lines[i].split()[0]); i += 1
             i += 1  # NETA (total open nodes) — recomputed on write
