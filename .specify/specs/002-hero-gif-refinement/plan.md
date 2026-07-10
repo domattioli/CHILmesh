@@ -22,8 +22,10 @@ The work is validated by four completed probes that replicated `_stage_data()` e
 (seed 11, annulus fixture, `deltat=0.02 Fscale=1.2 niter=200 history_every=1`) and
 measured every number cited below. The technical approach is: **one additive solver change
 (three keyword-only kwargs, default-off, capture-side only) + one rewritten generator
-script**. No new runtime dependency. No change to any of the 13-plus locked mesh modules
-or the public mesh API.
+script**. No new runtime dependency. No change to the CHILmesh core
+(`src/chilmesh/CHILmesh.py`) or the public API surface (`src/chilmesh/__init__.py`
+exports); the only source file changing under `src/` is `_vendor_admesh_truss.py`
+(capture block + additive kwargs).
 
 ## Technical Context
 
@@ -210,7 +212,7 @@ snapshots = [hist[i] for i in snap_idx]
 
 Then in `main()`, replace the tiered-hold play-list build with a **uniform hold**
 (`TRUSS_HOLD=2`): 3 preroll seed frames + `TRUSS_HOLD × len(snapshots)`. Probe 2 measured
-SC-002 thirds ratio **1.261** (vs baseline 14.888 FAIL), 69 truss frames = 6.9 s @ 10 fps
+SC-002 thirds ratio **1.261** (vs baseline 14.888 FAIL), 67 truss frames (3-frame preroll + 2×32 snapshots; probe measured 69 with the since-dropped appended final, F-03 corrigendum) = 6.7 s @ 10 fps
 (inside the 5–8 s target), per-transition motion mean ≈ 10 px @ 864-wide. The algorithm is
 quantile-based, so it self-adapts if Probe 1's dynamics shift.
 
