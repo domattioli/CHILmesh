@@ -44,7 +44,7 @@ One of Seed / Truss / FEM / Peel; owns a frame schedule and a boundary pause.
 
 **Invariants.**
 - Every stage boundary (Seed→Truss, Truss→FEM, FEM→Peel) holds ≥ 15 frames = 1.5 s @ 10 fps
-  (FR-004 / SC-003). The peel k=0 hold (15 f) doubles as the FEM→Peel pause.
+  (FR-004 / SC-003). The peel k=0 hold (18 f, per analyze-cycle-1 F-13) doubles as the FEM→Peel pause.
 - Truss stage = 3 preroll + `TRUSS_HOLD × len(snapshots)` frames (uniform hold); its
   per-rendered-frame mean node displacement varies ≤ 3× across thirds (FR-003 / SC-002).
 - Held frames are pixel-identical runs (merged free by PIL — do not budget them as bytes).

@@ -48,8 +48,9 @@ identical and zero-cost when the new kwargs are unused.
 the peel result (FR-008); deterministic run-to-run under RNG seed 11 (FR-009 / SC-007);
 truss node positions remain real captured solver iterations (FR-002); solver library
 change additive and default-off, existing behavior byte-identical when unused (FR-001).
-**Scale/Scope**: One ~380-node annulus mesh; ~200 captured solver iterations; ~180 unique
-animation frames plus held frames (held frames are free — see research Probe 4).
+**Scale/Scope**: One ~380-node annulus mesh; ~200 captured solver iterations; ~110–120 unique
+animation frames, ~265 total played frames after held-frame expansion (held frames are free —
+see research Probe 4; the earlier "~180 unique" was an overcount, F-07).
 
 ## Constitution Check
 
@@ -162,6 +163,13 @@ off-hook run. `snapshot_strict_interior` is a measured no-op on this annulus (no
 spanners) — the load-bearing lever is `snapshot_retriangulate` alone; strict is kept ON for
 robustness on non-annulus domains.
 
+**Return vs. capture (F-03).** The `snapshot_retriangulate` branch rewrites only the captured
+`history_out` entries — the solver's *return* `(p_out, t_out)` still carries the pre-move stale
+connectivity from its last Euler step. "Byte-identical to the off-hook run" is a *physics/node-
+positions* invariance proof, **not** a promise that `t_out` is degeneracy-free. The generator
+therefore sources both the converged-truss frame and the FEM input from `hist[-1]` (re-
+triangulated), never from the return — see §B.
+
 **Metric-definition correction (generator + spec audit):** any degenerate audit must use
 `hole-span = edge-midpoint fd > +0.02` (NOT `> -geps`, which flags all legitimate boundary
 tris) and `oversize = area > 8× snapshot-median` (NOT 4×, since a valid annulus mesh's
@@ -194,15 +202,34 @@ else:
         sel = np.unique(np.concatenate(
             [sel, np.linspace(0, len(hist) - 1, N_SNAP).astype(int)]))
 snap_idx = sel.tolist()
-snapshots = [hist[i] for i in snap_idx] + [(p_out, t_out)]
+# F-03: do NOT append (p_out, t_out) — the solver RETURN keeps the pre-move stale t that
+# snapshot_retriangulate never fixes. sel[-1] == len(hist)-1 already selects the final
+# iterate (re-triangulated) as the converged-truss frame.
+snapshots = [hist[i] for i in snap_idx]
 ```
 
 Then in `main()`, replace the tiered-hold play-list build with a **uniform hold**
 (`TRUSS_HOLD=2`): 3 preroll seed frames + `TRUSS_HOLD × len(snapshots)`. Probe 2 measured
 SC-002 thirds ratio **1.261** (vs baseline 14.888 FAIL), 69 truss frames = 6.9 s @ 10 fps
 (inside the 5–8 s target), per-transition motion mean ≈ 10 px @ 864-wide. The algorithm is
-quantile-based, so it self-adapts if Probe 1's dynamics shift; the appended `(p_out, t_out)`
-is a harmless converged-hold duplicate (`sel[-1]` already covers the last iter).
+quantile-based, so it self-adapts if Probe 1's dynamics shift.
+
+**Converged-truss frame + FEM input (F-03 corrigendum).** `sel[-1] == len(hist) - 1` already
+selects the last iterate as the final rendered truss frame, so **no** extra snapshot is
+appended. Because the solver *return* `(p_out, t_out)` keeps the pre-move stale `t` (§A),
+`_stage_data()` must derive the converged-truss mesh **and** the FEM input from `hist[-1]`,
+not the return: `p_fin, t_fin = hist[-1]`; compute `q_truss = _quality(p_fin, t_fin)`; build
+the smoother input `Mesh(connectivity=np.c_[t_fin, t_fin[:, 0]], points=np.c_[p_fin,
+np.zeros(len(p_fin))], ...)` and compute `q_fem` on `t_fin`. `audit_hero_gif` asserts this
+FEM-input connectivity (`hist[-1]`) passes the degenerate audit **by name** — it is already
+covered by the 0/200 snapshot sweep, but is asserted explicitly so a FEM-path regression
+cannot slip through.
+
+**Seed triangulation (F-11).** The seed-stage wireframe/histogram must show the true *pre-
+solver* scattered state, so `T_seed` is computed in-generator as a fresh `Delaunay(P_seed)`
+filtered by the centroid-in-domain keep test — **not** `snapshots[0][1]`, which under
+`snapshot_retriangulate=True` is the triangulation *after* iteration 0's move. `q_seed =
+_quality(P_seed, T_seed)` then reflects the genuine unrelaxed seed.
 
 ### C. Peel + histogram + metrics (from Probe 3)
 
@@ -213,7 +240,9 @@ revealed layers (0..n_layers); `k=0` is byte-identical to the FEM-hold appearanc
 (satisfies convert-in-place FR-006). Function signatures + constants:
 
 ```python
-HBINS = 40; GREEN = "#2ecc71"; RED = "#ff5555"; NEUTRAL = "#e8e8ee"
+HBINS = 40; RED = "#ff5555"          # F-08: RED is the ONE new constant. Reuse the existing
+                                     # GOOD ("#2ecc71") for the green Median and TEXT
+                                     # ("#e8e8ee") for the neutral Min — no GREEN/NEUTRAL dups.
 
 def _layer_color(li, n_layers):                          # single-layer viridis color
     return matplotlib.colormaps["viridis"](Normalize(0, max(1, n_layers - 1))(li))
@@ -225,31 +254,40 @@ def _peel_facecolors(q, elem_layer, n_layers, k):        # mesh facecolors for s
     return fc
 
 def _draw_peel_hist(ax, q, elem_layer, n_layers, k, D):  # stacked bars, totals invariant
-    # bottom-up: layers 0..k-1 each viridis, then remainder (layers >= k) in per-bin cool_r
-    ...  # see research Probe 3 code sketch (bincount into HBINS via np.add.at, bottom accum)
+    # Per-element bin index (F-10): shared HBINS edges over [0,1]; a q=1.0 element lands in
+    # the last bin, never overflows ->  b = np.clip(np.floor(q * HBINS).astype(int), 0, HBINS-1)
+    # Bottom-up stack: revealed layers 0..k-1 each in viridis(li); the REMAINDER (elements
+    # with elem_layer >= k) is colored PER BIN, pinned EXACTLY (F-04) to
+    #   cool_r(Normalize(0, 1)(bin_midpoints))
+    # i.e. byte-identical to _draw_hist's `bar_colors` (mids = hedges[:-1] + widths/2), so at
+    # k=0 the whole histogram equals the FEM-hold histogram pixel-for-pixel (convert-in-place, FR-006).
+    ...  # counts via np.add.at into HBINS; bottom-accumulate the stacked segments
 
-def _draw_metrics(ax, q):                                # REPLACES ax.set_title, ALL frames
+def _draw_metrics(ax, q, alpha=1.0):                     # REPLACES ax.set_title (F-09: alpha)
     med, mn, mean = float(np.median(q)), float(np.min(q)), float(np.mean(q))
-    ax.axvline(med,  color=GREEN, linestyle=":", linewidth=1.8, alpha=0.9, zorder=20)
-    ax.axvline(mean, color=RED,   linestyle=":", linewidth=1.8, alpha=0.9, zorder=20)
-    ax.text(0.02, 1.06, f"Median: {med:.3f}", transform=ax.transAxes, color=GREEN,
-            fontsize=11, fontweight="bold", ha="left", va="bottom")
+    ax.axvline(med,  color=GOOD, linestyle=":", linewidth=1.8, alpha=0.9 * alpha, zorder=20)
+    ax.axvline(mean, color=RED,  linestyle=":", linewidth=1.8, alpha=0.9 * alpha, zorder=20)
+    ax.text(0.02, 1.06, f"Median: {med:.3f}", transform=ax.transAxes, color=GOOD,
+            fontsize=11, fontweight="bold", ha="left", va="bottom", alpha=alpha)
     ax.text(0.40, 1.06, f"Mean: {mean:.3f}",  transform=ax.transAxes, color=RED,
-            fontsize=11, fontweight="bold", ha="left", va="bottom")
-    ax.text(0.76, 1.06, f"Min: {mn:.3f}",     transform=ax.transAxes, color=NEUTRAL,
-            fontsize=11, ha="left", va="bottom")
+            fontsize=11, fontweight="bold", ha="left", va="bottom", alpha=alpha)
+    ax.text(0.76, 1.06, f"Min: {mn:.3f}",     transform=ax.transAxes, color=TEXT,
+            fontsize=11, ha="left", va="bottom", alpha=alpha)
 ```
 
-`_draw_metrics` is called from **every** histogram-bearing frame (all stages), replacing the
-current single `ax.set_title(...)` in `_draw_hist`. Probe 3 verified per-bin stacked totals
-are `np.array_equal` across k=0..4 and equal to the plain histogram (FR-006 / SC-004
-invariant), and that median (0.930) / mean (0.870) lines are 2.4 bins apart —
-distinguishable, color+position keyed.
+`_draw_metrics` reaches the **seed/truss/FEM** stages by replacing the single `ax.set_title(...)`
+in `_draw_hist` (those frames call `_draw_hist`). **The peel-reveal frames do NOT call
+`_draw_hist` — they call `_draw_peel_hist`** (F-01), so the peel frame function must call
+`_draw_metrics(ax, q_fem)` explicitly, immediately after `_draw_peel_hist`. Peel `q` is `q_fem`
+(constant across `k` — peeling recolors, it does not re-smooth), so the Median/Mean/Min lines and
+texts are identical on every peel frame. Probe 3 verified per-bin stacked totals are
+`np.array_equal` across k=0..4 and equal to the plain histogram (FR-006 / SC-004 invariant), and
+that median (0.930) / mean (0.870) lines are 2.4 bins apart — distinguishable, color+position keyed.
 
-**Peel frame schedule (10 fps):** k=0 hold 15 f (1.5 s — doubles as the FR-004 FEM→Peel
-inter-stage pause) → k=1/k=2/k=3 hold 8 f each → k=4 final hold 20 f (2 s, FR-005 held
-full-layer). Total peel = 59 frames. Recolor is **instant** at each reveal boundary, not a
-fade.
+**Peel frame schedule (10 fps):** k=0 hold **18 f (1.8 s)** — doubles as the FR-004 FEM→Peel
+inter-stage pause (F-13: all inter-stage holds standardized to 18 f) → k=1/k=2/k=3 hold 8 f
+each → k=4 final hold 20 f (2 s, FR-005 held full-layer). Total peel = **62 frames**. Recolor
+is **instant** at each reveal boundary, not a fade.
 
 ### D. Frame + size budget (from Probe 4)
 
@@ -257,9 +295,18 @@ fade.
 identical consecutive frames into one stored frame with extended duration (proven byte-
 identical: 30-unique vs 30-unique-held-4×). Budget by **unique** frames only. Cost per
 unique frame: seed dots-only ≈ 10.8 KB, full mesh+hist ≈ 33.3 KB, peel ≈ 31.5 KB (raw
-`PillowWriter`, no optimize). The redesign's ~179 unique frames project to ~3.4–4.4 MB raw —
-tight/over at the high truss-unique end. Therefore a **mandatory post-process re-encode** is
-appended after `anim.save(...)` in `main()`:
+`PillowWriter`, no optimize).
+
+**Total played frames after the F-13 hold changes ≈ 265 (26.5 s @ 10 fps):** seed 8+26+16 +
+wire 10 + wire-hold **18** + truss (3 + 2×32 =) 67 + truss-hold **18** + FEM 24 + FEM-hold 16
++ peel **62**. **Unique** frames ≈ **110–120** (F-07: probe-4's conservative 50–80-truss-unique
+budget was for a coarser snapshot set; the shipped 32-snapshot config lands here — the earlier
+"~179 unique" was an overcount, no action needed). **Seed-frame budget correction (F-05):** only
+`f_bfade`/`f_fall`/`f_settle` (~50 frames) are histogram-free ≈ 10.8 KB; `f_wire` (~10 unique)
+**and** the wire-hold **intentionally carry the fading histogram** at ≈ 33 KB/frame (kept by
+design), which adds ≈ **+220 KB** over a naive all-seed-dots-only assumption. Net raw projection
+≈ **3.0–3.4 MB** — tight but under 4.2 MB even before optimize. Therefore a **mandatory
+post-process re-encode** is appended after `anim.save(...)` in `main()`:
 
 ```python
 from PIL import Image, ImageSequence
@@ -280,11 +327,13 @@ _optimize_gif(str(OUT_PATH), colors=256)   # dims 864x396 + frame count + durati
 ```
 
 Probe 4 measured this at **−31.6%** on the real shipped GIF (3.77 → 2.58 MB) with identical
-dimensions and frame count, moving the projection to ~2.3–3.0 MB — comfortably under 4.2 MB.
-`colors=192` (−36.6%) / `128` (−41.6%) are fallbacks if a hard margin is needed; `dpi<72`
-shrinks below 864×396 and is **rejected** (FR-008 violation). Two budget guardrails: keep
-the ~70 seed frames dots-only with an empty histogram panel (so they stay ~10.8 KB, not
-~33 KB); if size still regresses, trim truss holds before touching uniques.
+dimensions and frame count, moving the ≈ 3.0–3.4 MB raw projection to ≈ **2.1–2.3 MB** —
+comfortably under 4.2 MB. `colors=192` (−36.6%) / `128` (−41.6%) are fallbacks if a hard
+margin is needed; `dpi<72` shrinks below 864×396 and is **rejected** (FR-008 violation). Two
+budget guardrails: keep **only the `f_bfade`/`f_fall`/`f_settle` seed frames** (~50) dots-only
+with an empty histogram panel (so they stay ~10.8 KB, not ~33 KB) — the `f_wire` + wire-hold
+histogram is intentional and **NOT** subject to this guardrail; if size still regresses, trim
+truss holds before touching uniques.
 
 ### FR → design traceability
 
@@ -293,10 +342,10 @@ the ~70 seed frames dots-only with an empty histogram panel (so they stay ~10.8 
 | FR-001 (solver-side degeneracy suppression, additive/default-off) | A — `snapshot_retriangulate`/`snapshot_strict_interior`/`snapshot_hole_tau`; default path byte-identical (probe-proven). |
 | FR-002 (real captured node positions, no interpolation) | A — only the render **connectivity** is re-triangulated; captured `p` positions are the untouched solver iterates. |
 | FR-003 (uniform truss pacing, ≤3× band) | B — equal-motion quantile resampling + uniform hold (ratio 1.261). |
-| FR-004 (≥1.5 s inter-stage pauses) | B/C schedule — k=0 peel hold 15 f = 1.5 s (FEM→Peel); Truss→FEM and Seed→Truss holds raised to ≥15 f; held frames are free (D). |
+| FR-004 (≥1.5 s inter-stage pauses) | B/C schedule — all three inter-stage holds standardized to 18 f = 1.8 s (Seed→Truss wire-hold, Truss→FEM, FEM→Peel k=0), F-13; held frames are free (D). |
 | FR-005 (peel boundary-inward reveal, ≥0.8 s/layer, held full-layer end) | C — reveal k=1..4 at 8 f (0.8 s) each, final hold 20 f, instant recolor. |
 | FR-006 (lock-step stacked histogram, in-place, totals invariant) | C — `_draw_peel_hist` bottom-up stack; k=0 == quality-colored; per-bin totals `np.array_equal` across k. |
-| FR-007 (green Median line+text, red Mean line+text, neutral Min) | C — `_draw_metrics` on every histogram frame. |
+| FR-007 (green Median line+text, red Mean line+text, neutral Min) | C — `_draw_metrics` (green=GOOD, red=RED, neutral=TEXT; F-08) from `_draw_hist` for seed/truss/FEM, and called explicitly after `_draw_peel_hist` on every peel frame (F-01). |
 | FR-008 (≤4.2 MB, 864×396, single loop) | D — post-process 256-color + optimize re-encode; dpi pinned at 72; loop ends on peel k=4 hold. |
 | FR-009 (deterministic, fixed seed) | A–D — seed 11 unchanged; resampling/re-encode add no RNG; Delaunay + ADAPTIVE palette deterministic on fixed input. |
 
@@ -340,6 +389,6 @@ No change to any existing test is required (backward-compat gate). All prior
 | `snapshot_hole_tau` floor | Too-low tau culls inner-ring boundary tris → empty-ring frames | Keep tau ≥ ~0.01 (inner-ring chord midpoints dip ~0.004 into the hole); 0.02 verified safe at h0≈0.095. For a different h0, re-verify. |
 | Probe-1 dynamics could shorten `len(hist)` | Fewer than 32 snapshots → shorter truss stage | Probe 2 floor + zero-motion fallback present; if `len(hist)` routinely < 40 after the solver change, lower `N_SNAP` or raise `TRUSS_HOLD` to keep the stage ≥ 50 frames (spec min-stage edge case). **Re-run Probe 2 after the solver change lands** to re-confirm the SC-002 ratio. |
 | Raw GIF budget sensitive to truss unique count | > 4.2 MB at high truss-unique end (raw path) | Mandatory 256c + optimize post-process (−31.6%) gives margin; if omitted, hard-cap truss uniques ≤ 60. Flag for the render-and-measure gate (SC-006). |
-| Seed frames accidentally carrying the histogram | +~1.6 MB (70 frames × 22 KB) | Keep the 70 moving-dot seed frames dots-only with an empty histogram panel. |
+| `f_bfade`/`f_fall`/`f_settle` accidentally carrying the histogram | +~1.1 MB (~50 frames × 22 KB) | Keep only those ~50 dots-only seed frames with an empty histogram panel. NOTE (F-05): `f_wire` + the wire-hold intentionally DO carry the fading histogram (~33 KB) — by design, not a regression. |
 | Metric lines coincide in some non-peel stage (median≈mean) | Two dotted lines overlap | Distinct colors + zorder(20) keep both readable; low risk (peel data is 2.4 bins apart). |
 | `elem_layer` ordering depends on `m.Layers`/`m.n_layers` | A future chilmesh layer-reordering could break boundary-inward assumption | Add a cheap rim-distance-monotonicity assert in the generator so a reorder is caught at render time. |

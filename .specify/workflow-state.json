@@ -4,9 +4,10 @@
   "phases": {
     "specify": "succeeded",
     "clarify": "succeeded",
-    "plan": "succeeded"
+    "plan": "succeeded",
+    "analyze": "cycle-1-fixes-applied"
   },
-  "analyze_cycles": 0,
+  "analyze_cycles": 1,
   "notes": [
     "no feature branch created \u2014 CHILmesh single-branch policy (development)",
     "ultracode session: FR-024 parallel fan-out authorized by operator keyword",

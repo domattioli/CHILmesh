@@ -1,7 +1,7 @@
 # Visual Quality Pre-Merge Checklist
 
 **Feature**: README Hero GIF Refinement (spec-002)  
-**Input**: spec.md (FR-001…FR-009, SC-001…SC-007, user stories), plan.md (Architecture A–D, Test Plan), tasks.md (T001–T025, 8 phases)  
+**Input**: spec.md (FR-001…FR-009, SC-001…SC-007, user stories), plan.md (Architecture A–D, Test Plan), tasks.md (T001–T027, 8 phases)  
 **When to use**: After implementation of all tasks is complete, before commit + push. Walk through each section; every item must be green before merge.
 
 This checklist is organized around the six operator-identified defects (FR-001…FR-006) plus cross-cutting concerns (FR-007…FR-009, frame budget, determinism, process). Each item is an atomic verification step with a concrete command or artifact to inspect.
@@ -65,7 +65,7 @@ No truss-stage frame contains massively degenerate elements — hole-spanning, o
   - `oversize = triangle area > 8× per-snapshot-median` (NOT 4×)
   - `inverted = signed-area sign flip vs. snapshot majority`
 
-- [ ] **CHK-204** Frame-by-frame visual spot-check (manual): open the regenerated GIF in an image viewer; step through the truss-stage frames (roughly frames 70–140 out of ~180 total); confirm no element visually spans the annulus hole or overlaps neighbors at a grotesque scale.
+- [ ] **CHK-204** Frame-by-frame visual spot-check (manual): open the regenerated GIF in an image viewer; step through the truss-stage frames (roughly frames 78–145 out of ~265 total); confirm no element visually spans the annulus hole or overlaps neighbors at a grotesque scale.
 
 - [ ] **CHK-205** Verify node positions remain real solver iterates: in `scripts/generate_hero_animation.py::_stage_data()`, the returned `hist` contains only real captured `(p, t)` pairs from `distmesh2d_warmstart`; no interpolated positions added.
 
@@ -99,17 +99,17 @@ Truss-stage playback speed is approximately constant — no visible acceleration
 
 Every stage boundary (Seed→Truss, Truss→FEM, FEM→Peel) and pre-loop-end hold shows a pause ≥ 1.5 s (≥ 15 frames @ 10 fps). Peel reveals layers boundary-inward with ≥ 0.8 s between reveals; final hold ≥ 2 s; no re-peel.
 
-- [ ] **CHK-401** Inspect `scripts/generate_hero_animation.py::main()` static hold durations:
-  - Seed→Truss hold: ≥ 15 frames (≥ 1.5 s)
-  - Truss→FEM hold: ≥ 15 frames (≥ 1.5 s)
-  - FEM→Peel hold (k=0): 15 frames (1.5 s) — from T014's peel schedule
+- [ ] **CHK-401** Inspect `scripts/generate_hero_animation.py::main()` static hold durations (F-13 standardizes the three inter-stage holds to 18 f / 1.8 s):
+  - Seed→Truss hold: 18 frames (1.8 s)
+  - Truss→FEM hold: 18 frames (1.8 s)
+  - FEM→Peel hold (k=0): 18 frames (1.8 s) — from T014's peel schedule
   - Peel final hold (k=n_layers): ≥ 20 frames (≥ 2.0 s)
 
 - [ ] **CHK-402** Verify peel layer-reveal schedule in `main()` from T014:
-  - k=0 (start, pre-reveal): 15 frames / 1.5 s
+  - k=0 (start, pre-reveal): 18 frames / 1.8 s (F-13)
   - k=1, k=2, k=3 (layer reveals): 8 frames / 0.8 s each
   - k=n_layers (final hold): 20 frames / 2.0 s
-  - Total peel stage: ~59 frames
+  - Total peel stage: ~62 frames
 
 - [ ] **CHK-403** Confirm layer reveal order: `_stage_data()` includes rim-distance monotonicity assert verifying boundary-inward ordering (layer 0 is outermost, strictly increasing mean-rim-distance per layer).
 
@@ -126,15 +126,15 @@ During the peel stage, the quality histogram converts to stacked-bar composition
 - [ ] **CHK-501** Inspect `scripts/generate_hero_animation.py` new functions from T013:
   - `_layer_color(li, n_layers)` returns single-layer viridis color
   - `_peel_facecolors(q, elem_layer, n_layers, k)` starts from quality-colored `cool_r(q)`, overwrites `elem_layer < k` to layer colors
-  - `_draw_peel_hist(ax, q, elem_layer, n_layers, k, D)` renders stacked bars: bottom-up layers 0..k-1 in viridis, remainder in per-bin cool_r
+  - `_draw_peel_hist(ax, q, elem_layer, n_layers, k, D)` renders stacked bars: bottom-up layers 0..k-1 in viridis, remainder per bin in `cool_r(Normalize(0,1)(bin_midpoints))` pinned EXACTLY to `_draw_hist`'s `bar_colors` (F-04); per-element binning via `np.clip(np.floor(q*HBINS).astype(int), 0, HBINS-1)` (F-10)
 
-- [ ] **CHK-502** Verify convert-in-place semantics: at k=0 (entry to peel stage), `_draw_peel_hist` renders the histogram **identical** to the final FEM-stage frame (quality-colored bars, no layer colors yet).
+- [ ] **CHK-502** Verify convert-in-place semantics: at k=0 (entry to peel stage), `_draw_peel_hist` renders the histogram **pixel-for-pixel identical** to the final FEM-stage frame's `_draw_hist(q_fem)` — the T015 audit renders both to the Agg `fig.canvas` buffer and asserts `np.array_equal` (F-04). Quality-colored bars, no layer colors yet.
 
 - [ ] **CHK-503** Run the peel-invariance audit:
   ```bash
   python scripts/audit_hero_gif.py --check peel-invariance
   ```
-  Assert output shows: `per-bin-totals-invariant = True` (per-bin sum constant across k=0..n_layers, matching the plain quality histogram).
+  Assert output shows: `per-bin-totals-invariant = True` (per-bin sum constant across k=0..n_layers, matching the plain quality histogram — bins computed **independently** via `np.histogram`, not reused from the render path, F-10) **and** `k0-pixel-equal = True` (the k=0 vs FEM-hold canvas-buffer `np.array_equal` proof, F-04).
 
 - [ ] **CHK-504** Manual per-frame stacked-bar inspection: step through the peel-stage frames in the rendered GIF; visually confirm each histogram bar's total height stays constant as layer colors appear from bottom-up in each bar.
 
@@ -146,21 +146,22 @@ During the peel stage, the quality histogram converts to stacked-bar composition
 
 In every histogram-bearing frame (all 4 stages), Median is marked by a green dotted line + green text, Mean by a red dotted line + red text, Min stays neutral.
 
-- [ ] **CHK-601** Inspect `scripts/generate_hero_animation.py` color constants from T019:
-  - `GREEN` or reuse existing `GOOD` for Median (#2ecc71 or similar)
-  - `RED = "#ff5555"` for Mean
-  - `NEUTRAL = "#e8e8ee"` for Min
+- [ ] **CHK-601** Inspect `scripts/generate_hero_animation.py` color constants from T019 (F-08 — exactly ONE new constant):
+  - Median: reuse existing `GOOD = "#2ecc71"` (do NOT add a `GREEN` duplicate)
+  - Mean: `RED = "#ff5555"` (the one new constant)
+  - Min: reuse existing `TEXT = "#e8e8ee"` (do NOT add a `NEUTRAL` duplicate)
 
-- [ ] **CHK-602** Inspect `_draw_metrics(ax, q)` function from T019:
-  - Green dotted vertical line at median: `axvline(med, color=GREEN, linestyle=":", ...)`
+- [ ] **CHK-602** Inspect `_draw_metrics(ax, q, alpha=1.0)` function from T019:
+  - Green dotted vertical line at median: `axvline(med, color=GOOD, linestyle=":", ...)`
   - Red dotted vertical line at mean: `axvline(mean, color=RED, linestyle=":", ...)`
   - Metric texts rendered at axes-fraction x=0.02 (Median), x=0.40 (Mean), x=0.76 (Min), y=1.06
-  - Median text green, Mean text red, Min text neutral
+  - Median text `GOOD`-green, Mean text `RED`, Min text `TEXT`-neutral
+  - Every line/text scales by the `alpha` arg (F-09) so `f_wire` fades the metrics in with its bars
   - zorder=20 to keep lines/texts individually distinguishable
 
-- [ ] **CHK-603** Verify `_draw_metrics` is called from `_draw_hist()`, replacing the old single-line `set_title` + `axvline` pattern (so it reaches every stage: seed, truss, FEM, peel).
+- [ ] **CHK-603** Verify `_draw_metrics` is called from `_draw_hist()` (replacing the old single-line `set_title` + `axvline`), which reaches the **seed/truss/FEM** stages. **F-01 — the peel-reveal frames call `_draw_peel_hist()`, NOT `_draw_hist()`**, so verify the peel frame function *also* calls `_draw_metrics(ax_hist, q_fem)` explicitly, immediately after `_draw_peel_hist(...)`. Confirm the metrics are NOT silently absent from peel frames.
 
-- [ ] **CHK-604** Manual metric-text color inspection: render still-frame PNGs from each of the 4 stages (one frame from seed/wire, one from truss, one from FEM, one from peel); visually confirm green dotted line + green text for Median, red line + red text for Mean, neutral Min text in every histogram frame.
+- [ ] **CHK-604** Metric-text color inspection: render still-frame PNGs from each of the 4 stages (one from seed/wire, one from truss, one from FEM, and **specifically a peel `k=2` frame**); confirm green dotted line + green text for Median, red line + red text for Mean, neutral Min text in every histogram frame. For the peel `k=2` PNG, assert programmatically that the green + red vertical lines and the three colored metric texts are present (F-01 — metrics must render in peel k-frames, not only seed/truss/FEM).
 
 - [ ] **CHK-605** Edge case: verify in the peel stage where median ≈ mean (roughly 2.4 bins apart), both lines and texts remain individually distinguishable (distinct colors + zorder prevent overlap).
 
@@ -214,7 +215,11 @@ All functional and success criteria validated together. No pre-existing tests mo
 
 - [ ] **CHK-803** Verify generator smoke test exists (T005): `tests/test_generate_hero_animation.py` runs `main()` (or a truncated version) headless under `MPLBACKEND=Agg` and asserts output GIF is non-empty.
 
-- [ ] **CHK-804** Verify no locked module or public API touch: grep for any changes to the 13 stage modules (`_stages/*.py`) — should be zero. Verify `CHILmesh.__init__` unchanged.
+- [ ] **CHK-804** Verify no core-module or public-API touch. CHILmesh has **no** `_stages/*.py` "13 locked stage modules" — that is sibling-repo ADMESH's architecture (F-02). Real guard: `git diff development -- src/chilmesh/CHILmesh.py src/chilmesh/__init__.py` MUST be empty (no core-topology / `_peel` / `_build_adjacencies` / public-export changes); under `src/`, only `src/chilmesh/_vendor_admesh_truss.py` (additive capture block + the three kwargs) may show a diff.
+
+- [ ] **CHK-805** Verify generator docstring = contract (T026 / F-06 / Constitution VIII): the `scripts/generate_hero_animation.py` module docstring and inline comments describe the SHIPPED design — reveal-based peel stage, equal-motion quantile pacing, the `snapshot_retriangulate` render-vs-physics note that explicitly warns against "restoring" the stale captured/return `t` and states the FEM input is `hist[-1]`, and the `_optimize_gif` post-process. No stale "single held peel frame" / "tiered hold" / "converges within ~15 iterations, each snapshot HELD" language remains.
+
+- [ ] **CHK-806** Verify the auditor's own tests exist (T027 / F-12): `tests/test_audit_hero_gif.py` builds synthetic fixtures — one inverted triangle, one hole-spanning triangle, one `q=1.0` element — and asserts `audit_degenerate` flags the first two and bins the `q=1.0` element into the last bin (`HBINS-1`). Guards the auditor against silently self-certifying.
 
 ---
 
@@ -232,7 +237,7 @@ All work committed to `development` branch via git CLI only; no MCP file tools u
 
 - [ ] **CHK-904** Confirm binary integrity on remote: fetch the raw URL of the pushed GIF from GitHub and verify magic bytes (GIF89a or GIF87a header) and non-empty file size via a local tool (e.g., `curl -sI`), not an MCP read.
 
-- [ ] **CHK-905** Verify seed-stage optimization: the ~70 seed-stage frames (dots-only animation) contain **no** histogram panel to keep their size ~10.8 KB each; do not accidentally add the histogram to seed frames (guardrail from plan.md § Complexity Tracking).
+- [ ] **CHK-905** Verify seed-stage optimization: **only the `f_bfade`/`f_fall`/`f_settle` frames** (~50, dots-only animation) contain **no** histogram panel, keeping them ~10.8 KB each; do not accidentally add the histogram there (guardrail from plan.md § D). NOTE (F-05): `f_wire` + the wire-hold **intentionally DO** carry the fading histogram (~33 KB) — that is by design and must NOT be "optimized" away.
 
 ---
 
