@@ -93,7 +93,7 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
     grid_name = lines[i].rstrip("\n"); i += 1
     try:
         hdr = lines[i].split(); i += 1
-        n_elems, n_nodes = int(hdr[0]), int(hdr[1])
+        n_elems, n_nodes = int(float(hdr[0])), int(float(hdr[1]))
     except (IndexError, ValueError) as e:
         raise Fort14ParseError(f"{path}: bad NE/NP header: {e}") from e
 
@@ -102,7 +102,7 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
     try:
         for _ in range(n_nodes):
             p = lines[i].split(); i += 1
-            nid = int(p[0])
+            nid = int(float(p[0]))
             x, y = float(p[1]), float(p[2])
             dp = float(p[3]) if len(p) > 3 else 0.0
             node_ids.append(nid)
@@ -115,7 +115,7 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
     try:
         for _ in range(n_elems):
             p = lines[i].split(); i += 1
-            eid = int(p[0]); nhy = int(p[1])
+            eid = int(float(p[0])); nhy = int(float(p[1]))
             verts = tuple(int(float(v)) for v in p[2:2 + nhy])
             if len(verts) != nhy:
                 raise ValueError(f"element {eid} declares {nhy} nodes, found {len(verts)}")
