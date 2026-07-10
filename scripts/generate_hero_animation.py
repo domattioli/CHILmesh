@@ -1,12 +1,14 @@
 """Generate CHILmesh README hero animation as GIF.
 
-Pipeline (4 stages, GIF loop):
-  1. Random Delaunay (initial triangulation from random points)
-  2. ADMESH truss (spring relaxation solved to convergence)
-  3. FEM smoother (Balendran direct method)
-  4. Skeletonization layers (medial-axis viz of stage-3 mesh)
+Sequence (5 stages, loops layers -> layers; #187 lexicon + #198 truss interp):
+  1. Peel layers of the RAW mesh -- animated inward reveal (peel_layers())
+  2. Crossfade to element quality of the raw Delaunay triangulation
+  3. ADMESH truss -- node positions + quality INTERPOLATED to convergence (#198)
+  4. FEM smoother (Balendran) -- positions + quality interpolated
+  5. Peel layers of the SMOOTHED mesh -- animated reveal, long hold, loop
 
-Each frame: left = mesh viz with vertex tracking dots, right = colormapped quality histogram.
+Each frame: left = mesh viz with vertex tracking dots, right = colormapped
+quality histogram of the current geometry.
 
 Output: docs/gallery/readme_pipeline_annulus.gif (replaces existing).
 """
@@ -152,7 +154,7 @@ def _stage_data():
         fem_mesh = None
 
     # Stage 4: Skeletonization layers
-    print("Stage 4: Skeletonization layers...")
+    print("Stage 4: Peel layers (final mesh)...")
     try:
         if fem_mesh is None:
             layer_mesh = _arrays_to_mesh(fem_pts, fem_elems)
@@ -161,16 +163,13 @@ def _stage_data():
     except Exception as e:
         print(f"  Layer mesh construction warn: {e}")
         layer_mesh = _arrays_to_mesh(truss_pts, truss_elems)
-    layers = layer_mesh.Layers
-    elem_layer = np.zeros(layer_mesh.n_elems, dtype=np.int32)
-    n_layers = layer_mesh.n_layers
-    for li in range(n_layers):
-        oe = layers["OE"][li]
-        ie = layers["IE"][li]
-        for e in oe:
-            elem_layer[e] = li
-        for e in ie:
-            elem_layer[e] = li
+    elem_layer, n_layers = _elem_layer_for(layer_mesh)
+
+    # Stage 0 (opening view): peel layers of the RAW mesh, so the loop opens
+    # and closes on the layer decomposition (peel -> quality -> truss -> FEM -> peel).
+    print("Stage 0: Peel layers (raw mesh)...")
+    raw_layer_mesh = _arrays_to_mesh(raw_pts, raw_elems)
+    raw_elem_layer, raw_n_layers = _elem_layer_for(raw_layer_mesh)
 
     return {
         "stages": [
@@ -193,18 +192,33 @@ def _stage_data():
                 "viz": "quality",
             },
             {
-                "name": "Skeletonization Layers",
-                "algo": f"Medial-axis: {n_layers} layers (OE+IE per ring)",
+                "name": "Peel Layers",
+                "algo": f"peel_layers(): {n_layers} concentric layers (OE+IE per ring)",
                 "pts": fem_pts, "elems": fem_elems,
                 "viz": "layers",
                 "elem_layer": elem_layer,
                 "n_layers": n_layers,
             },
         ],
+        "raw_elem_layer": raw_elem_layer,
+        "raw_n_layers": raw_n_layers,
         "raw_quality": _quality_for(raw_pts, raw_elems),
         "truss_quality": _quality_for(truss_pts, truss_elems),
         "fem_quality": _quality_for(fem_pts, fem_elems),
     }
+
+
+def _elem_layer_for(mesh):
+    """Per-element layer index array + layer count from a peeled mesh."""
+    layers = mesh.Layers
+    elem_layer = np.zeros(mesh.n_elems, dtype=np.int32)
+    n_layers = mesh.n_layers
+    for li in range(n_layers):
+        for e in layers["OE"][li]:
+            elem_layer[e] = li
+        for e in layers["IE"][li]:
+            elem_layer[e] = li
+    return elem_layer, n_layers
 
 
 def _arrays_to_mesh(pts, elems):
@@ -326,95 +340,267 @@ def _ease(t: float) -> float:
     return t * t * (3 - 2 * t)
 
 
+DIM_FACE = np.array([0.16, 0.16, 0.18, 1.0])  # un-revealed layer elements
+
+
+def _quality_colors(q: np.ndarray) -> np.ndarray:
+    """RGBA facecolors for a quality array (cool_r, 0..1)."""
+    return matplotlib.colormaps[QCMAP](Normalize(vmin=0.0, vmax=1.0)(q))
+
+
+def _layer_colors(elem_layer: np.ndarray, n_layers: int, reveal: float = 1.0) -> np.ndarray:
+    """RGBA facecolors for a peel-layer view with progressive inward reveal.
+
+    reveal in [0, 1]: layers with index <= reveal * (n_layers - 1) get their
+    viridis color; deeper (not-yet-peeled) layers render dimmed. reveal=1.0
+    shows the full decomposition. This is the "peel_layers interpolation" —
+    the animation peels inward one ring at a time.
+    """
+    norm = Normalize(vmin=0, vmax=max(1, n_layers - 1))
+    colors = matplotlib.colormaps["viridis"](norm(elem_layer))
+    if reveal < 1.0:
+        cutoff = reveal * max(1, n_layers - 1)
+        hidden = elem_layer > cutoff
+        colors[hidden] = DIM_FACE
+    return colors
+
+
+def _blend(colors_a: np.ndarray, colors_b: np.ndarray, t: float) -> np.ndarray:
+    """Linear RGBA crossfade between two facecolor arrays (same length)."""
+    return (1.0 - t) * colors_a + t * colors_b
+
+
+def render_view(ax_mesh, ax_hist, pts, elems, facecolors, quality_arr,
+                title, subtitle, cbar_label, dots=True):
+    """Render one frame: mesh panel (explicit facecolors) + quality histogram."""
+    ax_mesh.clear()
+    ax_hist.clear()
+
+    polys = [pts[elem] for elem in elems]
+    pc = PolyCollection(polys, facecolors=facecolors,
+                        edgecolors="#1a1a1f", linewidths=0.5)
+    ax_mesh.add_collection(pc)
+
+    edges = np.vstack([elems[:, [0, 1]], elems[:, [1, 2]], elems[:, [2, 0]]])
+    edge_coll = LineCollection(pts[edges], colors=EDGE, linewidths=0.3, alpha=0.4)
+    ax_mesh.add_collection(edge_coll)
+
+    x_min, x_max = pts[:, 0].min(), pts[:, 0].max()
+    y_min, y_max = pts[:, 1].min(), pts[:, 1].max()
+    pad = 0.05 * max(x_max - x_min, y_max - y_min)
+    ax_mesh.set_xlim(x_min - pad, x_max + pad)
+    ax_mesh.set_ylim(y_min - pad, y_max + pad)
+    ax_mesh.set_aspect("equal")
+    ax_mesh.set_facecolor(BG)
+    ax_mesh.set_xticks([])
+    ax_mesh.set_yticks([])
+    for spine in ax_mesh.spines.values():
+        spine.set_color(DIM)
+
+    if dots:
+        for (x, y) in pts:
+            ax_mesh.add_patch(Circle((x, y), radius=0.012, color=VERTEX_DOT,
+                                     alpha=0.7, zorder=10))
+
+    # Histogram panel: colormapped quality of the current geometry.
+    bins = 40
+    counts, hedges = np.histogram(quality_arr, bins=bins, range=(0.0, 1.0))
+    widths = np.diff(hedges)
+    midpoints = hedges[:-1] + widths / 2.0
+    bar_colors = matplotlib.colormaps[QCMAP](Normalize(0.0, 1.0)(midpoints))
+    ax_hist.bar(hedges[:-1], counts, width=widths, align="edge",
+                color=bar_colors, edgecolor="#1a1a1f", linewidth=0.3)
+
+    med_q = float(np.median(quality_arr))
+    min_q = float(np.min(quality_arr))
+    mean_q = float(np.mean(quality_arr))
+    ax_hist.axvline(med_q, color=GOOD, linestyle="--", linewidth=1.5, alpha=0.85)
+    ax_hist.set_xlim(0.0, 1.0)
+    ax_hist.set_facecolor(BG)
+    ax_hist.set_xlabel("Element quality", color=TEXT, fontsize=11)
+    ax_hist.set_ylabel("Count", color=TEXT, fontsize=11)
+    ax_hist.tick_params(colors=DIM, labelsize=9)
+    for spine in ax_hist.spines.values():
+        spine.set_color(DIM)
+    ax_hist.set_title(
+        f"Median: {med_q:.3f}    Min: {min_q:.3f}    Mean: {mean_q:.3f}",
+        color=TEXT, fontsize=11, pad=8,
+    )
+
+    ax_mesh.text(0.02, 1.08, title, transform=ax_mesh.transAxes, color=ACCENT,
+                 fontsize=13, fontweight="bold", ha="left", va="bottom")
+    ax_mesh.text(0.02, 1.02, subtitle, transform=ax_mesh.transAxes, color=TEXT,
+                 fontsize=10, ha="left", va="bottom")
+
+
 def main():
     data = _stage_data()
     stages = data["stages"]
-    n_stages = len(stages)
-    qualities = [data["raw_quality"], data["truss_quality"],
-                 data["fem_quality"], data["fem_quality"]]
+    raw, truss, fem, final_layers = stages
+    q_raw = data["raw_quality"]
+    q_truss = data["truss_quality"]
+    q_fem = data["fem_quality"]
+    raw_elem_layer = data["raw_elem_layer"]
+    raw_n_layers = data["raw_n_layers"]
 
-    # Frame schedule: HOLD at each stage, TRANSITION between stages
-    HOLD = 40     # frames to hold each stage (4.0s @ 10fps)
-    TRANS = 12    # transition frames between stages (1.2s)
+    # Pre-computed static facecolors
+    fc_raw_quality = _quality_colors(q_raw)
+    fc_truss_quality = _quality_colors(q_truss)
+    fc_fem_quality = _quality_colors(q_fem)
+    fc_raw_layers_full = _layer_colors(raw_elem_layer, raw_n_layers, 1.0)
+    fc_final_layers_full = _layer_colors(final_layers["elem_layer"],
+                                         final_layers["n_layers"], 1.0)
 
-    # Build a flat list of (stage_idx, interp_t, pts_for_dots, quality_for_hist)
-    # where interp_t=None means static, or 0.0..1.0 during transition
-    frame_schedule = []
-    for si in range(n_stages):
-        # Extra hold time for final stage (skeletonization view)
-        hold_frames = HOLD + (20 if si == n_stages - 1 else 0)
-        for _ in range(hold_frames):
-            frame_schedule.append({"type": "hold", "stage": si})
-        if si < n_stages - 1:
-            pts_a = stages[si]["pts"]
-            pts_b = stages[si + 1]["pts"]
-            can_interp = (len(pts_a) == len(pts_b))
-            for fi in range(TRANS):
-                t = _ease(fi / (TRANS - 1))
-                frame_schedule.append({
-                    "type": "trans",
-                    "stage": si,          # base stage for mesh/label
-                    "stage_to": si + 1,   # target stage
-                    "t": t,
-                    "can_interp": can_interp,
-                })
+    can_interp = len(raw["pts"]) == len(truss["pts"]) == len(fem["pts"])
+    print(f"Positional interpolation available: {can_interp}")
 
-    total_frames = len(frame_schedule)
+    # ------------------------------------------------------------------
+    # Frame schedule (10 fps). Sequence per #187/#198 + operator direction:
+    #   A  peel_layers reveal on the RAW mesh        (the opening)
+    #   B  crossfade layers -> quality (raw mesh)
+    #   C  hold quality (raw)
+    #   D  truss morph  raw -> truss   (positions + quality interpolated)
+    #   E  hold quality (truss)
+    #   F  FEM morph    truss -> fem   (positions + quality interpolated)
+    #   G  hold quality (fem)
+    #   H  crossfade quality -> layers (final mesh)
+    #   I  peel_layers reveal on the FINAL mesh, long hold -> loops back to A
+    # ------------------------------------------------------------------
+    REVEAL_A, HOLD_A = 20, 14
+    FADE_B = 10
+    HOLD_C = 14
+    MORPH_D = 24
+    HOLD_E = 12
+    MORPH_F = 18
+    HOLD_G = 14
+    FADE_H = 10
+    REVEAL_I, HOLD_I = 20, 26
+
+    schedule = []
+
+    def add(n, fn):
+        for i in range(n):
+            schedule.append((fn, i, n))
+
+    # A: peel reveal on raw mesh
+    def frame_A(i, n):
+        t = _ease(i / max(1, n - 1))
+        fc = _layer_colors(raw_elem_layer, raw_n_layers, t)
+        k = int(round(t * max(1, raw_n_layers - 1)))
+        return (raw["pts"], raw["elems"], fc, q_raw,
+                "Stage 1/5: Peel Layers",
+                f"peel_layers() on the input mesh: revealing layer {k + 1}/{raw_n_layers}")
+
+    def frame_A_hold(i, n):
+        return (raw["pts"], raw["elems"], fc_raw_layers_full, q_raw,
+                "Stage 1/5: Peel Layers",
+                f"peel_layers() on the input mesh: {raw_n_layers} concentric layers")
+
+    # B: crossfade layers -> quality on raw mesh
+    def frame_B(i, n):
+        t = _ease(i / max(1, n - 1))
+        fc = _blend(fc_raw_layers_full, fc_raw_quality, t)
+        return (raw["pts"], raw["elems"], fc, q_raw,
+                "Stage 2/5: Element Quality",
+                "elem_quality(): raw Delaunay triangulation")
+
+    def frame_C(i, n):
+        return (raw["pts"], raw["elems"], fc_raw_quality, q_raw,
+                "Stage 2/5: Element Quality (input)",
+                "elem_quality(): raw Delaunay triangulation")
+
+    # D: truss morph raw -> truss
+    def frame_D(i, n):
+        t = _ease(i / max(1, n - 1))
+        if can_interp:
+            pts = (1 - t) * raw["pts"] + t * truss["pts"]
+            q = (1 - t) * q_raw + t * q_truss
+        else:
+            pts = truss["pts"] if t > 0.5 else raw["pts"]
+            q = q_truss if t > 0.5 else q_raw
+        return (pts, truss["elems"], _quality_colors(q), q,
+                "Stage 3/5: ADMESH Truss",
+                "Spring relaxation — node positions interpolating to convergence")
+
+    def frame_E(i, n):
+        return (truss["pts"], truss["elems"], fc_truss_quality, q_truss,
+                "Stage 3/5: ADMESH Truss",
+                "Spring relaxation (converged)")
+
+    # F: FEM morph truss -> fem
+    def frame_F(i, n):
+        t = _ease(i / max(1, n - 1))
+        if can_interp:
+            pts = (1 - t) * truss["pts"] + t * fem["pts"]
+            q = (1 - t) * q_truss + t * q_fem
+        else:
+            pts = fem["pts"] if t > 0.5 else truss["pts"]
+            q = q_fem if t > 0.5 else q_truss
+        return (pts, fem["elems"], _quality_colors(q), q,
+                "Stage 4/5: FEM Smoother",
+                "Balendran direct method — interpolating smoothed positions")
+
+    def frame_G(i, n):
+        return (fem["pts"], fem["elems"], fc_fem_quality, q_fem,
+                "Stage 4/5: FEM Smoother",
+                "Balendran direct method (smoothed)")
+
+    # H: crossfade quality -> layers on final mesh
+    def frame_H(i, n):
+        t = _ease(i / max(1, n - 1))
+        fc = _blend(fc_fem_quality, fc_final_layers_full, t)
+        return (fem["pts"], fem["elems"], fc, q_fem,
+                "Stage 5/5: Peel Layers",
+                "peel_layers() on the smoothed mesh")
+
+    # I: peel reveal on final mesh (then long hold; GIF loops back to A)
+    def frame_I(i, n):
+        t = _ease(i / max(1, n - 1))
+        nl = final_layers["n_layers"]
+        fc = _layer_colors(final_layers["elem_layer"], nl, t)
+        k = int(round(t * max(1, nl - 1)))
+        return (fem["pts"], fem["elems"], fc, q_fem,
+                "Stage 5/5: Peel Layers",
+                f"peel_layers() on the smoothed mesh: revealing layer {k + 1}/{nl}")
+
+    def frame_I_hold(i, n):
+        nl = final_layers["n_layers"]
+        return (fem["pts"], fem["elems"], fc_final_layers_full, q_fem,
+                "Stage 5/5: Peel Layers",
+                f"peel_layers() on the smoothed mesh: {nl} layers — loop restarts")
+
+    add(REVEAL_A, frame_A)
+    add(HOLD_A, frame_A_hold)
+    add(FADE_B, frame_B)
+    add(HOLD_C, frame_C)
+    add(MORPH_D, frame_D)
+    add(HOLD_E, frame_E)
+    add(MORPH_F, frame_F)
+    add(HOLD_G, frame_G)
+    add(FADE_H, frame_H)
+    add(REVEAL_I, frame_I)
+    add(HOLD_I, frame_I_hold)
+
+    total_frames = len(schedule)
 
     fig = plt.figure(figsize=(12, 5.5), facecolor=BG)
     gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 1.05], wspace=0.18,
                           left=0.04, right=0.97, top=0.88, bottom=0.12)
     ax_mesh = fig.add_subplot(gs[0, 0])
     ax_hist = fig.add_subplot(gs[0, 1])
-
     fig.suptitle("CHILmesh pipeline · annulus", color=TEXT, fontsize=14,
                  fontweight="bold", y=0.98)
 
     def animate(frame_idx):
-        info = frame_schedule[frame_idx]
-        si = info["stage"]
-        stage = stages[si]
-
-        if info["type"] == "hold":
-            render_frame(ax_mesh, ax_hist, stage, qualities[si], si, n_stages,
-                         current_pts=stage["pts"])
-        else:
-            # Transition: morph mesh + dots between stages
-            t = info["t"]
-            si_to = info["stage_to"]
-            if info["can_interp"]:
-                # Interpolate both mesh points and quality
-                interp_pts = (1 - t) * stages[si]["pts"] + t * stages[si_to]["pts"]
-                interp_qual = (1 - t) * qualities[si] + t * qualities[si_to]
-            else:
-                # Discrete switch at midpoint
-                if t > 0.5:
-                    interp_pts = stages[si_to]["pts"]
-                    interp_qual = qualities[si_to]
-                else:
-                    interp_pts = stages[si]["pts"]
-                    interp_qual = qualities[si]
-
-            render_frame(ax_mesh, ax_hist, stage, interp_qual, si, n_stages,
-                         prev_pts=interp_pts, current_pts=interp_pts, quality_array_override=interp_qual)
-
-        # Stage label overlaid above mesh axes (in figure coords above ax_mesh)
-        ax_mesh.text(
-            0.02, 1.08, f"Stage {si + 1}/{n_stages}: {stage['name']}",
-            transform=ax_mesh.transAxes, color=ACCENT, fontsize=13,
-            fontweight="bold", ha="left", va="bottom",
-        )
-        ax_mesh.text(
-            0.02, 1.02, stage["algo"],
-            transform=ax_mesh.transAxes, color=TEXT, fontsize=10,
-            ha="left", va="bottom",
-        )
+        fn, i, n = schedule[frame_idx]
+        pts, elems, fc, q, title, subtitle = fn(i, n)
+        render_view(ax_mesh, ax_hist, pts, np.asarray(elems), fc, q,
+                    title, subtitle, "")
         return []
 
     print(f"Rendering {total_frames} frames → {OUT_PATH}...")
-    anim = animation.FuncAnimation(
-        fig, animate, frames=total_frames, interval=100, blit=False,
-    )
+    anim = animation.FuncAnimation(fig, animate, frames=total_frames,
+                                   interval=100, blit=False)
     writer = animation.PillowWriter(fps=10)
     anim.save(str(OUT_PATH), writer=writer, dpi=110)
     plt.close(fig)
