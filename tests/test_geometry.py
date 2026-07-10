@@ -4,7 +4,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from chilmesh.geometry import haversine_m, edge_lengths, EARTH_RADIUS_M
+from chilmesh.geometry import (
+    haversine_m,
+    edge_lengths,
+    EARTH_RADIUS_M,
+    convex_hull,
+    is_antimeridian_wrapping,
+    split_antimeridian_bbox,
+    bbox_iou,
+    hausdorff_distance,
+)
 
 
 class TestHaversine:
@@ -102,6 +111,166 @@ class TestEdgeLengths:
         assert isinstance(result, np.ndarray)
 
 
+class TestConvexHull:
+    """Tests for the convex_hull function."""
+
+    def test_unit_square(self):
+        """Test that a unit square with interior point produces 4 hull vertices."""
+        pts = np.array([[0, 0], [1, 1], [1, 0], [0, 1], [0.5, 0.5]])
+        hull = convex_hull(pts)
+        assert hull.shape == (4, 2)
+
+    def test_ccw_order(self):
+        """Test that hull vertices are in counter-clockwise order."""
+        pts = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
+        hull = convex_hull(pts)
+        # First vertex should be lexicographically smallest: (0, 0)
+        assert np.allclose(hull[0], [0, 0])
+
+    def test_collinear_points_dropped(self):
+        """Test that collinear points are excluded from the hull."""
+        pts = np.array([[0, 0], [0.5, 0.5], [1, 1], [2, 2]])
+        hull = convex_hull(pts)
+        # All points are collinear, so hull should be the two endpoints
+        assert hull.shape == (2, 2)
+        assert np.allclose(hull[0], [0, 0])
+        assert np.allclose(hull[1], [2, 2])
+
+    def test_two_point_degenerate(self):
+        """Test that a 2-point degenerate case returns both points sorted."""
+        pts = np.array([[1, 1], [0, 0]])
+        hull = convex_hull(pts)
+        assert hull.shape == (2, 2)
+        assert np.allclose(hull[0], [0, 0])
+        assert np.allclose(hull[1], [1, 1])
+
+    def test_single_point_degenerate(self):
+        """Test that a single point is returned as-is."""
+        pts = np.array([[5, 5]])
+        hull = convex_hull(pts)
+        assert hull.shape == (1, 2)
+        assert np.allclose(hull[0], [5, 5])
+
+
+class TestIsAntimeridianWrapping:
+    """Tests for the is_antimeridian_wrapping function."""
+
+    def test_wrapping_case(self):
+        """Test that min_lon > max_lon returns True."""
+        bbox = (170, -10, -170, 10)
+        assert is_antimeridian_wrapping(bbox) is True
+
+    def test_non_wrapping_case(self):
+        """Test that min_lon <= max_lon returns False."""
+        bbox = (-10, -10, 10, 10)
+        assert is_antimeridian_wrapping(bbox) is False
+
+    def test_edge_case_zero_crossing(self):
+        """Test edge case where box straddles zero."""
+        bbox = (-5, -5, 5, 5)
+        assert is_antimeridian_wrapping(bbox) is False
+
+    def test_edge_case_at_dateline(self):
+        """Test edge case at exactly 180 / -180."""
+        bbox = (179, -10, -179, 10)
+        assert is_antimeridian_wrapping(bbox) is True
+
+
+class TestSplitAntimeridianBbox:
+    """Tests for the split_antimeridian_bbox function."""
+
+    def test_wrapping_split(self):
+        """Test that wrapping bbox is split into two non-wrapping parts."""
+        bbox = (170, -10, -170, 10)
+        result = split_antimeridian_bbox(bbox)
+        assert len(result) == 2
+        # Eastern part: (170, -10, 180, 10)
+        assert np.allclose(result[0], (170, -10, 180.0, 10))
+        # Western part: (-180, -10, -170, 10)
+        assert np.allclose(result[1], (-180.0, -10, -170, 10))
+
+    def test_non_wrapping_no_split(self):
+        """Test that non-wrapping bbox is returned as single-element list."""
+        bbox = (-10, -10, 10, 10)
+        result = split_antimeridian_bbox(bbox)
+        assert len(result) == 1
+        assert result[0] == bbox
+
+
+class TestBboxIOU:
+    """Tests for the bbox_iou function."""
+
+    def test_identical_boxes(self):
+        """Test that identical boxes have IoU = 1.0."""
+        bbox = (0, 0, 2, 2)
+        assert bbox_iou(bbox, bbox) == pytest.approx(1.0)
+
+    def test_disjoint_boxes(self):
+        """Test that disjoint boxes have IoU = 0.0."""
+        bbox_a = (0, 0, 2, 2)
+        bbox_b = (3, 3, 5, 5)
+        assert bbox_iou(bbox_a, bbox_b) == pytest.approx(0.0)
+
+    def test_half_overlap(self):
+        """Test half-overlapping boxes: (0,0,2,2) vs (1,0,3,2)."""
+        bbox_a = (0, 0, 2, 2)
+        bbox_b = (1, 0, 3, 2)
+        # Intersection: 1 x 2 = 2
+        # Union: 4 + 4 - 2 = 6
+        # IoU = 2 / 6 ≈ 0.333
+        expected = 2.0 / 6.0
+        assert bbox_iou(bbox_a, bbox_b) == pytest.approx(expected, rel=1e-5)
+
+    def test_wrapping_iou(self):
+        """Test IoU with antimeridian-wrapping box."""
+        # A wrapping box should compute IoU correctly
+        bbox_wrapping = (170, -10, -170, 10)
+        # Split parts: [(170, -10, 180, 10), (-180, -10, -170, 10)]
+        # IoU with itself should be 1.0
+        assert bbox_iou(bbox_wrapping, bbox_wrapping) == pytest.approx(1.0)
+
+
+class TestHausdorffDistance:
+    """Tests for the hausdorff_distance function."""
+
+    def test_identical_sets_cartesian(self):
+        """Test that identical sets have Hausdorff distance 0."""
+        pts = np.array([[0, 0], [1, 1], [2, 0]])
+        assert hausdorff_distance(pts, pts, crs="cartesian") == pytest.approx(0.0)
+
+    def test_two_point_sets_cartesian(self):
+        """Test Hausdorff distance for two-point sets: (0,0)/(3,4) vs (0,0)."""
+        pts_a = np.array([[0, 0], [3, 4]])
+        pts_b = np.array([[0, 0]])
+        # Distance from (0,0) to (0,0) = 0
+        # Distance from (3,4) to (0,0) = 5
+        # max(0, 5) = 5, and max(5, 0) = 5
+        assert hausdorff_distance(pts_a, pts_b, crs="cartesian") == pytest.approx(5.0)
+
+    def test_spherical_path(self):
+        """Test Hausdorff distance in spherical CRS."""
+        pts_a = np.array([[0, 0]])
+        pts_b = np.array([[1, 0]])
+        result = hausdorff_distance(pts_a, pts_b, crs="spherical")
+        # Should return the haversine distance
+        expected = haversine_m(0, 0, 1, 0)
+        assert result == pytest.approx(expected)
+
+    def test_invalid_crs_raises_error(self):
+        """Test that invalid crs raises ValueError."""
+        pts_a = np.array([[0, 0]])
+        pts_b = np.array([[1, 1]])
+        with pytest.raises(ValueError, match="unsupported crs"):
+            hausdorff_distance(pts_a, pts_b, crs="bogus")
+
+    def test_empty_input_raises_error(self):
+        """Test that empty point sets raise ValueError."""
+        pts_a = np.array([[0, 0]])
+        pts_b = np.array([]).reshape(0, 2)
+        with pytest.raises(ValueError, match="non-empty"):
+            hausdorff_distance(pts_a, pts_b, crs="cartesian")
+
+
 class TestImportSurface:
     """Tests for public API exports."""
 
@@ -120,3 +289,28 @@ class TestImportSurface:
         from chilmesh import EARTH_RADIUS_M
         assert isinstance(EARTH_RADIUS_M, (int, float))
         assert EARTH_RADIUS_M > 0
+
+    def test_convex_hull_importable(self):
+        """Test that convex_hull is importable from chilmesh package."""
+        from chilmesh import convex_hull
+        assert callable(convex_hull)
+
+    def test_is_antimeridian_wrapping_importable(self):
+        """Test that is_antimeridian_wrapping is importable from chilmesh package."""
+        from chilmesh import is_antimeridian_wrapping
+        assert callable(is_antimeridian_wrapping)
+
+    def test_split_antimeridian_bbox_importable(self):
+        """Test that split_antimeridian_bbox is importable from chilmesh package."""
+        from chilmesh import split_antimeridian_bbox
+        assert callable(split_antimeridian_bbox)
+
+    def test_bbox_iou_importable(self):
+        """Test that bbox_iou is importable from chilmesh package."""
+        from chilmesh import bbox_iou
+        assert callable(bbox_iou)
+
+    def test_hausdorff_distance_importable(self):
+        """Test that hausdorff_distance is importable from chilmesh package."""
+        from chilmesh import hausdorff_distance
+        assert callable(hausdorff_distance)

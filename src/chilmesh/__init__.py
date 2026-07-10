@@ -31,7 +31,16 @@ from .summary_io import summary, SummaryError
 from .mesh_topology import EdgeMap, quad_from_tri_pair, quads_from_tri_pairs
 from .mutations import MutableMesh
 from .quality import element_quality
-from .geometry import haversine_m, edge_lengths, EARTH_RADIUS_M
+from .geometry import (
+    haversine_m,
+    edge_lengths,
+    EARTH_RADIUS_M,
+    convex_hull,
+    is_antimeridian_wrapping,
+    split_antimeridian_bbox,
+    bbox_iou,
+    hausdorff_distance,
+)
 from . import examples
 from . import bridge
 from . import chilplotting
@@ -131,6 +140,11 @@ __all__ = [
     "haversine_m",
     "edge_lengths",
     "EARTH_RADIUS_M",
+    "convex_hull",
+    "is_antimeridian_wrapping",
+    "split_antimeridian_bbox",
+    "bbox_iou",
+    "hausdorff_distance",
     # Backend introspection
     "backend_info",
     # Submodules
