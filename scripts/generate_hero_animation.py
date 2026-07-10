@@ -369,7 +369,7 @@ def main():
 
     print(f"Rendering {total} frames → {OUT_PATH}...")
     anim = animation.FuncAnimation(fig, animate, frames=total, interval=100, blit=False)
-    anim.save(str(OUT_PATH), writer=animation.PillowWriter(fps=10), dpi=110)
+    anim.save(str(OUT_PATH), writer=animation.PillowWriter(fps=10), dpi=72)
     plt.close(fig)
     print(f"Done: {OUT_PATH} ({OUT_PATH.stat().st_size / 1024:.0f} KB)")
 
