@@ -106,7 +106,7 @@ def bench_python(conn: np.ndarray, pts: np.ndarray, repeats: int) -> dict:
         m = CHILmesh(connectivity=conn.copy(), points=pts.copy(),
                      compute_layers=False, compute_adjacencies=False)
         t = time.perf_counter(); m._build_adjacencies(); a = time.perf_counter() - t
-        t = time.perf_counter(); m._skeletonize(); s = time.perf_counter() - t
+        t = time.perf_counter(); m._peel(); s = time.perf_counter() - t
         adj.append(a); skel.append(s); full.append(a + s)
         t = time.perf_counter(); m.signed_area(); qual.append(time.perf_counter() - t)
         mesh = m
@@ -314,7 +314,7 @@ def bench_lifecycle(conn: np.ndarray, pts: np.ndarray, repeats: int,
                      compute_layers=False, compute_adjacencies=False)
         t = time.perf_counter(); m._build_adjacencies(); adj.append(time.perf_counter() - t)
         if not skip_skel:
-            t = time.perf_counter(); m._skeletonize(); skel.append(time.perf_counter() - t)
+            t = time.perf_counter(); m._peel(); skel.append(time.perf_counter() - t)
         t = time.perf_counter(); m.signed_area(); qual.append(time.perf_counter() - t)
         if not skip_fem:
             t = time.perf_counter(); m.direct_smoother(solver=fem_solver); fem.append(time.perf_counter() - t)
