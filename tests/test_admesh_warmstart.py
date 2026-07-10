@@ -434,3 +434,53 @@ class TestQualityAndPerformance:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestHistoryCapture:
+    """history_out= hook on distmesh2d_warmstart (hero-animation capture)."""
+
+    def test_history_captures_iterations(self):
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+
+        def fd(p):
+            r = np.linalg.norm(p, axis=1)
+            return np.maximum(r - 1.0, 0.3 - r)
+
+        ang_o = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+        ang_i = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+        bnd = np.vstack([np.c_[np.cos(ang_o), np.sin(ang_o)],
+                         0.3 * np.c_[np.cos(ang_i), np.sin(ang_i)]])
+        rng = np.random.default_rng(0)
+        rad = rng.uniform(0.4, 0.9, 30)
+        th = rng.uniform(0, 2 * np.pi, 30)
+        interior = np.c_[rad * np.cos(th), rad * np.sin(th)]
+
+        hist = []
+        p, t = distmesh2d_warmstart(bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+                                    niter=10, track_best_quality=False,
+                                    history_out=hist, history_every=1)
+        assert 1 <= len(hist) <= 10
+        for pi, ti in hist:
+            assert pi.shape[1] == 2 and ti.shape[1] == 3
+        # boundary rows pinned in every snapshot
+        for pi, _ in hist:
+            np.testing.assert_allclose(pi[:len(bnd)], bnd, atol=1e-12)
+
+    def test_history_none_is_default_noop(self):
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+
+        def fd(p):
+            return np.linalg.norm(p, axis=1) - 1.0
+
+        ang = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+        bnd = np.c_[np.cos(ang), np.sin(ang)]
+        rng = np.random.default_rng(1)
+        interior = rng.uniform(-0.5, 0.5, size=(12, 2))
+        p1, t1 = distmesh2d_warmstart(bnd, interior, fd, None, 0.4, (-1, -1, 1, 1),
+                                      niter=5, track_best_quality=False)
+        p2, t2 = distmesh2d_warmstart(bnd, interior, fd, None, 0.4, (-1, -1, 1, 1),
+                                      niter=5, track_best_quality=False,
+                                      history_out=[], history_every=2)
+        np.testing.assert_allclose(p1, p2)
