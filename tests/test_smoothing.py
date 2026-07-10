@@ -637,3 +637,33 @@ def test_smooth_mesh_sdf_preserves_grid_name():
     sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
     m.smooth_mesh('sdf', acknowledge_change=True, sdf=sdf)
     assert m.grid_name == "donut", "sdf smoothing dropped grid_name"
+
+
+class TestSmoothMeshKwargPassthrough:
+    """Regression for #251: smooth_mesh forwarded *kwargs (positional-only splat)
+    so keyword smoother options could never reach the underlying smoothers."""
+
+    def test_angle_based_kwarg_reaches_smoother(self, monkeypatch):
+        m = examples.annulus().copy()
+        captured = {}
+
+        def spy(self, *args, **kwargs):
+            captured.update(kwargs)
+            return self.points
+
+        monkeypatch.setattr(CHILmesh, "angle_based_smoother", spy)
+        # Previously raised: TypeError: unexpected keyword argument 'n_iter'
+        m.smooth_mesh('angle-based', acknowledge_change=True, n_iter=2)
+        assert captured.get("n_iter") == 2
+
+    def test_fem_kwarg_reaches_smoother(self, monkeypatch):
+        m = examples.annulus().copy()
+        captured = {}
+
+        def spy(self, *args, **kwargs):
+            captured.update(kwargs)
+            return self.points
+
+        monkeypatch.setattr(CHILmesh, "direct_smoother", spy)
+        m.smooth_mesh('fem', acknowledge_change=True, freeze_quad_nodes=True)
+        assert captured.get("freeze_quad_nodes") is True
