@@ -31,6 +31,7 @@ from .summary_io import summary, SummaryError
 from .mesh_topology import EdgeMap, quad_from_tri_pair, quads_from_tri_pairs
 from .mutations import MutableMesh
 from .quality import element_quality
+from .geometry import haversine_m, edge_lengths, EARTH_RADIUS_M
 from . import examples
 from . import bridge
 from . import chilplotting
@@ -126,6 +127,10 @@ __all__ = [
     "SummaryError",
     # Standalone quality computation
     "element_quality",
+    # Geodesic / planar geometry helpers
+    "haversine_m",
+    "edge_lengths",
+    "EARTH_RADIUS_M",
     # Backend introspection
     "backend_info",
     # Submodules
