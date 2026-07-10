@@ -1636,7 +1636,7 @@ class CHILmesh(CHILmeshPlotMixin):
         # Invalidate spatial indices after moving points
         self._build_spatial_indices()
 
-    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *kwargs, sdf=None, size_fn=None) -> np.ndarray:
+    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *, sdf=None, size_fn=None, **kwargs) -> np.ndarray:
         """
         Perform mesh smoothing using a modified FEM-based approach.
 
@@ -1662,9 +1662,9 @@ class CHILmesh(CHILmeshPlotMixin):
                 self.grid_name = saved_grid_name
             return self.points
         if method.lower() == 'fem':
-            new_points = self.direct_smoother( *kwargs )
+            new_points = self.direct_smoother( **kwargs )
         elif method.lower() == 'angle-based':
-            new_points = self.angle_based_smoother( *kwargs )
+            new_points = self.angle_based_smoother( **kwargs )
         else:
             raise ValueError(f"Unknown smoothing method: {method}")
         self.change_points( new_points, acknowledge_change=True )
