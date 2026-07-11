@@ -484,3 +484,234 @@ class TestHistoryCapture:
                                       niter=5, track_best_quality=False,
                                       history_out=[], history_every=2)
         np.testing.assert_allclose(p1, p2)
+
+    def test_snapshot_retriangulate_default_off_byte_identical(self):
+        """T002 part 1: Default kwargs (snapshot_retriangulate=False) → byte-identical to no-hook."""
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+
+        def fd(p):
+            r = np.linalg.norm(p, axis=1)
+            return np.maximum(r - 1.0, 0.3 - r)
+
+        ang_o = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+        ang_i = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+        bnd = np.vstack([np.c_[np.cos(ang_o), np.sin(ang_o)],
+                         0.3 * np.c_[np.cos(ang_i), np.sin(ang_i)]])
+        rng = np.random.default_rng(11)
+        rad = rng.uniform(0.4, 0.9, 30)
+        th = rng.uniform(0, 2 * np.pi, 30)
+        interior = np.c_[rad * np.cos(th), rad * np.sin(th)]
+
+        # Run without history hook
+        p_no_hook, t_no_hook = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False)
+
+        # Run with history hook but new kwargs at defaults (snapshot_retriangulate=False)
+        hist = []
+        p_with_hook, t_with_hook = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False,
+            history_out=hist, history_every=1,
+            snapshot_retriangulate=False,
+            snapshot_strict_interior=False,
+            snapshot_hole_tau=0.02)
+
+        # Outputs must be byte-identical
+        np.testing.assert_allclose(p_with_hook, p_no_hook, atol=1e-15)
+        np.testing.assert_array_equal(t_with_hook, t_no_hook)
+
+    def test_snapshot_retriangulate_explicit_false_byte_identical(self):
+        """T002 part 1b: Explicit snapshot_retriangulate=False → byte-identical to no-hook."""
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+
+        def fd(p):
+            r = np.linalg.norm(p, axis=1)
+            return np.maximum(r - 1.0, 0.3 - r)
+
+        ang_o = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+        ang_i = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+        bnd = np.vstack([np.c_[np.cos(ang_o), np.sin(ang_o)],
+                         0.3 * np.c_[np.cos(ang_i), np.sin(ang_i)]])
+        rng = np.random.default_rng(11)
+        rad = rng.uniform(0.4, 0.9, 30)
+        th = rng.uniform(0, 2 * np.pi, 30)
+        interior = np.c_[rad * np.cos(th), rad * np.sin(th)]
+
+        # Run without history hook
+        p_no_hook, t_no_hook = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False)
+
+        # Run with history hook and explicit snapshot_retriangulate=False
+        hist = []
+        p_with_hook, t_with_hook = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False,
+            history_out=hist, history_every=1,
+            snapshot_retriangulate=False)
+
+        # Outputs must be byte-identical
+        np.testing.assert_allclose(p_with_hook, p_no_hook, atol=1e-15)
+        np.testing.assert_array_equal(t_with_hook, t_no_hook)
+
+
+class TestSnapshotRetriangulate:
+    """Opt-in snapshot re-triangulation (plan.md § Implementation Architecture A)."""
+
+    def test_snapshot_retriangulate_all_delaunay(self):
+        """T002 part 2a: snapshot_retriangulate=True → every t is valid Delaunay of p."""
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+        from scipy.spatial import Delaunay
+
+        def fd(p):
+            r = np.linalg.norm(p, axis=1)
+            return np.maximum(r - 1.0, 0.3 - r)
+
+        ang_o = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+        ang_i = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+        bnd = np.vstack([np.c_[np.cos(ang_o), np.sin(ang_o)],
+                         0.3 * np.c_[np.cos(ang_i), np.sin(ang_i)]])
+        rng = np.random.default_rng(11)
+        rad = rng.uniform(0.4, 0.9, 30)
+        th = rng.uniform(0, 2 * np.pi, 30)
+        interior = np.c_[rad * np.cos(th), rad * np.sin(th)]
+
+        hist = []
+        _, _ = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False,
+            history_out=hist, history_every=1,
+            snapshot_retriangulate=True,
+            snapshot_strict_interior=False)
+
+        # For every snapshot, verify t is a valid Delaunay of p
+        geps = 1e-13
+        for pi, ti in hist:
+            # Re-triangulate from p using Delaunay
+            ref_tri = Delaunay(pi)
+            ref_simplices = ref_tri.simplices
+
+            # All captured triangles should be among the Delaunay simplices
+            # (allowing for numerical precision)
+            for triangle in ti:
+                v0, v1, v2 = triangle
+                # Check triangle exists in reference (may appear in different row order)
+                found = False
+                for ref_tri_idx in ref_simplices:
+                    if set([v0, v1, v2]) == set(ref_tri_idx):
+                        found = True
+                        break
+                assert found, f"Triangle {triangle} not in Delaunay({pi.shape[0]} points)"
+
+    def test_snapshot_retriangulate_no_inverted_tris(self):
+        """T002 part 2b: snapshot_retriangulate=True → zero inverted triangles."""
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+
+        def fd(p):
+            r = np.linalg.norm(p, axis=1)
+            return np.maximum(r - 1.0, 0.3 - r)
+
+        ang_o = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+        ang_i = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+        bnd = np.vstack([np.c_[np.cos(ang_o), np.sin(ang_o)],
+                         0.3 * np.c_[np.cos(ang_i), np.sin(ang_i)]])
+        rng = np.random.default_rng(11)
+        rad = rng.uniform(0.4, 0.9, 30)
+        th = rng.uniform(0, 2 * np.pi, 30)
+        interior = np.c_[rad * np.cos(th), rad * np.sin(th)]
+
+        hist = []
+        _, _ = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False,
+            history_out=hist, history_every=1,
+            snapshot_retriangulate=True,
+            snapshot_strict_interior=False)
+
+        # For every snapshot, verify no triangles are inverted
+        for pi, ti in hist:
+            signed_areas = []
+            for v0, v1, v2 in ti:
+                p0, p1, p2 = pi[v0], pi[v1], pi[v2]
+                signed_area = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1])
+                signed_areas.append(signed_area)
+
+            signed_areas = np.array(signed_areas)
+            # All should have same sign (all positive in CCW triangulation)
+            positive_count = np.sum(signed_areas > 0)
+            negative_count = np.sum(signed_areas < 0)
+            assert negative_count == 0, f"Inverted triangles found: {negative_count} inverted, {positive_count} positive"
+
+    def test_snapshot_retriangulate_boundary_pinned(self):
+        """T002 part 2c: Boundary rows stay pinned in re-triangulated snapshots."""
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+
+        def fd(p):
+            r = np.linalg.norm(p, axis=1)
+            return np.maximum(r - 1.0, 0.3 - r)
+
+        ang_o = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+        ang_i = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+        bnd = np.vstack([np.c_[np.cos(ang_o), np.sin(ang_o)],
+                         0.3 * np.c_[np.cos(ang_i), np.sin(ang_i)]])
+        rng = np.random.default_rng(11)
+        rad = rng.uniform(0.4, 0.9, 30)
+        th = rng.uniform(0, 2 * np.pi, 30)
+        interior = np.c_[rad * np.cos(th), rad * np.sin(th)]
+
+        hist = []
+        _, _ = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False,
+            history_out=hist, history_every=1,
+            snapshot_retriangulate=True,
+            snapshot_strict_interior=False)
+
+        # Boundary rows must be pinned in every snapshot
+        for pi, _ in hist:
+            np.testing.assert_allclose(pi[:len(bnd)], bnd, atol=1e-12)
+
+    def test_snapshot_retriangulate_return_invariant(self):
+        """T002 part 3: Return (p_out, t_out) identical with/without snapshot_retriangulate=True."""
+        import numpy as np
+        from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
+
+        def fd(p):
+            r = np.linalg.norm(p, axis=1)
+            return np.maximum(r - 1.0, 0.3 - r)
+
+        ang_o = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+        ang_i = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+        bnd = np.vstack([np.c_[np.cos(ang_o), np.sin(ang_o)],
+                         0.3 * np.c_[np.cos(ang_i), np.sin(ang_i)]])
+        rng = np.random.default_rng(11)
+        rad = rng.uniform(0.4, 0.9, 30)
+        th = rng.uniform(0, 2 * np.pi, 30)
+        interior = np.c_[rad * np.cos(th), rad * np.sin(th)]
+
+        # Run with snapshot_retriangulate=False
+        hist_off = []
+        p_off, t_off = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False,
+            history_out=hist_off, history_every=1,
+            snapshot_retriangulate=False)
+
+        # Run with snapshot_retriangulate=True
+        hist_on = []
+        p_on, t_on = distmesh2d_warmstart(
+            bnd, interior, fd, None, 0.25, (-1, -1, 1, 1),
+            niter=10, track_best_quality=False,
+            history_out=hist_on, history_every=1,
+            snapshot_retriangulate=True,
+            snapshot_strict_interior=False)
+
+        # Return values must be byte-identical (physics untouched)
+        np.testing.assert_allclose(p_on, p_off, atol=1e-15)
+        np.testing.assert_array_equal(t_on, t_off)
