@@ -152,7 +152,7 @@ class TestEdgeMapBackwardCompatibility:
 
     @pytest.mark.parametrize("mesh_name", ["annulus", "donut", "structured"])
     def test_layers_unchanged(self, mesh_name):
-        """Skeletonization layers should be valid."""
+        """Peel layers should be valid."""
         mesh = getattr(examples, mesh_name)()
 
         # Should have at least one layer

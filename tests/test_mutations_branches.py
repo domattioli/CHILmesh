@@ -1,6 +1,6 @@
 """Tests for currently-untested branches in mutations.py.
 
-Covers edge cases in reskeletonize_local(), smooth_topology(), and related methods.
+Covers edge cases in repeel_local(), smooth_topology(), and related methods.
 Targets specific uncovered branches identified in code review.
 """
 
@@ -11,23 +11,23 @@ from chilmesh import MutableMesh
 from chilmesh import examples
 
 
-class TestReskeletonizeLocalBranches:
-    """Tests for uncovered branches in reskeletonize_local().
+class TestReepeelLocalBranches:
+    """Tests for uncovered branches in repeel_local().
 
     Target lines 576-578 (empty OE), 590-593 (no layer found),
-    and 596-598 (start_layer == 0).
+    and 596-598 (start_layer == 0). [Line numbers are approximate; update as needed after refactoring.]
     """
 
-    def test_reskeletonize_local_with_empty_oe_branch(self):
-        """Branch lines 576-578: OE layers empty → calls _skeletonize() and returns.
+    def test_repeel_local_with_empty_oe_branch(self):
+        """Branch: OE layers empty → calls _peel() and returns.
 
-        Creates a mesh, clears its layers, then calls reskeletonize_local.
+        Creates a mesh, clears its layers, then calls repeel_local.
         """
         mesh = annulus()
         original_n_verts = mesh.n_verts
         mutable = MutableMesh(mesh)
 
-        # Clear OE layers (simulate "no skeletonization yet")
+        # Clear OE layers (simulate "no peeling yet")
         mesh.layers['OE'] = []
         mesh.layers['IE'] = []
         mesh.layers['OV'] = []
@@ -35,18 +35,18 @@ class TestReskeletonizeLocalBranches:
         mesh.layers['bEdgeIDs'] = []
         mesh.n_layers = 0
 
-        # Call reskeletonize_local with any element ID
-        mutable.reskeletonize_local(np.array([0, 1, 2]), radius=2)
+        # Call repeel_local with any element ID
+        mutable.repeel_local(np.array([0, 1, 2]), radius=2)
 
-        # Should have re-skeletonized the mesh
-        assert mesh.n_layers > 0, "Expected n_layers > 0 after reskeletonize"
-        assert len(mesh.layers['OE']) > 0, "Expected OE to be populated after skeletonize"
+        # Should have re-peeled the mesh
+        assert mesh.n_layers > 0, "Expected n_layers > 0 after repeel"
+        assert len(mesh.layers['OE']) > 0, "Expected OE to be populated after peel"
         assert mesh.n_verts == original_n_verts, "Vertices count should not change"
 
-    def test_reskeletonize_local_with_nonexistent_elem_ids_branch(self):
-        """Branch lines 590-593: elem_ids not in any layer → full rebuild.
+    def test_repeel_local_with_nonexistent_elem_ids_branch(self):
+        """Branch: elem_ids not in any layer → full rebuild.
 
-        Skeletonizes a mesh, then calls reskeletonize_local with an element ID
+        Peels a mesh, then calls repeel_local with an element ID
         that doesn't exist in any layer (e.g., ID beyond n_elems).
         """
         mesh = annulus()
@@ -58,14 +58,14 @@ class TestReskeletonizeLocalBranches:
         elem_ids = np.array([huge_id])
 
         # This should trigger full rebuild (no layer found containing huge_id)
-        mutable.reskeletonize_local(elem_ids, radius=2)
+        mutable.repeel_local(elem_ids, radius=2)
 
-        # Verify the mesh is still valid (full skeletonize was called)
+        # Verify the mesh is still valid (full peel was called)
         assert mesh.n_layers > 0, "Expected n_layers > 0 after rebuild"
         # n_layers should be regenerated (may differ from original)
         assert len(mesh.layers['OE']) == mesh.n_layers
 
-    def test_reskeletonize_local_with_layer_zero_affected(self):
+    def test_repeel_local_with_layer_zero_affected(self):
         """Branch lines 596-598: affected_layer=0 with radius=2 → start_layer==0 → full rebuild.
 
         The affected layer is layer 0 (outermost boundary). With radius=2,
@@ -79,8 +79,8 @@ class TestReskeletonizeLocalBranches:
         if len(mesh.layers['OE']) > 0 and len(mesh.layers['OE'][0]) > 0:
             outer_elem_id = int(mesh.layers['OE'][0][0])
 
-            # Call reskeletonize_local with element from layer 0
-            mutable.reskeletonize_local(np.array([outer_elem_id]), radius=2)
+            # Call repeel_local with element from layer 0
+            mutable.repeel_local(np.array([outer_elem_id]), radius=2)
 
             # Verify mesh state is valid
             assert mesh.n_layers > 0
@@ -88,7 +88,7 @@ class TestReskeletonizeLocalBranches:
             # n_layers may or may not equal original (depends on mesh structure)
             assert mesh.n_verts > 0
 
-    def test_reskeletonize_local_partial_rebuild(self):
+    def test_repeel_local_partial_rebuild(self):
         """Branch around line 595: normal partial rebuild (start_layer > 0).
 
         Affected element is in mid-layer, so start_layer > 0 and < n_layers.
@@ -104,8 +104,8 @@ class TestReskeletonizeLocalBranches:
             if len(mesh.layers['OE'][mid_layer_idx]) > 0:
                 elem_id = int(mesh.layers['OE'][mid_layer_idx][0])
 
-                # Call reskeletonize_local with radius=1 so start_layer > 0
-                mutable.reskeletonize_local(np.array([elem_id]), radius=1)
+                # Call repeel_local with radius=1 so start_layer > 0
+                mutable.repeel_local(np.array([elem_id]), radius=1)
 
                 # Verify state
                 assert mesh.n_layers > 0

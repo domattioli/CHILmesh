@@ -6,7 +6,49 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Staging for the next release (**1.3.0**): unblocks Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). #214's new `fort14_io` module is a minor-version feature, so the consolidated cut is **1.3.0**; a **v1.2.3** may instead be tagged at commit `80fd021` for #216 + #217 only. See `.planning/valence-adoption-chilmesh-audit.md`._
+_Nothing yet._
+
+## [2.0.0] — 2026-07-10
+
+**Major release.** The #187 lexicon ratification renames public API symbols with no compatibility aliases (pre-adoption window; no known consumers), which is a breaking change under SemVer. Also consolidates the Valence→CHILmesh upstreaming (geometry + CFL gate) and fort.14 robustness fixes.
+
+### Breaking — #187 layer-lexicon ratification
+
+Operator-ratified naming (math frame: a stored ring is a discrete *level set*; the construction is *onion peeling*; the front-collision locus is the *medial axis* — distinct constructs, distinct names):
+
+| Removed / renamed | Replacement |
+|---|---|
+| `MutableMesh.reskeletonize_local()` | `MutableMesh.repeel_local()` |
+| `MutableMesh.skeletonize_diff()` | `MutableMesh.layers_diff()` |
+| `CHILmesh._skeletonize` (alias) | removed — use `_peel()` / `peel_layers()` |
+| `CHILmesh._layerize()` (private) | `CHILmesh._peel()` |
+
+- **New public `CHILmesh.peel_layers()`** — canonical public entry for the onion-peel layer decomposition; returns `self.layers`.
+- `skeletonize` is now **reserved** for the future medial-axis operation (#223). It survives only as the compiled cpp/rust backend extension-API method name (cross-language rename deferred to a backend release cycle).
+- Decision record: `docs/LEXICON_PROPOSAL.md`; concept taxonomy: `docs/CONCEPTS.md`.
+
+### Breaking — `smooth_mesh` signature fix (#251)
+
+- `smooth_mesh(method, acknowledge_change, *kwargs, sdf=None, size_fn=None)` → `smooth_mesh(method, acknowledge_change=False, *, sdf=None, size_fn=None, **kwargs)`. The single-star `*kwargs` collected extra **positional** args and forwarded them positionally, so keyword smoother options (`n_iter`, `omega`, `freeze_quad_nodes`) raised `TypeError`. Keyword options now pass through to `direct_smoother` / `angle_based_smoother`; the undocumented positional-splat call shape is removed.
+
+### Added
+
+- **`chilmesh.geometry` module** (Valence→CHILmesh consolidation, #240 + #241): `haversine_m` (vectorized great-circle metres), `edge_lengths(p1, p2, crs="cartesian"|"spherical")` (CRS-aware, resolvable from fort.15 ICS), `convex_hull` (Andrew's monotone chain), `is_antimeridian_wrapping` / `split_antimeridian_bbox`, `bbox_iou` (antimeridian-aware), `hausdorff_distance` (discrete symmetric, cartesian or spherical). Pure numpy, package-level exports.
+- **CFL / Courant quality gate** (#238): `quality.courant_number(points, edges, depths, dt, crs)` — per-edge shallow-water Courant `C = sqrt(g·h)·dt/dx` — and `quality.cfl_gate(...)` (pass/fail vs `courant_max`, max/median/p95 stats, worst-offender list). Raw-array, numpy-only, mirrors `element_quality`.
+- **`read_fort14_raw(parse_boundaries=False)`** — table-only read mode; returns after the node/element table for identity consumers that keep their own boundary parser.
+
+### Fixed
+
+- **fort.14 boundary parsing robustness** (#253): default-mode `read_fort14_raw` no longer raises on prose-annotated NOPE/NBOU headers (`24 = Number of nodes …`) — `_lead_int()` extracts the leading integer and ignores trailing prose — and over-declared boundary counts no longer hit `IndexError` (EOF guards). Rescues 10/41 Valence registry corpus meshes.
+- **Float-formatted fort.14 tokens**: node/element/header ids and element vertex indices written as floats (`1.000000`) now parse via `int(float(v))`.
+
+### Documentation
+
+- README hero animation regenerated: opens and closes on the `peel_layers()` decomposition (animated inward reveal), crossfades to element quality, and **interpolates node positions through the ADMESH truss solve and FEM smoothing** (#198).
+
+## [1.3.0] — 2026-07-04
+
+_Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). Tagged v1.3.0; published to PyPI. (This section was staged under [Unreleased] at release time and retitled retroactively.)_
 
 ### Added
 

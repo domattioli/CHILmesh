@@ -1,7 +1,7 @@
 """Pin CHILmesh public unification API for MADMESHing/QuADMesh consumers (spec-048 T1).
 
 CHILmesh serves as a bridge library downstream of ADMESH, providing mesh data
-structures and skeletonization for MADMESHR and QuADMesh. This contract test
+structures and layer peeling for MADMESHR and QuADMesh. This contract test
 ensures that critical functions remain stable and importable across versions
 for callers like MADMESHing (https://github.com/domattioli/MADMESHing).
 

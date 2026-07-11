@@ -71,6 +71,11 @@ def distmesh2d_warmstart(
     quality_check_interval: int = 5,
     quality_drop_threshold: float = 0.10,
     track_best_quality: bool = True,
+    history_out: Optional[list] = None,
+    history_every: int = 1,
+    snapshot_retriangulate: bool = False,
+    snapshot_strict_interior: bool = False,
+    snapshot_hole_tau: float = 0.02,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Warm-start variant of ADMESH's distmesh2d truss loop.
@@ -107,6 +112,30 @@ def distmesh2d_warmstart(
         Maximum iterations.
     seed : int
         RNG seed (for any stochastic components).
+    quality_check_interval : int
+        Perform quality check every N iterations (default 5).
+    quality_drop_threshold : float
+        Stop if quality drops by > this fraction from peak (default 0.10).
+    track_best_quality : bool
+        If True (default), track and return the best quality mesh (non-degrading).
+        If False, return the final truss iterate regardless of quality trend.
+    history_out : list or None
+        If not None, append (p, t) snapshots to this list at each iteration
+        where (iteration % max(1, history_every) == 0). Default None = no capture.
+    history_every : int
+        Capture interval for history_out. Default 1 = every iteration.
+    snapshot_retriangulate : bool
+        If True, re-triangulate captured snapshots to ensure connectivity is
+        consistent with post-move positions. If False (default), use the stale
+        connectivity from the solver's last Delaunay step. Additive, default-off,
+        capture-side-only — does not affect solver physics or return values.
+    snapshot_strict_interior : bool
+        If True with snapshot_retriangulate=True, additionally filter captured
+        triangles to exclude those with edge-midpoints outside the domain
+        (distance > snapshot_hole_tau). If False (default), only centroid test.
+    snapshot_hole_tau : float
+        Distance threshold for edge-midpoint interior test when
+        snapshot_strict_interior=True. Default 0.02.
 
     Returns
     -------
@@ -276,6 +305,33 @@ def distmesh2d_warmstart(
         max_interior_move = interior_movement.max() if len(interior_movement) > 0 else 0.0
 
         p = p_new
+
+        # Optional per-iteration snapshot capture (post-update, current
+        # triangulation). Additive viz/diagnostic hook — no behavior change
+        # when history_out is None (the default).
+        if history_out is not None and (iteration % max(1, history_every) == 0):
+            if snapshot_retriangulate:
+                # ADDITIVE, default-OFF: capture a triangulation CONSISTENT with the
+                # post-move points p. Fixes the 1-Euler-step (p_new, t_old) staleness that
+                # renders inverted "overlapping sail" triangles. Physics/forces/return are
+                # untouched -> convergence byte-identical to the default path. The captured
+                # connectivity is a RENDER artifact; the solver discards its own t next
+                # iteration anyway (do NOT "restore" the stale capture in a future edit).
+                _tri = Delaunay(p)
+                _ta = _tri.simplices
+                _cen = p[_ta].mean(axis=1)
+                _keep = fd(_cen) < -geps
+                if snapshot_strict_interior:
+                    _p0, _p1, _p2 = p[_ta[:, 0]], p[_ta[:, 1]], p[_ta[:, 2]]
+                    _m01 = 0.5 * (_p0 + _p1)
+                    _m12 = 0.5 * (_p1 + _p2)
+                    _m20 = 0.5 * (_p2 + _p0)
+                    _keep = _keep & (fd(_m01) < snapshot_hole_tau) \
+                                  & (fd(_m12) < snapshot_hole_tau) \
+                                  & (fd(_m20) < snapshot_hole_tau)
+                history_out.append((p.copy(), _ta[_keep].copy()))
+            else:
+                history_out.append((p.copy(), t.copy()))  # unchanged default path
 
         if max_interior_move / h0 < dptol:
             # Final quality update at converged state (next iteration won't run)

@@ -1,12 +1,12 @@
-"""Tests for reskeletonize_local core path: partial re-peel on deep element mutations.
+"""Tests for repeel_local core path: partial re-peel on deep element mutations.
 
-This test module exercises the UNTESTED core block of reskeletonize_local
+This test module exercises the UNTESTED core block of repeel_local
 (mutations.py lines 604-671), which only runs when start_layer > 0 (i.e.,
 affected element in layer >= radius+1). Existing test_mutations.py tests only
-exercise the FALLBACK paths (full _skeletonize rebuild) because they mutate
+exercise the FALLBACK paths (full _peel rebuild) because they mutate
 shallow layer 0/1 elements.
 
-See: mutations.py::MutableMesh.reskeletonize_local (lines 552-671)
+See: mutations.py::MutableMesh.repeel_local (lines 552-671)
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ def _fresh(name: str) -> CHILmesh:
     return example_fn()
 
 
-class TestReskeletonizeLocalCore:
-    """Tests for reskeletonize_local core partial re-peel path."""
+class TestReepeelLocalCore:
+    """Tests for repeel_local core partial re-peel path."""
 
     def test_core_path_runs_deep_element(self, deep_mesh_name):
         """Core block executes when deep element is re-peeled with radius=2.
@@ -69,8 +69,8 @@ class TestReskeletonizeLocalCore:
         start_layer = max(0, affected_layer - 2)
         assert start_layer > 0, f"start_layer would be {start_layer}, core block requires > 0"
 
-        # Run reskeletonize_local with radius=2
-        mutable.reskeletonize_local(np.array([deep_elem]), radius=2)
+        # Run repeel_local with radius=2
+        mutable.repeel_local(np.array([deep_elem]), radius=2)
 
         # Assert layer structure is valid
         assert mesh.n_layers >= 4, f"After re-peel, n_layers = {mesh.n_layers}, expected >= 4"
@@ -80,11 +80,11 @@ class TestReskeletonizeLocalCore:
         assert len(mesh.layers['IV']) == mesh.n_layers
         assert len(mesh.layers['bEdgeIDs']) == mesh.n_layers
 
-    def test_parity_with_full_skeletonize_radius2(self, deep_mesh_name):
+    def test_parity_with_full_peel_radius2(self, deep_mesh_name):
         """Partial re-peel (radius=2) produces layers identical to full rebuild.
 
         This is the gold assertion: given unchanged mesh topology, a partial
-        re-peel from a deep checkpoint must reproduce full _skeletonize() output.
+        re-peel from a deep checkpoint must reproduce full _peel() output.
         """
         # Load two independent fresh meshes from the same name
         mesh_local = _fresh(deep_mesh_name)
@@ -109,9 +109,9 @@ class TestReskeletonizeLocalCore:
         if affected_layer is None or affected_layer < 3:
             pytest.skip(f"Element in layer {affected_layer}, need >= 3 for core path")
 
-        # On mesh_local: run reskeletonize_local
+        # On mesh_local: run repeel_local
         mutable_local = MutableMesh(mesh_local)
-        mutable_local.reskeletonize_local(np.array([deep_elem]), radius=2)
+        mutable_local.repeel_local(np.array([deep_elem]), radius=2)
 
         # Capture OE, IE, OV, IV as per-layer sets on mesh_local
         local_oe = [set(int(e) for e in mesh_local.layers['OE'][iL])
@@ -123,8 +123,8 @@ class TestReskeletonizeLocalCore:
         local_iv = [set(int(e) for e in mesh_local.layers['IV'][iL])
                     for iL in range(mesh_local.n_layers)]
 
-        # On mesh_full: run full _skeletonize
-        mesh_full._skeletonize()
+        # On mesh_full: run full _peel
+        mesh_full._peel()
 
         # Capture the same on mesh_full
         full_oe = [set(int(e) for e in mesh_full.layers['OE'][iL])
@@ -146,7 +146,7 @@ class TestReskeletonizeLocalCore:
         assert local_ov == full_ov, "OV per-layer sets differ"
         assert local_iv == full_iv, "IV per-layer sets differ"
 
-    def test_parity_with_full_skeletonize_radius1(self, deep_mesh_name):
+    def test_parity_with_full_peel_radius1(self, deep_mesh_name):
         """Partial re-peel (radius=1) produces layers identical to full rebuild.
 
         Same parity check as radius=2 test, but with smaller safety margin.
@@ -173,16 +173,16 @@ class TestReskeletonizeLocalCore:
         if affected_layer is None or affected_layer < 2:
             pytest.skip(f"Element in layer {affected_layer}, need >= 2 for core path with radius=1")
 
-        # On mesh_local: run reskeletonize_local with radius=1
+        # On mesh_local: run repeel_local with radius=1
         mutable_local = MutableMesh(mesh_local)
-        mutable_local.reskeletonize_local(np.array([deep_elem]), radius=1)
+        mutable_local.repeel_local(np.array([deep_elem]), radius=1)
 
         # Capture OE per-layer sets
         local_oe = [set(int(e) for e in mesh_local.layers['OE'][iL])
                     for iL in range(mesh_local.n_layers)]
 
-        # On mesh_full: run full _skeletonize
-        mesh_full._skeletonize()
+        # On mesh_full: run full _peel
+        mesh_full._peel()
         full_oe = [set(int(e) for e in mesh_full.layers['OE'][iL])
                    for iL in range(mesh_full.n_layers)]
 
@@ -218,7 +218,7 @@ class TestReskeletonizeLocalCore:
         if affected_layer is None or affected_layer < 3:
             pytest.skip(f"Element in layer {affected_layer}, need >= 3")
 
-        mutable.reskeletonize_local(np.array([deep_elem]), radius=2)
+        mutable.repeel_local(np.array([deep_elem]), radius=2)
 
         # Assert all IDs are non-negative
         for iL in range(mesh.n_layers):

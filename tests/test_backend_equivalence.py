@@ -1,7 +1,7 @@
 """Cross-backend equivalence tests for CHILmesh.
 
 These tests ensure that the Python, Rust, and C++ backends produce
-bit-identical mesh topology, skeletonization layers, and quality outputs
+bit-identical mesh topology, peel layers, and quality outputs
 across all built-in fixtures plus the WNAT_Hagen reference mesh.
 
 If a backend is unavailable in the test environment, the corresponding
@@ -60,7 +60,7 @@ def _arrays_for_cpp(mesh: CHILmesh):
 @pytest.mark.skipif(not CPP_AVAILABLE, reason="chilmesh_cpp not built")
 @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
 def test_cpp_layer_count_matches_python(fixture):
-    """C++ skeletonization must produce same number of layers as Python."""
+    """C++ layer peel (backend skeletonize()) must produce same number of layers as Python."""
     mesh = _load_python_mesh(fixture)
     points, conn = _arrays_for_cpp(mesh)
     cpp = chilmesh_cpp.full_init(points, conn)
@@ -177,7 +177,7 @@ def _build_rust_mesh(mesh):
 @pytest.mark.skipif(not RUST_AVAILABLE, reason="chilmesh_core (Rust) not built")
 @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
 def test_rust_layer_count_matches_python(fixture):
-    """Rust skeletonization must produce same number of layers as Python."""
+    """Rust layer peel (backend skeletonize()) must produce same number of layers as Python."""
     mesh = _load_python_mesh(fixture)
     rust = _build_rust_mesh(mesh)
     assert mesh.n_layers == rust.get_num_layers(), (

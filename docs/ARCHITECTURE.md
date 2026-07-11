@@ -28,13 +28,13 @@ bit-for-bit (`n_layers` parity holds across both — see
 |---|---|---|
 | Edge lookup / dedup | **O(1)** | `EdgeMap` hash (was O(n²) pre-v0.2 — the 937× init speedup) |
 | Adjacency build | **O(n log n)** | vectorized `np.unique` / argsort |
-| Layerization (`_layerize`) | **O(n)** | concentric layer peel, ~1 s / 60k elems in Python; ~15× faster in C++ |
+| Layer peel (`_peel`) | **O(n)** | concentric layer peel, ~1 s / 60k elems in Python; ~15× faster in C++ |
 | Spatial query (`find_element`, `nearest_vertices`) | **O(log n)** | `cKDTree` |
 | Vertex valence / 1-ring | **O(1) + O(degree)** | dict lookup |
 
 ## Layerization vs skeletonization
 
-`_layerize` peels concentric element rings (the discrete, banded analogue of a
+`_peel` peels concentric element rings (the discrete, banded analogue of a
 distance field). It is **not** medial-axis or skeleton extraction — those are
 distinct constructs documented in [`CONCEPTS.md`](CONCEPTS.md). The ownership
 boundary between CHILmesh (post-mesh analysis) and ADMESH (pre-mesh generation)

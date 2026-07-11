@@ -9,9 +9,9 @@ Distinguishes four related-but-distinct constructs on a shared L-shape domain:
      equidistant from >=2 boundary points (pure geometry of the domain).
   3. Skeleton              -- a 1-wide connectivity-preserving curve from
      topological thinning (a distinct algorithm, hence a distinct result).
-  4. Layers (layerize)     -- actual mesh ELEMENTS grouped into concentric
-     bands peeled boundary-inward, which is what CHILmesh `_layerize`
-     (formerly `_skeletonize`) computes. See issue #221.
+  4. Layers (peel)     -- actual mesh ELEMENTS grouped into concentric
+     bands peeled boundary-inward, which is what CHILmesh `_peel`
+     (formerly `_skeletonize`, renamed via #221 then #187) computes. See issue #221.
 
 The point: these are related, not identical. distance is a field -> its ridge
 is the medial axis -> the skeleton is a thinned discrete curve -> layers group

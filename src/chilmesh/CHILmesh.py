@@ -163,7 +163,7 @@ class CHILmesh(CHILmeshPlotMixin):
         Parameters:
             elem_ids: Indices of elements to include. May contain duplicates; the
                 method deduplicates internally. Must be non-empty.
-            compute_layers: Whether to layerize the sub-mesh (default: True).
+            compute_layers: Whether to peel the sub-mesh into layers (default: True).
                 Forwarded to :class:`CHILmesh` constructor.
             compute_adjacencies: Whether to build adjacency dicts on the sub-mesh.
                 ``None`` tracks ``compute_layers``. See :meth:`__init__`.
@@ -345,8 +345,8 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies: If False, skip adjacency dict construction (default: True).
                 Cannot be False when ``compute_layers`` is True — caller is responsible
                 for that consistency (enforced in ``__init__``).
-            seed_boundary_kinds: Forwarded to ``_layerize``; see ``__init__`` docs. (#129)
-            seed_ibtypes: Forwarded to ``_layerize``; see ``__init__`` docs. (#129)
+            seed_boundary_kinds: Forwarded to ``_peel``; see ``__init__`` docs. (#129)
+            seed_ibtypes: Forwarded to ``_peel``; see ``__init__`` docs. (#129)
             build_spatial_indices: If False, skip spatial index build (default: True). (#204)
             validate: If False, skip adjacency validation (default: True). (#204)
         """
@@ -392,7 +392,7 @@ class CHILmesh(CHILmeshPlotMixin):
                             UserWarning,
                             stacklevel=2,
                         )
-                self._layerize(
+                self._peel(
                     seed_boundary_kinds=seed_boundary_kinds,
                     seed_ibtypes=seed_ibtypes,
                 )
@@ -930,7 +930,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Notes:
             - Does NOT recompute layerization layers. If the topology
-              change altered the peel structure, also call ``_layerize()``
+              change altered the peel structure, also call ``_peel()``
               or invalidate layers separately.
             - Preserves ``grid_name``, ``type``, and other metadata.
         """
@@ -1122,9 +1122,9 @@ class CHILmesh(CHILmeshPlotMixin):
             )
         return np.unique(np.concatenate([seg["nodes"] for seg in matching]))
 
-    def _layerize(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> None:
+    def _peel(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> None:
         """
-        Layerize the mesh by iteratively peeling concentric layers inward.
+        Peel the mesh by iteratively peeling concentric layers inward.
 
         Peels the mesh into concentric layers (``OE``/``IE``/``OV``/``IV``).
         This approximates but is distinct from the geometric medial axis and
@@ -1174,7 +1174,7 @@ class CHILmesh(CHILmeshPlotMixin):
         while np.any(edge2elem_work >= 0):
             if iL > max_layers:
                 raise RuntimeError(
-                    f"_layerize did not converge: exceeded max layer count "
+                    f"_peel did not converge: exceeded max layer count "
                     f"({max_layers}). The layer peel is not shrinking the active "
                     f"element set, indicating a malformed or non-manifold mesh."
                 )
@@ -1245,7 +1245,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
         self.n_layers = iL
 
-    _skeletonize = _layerize  # backward-compat alias; this op is layerization, not skeletonization (see #221)
+    def peel_layers(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> dict:
+        """Recompute the mesh's onion-peel layer decomposition (public entry).
+
+        Iteratively peels boundary elements inward, recording each ring as a
+        layer (a discrete level set of the graph-distance-to-boundary). This is
+        the canonical public verb for the layer peel; the medial-axis
+        ``skeletonize`` name is reserved for a distinct future operation.
+
+        Returns
+        -------
+        dict
+            ``self.layers`` after the peel.
+        """
+        self._peel(seed_boundary_kinds=seed_boundary_kinds, seed_ibtypes=seed_ibtypes)
+        return self.layers
 
     def get_layer( self, layer_idx: int ) -> Dict[str, np.ndarray]:
         """
@@ -1636,7 +1650,7 @@ class CHILmesh(CHILmeshPlotMixin):
         # Invalidate spatial indices after moving points
         self._build_spatial_indices()
 
-    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *kwargs, sdf=None, size_fn=None) -> np.ndarray:
+    def smooth_mesh(self, method: str, acknowledge_change: bool=False, *, sdf=None, size_fn=None, **kwargs) -> np.ndarray:
         """
         Perform mesh smoothing using a modified FEM-based approach.
 
@@ -1662,9 +1676,9 @@ class CHILmesh(CHILmeshPlotMixin):
                 self.grid_name = saved_grid_name
             return self.points
         if method.lower() == 'fem':
-            new_points = self.direct_smoother( *kwargs )
+            new_points = self.direct_smoother( **kwargs )
         elif method.lower() == 'angle-based':
-            new_points = self.angle_based_smoother( *kwargs )
+            new_points = self.angle_based_smoother( **kwargs )
         else:
             raise ValueError(f"Unknown smoothing method: {method}")
         self.change_points( new_points, acknowledge_change=True )
@@ -2724,7 +2738,7 @@ class CHILmesh(CHILmeshPlotMixin):
         # Now run adjacencies + layerization with segments in place.
         if compute_layers:
             mesh._build_adjacencies()
-            mesh._layerize()
+            mesh._peel()
         elif compute_adjacencies:
             mesh._build_adjacencies()
         mesh._build_spatial_indices()
