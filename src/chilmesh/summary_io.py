@@ -1,6 +1,6 @@
 """Lazy header-only mesh metadata reading for CHILmesh.
 
-Supports fast metadata extraction from mesh files (fort.14, 2dm, fort.13, fort.15) without
+Supports fast metadata extraction from mesh files (fort.14, 2dm, fort.13, fort.15, .npy, .npz) without
 loading full mesh data. For CHILmesh objects, returns mesh properties directly.
 """
 from __future__ import annotations
@@ -106,6 +106,10 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         fmt = 'fort13'
     elif suffix == '.15':
         fmt = 'fort15'
+    elif suffix == '.npy':
+        fmt = 'npy'
+    elif suffix == '.npz':
+        fmt = 'npz'
     else:
         raise SummaryError(f"Unknown mesh format: {suffix}")
 
@@ -130,6 +134,10 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         _read_fort13_header(path, result)
     elif fmt == 'fort15':
         _read_fort15_header(path, result)
+    elif fmt == 'npy':
+        _read_npy_header(path, result)
+    elif fmt == 'npz':
+        _read_npz_header(path, result)
 
     # If deep=True, load the full mesh for element_type and bbox
     if deep:
@@ -260,6 +268,53 @@ def _read_fort15_header(path: Path, result: dict) -> None:
         result['runid'] = line2.split('!', 1)[0].rstrip()
     except IOError as e:
         raise SummaryError(f"Cannot read fort.15 file {path}: {e}")
+
+
+def _read_npy_header(path: Path, result: dict) -> None:
+    """Read a .npy header (shape + dtype) without loading the array body.
+
+    Uses numpy.load with mmap_mode='r' to memory-map the file lazily,
+    extracting metadata without allocating the full array in RAM.
+    """
+    import numpy as np
+    try:
+        # Memory-map the array without loading it into RAM
+        mmap = np.load(path, allow_pickle=False, mmap_mode='r')
+        result['shape'] = list(mmap.shape)
+        result['dtype'] = str(mmap.dtype)
+        result['fortran_order'] = mmap.flags['F_CONTIGUOUS']
+    except Exception as e:
+        raise SummaryError(f"Cannot read .npy header {path}: {e}")
+
+
+def _read_npz_header(path: Path, result: dict) -> None:
+    """Read a .npz archive's member headers (name -> shape/dtype) lazily.
+
+    A .npz is a zip of .npy members; each member's header is extracted via
+    numpy.load with mmap_mode, never loading array bodies into RAM.
+    """
+    import zipfile
+    import numpy as np
+    try:
+        arrays = {}
+        with zipfile.ZipFile(path) as z:
+            for entry in z.namelist():
+                # Remove .npy suffix to get the array name
+                name = entry[:-4] if entry.endswith('.npy') else entry
+                # Stream only the .npy header off the zip member — the array
+                # body is never read into memory (open(), not read()).
+                with z.open(entry) as member:
+                    major, _minor = np.lib.format.read_magic(member)
+                    if major == 2:
+                        shape, _fortran_order, dtype = np.lib.format.read_array_header_2_0(member)
+                    else:
+                        shape, _fortran_order, dtype = np.lib.format.read_array_header_1_0(member)
+                arrays[name] = {'shape': list(shape), 'dtype': str(dtype)}
+        result['members'] = sorted(arrays.keys())
+        result['n_members'] = len(arrays)
+        result['arrays'] = arrays
+    except Exception as e:
+        raise SummaryError(f"Cannot read .npz header {path}: {e}")
 
 
 __all__ = ["summary", "SummaryError"]
