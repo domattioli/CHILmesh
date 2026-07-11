@@ -322,3 +322,111 @@ class TestSummary2dmIOErrors:
 
         # IsADirectoryError is caught as IOError and wrapped in SummaryError
         assert exc_info.value is not None, "Expected SummaryError to be raised"
+
+
+class TestSummaryFort13:
+    """Test summary() on fort.13 format files."""
+
+    def test_fort13_sample_shallow(self):
+        """Fort13 shallow summary of sample.13: header-only read."""
+        path = Path(__file__).parent / "fixtures" / "fort13" / "sample.13"
+        result = summary(path, deep=False)
+
+        assert result['format'] == 'fort13', (
+            f"Expected format='fort13', got {result['format']}"
+        )
+        assert result['grid_name'] == 'sample_grid', (
+            f"Expected grid_name='sample_grid', got {result['grid_name']}"
+        )
+        assert result['n_nodes'] == 4, (
+            f"Expected n_nodes=4, got {result['n_nodes']}"
+        )
+        assert result['n_attributes'] == 2, (
+            f"Expected n_attributes=2, got {result['n_attributes']}"
+        )
+        assert result['file_bytes'] > 0, (
+            f"Expected file_bytes>0, got {result['file_bytes']}"
+        )
+        assert str(path) in result['path'], (
+            f"Expected path to contain {path}, got {result['path']}"
+        )
+
+    def test_fort13_malformed_header_error(self, tmp_path):
+        """Fort13 with fewer than 3 header lines raises SummaryError."""
+        bad_fort13 = tmp_path / "bad_header.13"
+        # Only 2 lines instead of 3
+        bad_fort13.write_text("grid_name\n4\n")
+
+        with pytest.raises(SummaryError) as exc_info:
+            summary(bad_fort13)
+
+        assert "malformed" in str(exc_info.value).lower(), (
+            f"SummaryError should mention 'malformed', got: {exc_info.value}"
+        )
+
+    def test_fort13_non_integer_counts_error(self, tmp_path):
+        """Fort13 with non-integer counts raises SummaryError."""
+        bad_fort13 = tmp_path / "bad_counts.13"
+        bad_fort13.write_text("grid_name\nfoo\n2\n")
+
+        with pytest.raises(SummaryError) as exc_info:
+            summary(bad_fort13)
+
+        assert "parse error" in str(exc_info.value).lower(), (
+            f"SummaryError should mention 'parse error', got: {exc_info.value}"
+        )
+
+
+class TestSummaryFort15:
+    """Test summary() on fort.15 format files."""
+
+    def test_fort15_sample_shallow(self):
+        """Fort15 shallow summary of sample.15: header-only read."""
+        path = Path(__file__).parent / "fixtures" / "fort15" / "sample.15"
+        result = summary(path, deep=False)
+
+        assert result['format'] == 'fort15', (
+            f"Expected format='fort15', got {result['format']}"
+        )
+        assert result['rundes'] == 'Sample WNAT tidal run', (
+            f"Expected rundes='Sample WNAT tidal run', got {result['rundes']}"
+        )
+        assert result['runid'] == 'sample01', (
+            f"Expected runid='sample01', got {result['runid']}"
+        )
+        assert result['file_bytes'] > 0, (
+            f"Expected file_bytes>0, got {result['file_bytes']}"
+        )
+        assert str(path) in result['path'], (
+            f"Expected path to contain {path}, got {result['path']}"
+        )
+
+    def test_fort15_malformed_header_error(self, tmp_path):
+        """Fort15 with fewer than 2 header lines raises SummaryError."""
+        bad_fort15 = tmp_path / "bad_header.15"
+        # Only 1 line instead of 2
+        bad_fort15.write_text("rundes\n")
+
+        with pytest.raises(SummaryError) as exc_info:
+            summary(bad_fort15)
+
+        assert "malformed" in str(exc_info.value).lower(), (
+            f"SummaryError should mention 'malformed', got: {exc_info.value}"
+        )
+
+    def test_fort15_comment_stripping(self, tmp_path):
+        """Fort15 strips inline comments from rundes and runid."""
+        fort15 = tmp_path / "with_comments.15"
+        fort15.write_text(
+            "My test run description    ! RUNDES comment\n"
+            "test01                     ! RUNID comment\n"
+        )
+
+        result = summary(fort15)
+
+        assert result['rundes'] == 'My test run description', (
+            f"Expected rundes stripped of comment, got {result['rundes']}"
+        )
+        assert result['runid'] == 'test01', (
+            f"Expected runid stripped of comment, got {result['runid']}"
+        )

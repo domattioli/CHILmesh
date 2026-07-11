@@ -1,6 +1,6 @@
 """Lazy header-only mesh metadata reading for CHILmesh.
 
-Supports fast metadata extraction from mesh files (fort.14, 2dm) without
+Supports fast metadata extraction from mesh files (fort.14, 2dm, fort.13, fort.15) without
 loading full mesh data. For CHILmesh objects, returns mesh properties directly.
 """
 from __future__ import annotations
@@ -102,6 +102,10 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         fmt = 'fort14'
     elif suffix == '.2dm':
         fmt = '2dm'
+    elif suffix == '.13':
+        fmt = 'fort13'
+    elif suffix == '.15':
+        fmt = 'fort15'
     else:
         raise SummaryError(f"Unknown mesh format: {suffix}")
 
@@ -122,6 +126,10 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         _read_fort14_header(path, result)
     elif fmt == '2dm':
         _read_2dm_header(path, result)
+    elif fmt == 'fort13':
+        _read_fort13_header(path, result)
+    elif fmt == 'fort15':
+        _read_fort15_header(path, result)
 
     # If deep=True, load the full mesh for element_type and bbox
     if deep:
@@ -203,6 +211,55 @@ def _read_2dm_header(path: Path, result: dict) -> None:
         raise SummaryError(f"Cannot read 2dm file {path}: {e}")
 
 
+def _read_fort13_header(path: Path, result: dict) -> None:
+    """Read fort.13 header (grid name + node count + attribute count).
+
+    fort.13 layout: line 1 = AGRID (grid name), line 2 = NumOfNodes,
+    line 3 = NAttr (number of nodal attributes). Read only these 3 lines —
+    the per-node non-default overlay blocks (potentially millions of rows)
+    are never loaded. Blank lines skipped.
+    """
+    try:
+        vals = []
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                s = line.strip()
+                if not s:
+                    continue
+                vals.append(s)
+                if len(vals) >= 3:
+                    break
+        if len(vals) < 3:
+            raise SummaryError(f"fort.13 header malformed: expected 3 lines, got {len(vals)}")
+        try:
+            n_nodes = int(vals[1].split()[0])
+            n_attributes = int(vals[2].split()[0])
+        except (ValueError, IndexError) as e:
+            raise SummaryError(f"fort.13 header parse error: {e}")
+        result['grid_name'] = vals[0]
+        result['n_nodes'] = n_nodes
+        result['n_attributes'] = n_attributes
+    except IOError as e:
+        raise SummaryError(f"Cannot read fort.13 file {path}: {e}")
+
+
+def _read_fort15_header(path: Path, result: dict) -> None:
+    """Read fort.15 header (run description + run identification).
+
+    fort.15 is ADCIRC model run-config, not a mesh — it carries no node/element
+    counts. Line 1 = RUNDES, line 2 = RUNID; trailing inline ``! comment`` is
+    stripped (mirrors read_fort15). Only 2 lines are read.
+    """
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            line1 = f.readline()
+            line2 = f.readline()
+        if not line1 or not line2:
+            raise SummaryError("fort.15 header malformed: fewer than 2 lines")
+        result['rundes'] = line1.split('!', 1)[0].rstrip()
+        result['runid'] = line2.split('!', 1)[0].rstrip()
+    except IOError as e:
+        raise SummaryError(f"Cannot read fort.15 file {path}: {e}")
 
 
 __all__ = ["summary", "SummaryError"]
