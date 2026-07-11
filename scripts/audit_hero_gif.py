@@ -299,6 +299,95 @@ def audit_peel_invariance(
     return result
 
 
+def audit_peel_pixel_equality(
+    q_fem: np.ndarray,
+    elem_layer: np.ndarray,
+    n_layers: int,
+) -> bool:
+    """Audit k=0 peel histogram is pixel-identical to FEM histogram (F-04, N-01).
+
+    Renders two matplotlib figures with identical axes config and compares RGBA buffers.
+    At k=0, no layers are revealed (bar colors are quality-based), and _draw_metrics
+    overlays are identical → pixel-for-pixel match is mandatory per F-04/N-01
+    (convert-in-place). Reuses exact generator figure/gridspec setup to ensure
+    identical DPI, positioning, and rendering.
+
+    Parameters
+    ----------
+    q_fem : (n_elems,) ndarray
+        Quality values for all elements.
+    elem_layer : (n_elems,) ndarray
+        Layer assignment for each element (0 to n_layers-1).
+    n_layers : int
+        Number of layers.
+
+    Returns
+    -------
+    bool
+        True if FEM and peel k=0 histograms are pixel-identical; False otherwise.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+    sys.path.insert(0, str(Path(__file__).parent))
+
+    # Lazy import inside function — keeps module PURE at top level
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    q_fem = np.asarray(q_fem, dtype=np.float64)
+    elem_layer = np.asarray(elem_layer, dtype=np.int32)
+
+    if len(q_fem) != len(elem_layer) or len(q_fem) == 0:
+        return False
+
+    try:
+        from generate_hero_animation import (
+            _draw_hist, _draw_peel_hist, _draw_metrics, _setup_axes,
+            BG, HBINS
+        )
+    except ImportError as e:
+        return False
+
+    # Compute ymax (same as generator _stage_data line 233-237)
+    counts_ref, _ = np.histogram(q_fem, bins=HBINS, range=(0.0, 1.0))
+    ymax = int(counts_ref.max() * 1.08) + 1
+    D = {"ymax": ymax}
+
+    # Use exact generator figure/gridspec setup (figsize=(12, 5.5), 2-panel gridspec)
+    # to ensure DPI, positioning, and rendering match exactly. Both figures extract
+    # only the histogram panel (right axis) for comparison.
+    def _render_hist_frame(draw_fn):
+        """Render histogram using either _draw_hist or _draw_peel_hist."""
+        fig = plt.figure(figsize=(12, 5.5), facecolor=BG)
+        gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 1.05], wspace=0.18,
+                              left=0.04, right=0.97, top=0.86, bottom=0.12)
+        ax_mesh = fig.add_subplot(gs[0, 0])
+        ax_hist = fig.add_subplot(gs[0, 1])
+        _setup_axes(ax_mesh, ax_hist, D)
+        draw_fn(ax_hist)
+        fig.canvas.draw()
+        buffer = np.asarray(fig.canvas.buffer_rgba()).copy()
+        plt.close(fig)
+        return buffer
+
+    # FEM: _draw_hist (which internally calls _draw_metrics)
+    buffer_fem = _render_hist_frame(
+        lambda ax: _draw_hist(ax, q_fem, D, alpha=1.0)
+    )
+
+    # Peel k=0: _draw_peel_hist + _draw_metrics (called explicitly, not by _draw_peel_hist)
+    def draw_peel_k0(ax):
+        _draw_peel_hist(ax, q_fem, elem_layer, n_layers, k=0, D=D)
+        _draw_metrics(ax, q_fem, alpha=1.0)
+
+    buffer_peel = _render_hist_frame(draw_peel_k0)
+
+    # Pixel-level comparison (F-04, N-01)
+    return np.array_equal(buffer_fem, buffer_peel)
+
+
 def audit_determinism(
     run1_snapshots: list,
     run1_n_layers: int,
@@ -450,6 +539,19 @@ def main():
         except Exception as e:
             failures.append('peel-invariance')
             print(f'[audit] ERROR in peel-invariance audit: {e}', file=sys.stderr)
+
+        # N-01: k=0 pixel-equality gate (F-04)
+        print('[audit] Running audit_peel_pixel_equality...')
+        try:
+            D = _stage_data()
+            pixel_equal = audit_peel_pixel_equality(D['q_fem'], D['elem_layer'], D['n_layers'])
+            print(f"[audit]   k=0 pixel-equality (F-04/N-01) = {pixel_equal}")
+            if not pixel_equal:
+                failures.append('peel-invariance')
+                print('[audit] ERROR: k=0 peel histogram not pixel-identical to FEM histogram', file=sys.stderr)
+        except Exception as e:
+            failures.append('peel-invariance')
+            print(f'[audit] ERROR in k=0 pixel-equality audit: {e}', file=sys.stderr)
 
     if args.check in ('determinism', 'all'):
         print('[audit] Running audit_determinism...')
