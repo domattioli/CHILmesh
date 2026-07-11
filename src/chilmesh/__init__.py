@@ -41,6 +41,12 @@ from .geometry import (
     bbox_iou,
     hausdorff_distance,
 )
+from .node_match import (
+    NodeMatch,
+    match_nodes,
+    derive_tolerance,
+    nodal_field_delta,
+)
 from . import examples
 from . import bridge
 from . import chilplotting
@@ -147,6 +153,11 @@ __all__ = [
     "split_antimeridian_bbox",
     "bbox_iou",
     "hausdorff_distance",
+    # Cross-mesh node matching + nodal-field deltas (#239)
+    "NodeMatch",
+    "match_nodes",
+    "derive_tolerance",
+    "nodal_field_delta",
     # Backend introspection
     "backend_info",
     # Submodules
