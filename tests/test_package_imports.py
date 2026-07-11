@@ -52,9 +52,12 @@ def test_version_string():
     import chilmesh
 
     assert chilmesh.__version__ != "0.0.0", "package not installed properly"
-    # Accept any 1.x.y release
-    assert chilmesh.__version__.startswith("1."), (
-        f"expected 1.x.y, got {chilmesh.__version__}"
+    # Accept any released semver (drift-proof across major bumps; was pinned to
+    # "1." and broke on the v2.0.0 bump).
+    import re
+
+    assert re.match(r"^\d+\.\d+\.\d+", chilmesh.__version__), (
+        f"expected semver X.Y.Z, got {chilmesh.__version__}"
     )
 
 
