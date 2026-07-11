@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — raw → smoothed → layerized" width="720">
+  <img src="docs/gallery/readme_pipeline_annulus.gif" alt="CHILmesh pipeline — peel layers → quality → truss → FEM smooth → peel layers" width="720">
 </p>
 
 <h1 align="center">CHILmesh</h1>
@@ -52,7 +52,7 @@
 
 **Current status (June 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; cross-backend equivalence tests across C++ and Rust; fort.14 + .2dm + fort.13 I/O; mixed-element support; full mesh-mutation API (split/swap/merge/collapse, [#94](https://github.com/domattioli/CHILmesh/issues/94)); lazy header-only `summary()`.
 
-- **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust skeletonization completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
+- **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust layer-peel completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
 - **Next:** performance optimization; parallelization; conda-forge packaging; mkdocs API site; native `.chil` file format
 - **Future:** formal integration within a unified ecosystem including <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMiAyMSBMMTIgMiBMMjIgMjEgWiBNMTIgMiBMNyAyMSBNMTIgMiBMMTcgMjEgTTcgMjEgTDEyIDEyIEwxNyAyMSBNMTIgMTIgTDEyIDIiLz48L3N2Zz4=" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0iTTMgNCBIMjEgTTMgMTIgSDIxIE0zIDIwIEgyMSBNNCAzIFYyMSBNMTIgMyBWMjEgTTIwIDMgVjIxIi8%2BPC9zdmc%2B" alt="QuADMESH PyPI version"></a>
 
@@ -109,7 +109,7 @@ The legacy `chilmesh.CHILmesh` import is preserved for backward compatibility. B
 - **Fast** — C++ backend full-inits the 531,680-element ENPAC2003 mesh in ~1.4 s — 8.6× over pure Python (up to ~15× on smaller meshes)
 - **Mixed-element** — triangles, quads, and mixed meshes share one API
 - **Smoothing** — Balendran direct FEM, Zhou-Shimada angle-based, and ADMESH Spring-Based Truss
-- **Analysis** — element quality, interior angles, layer-based decomposition (layerize)
+- **Analysis** — element quality, interior angles, layer-based decomposition (peel_layers)
 - **I/O** — [ADCIRC](https://adcirc.org/) `.fort.14` and [SMS Aquaveo](https://www.aquaveo.com/sms) `.2dm` read/write
 - **Spatial queries** — point-in-element, k-nearest vertices, radius search at O(log n)
 - **Mesh alterations** — advancing-front element addition (`add_advancing_front_element`), coordinate moves; full mutation suite tracked in [#94](https://github.com/domattioli/CHILmesh/issues/94)
@@ -121,17 +121,17 @@ Reference workload: **EasternPacific_ENPAC2003** — 272,913 vertices · 531,680
 
 | Stage | MATLAB (Octave) ‡ | Python | C++ | Rust |
 |---|---:|---:|---:|---:|
-| Fast init (adj, no layerize) | 2.738 s | 6.454 s | 0.769 s | tbd |
-| Layerize only | 12.771 s | 5.814 s | 0.669 s | tbd |
-| Full init (adj + layerize) | 16.677 s | 12.300 s | 1.438 s | tbd |
+| Fast init (adj, no peel) | 2.738 s | 6.454 s | 0.769 s | tbd |
+| Peel only | 12.771 s | 5.814 s | 0.669 s | tbd |
+| Full init (adj + peel) | 16.677 s | 12.300 s | 1.438 s | tbd |
 | Quality (signed area) | 75 ms | 51 ms | 7 ms | tbd |
 
 Like-for-like: every backend runs the same operation on the same in-memory arrays. No fort.14 parse, signed-area quality. All resolve `n_layers = 75`; Python↔C++ layers are bit-identical ([`test_backend_equivalence.py`](tests/test_backend_equivalence.py)).
 
 - **C++ leads every stage** — full init 8.6× over Python, 11.6× over Octave.
 - **Octave builds adjacency 2.4× faster than Python** — `sparse()`-accumulated, in compiled built-ins.
-- **Python layerizes 2.2× faster than Octave** — ~26% ahead on full init overall.
-- **Rust** — skeletonization now matches Python on `n_layers`, layer-member sets (OE/IE/OV/IV), per-layer `bEdgeIDs` (full-mesh edge IDs, ascending), full-mesh `Edge2Vert`/`Vert2Edge` ordering, and signed areas — verified by the `rust-equivalence` CI job across all four fixtures incl. `block_o` ([#163](https://github.com/domattioli/CHILmesh/issues/163)); only perf timings (`tbd`) remain open.
+- **Python peels 2.2× faster than Octave** — ~26% ahead on full init overall.
+- **Rust** — the layer peel now matches Python on `n_layers`, layer-member sets (OE/IE/OV/IV), per-layer `bEdgeIDs` (full-mesh edge IDs, ascending), full-mesh `Edge2Vert`/`Vert2Edge` ordering, and signed areas — verified by the `rust-equivalence` CI job across all four fixtures incl. `block_o` ([#163](https://github.com/domattioli/CHILmesh/issues/163)); only perf timings (`tbd`) remain open.
 
 ‡ Octave 8.4, interpreter. Times are in-memory compute only — fort.14 parse and rendering excluded. Machine-dependent. Full method: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
@@ -141,12 +141,12 @@ Like-for-like: every backend runs the same operation on the same in-memory array
   <sub><em><strong>Figure 1.</strong> Scale demo on EasternPacific_ENPAC2003 (272,913 vertices · 531,680 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> emits the matched-colormap distribution beneath. Reproduce: <code>python scripts/generate_enpac_showcase.py</code>.</em></sub>
 </p>
 
-Full pipeline cost (parse · adjacency · layerize · spatial-index · quality · render — render dominates), the cross-backend layer-parity catalog (557 → 273k vertices), and mesh-quality metrics: [`docs/BENCHMARK.md`](docs/BENCHMARK.md). Layerization is distinct from medial axis / skeleton / distance — [`docs/CONCEPTS.md`](docs/CONCEPTS.md):
+Full pipeline cost (parse · adjacency · peel · spatial-index · quality · render — render dominates), the cross-backend layer-parity catalog (557 → 273k vertices), and mesh-quality metrics: [`docs/BENCHMARK.md`](docs/BENCHMARK.md). The layer peel is distinct from medial axis / skeleton / distance — [`docs/CONCEPTS.md`](docs/CONCEPTS.md):
 
 <p align="center">
   <img src="docs/gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
   <br>
-  <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh layerizes). Full write-up: <a href="docs/CONCEPTS.md">docs/CONCEPTS.md</a>. Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
+  <sub><em><strong>Figure 2.</strong> Related, not identical — distance is a scalar <em>field</em>; its ridge is the <em>medial axis</em>; the <em>skeleton</em> is a thinned discrete curve; <em>layers</em> are concentric element bands (what CHILmesh peels). Full write-up: <a href="docs/CONCEPTS.md">docs/CONCEPTS.md</a>. Reproduce: <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
 </p>
 
 ### Smoothing
@@ -167,7 +167,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 |---|---|---|
 | **Python** | Reference implementation — the default | `pip install chilmesh` |
 | **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (or `bash scripts/build_cpp.sh`) |
-| Rust | Experimental (quad-edge); skeletonization reaches full `n_layers`/layer-member/`bEdgeIDs`/edge-ordering parity with Python (`rust-equivalence` CI, all 4 fixtures incl. `block_o`), perf timings still open — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
+| Rust | Experimental (quad-edge); the layer peel (backend `skeletonize()`) reaches full `n_layers`/layer-member/`bEdgeIDs`/edge-ordering parity with Python (`rust-equivalence` CI, all 4 fixtures incl. `block_o`), perf timings still open — see [#163](https://github.com/domattioli/CHILmesh/issues/163) | source build, not recommended yet |
 | MATLAB | Original 2017 implementation, archived & unmaintained | [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) |
 
 ```python
@@ -186,7 +186,7 @@ Force a specific backend with `CHILMESH_BACKEND` (`python` or `cpp`). When unset
 
 ### Engine
 
-CHILmesh is a **graph over the mesh** — seven adjacency tables (built once) back O(1) edge lookup, O(n log n) adjacency build, O(n) layerize, and O(log n) spatial queries. The C++ half-edge backend reproduces them bit-for-bit. Full table + complexities: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+CHILmesh is a **graph over the mesh** — seven adjacency tables (built once) back O(1) edge lookup, O(n log n) adjacency build, O(n) peel, and O(log n) spatial queries. The C++ half-edge backend reproduces them bit-for-bit. Full table + complexities: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Examples
 
@@ -223,7 +223,7 @@ Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 ## Citation
 
-CHILmesh originated in MATLAB as the data structure backing a skeletonization-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc Thesis, 2017) <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf">
+CHILmesh originated in MATLAB as the data structure backing a layer-peel-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc Thesis, 2017) <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf">
     <img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis"></a>
 ```bibtex
 @software{mattioli_chilmesh,

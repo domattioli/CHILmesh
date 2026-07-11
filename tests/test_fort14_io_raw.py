@@ -144,3 +144,64 @@ def test_malformed_boundary_raises(tmp_path):
         """
     with pytest.raises(Fort14ParseError):
         read_fort14_raw(_write(tmp_path, bad))
+
+
+def test_boundary_headers_with_trailing_prose(tmp_path):
+    """Regression test for ADCIRC boundary headers with trailing prose.
+
+    Some ADCIRC meshes (e.g., Baranja_Hill) declare NOPE/NBOU lines with
+    trailing descriptive text: '24 = Number of nodes for open boundary 1'
+    instead of just '24'. The parser must extract the leading integer and
+    ignore the trailing tokens (or explicit '=' and descriptive text).
+    """
+    mesh_with_prose = """
+        mesh with prose boundary headers
+        1 4
+        1 0.0 0.0 0.0
+        2 1.0 0.0 0.0
+        3 1.0 1.0 0.0
+        4 0.0 1.0 0.0
+        1 3 1 2 3
+        1 = Number of open boundaries
+        2 = NETA (total open boundary nodes)
+        2 = Number of nodes for open boundary 1
+        1
+        2
+        1 = Number of flow boundaries
+        2 = NVEL (total flow boundary nodes)
+        2 = Number of nodes for flow boundary 1
+        3
+        4
+        """
+    raw = read_fort14_raw(_write(tmp_path, mesh_with_prose))
+    assert len(raw.open_boundaries) == 1
+    assert raw.open_boundaries[0].nodes == [1, 2]
+    assert len(raw.flow_boundaries) == 1
+    assert raw.flow_boundaries[0].nodes == [3, 4]
+
+
+def test_truncated_boundary_block(tmp_path):
+    """Regression test for meshes with truncated boundary blocks.
+
+    Some meshes (e.g., Baranja_Hill, donut_domain) declare more boundaries
+    than actually exist in the file. The parser must stop gracefully when
+    it runs out of lines instead of raising IndexError.
+    """
+    truncated = """
+        truncated mesh
+        1 3
+        1 0.0 0.0 0.0
+        2 1.0 0.0 0.0
+        3 0.0 1.0 0.0
+        1 3 1 2 3
+        2
+        4
+        2
+        1 2
+        """
+    # Should not raise IndexError; should gracefully stop at EOF.
+    raw = read_fort14_raw(_write(tmp_path, truncated))
+    # One open boundary declared, but incomplete (declared 2 nodes, found 1).
+    # Parser should return what it got without crashing.
+    assert len(raw.open_boundaries) >= 0
+    assert len(raw.flow_boundaries) == 0

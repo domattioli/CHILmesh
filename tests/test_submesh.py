@@ -157,7 +157,7 @@ class TestSubmeshValidation:
 
 
 class TestSubmeshLayerExtraction:
-    """The primary motivating use case (#138) — extract a skeletonization layer
+    """The primary motivating use case (#138) — extract a peel layer
     as a standalone mesh for differential smoothing."""
 
     def test_outer_layer_extraction(self, mesh):

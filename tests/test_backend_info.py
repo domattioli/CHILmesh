@@ -155,7 +155,7 @@ def test_stub_with_api_reports_cpp_available():
 
 
 def test_slow_path_warning_when_pure_python(monkeypatch):
-    """#202: pure-Python skeletonization of a large mesh warns once (non-silent)."""
+    """#202: pure-Python layer peel of a large mesh warns once (non-silent)."""
     if CPP_AVAILABLE or RUST_AVAILABLE:
         pytest.skip("compiled fast backend present; slow-path warning N/A")
     import chilmesh.CHILmesh  # ensure submodule imported

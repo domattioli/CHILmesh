@@ -441,7 +441,7 @@ def plot_label(mesh, ids=None, label: str = "all", ax=None
 
 def plot_layer(mesh, layers=None, cmap="viridis", ax=None
                ) -> Tuple[plt.Figure, plt.Axes]:
-    """Plot skeletonization layers as filled elements colored by layer index."""
+    """Plot peel layers as filled elements colored by layer index."""
     if layers is None:
         layers = range(mesh.n_layers)
     fig, ax = _new_ax(ax, figsize=(10, 8))

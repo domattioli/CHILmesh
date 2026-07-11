@@ -9,6 +9,10 @@ from __future__ import annotations
 import numpy as np
 from typing import Union
 
+from .geometry import edge_lengths
+
+GRAVITY = 9.81  # Gravitational acceleration (m/s^2)
+
 
 def _triangle_quality(
     v0: np.ndarray,
@@ -314,3 +318,177 @@ def element_quality(
             qualities[i] = 0.0
 
     return qualities
+
+
+def courant_number(points, edges, depths, dt, crs="cartesian", gravity=GRAVITY):
+    """Per-edge Courant number ``sqrt(g*h) * dt / dx`` (shallow-water celerity).
+
+    Parameters
+    ----------
+    points : array-like, shape (N, 2)
+        Node coordinates: (x, y) when crs="cartesian", (lon, lat) degrees
+        when crs="spherical" (dx then in geodesic metres).
+    edges : array-like of int, shape (E, 2)
+        Node-index pairs (e.g. a CHILmesh ``Edge2Vert`` adjacency).
+    depths : array-like, shape (N,)
+        Positive-down nodal depths (fort.14 convention). Edge depth h is the
+        deeper of the two endpoint depths.
+    dt : float
+        Timestep in seconds (e.g. fort.15 DTDP).
+    crs : {"cartesian", "spherical"}
+        Coordinate reference system. "cartesian": planar Euclidean in native
+        units. "spherical": haversine great-circle metres.
+    gravity : float
+        Gravitational acceleration, m/s^2. Default 9.81.
+
+    Returns
+    -------
+    ndarray, shape (E,)
+        Courant number per edge. NaN where the edge is dry (h <= 0) or
+        degenerate (dx <= 0).
+
+    Raises
+    ------
+    ValueError
+        If shapes are incompatible or dt <= 0.
+    """
+    pts = np.asarray(points, dtype=float)
+    e = np.asarray(edges, dtype=int)
+    d = np.asarray(depths, dtype=float)
+
+    # Validate shapes
+    if pts.ndim != 2 or pts.shape[1] < 2:
+        raise ValueError(f"points must be (N, >=2) array, got shape {pts.shape}")
+    if e.ndim != 2 or e.shape[1] != 2:
+        raise ValueError(f"edges must be (E, 2) array, got shape {e.shape}")
+    if d.ndim != 1:
+        raise ValueError(f"depths must be 1-D array, got shape {d.shape}")
+    if len(e) > 0 and (e.min() < 0 or e.max() >= len(d)):
+        raise ValueError(f"edge indices out of bounds: min={e.min()}, max={e.max()}, n_depths={len(d)}")
+    if dt <= 0:
+        raise ValueError(f"dt must be positive, got {dt}")
+
+    # Handle empty edges
+    if len(e) == 0:
+        return np.array([], dtype=float)
+
+    # Compute edge depth: max of the two endpoints
+    h = np.maximum(d[e[:, 0]], d[e[:, 1]])
+
+    # Compute edge lengths using edge_lengths
+    p1 = pts[e[:, 0], :2]
+    p2 = pts[e[:, 1], :2]
+    dx = np.atleast_1d(edge_lengths(p1, p2, crs=crs))
+
+    # Initialize Courant array
+    c = np.full(len(e), np.nan, dtype=float)
+
+    # Compute Courant only for wet, non-degenerate edges
+    wet = (h > 0) & (dx > 0)
+    c[wet] = np.sqrt(gravity * h[wet]) * dt / dx[wet]
+
+    return c
+
+
+def cfl_gate(points, edges, depths, dt, courant_max=1.0, crs="cartesian", gravity=GRAVITY, max_offenders=25):
+    """CFL flag (not a stability proof): which edges exceed ``courant_max``.
+
+    Parameters
+    ----------
+    points : array-like, shape (N, 2)
+        Node coordinates.
+    edges : array-like of int, shape (E, 2)
+        Edge connectivity.
+    depths : array-like, shape (N,)
+        Nodal depths.
+    dt : float
+        Timestep in seconds.
+    courant_max : float
+        Maximum allowable Courant number. Default 1.0.
+    crs : {"cartesian", "spherical"}
+        Coordinate reference system.
+    gravity : float
+        Gravitational acceleration, m/s^2.
+    max_offenders : int
+        Maximum number of offending edges to report. Default 25.
+
+    Returns
+    -------
+    dict with keys:
+        status : str
+            "pass" if all wet edges satisfy C <= courant_max, else "fail".
+        n_over : int
+            Number of edges exceeding courant_max.
+        n_wet : int
+            Number of wet (non-dry, non-degenerate) edges.
+        n_skipped : int
+            Number of dry or degenerate edges.
+        max : float
+            Maximum Courant number over wet edges (0.0 if none).
+        median : float
+            Median Courant number over wet edges (0.0 if none).
+        p95 : float
+            95th percentile Courant number over wet edges (0.0 if none).
+        offenders : list of dict
+            Worst-first (by courant), capped at max_offenders. Each dict:
+            {"edge_index": int, "nodes": [a, b], "courant": float,
+             "edge_length": float, "depth": float}
+        thresholds : dict
+            {"courant_max": courant_max}
+    """
+    pts = np.asarray(points, dtype=float)
+    e = np.asarray(edges, dtype=int)
+    d = np.asarray(depths, dtype=float)
+
+    # Compute Courant numbers
+    c = courant_number(pts, e, d, dt, crs=crs, gravity=gravity)
+
+    # Separate wet from skipped
+    wet_mask = np.isfinite(c)
+    c_wet = c[wet_mask]
+    n_wet = int(np.sum(wet_mask))
+    n_skipped = len(c) - n_wet
+
+    # Compute stats over wet edges
+    if n_wet > 0:
+        c_max = float(np.max(c_wet))
+        c_median = float(np.median(c_wet))
+        c_p95 = float(np.percentile(c_wet, 95))
+    else:
+        c_max = c_median = c_p95 = 0.0
+
+    # Find offenders
+    offender_mask = c > courant_max
+    n_over = int(np.sum(offender_mask))
+    offender_indices = np.where(offender_mask)[0]
+
+    # Sort offenders by Courant (descending)
+    offender_indices = offender_indices[np.argsort(-c[offender_indices])][:max_offenders]
+
+    # Build offender records
+    offenders = []
+    p1 = pts[e[:, 0], :2]
+    p2 = pts[e[:, 1], :2]
+    dx = np.atleast_1d(edge_lengths(p1, p2, crs=crs))
+    h = np.maximum(d[e[:, 0]], d[e[:, 1]])
+
+    for idx in offender_indices:
+        offenders.append({
+            "edge_index": int(idx),
+            "nodes": [int(e[idx, 0]), int(e[idx, 1])],
+            "courant": float(c[idx]),
+            "edge_length": float(dx[idx]),
+            "depth": float(h[idx])
+        })
+
+    return {
+        "status": "pass" if n_over == 0 else "fail",
+        "n_over": n_over,
+        "n_wet": n_wet,
+        "n_skipped": n_skipped,
+        "max": c_max,
+        "median": c_median,
+        "p95": c_p95,
+        "offenders": offenders,
+        "thresholds": {"courant_max": courant_max}
+    }

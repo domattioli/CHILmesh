@@ -30,7 +30,23 @@ from .fort14_io import (
 from .summary_io import summary, SummaryError
 from .mesh_topology import EdgeMap, quad_from_tri_pair, quads_from_tri_pairs
 from .mutations import MutableMesh
-from .quality import element_quality
+from .quality import element_quality, courant_number, cfl_gate
+from .geometry import (
+    haversine_m,
+    edge_lengths,
+    EARTH_RADIUS_M,
+    convex_hull,
+    is_antimeridian_wrapping,
+    split_antimeridian_bbox,
+    bbox_iou,
+    hausdorff_distance,
+)
+from .node_match import (
+    NodeMatch,
+    match_nodes,
+    derive_tolerance,
+    nodal_field_delta,
+)
 from . import examples
 from . import bridge
 from . import chilplotting
@@ -126,6 +142,22 @@ __all__ = [
     "SummaryError",
     # Standalone quality computation
     "element_quality",
+    "courant_number",
+    "cfl_gate",  # CFL / Courant gate
+    # Geodesic / planar geometry helpers
+    "haversine_m",
+    "edge_lengths",
+    "EARTH_RADIUS_M",
+    "convex_hull",
+    "is_antimeridian_wrapping",
+    "split_antimeridian_bbox",
+    "bbox_iou",
+    "hausdorff_distance",
+    # Cross-mesh node matching + nodal-field deltas (#239)
+    "NodeMatch",
+    "match_nodes",
+    "derive_tolerance",
+    "nodal_field_delta",
     # Backend introspection
     "backend_info",
     # Submodules

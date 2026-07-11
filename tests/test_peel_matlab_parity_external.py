@@ -1,6 +1,6 @@
-"""MATLAB-parity tests for skeletonization on external (Valence) meshes.
+"""MATLAB-parity tests for the layer peel on external (Valence) meshes.
 
-This is a sibling of ``tests/test_skeletonization_matlab_parity.py`` that pins
+This is a sibling of ``tests/test_peel_matlab_parity.py`` that pins
 expected layer counts for meshes from the external Valence catalog,
 rather than the bundled fixtures.
 
@@ -10,7 +10,7 @@ Why a separate file? Bundled-fixture parity is a fast, always-on guardrail
 the two concerns in separate files lets the fast tests stay cheap while still
 documenting the broader correctness expectation for the maintainer.
 
-The Python ``_skeletonize()`` method (see ``src/chilmesh/CHILmesh.py``) is a
+The Python ``_peel()`` method (see ``src/chilmesh/CHILmesh.py``) is a
 faithful port of the original MATLAB ``meshLayers`` function from QuADMesh+
 (``domattioli/QuADMesh-MATLAB/blob/master/00_CHILMesh_Class/@CHILmesh/CHILmesh.m``).
 For each mesh below, the Python port must produce the same ``n_layers`` value
@@ -31,7 +31,7 @@ all ten meshes. To run these tests locally:
 
    pip install valence-domains
    CHILMESH_RUN_EXTERNAL_PARITY=1 python -m pytest \\
-       tests/test_skeletonization_matlab_parity_external.py -v
+       tests/test_peel_matlab_parity_external.py -v
 
 Contributing additional reference data
 --------------------------------------
