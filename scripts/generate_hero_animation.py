@@ -533,12 +533,12 @@ def main():
     add(16, f_fem_hold)
     # Peel reveal schedule (US4): k=0 hold doubles as the FEM→Peel pause
     # (F-13: 18 f = 1.8 s, byte-identical to the FEM-hold histogram), then
-    # each layer reveals instantly and holds 8 f (0.8 s), ending on a 20 f
-    # (2 s) held full-layer view. No re-peel.
+    # each layer reveals instantly and holds 8 f (0.8 s), ending on a 50 f
+    # (5 s) held full-layer view. No re-peel.
     add(18, f_peel(0))
     for k in range(1, n_layers):
         add(8, f_peel(k))
-    add(20, f_peel(n_layers))
+    add(50, f_peel(n_layers))
 
     total = len(schedule)
 
