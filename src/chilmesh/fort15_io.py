@@ -30,6 +30,61 @@ def _first_value(line: str) -> str:
     return tokens[0]
 
 
+def _parse_deep_block(lines: list[str], im: int) -> dict:
+    """Parse the fort.15 leading scalar block after IM through REFTIM (#249).
+
+    Order (2DDI ADCIRC): [IDEN if 3D IM], NOLIBF, NOLIFA, NOLICA, NOLICAT, NWP,
+    <NWP nodal-attribute-name lines>, NCOR, NTIP, NWS, NRAMP, G, TAU0,
+    [Tau0FullDomainMin/Max if TAU0 == -5.0], DTDP, STATIM, REFTIM.
+
+    Best-effort: on any structural surprise raises Fort15ParseError; the caller
+    swallows it and leaves the deep fields None so the header parse never breaks.
+    """
+    idx = 8  # first line after the 8 unconditional header lines (0-based)
+    if im in (20, 21, 30, 31):
+        idx += 1  # 3D baroclinic: skip the IDEN line
+
+    def _int(i: int, name: str) -> int:
+        try:
+            return int(_first_value(lines[i]))
+        except (ValueError, IndexError) as e:
+            raise Fort15ParseError(f"fort.15 deep field {name} (line {i + 1}): {e}")
+
+    def _float(i: int, name: str) -> float:
+        try:
+            return float(_first_value(lines[i]))
+        except (ValueError, IndexError) as e:
+            raise Fort15ParseError(f"fort.15 deep field {name} (line {i + 1}): {e}")
+
+    out: dict = {}
+    out["nolibf"] = _int(idx, "NOLIBF"); idx += 1
+    out["nolifa"] = _int(idx, "NOLIFA"); idx += 1
+    out["nolica"] = _int(idx, "NOLICA"); idx += 1
+    out["nolicat"] = _int(idx, "NOLICAT"); idx += 1
+    nwp = _int(idx, "NWP"); idx += 1
+    out["nwp"] = nwp
+    names: list[str] = []
+    for _ in range(nwp):
+        if idx >= len(lines):
+            raise Fort15ParseError("fort.15 deep: NWP attribute-name block truncated")
+        names.append(lines[idx].split("!", 1)[0].strip())
+        idx += 1
+    out["nodal_attribute_names"] = names
+    out["ncor"] = _int(idx, "NCOR"); idx += 1
+    out["ntip"] = _int(idx, "NTIP"); idx += 1
+    out["nws"] = _int(idx, "NWS"); idx += 1
+    out["nramp"] = _int(idx, "NRAMP"); idx += 1
+    out["g"] = _float(idx, "G"); idx += 1
+    tau0 = _float(idx, "TAU0"); idx += 1
+    out["tau0"] = tau0
+    if tau0 == -5.0:
+        idx += 2  # Tau0FullDomainMin / Tau0FullDomainMax
+    out["dtdp"] = _float(idx, "DTDP"); idx += 1
+    out["statim"] = _float(idx, "STATIM"); idx += 1
+    out["reftim"] = _float(idx, "REFTIM"); idx += 1
+    return out
+
+
 @dataclass
 class Fort15:
     """Container for an ADCIRC fort.15 file.
@@ -47,9 +102,25 @@ class Fort15:
     ics: int
     im: int
     raw_text: str        # exact original file content (lossless write source)
+    # --- opt-in deep-parse fields (populated only when read_fort15(deep=True); None otherwise (#249) ---
+    nolibf: int | None = None
+    nolifa: int | None = None
+    nolica: int | None = None
+    nolicat: int | None = None
+    nwp: int | None = None
+    nodal_attribute_names: list[str] | None = None
+    ncor: int | None = None
+    ntip: int | None = None
+    nws: int | None = None
+    nramp: int | None = None
+    g: float | None = None
+    tau0: float | None = None
+    dtdp: float | None = None
+    statim: float | None = None
+    reftim: float | None = None
 
 
-def read_fort15(filename: str | Path) -> Fort15:
+def read_fort15(filename: str | Path, deep: bool = False) -> Fort15:
     """Read an ADCIRC fort.15 file, byte-preserving.
 
     Parses only the leading unconditional header (RUNDES, RUNID, NFOVER, NABOUT,
@@ -58,6 +129,10 @@ def read_fort15(filename: str | Path) -> Fort15:
 
     Parameters:
         filename: Path to the fort.15 file.
+        deep: When True, additionally parse the leading scalar block through
+            REFTIM (NOLIBF..REFTIM, incl. NWP nodal-attribute names) into the
+            optional Fort15 fields. Best-effort; raw_text and the byte-preserving
+            write contract are unaffected. Default False (#249).
 
     Returns:
         Fort15 object with extracted header fields and the raw text.
@@ -92,6 +167,18 @@ def read_fort15(filename: str | Path) -> Fort15:
 
     nfover, nabout, nscreen, ihot, ics, im = values
 
+    deep_fields: dict = {}
+    if deep:
+        import warnings
+        try:
+            deep_fields = _parse_deep_block(lines, im)
+        except Fort15ParseError as e:
+            warnings.warn(
+                f"fort.15 deep parse failed ({e}); leaving deep fields None",
+                stacklevel=2,
+            )
+            deep_fields = {}
+
     return Fort15(
         rundes=rundes,
         runid=runid,
@@ -102,6 +189,7 @@ def read_fort15(filename: str | Path) -> Fort15:
         ics=ics,
         im=im,
         raw_text=raw_text,
+        **deep_fields,
     )
 
 
