@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from chilmesh import CHILmesh, examples
@@ -429,4 +430,177 @@ class TestSummaryFort15:
         )
         assert result['runid'] == 'test01', (
             f"Expected runid stripped of comment, got {result['runid']}"
+        )
+
+
+class TestSummaryNpy:
+    """Test summary() on .npy (NumPy array) format files."""
+
+    def test_npy_basic_shape_dtype(self, tmp_path):
+        """Npy file summary reads shape and dtype without loading array body."""
+        path = tmp_path / "array.npy"
+        np.save(path, np.zeros((3, 5), dtype=np.float64))
+
+        result = summary(path)
+
+        assert result['format'] == 'npy', (
+            f"Expected format='npy', got {result['format']}"
+        )
+        assert result['shape'] == [3, 5], (
+            f"Expected shape=[3, 5], got {result['shape']}"
+        )
+        assert result['dtype'] == 'float64', (
+            f"Expected dtype='float64', got {result['dtype']}"
+        )
+        assert result['fortran_order'] == False, (
+            f"Expected fortran_order=False, got {result['fortran_order']}"
+        )
+        assert result['file_bytes'] > 0, (
+            f"Expected file_bytes>0, got {result['file_bytes']}"
+        )
+        assert str(path) in result['path'], (
+            f"Expected path to contain {path}, got {result['path']}"
+        )
+
+    def test_npy_int32_dtype(self, tmp_path):
+        """Npy file with int32 dtype is read correctly."""
+        path = tmp_path / "int_array.npy"
+        np.save(path, np.arange(10, dtype=np.int32))
+
+        result = summary(path)
+
+        assert result['format'] == 'npy', (
+            f"Expected format='npy', got {result['format']}"
+        )
+        assert result['shape'] == [10], (
+            f"Expected shape=[10], got {result['shape']}"
+        )
+        assert result['dtype'] == 'int32', (
+            f"Expected dtype='int32', got {result['dtype']}"
+        )
+
+    def test_npy_3d_array(self, tmp_path):
+        """Npy file with 3D shape is read correctly."""
+        path = tmp_path / "array_3d.npy"
+        np.save(path, np.ones((2, 3, 4), dtype=np.float32))
+
+        result = summary(path)
+
+        assert result['shape'] == [2, 3, 4], (
+            f"Expected shape=[2, 3, 4], got {result['shape']}"
+        )
+        assert result['dtype'] == 'float32', (
+            f"Expected dtype='float32', got {result['dtype']}"
+        )
+
+    def test_npy_malformed_header_error(self, tmp_path):
+        """Npy file with corrupted header raises SummaryError."""
+        path = tmp_path / "bad_array.npy"
+        # Write truncated/invalid npy magic
+        path.write_bytes(b'\x93NUMPY\x01')
+
+        with pytest.raises(SummaryError) as exc_info:
+            summary(path)
+
+        assert "cannot read .npy header" in str(exc_info.value).lower(), (
+            f"SummaryError should mention 'cannot read .npy header', got: {exc_info.value}"
+        )
+
+
+class TestSummaryNpz:
+    """Test summary() on .npz (NumPy compressed archive) format files."""
+
+    def test_npz_multiple_arrays(self, tmp_path):
+        """Npz archive with multiple arrays reads all member headers."""
+        path = tmp_path / "archive.npz"
+        np.savez(
+            path,
+            foo=np.zeros((2,), dtype=np.int32),
+            bar=np.ones((4, 4), dtype=np.float32)
+        )
+
+        result = summary(path)
+
+        assert result['format'] == 'npz', (
+            f"Expected format='npz', got {result['format']}"
+        )
+        assert result['n_members'] == 2, (
+            f"Expected n_members=2, got {result['n_members']}"
+        )
+        assert 'members' in result, "Expected 'members' key in result"
+        assert sorted(result['members']) == ['bar', 'foo'], (
+            f"Expected members=['bar', 'foo'], got {result['members']}"
+        )
+
+        # Check individual array headers
+        assert 'arrays' in result, "Expected 'arrays' key in result"
+        assert result['arrays']['foo']['shape'] == [2], (
+            f"Expected foo shape=[2], got {result['arrays']['foo']['shape']}"
+        )
+        assert result['arrays']['foo']['dtype'] == 'int32', (
+            f"Expected foo dtype='int32', got {result['arrays']['foo']['dtype']}"
+        )
+        assert result['arrays']['bar']['shape'] == [4, 4], (
+            f"Expected bar shape=[4, 4], got {result['arrays']['bar']['shape']}"
+        )
+        assert result['arrays']['bar']['dtype'] == 'float32', (
+            f"Expected bar dtype='float32', got {result['arrays']['bar']['dtype']}"
+        )
+        assert result['file_bytes'] > 0, (
+            f"Expected file_bytes>0, got {result['file_bytes']}"
+        )
+        assert str(path) in result['path'], (
+            f"Expected path to contain {path}, got {result['path']}"
+        )
+
+    def test_npz_single_array(self, tmp_path):
+        """Npz archive with one array reads correctly."""
+        path = tmp_path / "single.npz"
+        np.savez(path, data=np.arange(20, dtype=np.int64).reshape(4, 5))
+
+        result = summary(path)
+
+        assert result['format'] == 'npz', (
+            f"Expected format='npz', got {result['format']}"
+        )
+        assert result['n_members'] == 1, (
+            f"Expected n_members=1, got {result['n_members']}"
+        )
+        assert result['members'] == ['data'], (
+            f"Expected members=['data'], got {result['members']}"
+        )
+        assert result['arrays']['data']['shape'] == [4, 5], (
+            f"Expected shape=[4, 5], got {result['arrays']['data']['shape']}"
+        )
+        assert result['arrays']['data']['dtype'] == 'int64', (
+            f"Expected dtype='int64', got {result['arrays']['data']['dtype']}"
+        )
+
+    def test_npz_sorted_member_order(self, tmp_path):
+        """Npz members list is sorted alphabetically."""
+        path = tmp_path / "many.npz"
+        np.savez(
+            path,
+            zebra=np.array([1]),
+            apple=np.array([2]),
+            monkey=np.array([3])
+        )
+
+        result = summary(path)
+
+        assert result['members'] == ['apple', 'monkey', 'zebra'], (
+            f"Expected alphabetically sorted members, got {result['members']}"
+        )
+
+    def test_npz_corrupted_archive_error(self, tmp_path):
+        """Npz with corrupted zip structure raises SummaryError."""
+        path = tmp_path / "bad_archive.npz"
+        # Write truncated zip header
+        path.write_bytes(b'PK\x03\x04')
+
+        with pytest.raises(SummaryError) as exc_info:
+            summary(path)
+
+        assert "cannot read .npz header" in str(exc_info.value).lower(), (
+            f"SummaryError should mention 'cannot read .npz header', got: {exc_info.value}"
         )
