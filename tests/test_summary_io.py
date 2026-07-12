@@ -604,3 +604,25 @@ class TestSummaryNpz:
         assert "cannot read .npz header" in str(exc_info.value).lower(), (
             f"SummaryError should mention 'cannot read .npz header', got: {exc_info.value}"
         )
+
+
+class TestSummaryGmsh:
+    """Test summary() on Gmsh .msh format files."""
+
+    def test_msh_sample_shallow(self):
+        """Gmsh .msh shallow summary of sample.msh: streaming header read."""
+        path = Path(__file__).parent / "fixtures" / "gmsh" / "sample.msh"
+        result = summary(path)
+        assert result['format'] == 'gmsh', f"Expected format='gmsh', got {result['format']}"
+        assert result['gmsh_version'] == '2.2', (
+            f"Expected gmsh_version='2.2', got {result.get('gmsh_version')}"
+        )
+        assert result['n_nodes'] == 4, f"Expected n_nodes=4, got {result.get('n_nodes')}"
+        assert result['n_elems'] == 2, f"Expected n_elems=2, got {result.get('n_elems')}"
+
+    def test_msh_missing_meshformat_error(self, tmp_path):
+        """A .msh with no $MeshFormat section raises SummaryError."""
+        bad = tmp_path / "bad.msh"
+        bad.write_text("$Nodes\n1\n1 0 0 0\n$EndNodes\n")
+        with pytest.raises(SummaryError):
+            summary(bad)

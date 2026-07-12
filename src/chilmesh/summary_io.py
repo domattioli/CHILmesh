@@ -1,6 +1,6 @@
 """Lazy header-only mesh metadata reading for CHILmesh.
 
-Supports fast metadata extraction from mesh files (fort.14, 2dm, fort.13, fort.15, .npy, .npz) without
+Supports fast metadata extraction from mesh files (fort.14, 2dm, fort.13, fort.15, .msh, .npy, .npz) without
 loading full mesh data. For CHILmesh objects, returns mesh properties directly.
 """
 from __future__ import annotations
@@ -110,6 +110,8 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         fmt = 'npy'
     elif suffix == '.npz':
         fmt = 'npz'
+    elif suffix == '.msh':
+        fmt = 'gmsh'
     else:
         raise SummaryError(f"Unknown mesh format: {suffix}")
 
@@ -138,6 +140,8 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         _read_npy_header(path, result)
     elif fmt == 'npz':
         _read_npz_header(path, result)
+    elif fmt == 'gmsh':
+        _read_msh_header(path, result)
 
     # If deep=True, load the full mesh for element_type and bbox
     if deep:
@@ -315,6 +319,44 @@ def _read_npz_header(path: Path, result: dict) -> None:
         result['arrays'] = arrays
     except Exception as e:
         raise SummaryError(f"Cannot read .npz header {path}: {e}")
+
+
+def _read_msh_header(path: Path, result: dict) -> None:
+    """Read a Gmsh .msh header (version + node/element counts) by streaming.
+
+    Scans the file line-by-line without allocating node/element arrays (same
+    streaming, no-array approach as the .2dm path). Supports Gmsh ASCII
+    versions 2.2 and 4.1. In v2.2 the count line after ``$Nodes`` /
+    ``$Elements`` is a single integer; in v4.1 it is
+    ``numBlocks numEntities minTag maxTag`` and the entity count is the second
+    token. The scan stops once the element count is read, so element bodies are
+    never traversed.
+    """
+    version = None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                s = line.strip()
+                if s == '$MeshFormat':
+                    fmt_line = f.readline().split()
+                    if fmt_line:
+                        version = fmt_line[0]
+                        result['gmsh_version'] = version
+                elif s == '$Nodes':
+                    toks = f.readline().split()
+                    if toks:
+                        idx = 1 if (version and version.startswith('4')) else 0
+                        result['n_nodes'] = int(toks[idx])
+                elif s == '$Elements':
+                    toks = f.readline().split()
+                    if toks:
+                        idx = 1 if (version and version.startswith('4')) else 0
+                        result['n_elems'] = int(toks[idx])
+                    break
+    except (IOError, ValueError, IndexError) as e:
+        raise SummaryError(f"Cannot read .msh header {path}: {e}")
+    if version is None:
+        raise SummaryError(f"gmsh .msh header malformed: no $MeshFormat in {path}")
 
 
 __all__ = ["summary", "SummaryError"]
