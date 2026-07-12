@@ -26,9 +26,7 @@
   <a href="https://github.com/domattioli/CHILmesh/issues">
     <img src="https://img.shields.io/github/issues/domattioli/CHILmesh.svg?color=orange" alt="Open issues">
   </a>
-  <a href="https://doi.org/10.5281/zenodo.20263854">
-    <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.20263854.svg" alt="DOI">
-  </a>
+  <a href="https://doi.org/10.5281/zenodo.21313196"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21313196.svg" alt="DOI"></a>
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License">
   </a>
