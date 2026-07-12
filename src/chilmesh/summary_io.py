@@ -1,11 +1,18 @@
 """Lazy header-only mesh metadata reading for CHILmesh.
 
-Supports fast metadata extraction from mesh files (fort.14, 2dm, fort.13, fort.15, .msh, .npy, .npz) without
+Supports fast metadata extraction from mesh files (fort.14, 2dm, fort.13, fort.15, .msh, .npy, .npz,
+generic fort.NNN sidecars) without
 loading full mesh data. For CHILmesh objects, returns mesh properties directly.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+# Any file literally named fort.<digits> (fort.22/.24 forcing, fort.19/.20/.61/.63
+# output, …) with no dedicated reader. Specific suffix branches (.14/.13/.15) run
+# first, so only unhandled fort.NNN sidecars fall through to the generic path.
+_FORT_GENERIC_RE = re.compile(r'^fort\.\d+$')
 
 
 class SummaryError(Exception):
@@ -112,6 +119,8 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         fmt = 'npz'
     elif suffix == '.msh':
         fmt = 'gmsh'
+    elif _FORT_GENERIC_RE.match(path.name.lower()):
+        fmt = 'fort_generic'
     else:
         raise SummaryError(f"Unknown mesh format: {suffix}")
 
@@ -142,6 +151,8 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         _read_npz_header(path, result)
     elif fmt == 'gmsh':
         _read_msh_header(path, result)
+    elif fmt == 'fort_generic':
+        _read_fort_generic_header(path, result)
 
     # If deep=True, load the full mesh for element_type and bbox
     if deep:
@@ -357,6 +368,28 @@ def _read_msh_header(path: Path, result: dict) -> None:
         raise SummaryError(f"Cannot read .msh header {path}: {e}")
     if version is None:
         raise SummaryError(f"gmsh .msh header malformed: no $MeshFormat in {path}")
+
+
+def _read_fort_generic_header(path: Path, result: dict) -> None:
+    """Read a generic fort.NNN sidecar's first line only (fully lazy).
+
+    ADCIRC emits many numbered fort.NNN files with no dedicated reader
+    (forcing: fort.22/.24; output: fort.19/.20/.61/.63; …). The
+    ``mesh_read_guard`` PreToolUse hook reroutes ALL ``fort.<digits>`` reads to
+    ``chilmesh summary``, so summary() must resolve every one to at least
+    minimal metadata rather than raising ``Unknown mesh format``. Reads only
+    the first line — never the (potentially multi-GB) body — mirroring the
+    fort.15 lazy approach; ``fort_number`` carries the numeric suffix so the
+    caller can tell which sidecar it is.
+    """
+    result['fort_number'] = path.suffix.lstrip('.')
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            first_line = f.readline().strip()
+        if first_line:
+            result['description'] = first_line
+    except OSError as e:
+        raise SummaryError(f"Cannot read fort file {path}: {e}")
 
 
 __all__ = ["summary", "SummaryError"]

@@ -141,6 +141,45 @@ class TestSummary2dm:
         assert result['file_bytes'] > 0, f"Expected file_bytes>0, got {result['file_bytes']}"
 
 
+class TestSummaryFortGeneric:
+    """Generic fort.NNN sidecars (#201): guard reroutes every fort.<digits>
+    to `chilmesh summary`, so summary() must resolve them, not raise."""
+
+    def test_fort_forcing_sidecar(self, tmp_path):
+        """fort.22 (forcing) resolves to fort_generic metadata, not Unknown-format."""
+        f = tmp_path / "fort.22"
+        f.write_text("test forcing file\n100 3\n1 0.5 0.5\n")
+        result = summary(f)
+        assert result['format'] == 'fort_generic'
+        assert result['fort_number'] == '22'
+        assert result['description'] == 'test forcing file'
+        assert result['file_bytes'] > 0
+
+    def test_fort_output_sidecar(self, tmp_path):
+        """fort.63 (output) also resolves via the generic path."""
+        f = tmp_path / "fort.63"
+        f.write_text("! elevation output\n")
+        result = summary(f)
+        assert result['format'] == 'fort_generic'
+        assert result['fort_number'] == '63'
+
+    def test_specific_fort_reader_wins(self, tmp_path):
+        """A file named fort.14 still routes to the fort14 reader, not generic."""
+        f = tmp_path / "fort.14"
+        f.write_text("grid\n2 4\n")
+        result = summary(f)
+        assert result['format'] == 'fort14'
+        assert result['n_elems'] == 2 and result['n_nodes'] == 4
+
+    def test_empty_fort_generic_no_description(self, tmp_path):
+        """Empty first line → no description key, still resolves."""
+        f = tmp_path / "fort.19"
+        f.write_text("")
+        result = summary(f)
+        assert result['format'] == 'fort_generic'
+        assert 'description' not in result
+
+
 class TestSummaryErrors:
     """Test error cases for summary()."""
 
