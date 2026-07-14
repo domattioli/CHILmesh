@@ -2,7 +2,10 @@
 
 **Date:** 2026-07-14
 **Author:** Claude Code (routine session)
-**Status:** Evaluation — evidence + recommendation, no backend code changes
+**Backend status:** ❄️ **FROZEN** (2026-07-14, operator-directed) — kept and
+output-equivalent, but not developed further. See `src/chilmesh_core/STATUS.md`.
+**Status:** Evaluation — evidence + recommendation; the O(1) query fix was applied, the
+backend is otherwise frozen
 **Question:** Does a Rust implementation make sense for CHILmesh over the C++ or
 Python backends *in any regard*? And specifically: **could Rust replace Python in
 any functionality to improve performance?**
@@ -219,13 +222,15 @@ Rationale:
 
 **Concretely:**
 
-- Keep the Rust backend **clearly labeled experimental** (it already is). The
-  README/`BENCHMARK.md` updates that accompany this evaluation replace the stale
-  `tbd`/"incomplete" language with the measured result and a pointer here.
-- If maintenance cost of the second compiled backend is a concern, a **freeze or
-  deprecation** of `chilmesh_core` is a reasonable operator call — it removes a
-  CI job and a wheel-build path for a backend with no performance niche over C++.
-  (Not actioned here; flagged for operator sign-off.)
+- **The Rust backend is now FROZEN** (operator-directed, 2026-07-14) — kept and
+  output-equivalent, but not developed further and not kept in lockstep as the
+  Python API grows. Status banner: `src/chilmesh_core/STATUS.md`. The crate, its
+  `rust-equivalence` CI job, the equivalence tests, and the benchmark data all
+  stay; no new feature work lands on it. This is the "freeze" option below,
+  chosen over outright deprecation so the reference/parity value is retained.
+- **The acceleration path forward is prebuilt C++ binary wheels**, not a second
+  backend — so a plain `pip install` gives C++ speed with no toolchain. Plan:
+  [`docs/dev/PREBUILT_WHEELS_PLAN.md`](dev/PREBUILT_WHEELS_PLAN.md) (#229).
 - The one worthwhile, well-scoped fix — **cache `Vert2Edge` in `RustMesh`** so
   `get_vertex_edges` is O(1) instead of rebuilding the edge list per call (§4.2)
   — **has been applied in this session.** Rust queries now match C++/Python. This

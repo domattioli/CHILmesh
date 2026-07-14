@@ -4,6 +4,15 @@
 **Date:** 2026-05-22  
 **Status:** FINAL (pending benchmark data)
 
+> **UPDATE 2026-07-14 — superseded outcome.** The Rust/quad-edge port described
+> here was built (`src/chilmesh_core`) and has since been measured and **FROZEN**:
+> it is output-equivalent to Python but ~2–5× slower than the C++ backend on full
+> init, with no performance niche over it. The "pending benchmark data" is now
+> filled — see [`docs/RUST_EVALUATION.md`](../docs/RUST_EVALUATION.md) and
+> `src/chilmesh_core/STATUS.md`. C++ is the acceleration path; the forward plan is
+> prebuilt C++ wheels ([`docs/dev/PREBUILT_WHEELS_PLAN.md`](../docs/dev/PREBUILT_WHEELS_PLAN.md)),
+> not further Rust work. This decision record is retained as history.
+
 ---
 
 ## Executive Summary
