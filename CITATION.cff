@@ -30,7 +30,7 @@ keywords:
   - python
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.20263854
+    value: 10.5281/zenodo.21199161
     description: Zenodo DOI (first archive — update with concept DOI once a second release lands)
 preferred-citation:
   type: thesis
