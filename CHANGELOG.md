@@ -6,6 +6,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [2.0.1] — 2026-07-14
+
 ### Fixed
 - **Rust backend `get_vertex_edges` was O(_n_) per call** — it rebuilt the full canonical edge list on every call (100–1800× slower than C++/Python, growing with mesh size). `build_adjacencies` now caches the vertex→edge index once (built from the same `to_edge2vert` source, so output is bit-identical); queries are O(1) (Block_O 954 μs → 0.32 μs). All 76 `test_backend_equivalence.py` cases still pass.
 
