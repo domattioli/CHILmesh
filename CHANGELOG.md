@@ -22,9 +22,9 @@ _Nothing yet._
 
 ## [1.4.0] — 2026-07-11
 
-**Feature release with breaking API renames (shipped as 1.4.0).** The #187 lexicon ratification renames public API symbols with no compatibility aliases (pre-adoption window; no known consumers) — technically breaking under strict SemVer, but released as a minor bump given no known downstream consumers. Also consolidates the Valence→CHILmesh upstreaming (geometry + CFL gate) and fort.14 robustness fixes. (Note: this entry was drafted as a prospective "2.0.0"; it was published as **v1.4.0** on 2026-07-11 — PyPI/GitHub/Zenodo — and the in-repo version metadata is reconciled to match.)
+**Minor release.** The #187 lexicon ratification renames public API symbols with no compatibility aliases. These renames occur during the pre-adoption window with **no known downstream consumers**, so the release is versioned as a minor bump (1.3.0 → 1.4.0) rather than a major one; anyone pinning the old names should pin `chilmesh<1.4` and migrate at their convenience. Also consolidates the Valence→CHILmesh upstreaming (geometry + CFL gate) and fort.14 robustness fixes, and ships the reworked README hero animation.
 
-### Breaking — #187 layer-lexicon ratification
+### Changed — #187 layer-lexicon ratification (API renames, no compat aliases)
 
 Operator-ratified naming (math frame: a stored ring is a discrete *level set*; the construction is *onion peeling*; the front-collision locus is the *medial axis* — distinct constructs, distinct names):
 
@@ -39,7 +39,7 @@ Operator-ratified naming (math frame: a stored ring is a discrete *level set*; t
 - `skeletonize` is now **reserved** for the future medial-axis operation (#223). It survives only as the compiled cpp/rust backend extension-API method name (cross-language rename deferred to a backend release cycle).
 - Decision record: `docs/LEXICON_PROPOSAL.md`; concept taxonomy: `docs/CONCEPTS.md`.
 
-### Breaking — `smooth_mesh` signature fix (#251)
+### Fixed — `smooth_mesh` signature (#251)
 
 - `smooth_mesh(method, acknowledge_change, *kwargs, sdf=None, size_fn=None)` → `smooth_mesh(method, acknowledge_change=False, *, sdf=None, size_fn=None, **kwargs)`. The single-star `*kwargs` collected extra **positional** args and forwarded them positionally, so keyword smoother options (`n_iter`, `omega`, `freeze_quad_nodes`) raised `TypeError`. Keyword options now pass through to `direct_smoother` / `angle_based_smoother`; the undocumented positional-splat call shape is removed.
 
@@ -56,7 +56,7 @@ Operator-ratified naming (math frame: a stored ring is a discrete *level set*; t
 
 ### Documentation
 
-- README hero animation regenerated: opens and closes on the `peel_layers()` decomposition (animated inward reveal), crossfades to element quality, and **interpolates node positions through the ADMESH truss solve and FEM smoothing** (#198).
+- **README hero animation reworked** (#179, spec 002): the ADMESH-truss stage now plays back **actual per-iteration solver snapshots** (via an additive, default-off `distmesh2d_warmstart(snapshot_retriangulate=...)` capture hook) instead of interpolated positions, with equal-motion pacing so the relaxation reads at a uniform speed. The peel stage reveals `peel_layers()` layers one at a time from the boundary inward, recoloring each layer while the quality histogram converts to a matching stacked composition; the histogram carries color-keyed Median (green) and Mean (red) reference lines. Regenerated at 2.2 MB (256-colour re-encode).
 
 ## [1.3.0] — 2026-07-04
 
