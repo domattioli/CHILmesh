@@ -8,7 +8,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
-## [2.0.1] — 2026-07-14
+## [1.4.1] — 2026-07-14
 
 ### Fixed
 - **Rust backend `get_vertex_edges` was O(_n_) per call** — it rebuilt the full canonical edge list on every call (100–1800× slower than C++/Python, growing with mesh size). `build_adjacencies` now caches the vertex→edge index once (built from the same `to_edge2vert` source, so output is bit-identical); queries are O(1) (Block_O 954 μs → 0.32 μs). All 76 `test_backend_equivalence.py` cases still pass.
@@ -20,9 +20,9 @@ _Nothing yet._
 - **`docs/RUST_EVALUATION.md`** — first like-for-like measured comparison of the Python / C++ / Rust backends, the "could Rust replace Python as the default?" analysis, and the freeze recommendation.
 - **`docs/dev/PREBUILT_WHEELS_PLAN.md`** — phased plan to publish prebuilt C++ binary wheels to PyPI (`pip install chilmesh[cpp]`) so the C++ speedup needs no user toolchain (#229). README "Backends" now documents the selection order (C++ → Rust → Python) and opt-in reality (both compiled backends are source builds; neither is lighter).
 
-## [2.0.0] — 2026-07-10
+## [1.4.0] — 2026-07-11
 
-**Major release.** The #187 lexicon ratification renames public API symbols with no compatibility aliases (pre-adoption window; no known consumers), which is a breaking change under SemVer. Also consolidates the Valence→CHILmesh upstreaming (geometry + CFL gate) and fort.14 robustness fixes.
+**Feature release with breaking API renames (shipped as 1.4.0).** The #187 lexicon ratification renames public API symbols with no compatibility aliases (pre-adoption window; no known consumers) — technically breaking under strict SemVer, but released as a minor bump given no known downstream consumers. Also consolidates the Valence→CHILmesh upstreaming (geometry + CFL gate) and fort.14 robustness fixes. (Note: this entry was drafted as a prospective "2.0.0"; it was published as **v1.4.0** on 2026-07-11 — PyPI/GitHub/Zenodo — and the in-repo version metadata is reconciled to match.)
 
 ### Breaking — #187 layer-lexicon ratification
 

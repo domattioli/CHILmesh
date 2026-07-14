@@ -58,7 +58,7 @@ Revisit only if Model A's two-package version-sync proves painful.
 ### Phase 0 — decide + pin (design, no CI yet)
 - Ratify Model A.
 - Define the **version-compatibility contract** between `chilmesh` and `chilmesh-cpp`
-  (they version independently today: `2.0.0` vs `0.6.0.dev0`). Pin a compatible range
+  (they version independently today: `chilmesh` 1.4.x vs `chilmesh-cpp` `0.6.0.dev0`). Pin a compatible range
   in the extra, e.g. `chilmesh[cpp]` → `chilmesh-cpp>=0.6,<0.7`, and bump them together
   on any extension-API change. Record the contract in `CONTRIBUTING.md`.
 - Graduate `chilmesh-cpp` off `.dev0` to a real release version (e.g. `0.6.0`).
