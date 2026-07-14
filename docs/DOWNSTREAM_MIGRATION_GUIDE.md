@@ -40,7 +40,12 @@ On WNAT_Hagen (52,774 verts · 98,365 elements):
 - C++ skeletonization in isolation: **0.033 s vs Python 2.20 s (66×)**
 
 Force a specific backend with the `CHILMESH_BACKEND` environment variable
-(`python`, `cpp`, or `rust`).
+(`python`, `cpp`, or `rust`). When unset, the fastest available is auto-selected
+(order: C++ → Rust → Python).
+
+> **Downstream note:** the **Rust** backend is **frozen** — kept and
+> output-equivalent, but not developed further; build **C++** for acceleration.
+> See [`RUST_EVALUATION.md`](RUST_EVALUATION.md).
 
 ### New Public Surface (cumulative since v0.4.1)
 - `MeshAdapterForMADMESHR`, `MeshAdapterForADMESH`, `MeshAdapterForADMESHDomains` re-exported at package root.

@@ -6,7 +6,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+- **Rust backend `get_vertex_edges` was O(_n_) per call** — it rebuilt the full canonical edge list on every call (100–1800× slower than C++/Python, growing with mesh size). `build_adjacencies` now caches the vertex→edge index once (built from the same `to_edge2vert` source, so output is bit-identical); queries are O(1) (Block_O 954 μs → 0.32 μs). All 76 `test_backend_equivalence.py` cases still pass.
+
+### Changed
+- **Rust backend (`chilmesh_core`) is now FROZEN** — kept and output-equivalent to Python (layer/skeletonization parity reached, #163 closed), but **not developed further** and not the recommended accelerator. A measured cross-backend evaluation found it ~2–5× slower than C++ on full init with no performance niche over it; C++ remains the acceleration path. Supersedes the earlier "Rust skeletonization is incomplete" limitation. Status banner: `src/chilmesh_core/STATUS.md`.
+
+### Docs
+- **`docs/RUST_EVALUATION.md`** — first like-for-like measured comparison of the Python / C++ / Rust backends, the "could Rust replace Python as the default?" analysis, and the freeze recommendation.
+- **`docs/dev/PREBUILT_WHEELS_PLAN.md`** — phased plan to publish prebuilt C++ binary wheels to PyPI (`pip install chilmesh[cpp]`) so the C++ speedup needs no user toolchain (#229). README "Backends" now documents the selection order (C++ → Rust → Python) and opt-in reality (both compiled backends are source builds; neither is lighter).
 
 ## [2.0.0] — 2026-07-10
 

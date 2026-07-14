@@ -3,6 +3,12 @@
 This module wraps the compiled chilmesh_core extension (PyO3/maturin).
 It provides the same logical interface as the C++ backend wrapper.
 
+STATUS: FROZEN (2026-07-14). This backend is kept and output-equivalent to
+Python, but is not developed further and is not the recommended accelerator —
+it is measured ~2-5x slower than the C++ backend on full init with no
+performance niche over it. Use the C++ backend for speed. See
+``docs/RUST_EVALUATION.md`` and ``src/chilmesh_core/STATUS.md``.
+
 Usage::
 
     from chilmesh.backends.rust_backend import RUST_AVAILABLE, full_init

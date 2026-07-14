@@ -73,10 +73,12 @@ machine-dependent.
 > — the vertex→edge index is cached in `build_adjacencies`, so queries are O(1)
 > (Block_O 954 μs → 0.32 μs, on par with C++/Python, 76/76 equivalence tests
 > still pass). C++ remains the acceleration path; even with queries fixed, Rust
-> earns no perf niche over C++ on the hot path. Full measured tables (incl. the
-> before/after query column), methodology, the "could Rust replace Python
-> anywhere?" analysis, and the default-backend / opt-in discussion:
-> [`RUST_EVALUATION.md`](RUST_EVALUATION.md).
+> earns no perf niche over C++ on the hot path. The backend is now **frozen**
+> (kept + output-equivalent, not developed further — `src/chilmesh_core/STATUS.md`).
+> Full measured tables (incl. the before/after query column), methodology, the
+> "could Rust replace Python anywhere?" analysis, and the default-backend / opt-in
+> discussion: [`RUST_EVALUATION.md`](RUST_EVALUATION.md). The path to zero-opt-in
+> speed is prebuilt **C++** wheels: [`dev/PREBUILT_WHEELS_PLAN.md`](dev/PREBUILT_WHEELS_PLAN.md).
 
 ---
 
