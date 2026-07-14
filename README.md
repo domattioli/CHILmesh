@@ -48,10 +48,10 @@
 
 ## Status & Roadmap
 
-**Current status (June 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; cross-backend equivalence tests across C++ and Rust; fort.14 + .2dm + fort.13 I/O; mixed-element support; full mesh-mutation API (split/swap/merge/collapse, [#94](https://github.com/domattioli/CHILmesh/issues/94)); lazy header-only `summary()`.
+**Current status (July 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; cross-backend equivalence tests across C++ and Rust; fort.14 + .2dm + fort.13 I/O; mixed-element support; full mesh-mutation API (split/swap/merge/collapse, [#94](https://github.com/domattioli/CHILmesh/issues/94)); lazy header-only `summary()`.
 
-- **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust layer-peel completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
-- **Next:** performance optimization; parallelization; conda-forge packaging; mkdocs API site; native `.chil` file format
+- **Now:** Publish pre-built binary **C++** wheels to PyPI — `pip install chilmesh[cpp]`, no toolchain ([#256](https://github.com/domattioli/CHILmesh/issues/256)).
+- **Next:** native `.chil` file format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); documentation site.
 - **Future:** formal integration within a unified ecosystem including <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMiAyMSBMMTIgMiBMMjIgMjEgWiBNMTIgMiBMNyAyMSBNMTIgMiBMMTcgMjEgTTcgMjEgTDEyIDEyIEwxNyAyMSBNMTIgMTIgTDEyIDIiLz48L3N2Zz4=" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0iTTMgNCBIMjEgTTMgMTIgSDIxIE0zIDIwIEgyMSBNNCAzIFYyMSBNMTIgMyBWMjEgTTIwIDMgVjIxIi8%2BPC9zdmc%2B" alt="QuADMESH PyPI version"></a>
 
 ---
@@ -72,7 +72,6 @@
 ```bash
 pip install chilmesh                        # PyPI
 uv pip install chilmesh                     # uv
-conda install -c conda-forge chilmesh       # conda-forge (pending)
 pip install -e .                            # from source
 ```
 
