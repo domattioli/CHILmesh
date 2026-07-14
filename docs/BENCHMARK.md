@@ -67,11 +67,15 @@ machine-dependent.
 > **Rust backend (measured 2026-07-14).** #163 is closed and Rust is now
 > output-equivalent to Python, so the earlier "skeletonization incomplete"
 > exclusion is stale. On the bundled fixtures Rust full-inits ~3–5× faster than
-> Python but **~2–5× slower than C++** (≈5× behind on `Block_O`), and its
-> `get_vertex_edges` query path is O(_n_) per call (100–1800× slower than
-> C++/Python, rebuilds the edge list on every call). C++ remains the
-> acceleration path; Rust earns no perf niche over it. Full measured tables,
-> methodology, and the "could Rust replace Python anywhere?" analysis:
+> Python but **~2–5× slower than C++** (≈5× behind on `Block_O`). Its
+> `get_vertex_edges` query path was O(_n_) per call (100–1800× slower than
+> C++/Python — it rebuilt the edge list every call); that defect is **now fixed**
+> — the vertex→edge index is cached in `build_adjacencies`, so queries are O(1)
+> (Block_O 954 μs → 0.32 μs, on par with C++/Python, 76/76 equivalence tests
+> still pass). C++ remains the acceleration path; even with queries fixed, Rust
+> earns no perf niche over C++ on the hot path. Full measured tables (incl. the
+> before/after query column), methodology, the "could Rust replace Python
+> anywhere?" analysis, and the default-backend / opt-in discussion:
 > [`RUST_EVALUATION.md`](RUST_EVALUATION.md).
 
 ---
