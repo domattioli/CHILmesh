@@ -26,7 +26,7 @@
   <a href="https://github.com/domattioli/CHILmesh/issues">
     <img src="https://img.shields.io/github/issues/domattioli/CHILmesh.svg?color=orange" alt="Open issues">
   </a>
-  <a href="https://doi.org/10.5281/zenodo.21313196"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21313196.svg" alt="DOI"></a>
+  <a href="https://doi.org/10.5281/zenodo.21199161"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21199161.svg" alt="DOI"></a>
   <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License">
   </a>
@@ -222,8 +222,12 @@ Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 ## Citation
 
-CHILmesh originated in MATLAB as the data structure backing a layer-peel-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc Thesis, 2017) <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf">
-    <img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis"></a>
+<p align="center">
+  <a href="https://doi.org/10.5281/zenodo.21199161"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21199161.svg" alt="Cite via Zenodo DOI"></a>
+  <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf"><img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis"></a>
+</p>
+
+Cite the **software** via its Zenodo DOI — click the badge above, or use the BibTeX below. CHILmesh originated in MATLAB as the data structure backing a layer-peel-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc Thesis, 2017) — the **thesis** (badge above) is the original method reference.
 ```bibtex
 @software{mattioli_chilmesh,
   author    = {Mattioli, Dominik O. and Kubatko, Ethan J.},
@@ -231,8 +235,8 @@ CHILmesh originated in MATLAB as the data structure backing a layer-peel-driven 
                quadrilateral, and mixed-element grids},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {1.2.2},
-  doi       = {10.5281/zenodo.20263854},
+  version   = {1.4.1},
+  doi       = {10.5281/zenodo.21199161},
   url       = {https://github.com/domattioli/CHILmesh}
 }
 ```
