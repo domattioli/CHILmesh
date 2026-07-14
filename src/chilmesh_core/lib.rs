@@ -18,6 +18,7 @@ pub struct RustMesh {
     pub num_verts: usize,
     pub num_elems: usize,
     pub edges: Option<Array2<i32>>,  // Quad-edge topology: [n_edges, 4]
+    pub vert2edge: Option<Vec<Vec<usize>>>, // cached vertex -> incident edge ids (built in build_adjacencies)
     pub areas: Option<Array1<f64>>,  // Signed areas: [n_elems] (computed on demand)
     pub layers: Option<Vec<skeletonization::Layer>>, // Skeletonization layers (computed on demand)
 }
@@ -33,6 +34,7 @@ impl RustMesh {
             num_verts: 0,
             num_elems: 0,
             edges: None,
+            vert2edge: None,
             areas: None,
             layers: None,
         }
@@ -86,6 +88,8 @@ impl RustMesh {
         let array = connectivity.as_ref(py).to_owned_array();
         self.connectivity = array;
         self.num_elems = self.connectivity.shape()[0];
+        self.edges = None;
+        self.vert2edge = None;
         Ok(())
     }
 
@@ -105,6 +109,26 @@ impl RustMesh {
     fn build_adjacencies(&mut self) -> PyResult<()> {
         let edges = adjacency::build_quadegg_from_connectivity(&self.connectivity, self.num_verts);
         self.edges = Some(edges);
+        // Cache vertex -> incident edge ids once (O(n_edges)) so get_vertex_edges is
+        // O(1) per call instead of rebuilding the edge list on every call.
+        let edge2vert = adjacency::to_edge2vert(&self.connectivity);
+        let n_edges = edge2vert.shape()[0];
+        let mut v2e: Vec<Vec<usize>> = vec![Vec::new(); self.num_verts];
+        for edge_idx in 0..n_edges {
+            let a = edge2vert[[edge_idx, 0]] as usize;
+            let b = edge2vert[[edge_idx, 1]] as usize;
+            if a < self.num_verts {
+                v2e[a].push(edge_idx);
+            }
+            if b < self.num_verts {
+                v2e[b].push(edge_idx);
+            }
+        }
+        for row in v2e.iter_mut() {
+            row.sort_unstable();
+            row.dedup();
+        }
+        self.vert2edge = Some(v2e);
         Ok(())
     }
 
@@ -173,14 +197,12 @@ impl RustMesh {
         }
     }
 
-    /// Get edges incident to a vertex (requires edges to be computed)
+    /// Get edges incident to a vertex (requires build_adjacencies to have run).
+    /// O(1): returns the cached vertex->edge row (empty for out-of-range v, matching
+    /// the prior scan-finds-nothing behavior).
     fn get_vertex_edges(&self, v: usize) -> PyResult<Vec<usize>> {
-        match &self.edges {
-            Some(_edges_array) => {
-                // Convert quad-edge format [n_edges, 4] to edge list [n_edges, 2]
-                let edge2vert = adjacency::to_edge2vert(&self.connectivity);
-                Ok(queries::get_vertex_edges(v, &edge2vert))
-            }
+        match &self.vert2edge {
+            Some(v2e) => Ok(v2e.get(v).cloned().unwrap_or_default()),
             None => Err(pyo3::exceptions::PyRuntimeError::new_err(
                 "Edges not computed. Call build_adjacencies() first.",
             )),
