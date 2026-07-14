@@ -60,8 +60,25 @@
 `n_layers = 30` on all three (parity ✅). MATLAB is the original `src/@CHILmesh`
 class under GNU Octave 8.4 (interpreter, not MATLAB JIT); Python's
 skeletonization now beats Octave, with adjacency build (pure-Python loops) the
-remaining gap; C++ leads throughout. Rust is excluded — its skeletonization is
-incomplete (#163). Absolute times are machine-dependent.
+remaining gap; C++ leads throughout. Rust is excluded from this WNAT table
+(measured separately on the bundled fixtures — see below). Absolute times are
+machine-dependent.
+
+> **Rust backend (measured 2026-07-14).** #163 is closed and Rust is now
+> output-equivalent to Python, so the earlier "skeletonization incomplete"
+> exclusion is stale. On the bundled fixtures Rust full-inits ~3–5× faster than
+> Python but **~2–5× slower than C++** (≈5× behind on `Block_O`). Its
+> `get_vertex_edges` query path was O(_n_) per call (100–1800× slower than
+> C++/Python — it rebuilt the edge list every call); that defect is **now fixed**
+> — the vertex→edge index is cached in `build_adjacencies`, so queries are O(1)
+> (Block_O 954 μs → 0.32 μs, on par with C++/Python, 76/76 equivalence tests
+> still pass). C++ remains the acceleration path; even with queries fixed, Rust
+> earns no perf niche over C++ on the hot path. The backend is now **frozen**
+> (kept + output-equivalent, not developed further — `src/chilmesh_core/STATUS.md`).
+> Full measured tables (incl. the before/after query column), methodology, the
+> "could Rust replace Python anywhere?" analysis, and the default-backend / opt-in
+> discussion: [`RUST_EVALUATION.md`](RUST_EVALUATION.md). The path to zero-opt-in
+> speed is prebuilt **C++** wheels: [`dev/PREBUILT_WHEELS_PLAN.md`](dev/PREBUILT_WHEELS_PLAN.md).
 
 ---
 

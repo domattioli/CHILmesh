@@ -185,6 +185,7 @@ pub fn parse_fort14(path: &str) -> Result<RustMesh, RustMeshError> {
         num_verts: n_verts,
         num_elems: n_elems,
         edges: None,
+        vert2edge: None,
         areas: None,
         layers: None,
     })
@@ -538,6 +539,7 @@ pub fn parse_2dm(path: &str) -> Result<RustMesh, RustMeshError> {
         num_verts: n_verts,
         num_elems: n_elems,
         edges: None,
+        vert2edge: None,
         areas: None,
         layers: None,
     })
