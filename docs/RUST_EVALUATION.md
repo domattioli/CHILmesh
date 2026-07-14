@@ -48,6 +48,12 @@ like-for-like — every backend runs the same operation on the same in-memory
 `(connectivity, points)` arrays (no fort.14 parse inside the timed region),
 using the committed harness `scripts/benchmark.py`.
 
+*(Terminology: the layer decomposition is the **layer peel** / *onion peeling* —
+per the #187 lexicon, "skeletonization" is deprecated for this operation and
+reserved for a future medial-axis op (#223). The backend extension method is still
+literally named `skeletonize()` pending a deferred cross-language backend rename,
+so that symbol name persists in code while prose says "peel".)*
+
 - **Build:** `maturin build --release` (crate profile: `opt-level=3`, `lto=true`,
   `codegen-units=1`) for Rust; `pip wheel ./src/chilmesh_cpp` (scikit-build-core
   + pybind11, `Release`) for C++.
@@ -67,11 +73,11 @@ using the committed harness `scripts/benchmark.py`.
 
 ## 3. Measured results
 
-Medians of 5–7 runs. `full-init` = adjacency build + skeletonization (the
+Medians of 5–7 runs. `full-init` = adjacency build + layer peel (the
 apples-to-apples cross-backend operation). `vert-edge` = one `get_vertex_edges`
 call, averaged over up to 2000 vertices.
 
-### Full init (adjacency + skeletonization)
+### Full init (adjacency + layer peel)
 
 | Mesh | Elements | C++ | Rust | Python | Rust vs C++ | Rust vs Python |
 |---|---:|---:|---:|---:|---:|---:|
@@ -123,8 +129,24 @@ fix it is O(1) and on par with / slightly faster than C++ and Python
 
 4. **Prior `tbd`/"excluded" doc state is now resolved.** README's Rust perf cells
    were `tbd`; `BENCHMARK.md` said "Rust is excluded — its skeletonization is
-   incomplete (#163)". Both are stale: #163 is closed, skeletonization reaches
+   incomplete (#163)". Both are stale: #163 is closed, the layer peel reaches
    parity, and the missing perf evidence is the table above.
+
+5. **The backends differ in internal topology representation, not in output.**
+   Python is the reference — flat numpy arrays (`Edge2Vert`, `Elem2Edge`,
+   `Edge2Elem`) plus dict adjacencies (`Vert2Edge`, `Vert2Elem`) and an `EdgeMap`
+   hash. **C++** uses a **half-edge (DCEL)** structure (`src/chilmesh_cpp/src/halfedge.*`).
+   **Rust** uses a **quad-edge** structure (Guibas–Stolfi 1985 — four directed
+   edges per undirected edge). Despite three different internal representations,
+   all produce **bit-identical** layers, adjacency tables, and signed areas — that
+   equivalence is exactly what `tests/test_backend_equivalence.py` guards. The
+   quad-edge choice was an explicit experiment (`.planning/008-DECISION.md`) to
+   test whether a different topology structure would scale better than the flat /
+   half-edge representations. The measurements above show it does **not** beat the
+   C++ half-edge backend — the data-structure bet did not pay off on performance.
+   That, plus the doubled compiled-backend maintenance surface, is **why it is
+   frozen**: not because it is wrong (it is bit-exact), but because it is a slower
+   second way to compute the same thing C++ already computes faster.
 
 ---
 
@@ -136,7 +158,7 @@ perf-critical, and (c) something Rust would plausibly *win* at.
 
 | Functionality | Today | Perf-critical? | Would Rust replacing Python win? | Verdict |
 |---|---|---|---|---|
-| adjacency / skeletonize / signed-area / vertex queries | Python **+ C++** (+ Rust) | yes | C++ already replaces Python and beats Rust; Rust adds nothing | **No — C++ owns this** |
+| adjacency / layer-peel / signed-area / vertex queries | Python **+ C++** (+ Rust) | yes | C++ already replaces Python and beats Rust; Rust adds nothing | **No — C++ owns this** |
 | FEM smoother (`method='fem'`, direct + iterative) | Python → `scipy.sparse` `spsolve` / MINRES | yes at scale | the solve is already in compiled SuiteSparse/LAPACK; Rust would reimplement a sparse solver — huge effort, unlikely to beat, high risk | **No** |
 | angle-based smoother | Python, numpy-vectorized | moderate | numpy batch ops are already near-C; Rust gain marginal | **No** |
 | ADMESH warm-start truss | Python, numpy-vectorized | at scale | force loop is vectorized; any win is marginal and better placed in the existing C++ backend | **Marginal — prefer C++** |
