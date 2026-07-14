@@ -111,7 +111,7 @@ Edge2Elem: ndarray[n_edges, 2]        # Edge adjacent elements (-1 if boundary)
 - ✅ Skeletonization algorithm behavior
 - ✅ Public method signatures
 - ✅ Mixed-element (tri + quad) support
-- ✅ Test pass rate (currently 57 tests)
+- ✅ Test pass rate (the full pytest suite)
 
 ### Must Improve
 - 🚀 O(n²) edge building → O(n log n) or O(n)
