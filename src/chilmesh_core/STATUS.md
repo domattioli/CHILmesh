@@ -13,6 +13,21 @@ This Rust quad-edge backend is **kept but not developed further**:
 - **Not evolved** — no new features, and it is **not** kept in lockstep as the Python
   API grows. Treat it as a reference/experimental artifact, not a maintained backend.
 
+## How this differs from the Python / C++ backends
+
+Same outputs, different internal topology structure:
+
+- **Python** (reference) — flat numpy arrays + dict adjacencies + an `EdgeMap` hash.
+- **C++** — **half-edge (DCEL)** (`src/chilmesh_cpp/src/halfedge.*`); the accelerator.
+- **Rust (this crate)** — **quad-edge** (Guibas–Stolfi 1985; four directed edges per
+  undirected edge).
+
+All three are **bit-identical on output** (layers, adjacency tables, signed areas —
+guarded by `tests/test_backend_equivalence.py`). The quad-edge port was an experiment
+(`.planning/008-DECISION.md`) to test whether a different topology structure would scale
+better; it does not beat the C++ half-edge backend — the data-structure bet did not pay
+off, which is the core reason for the freeze.
+
 ## Why (summary; full detail + numbers in the evaluation)
 
 A measured, like-for-like comparison found that Rust:
