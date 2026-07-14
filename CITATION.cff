@@ -1,7 +1,7 @@
 # Citation metadata for CHILmesh.
 # Rendered by GitHub as the "Cite this repository" button.
 # Schema: https://citation-file-format.github.io/
-cff-version: 1.2.0
+cff-version: 1.4.1
 title: "CHILmesh: a fast 2D mesh library for triangular, quadrilateral, and mixed-element grids"
 message: "If you use CHILmesh in academic work, please cite it using these metadata."
 type: software
