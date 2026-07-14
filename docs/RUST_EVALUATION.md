@@ -80,14 +80,16 @@ call, averaged over up to 2000 vertices.
 
 ### Vertex-edge lookup (per call)
 
-| Mesh | Elements | C++ | Rust | Python |
-|---|---:|---:|---:|---:|
-| donut | 276 | 0.64 μs | **50 μs** | 0.41 μs |
-| annulus | 580 | 0.81 μs | **103 μs** | 0.44 μs |
-| Block_O | 5,214 | 0.64 μs | **954 μs** | 0.51 μs |
+| Mesh | Elements | C++ | Rust (before fix) | Rust (after fix) | Python |
+|---|---:|---:|---:|---:|---:|
+| donut | 276 | 0.64 μs | 50 μs | **0.53 μs** | 0.41 μs |
+| annulus | 580 | 0.81 μs | 103 μs | **0.40 μs** | 0.44 μs |
+| Block_O | 5,214 | 0.64 μs | 954 μs | **0.32 μs** | 0.51 μs |
 
-The Rust query cost is **100–1800× worse** than C++/Python and **grows with
-mesh size** — a scaling defect, not a constant overhead.
+Before the fix (§4.2) the Rust query cost was **100–1800× worse** than C++/Python
+and **grew with mesh size** — a scaling defect, not a constant overhead. After the
+fix it is O(1) and on par with / slightly faster than C++ and Python
+(Block_O: 954 μs → 0.32 μs, ~3000×). Equivalence still holds (76/76 tests pass).
 
 ---
 
@@ -97,15 +99,20 @@ mesh size** — a scaling defect, not a constant overhead.
    pure Python but ~2–5× *slower* than C++, and the gap widens with mesh size
    (~5× behind C++ on Block_O). C++ remains the performance backend.
 
-2. **Queries: Rust is catastrophically slow — worse than Python.** Root cause is
-   an algorithmic defect in the shipped crate, not the language.
-   `RustMesh.get_vertex_edges` (`src/chilmesh_core/lib.rs`) calls
+2. **Queries were catastrophically slow — now fixed.** Root cause was an
+   algorithmic defect in the shipped crate, not the language.
+   `RustMesh.get_vertex_edges` (`src/chilmesh_core/lib.rs`) called
    `adjacency::to_edge2vert(&self.connectivity)` on **every call**, rebuilding
-   the entire canonical edge list (O(n_elems), with allocation), then
-   `queries::get_vertex_edges` linearly scans **all** edges (O(n_edges)). So each
-   lookup is O(n_elems + n_edges); C++ and Python cache a `Vert2Edge` adjacency
-   and answer in O(1). This is why the Rust query time tracks mesh size.
-   *(Reported as a finding; not fixed in this docs-only evaluation.)*
+   the entire canonical edge list (O(n_elems), with allocation), then linearly
+   scanning **all** edges (O(n_edges)). So each lookup was O(n_elems + n_edges);
+   C++ and Python cache a `Vert2Edge` adjacency and answer in O(1), which is why
+   the Rust query time tracked mesh size.
+   **Fixed in this session:** `build_adjacencies` now precomputes the
+   vertex→edge index once (from the same `to_edge2vert` source, so output stays
+   bit-identical), and `get_vertex_edges` returns the cached row in O(1);
+   `set_connectivity` invalidates the cache. Result: Block_O 954 μs → 0.32 μs
+   (~3000×), now on par with / faster than C++ and Python, with all 76
+   equivalence tests still passing (see the "after fix" column in §3).
 
 3. **Correctness is not the issue.** All 76 equivalence tests pass. The problem
    is purely that Rust is slower than the already-shipped C++ backend on the hot
@@ -152,6 +159,43 @@ the shared core, already bit-identical, already in CI), not a second compiled
 backend that is slower and less maintained. The rule of thumb: **if a
 pure-Python path ever needs acceleration, extend C++, not Rust.**
 
+### 5.1 Default backend & opt-in — can Rust replace Python as the default?
+
+A natural follow-up: users opt in to C++ today; could Rust become the *default*
+so they get speed without opting in? The answer turns on distribution, not
+language.
+
+- **Both C++ and Rust are opt-in source builds today; neither is lighter than the
+  other.** A plain `pip install chilmesh` from PyPI ships **pure-Python only** —
+  no compiled extension ([#229](https://github.com/domattioli/CHILmesh/issues/229)).
+  C++ needs a C++ toolchain + CMake (`pip install ./src/chilmesh_cpp`); Rust needs
+  a Rust toolchain (`maturin build …`). Rust is **not** a lighter-weight opt-in
+  than C++ — it is the same class of requirement (a compiler + a build step).
+- **Auto-selection already prefers Rust over Python when Rust is built.**
+  `backend_info()` (`src/chilmesh/__init__.py`) picks the fastest *available*
+  backend, ordered C++ → Rust → Python, and honors `CHILMESH_BACKEND`. So "use
+  Rust instead of Python when the user hasn't opted into C++" **already happens**
+  — *if the Rust extension is present*. The only reason a non-opting user gets
+  pure Python is that nothing compiled ships in the wheel.
+- **Making a compiled backend the zero-opt-in default = shipping prebuilt binary
+  wheels** (manylinux/macOS/Windows via `cibuildwheel`/`maturin`). That work is
+  already planned for **C++** ([#229](https://github.com/domattioli/CHILmesh/issues/229)).
+  Once you commit to shipping a prebuilt compiled wheel, ship the **faster** one —
+  C++ is ~5× faster than Rust on full init. Defaulting to Rust would trade that 5×
+  away.
+- **The one real Rust distribution nicety:** maturin builds an `abi3` wheel, so a
+  *single* wheel per platform works across Python 3.8+, whereas the pybind11 C++
+  extension needs a wheel per Python version. Fewer wheels to build/ship is a
+  genuine packaging convenience — but it does not outweigh C++ being 5× faster on
+  the hot path. It is at best a stopgap argument if the C++ wheel matrix stalls,
+  not a reason to make Rust the default.
+
+**Net:** keep **pure-Python as the universal default and fallback** (zero
+dependencies, runs everywhere, the reference every backend is validated against);
+pursue **prebuilt C++ wheels** as the auto-selected accelerator (existing plan).
+Do not make Rust the default backend, and do not migrate any Python computation to
+Rust for speed.
+
 ---
 
 ## 6. Recommendation
@@ -182,11 +226,14 @@ Rationale:
   deprecation** of `chilmesh_core` is a reasonable operator call — it removes a
   CI job and a wheel-build path for a backend with no performance niche over C++.
   (Not actioned here; flagged for operator sign-off.)
-- If Rust is nonetheless kept active, the one worthwhile, well-scoped fix is to
-  **cache `Vert2Edge` in `RustMesh`** so `get_vertex_edges` is O(1) instead of
-  rebuilding the edge list per call (§4.2). That would bring queries in line with
-  C++/Python — but it does not change the top-line conclusion that C++ is the
-  right acceleration path.
+- The one worthwhile, well-scoped fix — **cache `Vert2Edge` in `RustMesh`** so
+  `get_vertex_edges` is O(1) instead of rebuilding the edge list per call (§4.2)
+  — **has been applied in this session.** Rust queries now match C++/Python. This
+  removes a real footgun: because `backend_info()` auto-selects Rust over Python
+  when Rust is built and C++ is not (`src/chilmesh/__init__.py`), the old defect
+  meant that a Rust-only build silently regressed query-heavy workloads far below
+  pure Python. It does **not** change the top-line conclusion — Rust full-init is
+  still ~5× behind C++, so C++ remains the acceleration path.
 
 ---
 
