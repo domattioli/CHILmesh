@@ -121,3 +121,119 @@ Revisit only if Model A's two-package version-sync proves painful.
    largest user base, fastest win.
 3. Resolve #225, then add macOS/Windows (Phase 1 remainder) + Phase 2 publish job.
 4. Phase 3 extra + docs, Phase 4 validation, close #229.
+
+---
+
+## Appendix — ready-to-apply snippets
+
+> **PROPOSED — not yet applied.** These are copy-paste-ready but intentionally
+> *inert* (they are documentation, not live workflow files). Apply them only after
+> Model A is ratified (Phase 0) and the macOS/Windows runner-billing question
+> (#225) is resolved. The `macos-latest` / `windows-latest` matrix legs and the
+> publish job are the parts that incur runner cost or perform the **irreversible,
+> outward** act of uploading to PyPI — those need operator sign-off before they go
+> live. The Linux-only build leg is free and safe to enable first.
+
+### A1 — Phase 1: expand `build-cpp-wheels.yml` (matrix + real smoke test)
+
+Replace the single `build-manylinux` job with a matrixed build. macOS/Windows legs
+are gated on #225 — drop them from `matrix.os` to ship Linux-only first.
+
+```yaml
+jobs:
+  build-wheels:
+    name: cibuildwheel chilmesh_cpp (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]  # macos/windows gated on #225
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.21.3
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse src/chilmesh_cpp
+        env:
+          CIBW_BUILD: "cp310-* cp311-* cp312-*"
+          CIBW_ARCHS_LINUX: "x86_64"
+          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          CIBW_ARCHS_WINDOWS: "AMD64"
+          CIBW_SKIP: "*-musllinux*"
+          # Real smoke: build a mesh, not just check the symbol exists.
+          CIBW_TEST_REQUIRES: "numpy"
+          CIBW_TEST_COMMAND: >
+            python -c "import numpy as np, chilmesh_cpp;
+            pts=np.array([[0.,0.],[1.,0.],[0.,1.],[1.,1.]]);
+            conn=np.array([[0,1,2],[1,3,2]],dtype=np.int32);
+            m=chilmesh_cpp.full_init(pts, conn);
+            assert m.n_elems==2, m.n_elems; print('cpp full_init OK', m.n_verts, m.n_elems)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chilmesh-cpp-wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+```
+
+### A2 — Phase 2: `publish-cpp-wheels.yml` (tag/release-gated publish)
+
+New workflow. Prefer **Trusted Publishing** (OIDC, no long-lived token); the
+token variant (mirroring `publish-pypi.yml`) is shown as a fallback comment. The
+`build` job reuses A1; only `publish` is new.
+
+```yaml
+name: publish-cpp-wheels
+on:
+  release:
+    types: [published]     # publishes ONLY on a real GitHub release; never on push
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    # ... reuse the A1 matrix build; uploads per-OS wheel artifacts ...
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: pipx run build --sdist --outdir dist src/chilmesh_cpp
+      - uses: actions/upload-artifact@v4
+        with: { name: chilmesh-cpp-sdist, path: dist/*.tar.gz }
+  publish:
+    needs: [build, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi              # protect with required reviewers in repo settings
+    permissions:
+      id-token: write              # PyPI Trusted Publishing (OIDC) — no secret
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        # Token fallback (if not using Trusted Publishing):
+        #   with: { password: ${{ secrets.PYPI_API_TOKEN }} }
+```
+
+### A3 — Phase 3: consumer-facing extra + docs
+
+`chilmesh/pyproject.toml` (add alongside the existing `dev` extra) — **land this in
+the same change that publishes `chilmesh-cpp`, never before**, or
+`pip install chilmesh[cpp]` resolves to a package that isn't on PyPI yet:
+
+```toml
+[project.optional-dependencies]
+cpp = ["chilmesh-cpp>=0.6,<0.7"]   # pin bumps with any extension-API change (Phase 0 contract)
+```
+
+README / docs one-liner:
+
+```bash
+pip install chilmesh          # pure-Python, runs everywhere
+pip install chilmesh[cpp]     # + prebuilt C++ acceleration where a wheel exists
+```
+
+No backend code changes — `chilmesh.backend_info()` already imports `chilmesh_cpp`
+and auto-selects it.
