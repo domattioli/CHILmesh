@@ -30,8 +30,8 @@ keywords:
   - python
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.20263854
-    description: Zenodo DOI (first archive — update with concept DOI once a second release lands)
+    value: 10.5281/zenodo.21362772
+    description: Zenodo DOI (v1.4.1, July 14, 2026)
 preferred-citation:
   type: thesis
   title: "QuADMESH+: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models"
