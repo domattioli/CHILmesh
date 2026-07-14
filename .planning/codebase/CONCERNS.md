@@ -2,6 +2,14 @@
 
 **Analysis Date:** 2026-05-21
 
+> **UPDATE 2026-07-14.** The "Rust/C++ extension" optimization opportunity below
+> has been resolved: the **C++** half-edge backend is built, bit-identical, and is
+> the acceleration path (~5× faster than the Rust port). The **Rust** extension was
+> also built, measured, and is now **FROZEN** (no perf niche over C++) — see
+> [`docs/RUST_EVALUATION.md`](../../docs/RUST_EVALUATION.md). The remaining lever is
+> distribution (prebuilt C++ wheels), not a new language port:
+> [`docs/dev/PREBUILT_WHEELS_PLAN.md`](../../docs/dev/PREBUILT_WHEELS_PLAN.md).
+
 ## Language & Performance Optimization Opportunities
 
 ### 1. Skeletonization Bottleneck (Medium Priority)
