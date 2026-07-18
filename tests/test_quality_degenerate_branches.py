@@ -67,11 +67,11 @@ class TestTriangleQualitySkewDegenerate:
 class TestQuadQualityNonSkewSplit:
     """Test lines 147-149: _quad_quality else branch for non-skew metrics."""
 
-    def test_unit_square_min_angle_split(self):
-        """Unit square split into two triangles, min_angle metric.
+    def test_unit_square_min_angle_raw(self):
+        """Unit square min_angle uses raw interior angles (#260).
 
-        Quad split as (v0,v1,v2) and (v0,v2,v3).
-        Result should equal min of the two triangle qualities.
+        Every interior angle of a unit square is 90 deg (pi/2 rad); the
+        prior triangle-split path returned pi/4 (a triangulation artifact).
         """
         v0 = np.array([0.0, 0.0])
         v1 = np.array([1.0, 0.0])
@@ -80,12 +80,7 @@ class TestQuadQualityNonSkewSplit:
 
         q_quad = _quad_quality(v0, v1, v2, v3, metric="min_angle")
 
-        # Manually compute the two triangle qualities
-        q_tri_1 = _triangle_quality(v0, v1, v2, metric="min_angle")
-        q_tri_2 = _triangle_quality(v0, v2, v3, metric="min_angle")
-        expected = min(q_tri_1, q_tri_2)
-
-        np.testing.assert_allclose(q_quad, expected)
+        np.testing.assert_allclose(q_quad, np.pi / 2)
 
     def test_unit_square_aspect_ratio_split(self):
         """Unit square split into two triangles, aspect_ratio metric."""
@@ -114,8 +109,11 @@ class TestQuadQualityNonSkewSplit:
 
         assert isinstance(q, float)
 
-    def test_unit_square_max_angle_split(self):
-        """Unit square with max_angle metric."""
+    def test_unit_square_max_angle_raw(self):
+        """Unit square max_angle uses raw interior angles (#260).
+
+        Every interior angle is 90 deg (pi/2 rad).
+        """
         v0 = np.array([0.0, 0.0])
         v1 = np.array([1.0, 0.0])
         v2 = np.array([1.0, 1.0])
@@ -123,11 +121,7 @@ class TestQuadQualityNonSkewSplit:
 
         q_quad = _quad_quality(v0, v1, v2, v3, metric="max_angle")
 
-        q_tri_1 = _triangle_quality(v0, v1, v2, metric="max_angle")
-        q_tri_2 = _triangle_quality(v0, v2, v3, metric="max_angle")
-        expected = min(q_tri_1, q_tri_2)
-
-        np.testing.assert_allclose(q_quad, expected)
+        np.testing.assert_allclose(q_quad, np.pi / 2)
 
 
 class TestElementQualityDegenerateFewVertices:

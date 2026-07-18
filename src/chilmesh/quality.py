@@ -191,6 +191,24 @@ def _quad_quality(
             (90.0 - angle_min) / 90.0,
         )
         return float(skewness)
+    elif metric in ("min_angle", "max_angle"):
+        # Quad angle metrics use the element's own four interior angles
+        # (radians), same convention as the skew/eas branches above. The
+        # prior triangle-split path returned min-of-sub-triangle-maxima,
+        # under-reporting a genuinely obtuse quad (#260).
+        verts = np.array([v0, v1, v2, v3])
+        angles = np.zeros(4)
+        for j in range(4):
+            v_curr = verts[j]
+            v_next = verts[(j + 1) % 4]
+            v_prev = verts[(j - 1) % 4]
+            v_edge1 = v_next - v_curr
+            v_edge2 = v_prev - v_curr
+            n1 = np.linalg.norm(v_edge1) + 1e-12
+            n2 = np.linalg.norm(v_edge2) + 1e-12
+            dot = np.clip(np.dot(v_edge1 / n1, v_edge2 / n2), -1.0, 1.0)
+            angles[j] = np.arccos(dot)
+        return float(angles.min() if metric == "min_angle" else angles.max())
     else:
         # For other metrics, split quad into two triangles and take min
         q1 = _triangle_quality(v0, v1, v2, metric)
@@ -304,8 +322,9 @@ def element_quality(
             v2 = verts_array[elem_valid[2]]
             v3 = verts_array[elem_valid[3]]
 
-            if metric in ("skew", "skewness", "angular_skewness", "angular skewness", "equiangle_skewness", "equiangle skewness", "eas"):
-                # Use dedicated quad skew quality function
+            if metric in ("skew", "skewness", "angular_skewness", "angular skewness", "equiangle_skewness", "equiangle skewness", "eas", "min_angle", "max_angle"):
+                # Dedicated quad function: skew/eas + raw-interior-angle
+                # min/max (#260 — angle metrics must not triangle-split).
                 qualities[i] = _quad_quality(v0, v1, v2, v3, metric)
             else:
                 # For other metrics, split into two triangles and take minimum
