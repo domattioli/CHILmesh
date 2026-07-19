@@ -205,3 +205,34 @@ def test_truncated_boundary_block(tmp_path):
     # Parser should return what it got without crashing.
     assert len(raw.open_boundaries) >= 0
     assert len(raw.flow_boundaries) == 0
+
+
+def test_boundaries_present_when_block_physically_present(tmp_path):
+    """#259: a present-but-empty (0/0) NOPE/NBOU block sets boundaries_present."""
+    # CW fixture has a physical 0/0/0/0 boundary block.
+    raw = read_fort14_raw(_write(tmp_path, CW))
+    assert raw.boundaries_present is True
+    assert raw.open_boundaries == []
+    assert raw.flow_boundaries == []
+
+
+def test_boundaries_absent_when_no_block(tmp_path):
+    """#259: a mesh with no boundary section at all keeps boundaries_present False."""
+    no_block = """
+        no-boundary mesh
+        1 3
+        1 0.0 0.0 0.0
+        2 1.0 0.0 0.0
+        3 0.0 1.0 0.0
+        1 3 1 2 3
+        """
+    raw = read_fort14_raw(_write(tmp_path, no_block))
+    assert raw.boundaries_present is False
+    assert raw.open_boundaries == []
+    assert raw.flow_boundaries == []
+
+
+def test_boundaries_present_false_when_parse_skipped(tmp_path):
+    """#259: parse_boundaries=False leaves boundaries_present False (not inspected)."""
+    raw = read_fort14_raw(_write(tmp_path, CW), parse_boundaries=False)
+    assert raw.boundaries_present is False
