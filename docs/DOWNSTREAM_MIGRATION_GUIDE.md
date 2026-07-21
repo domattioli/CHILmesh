@@ -1,7 +1,7 @@
 # Downstream Project Integration Guide
 
-**Version:** 2.0 (revised for CHILmesh v1.0.0)
-**CHILmesh Version:** 1.0.0+
+**Version:** 2.1 (adds v1.4.0 #187 breaking-rename migration)
+**CHILmesh Version:** 1.4.0+
 **Target Projects:** MADMESHR, ADMESH, Valence
 
 ---
@@ -11,6 +11,75 @@
 Guide for developers of downstream research projects integrating with CHILmesh v1.0.0+.
 
 **TL;DR:** Existing code keeps working — `CHILmesh` is still importable. The new `Mesh` alias is the v1.0.0 preferred idiom; adopt it when convenient. Optional C++ backend gives 46× speedup with bit-identical output.
+
+> **⚠️ v1.4.0 is the exception to "existing code keeps working."** The #187 lexicon
+> ratification renamed several public/semi-public symbols **without compatibility
+> aliases**. If you allow `chilmesh` 1.4.x and still call an old name, you break on
+> upgrade (silently at install, `AttributeError` at runtime). See
+> [v1.4.0 Breaking Renames](#-v140-breaking-renames-187) below **before** widening a pin.
+
+---
+
+## ⚠️ v1.4.0 Breaking Renames (#187)
+
+v1.4.0 (2026-07-11) ratified the CHILmesh skeleton/layer lexicon (#187) and renamed
+the symbols below **with no compatibility aliases**. Because it shipped as a *minor*
+bump, a `chilmesh>=1.x,<2` / caret pin does **not** exclude it — a consumer that (a)
+admits 1.4.x and (b) still calls a renamed symbol breaks on upgrade. The
+`smooth_mesh` signature change (#251) shipped in the same release and is a second
+break vector.
+
+### Rename map
+
+| Old (≤1.3.x) | New (≥1.4.0) | Surface |
+|---|---|---|
+| `mesh.skeletonize()` | `mesh.peel_layers()` | `CHILmesh` public |
+| `mesh._skeletonize()` | `mesh._peel()` | `CHILmesh` private (**removed** — no alias) |
+| `_layerize` | `_peel` | `CHILmesh` private |
+| `MutableMesh.reskeletonize_local(...)` | `MutableMesh.repeel_local(...)` | `chilmesh.mutations` |
+| `MutableMesh.skeletonize_diff(...)` | `MutableMesh.layers_diff(...)` | `chilmesh.mutations` |
+| `smooth_mesh(...)` positional splat | `smooth_mesh(method, acknowledge_change=False, *, sdf=None, size_fn=None, **kwargs)` | `CHILmesh` public (#251) |
+
+`skeletonize` / `_skeletonize` / `_layerize` / `reskeletonize_local` / `skeletonize_diff`
+no longer exist under their old names — grep your tree for those five groups.
+
+### `smooth_mesh` signature (#251)
+
+`method` and `acknowledge_change` remain positional-or-keyword, so an existing
+`mesh.smooth_mesh("laplacian", True)` or `mesh.smooth_mesh(method=..., acknowledge_change=True)`
+call is safe. What changed: `sdf` and `size_fn` are now **keyword-only** — any call
+that passed them positionally must switch to keyword form.
+
+```python
+# Before (≤1.3.x) — positional sdf breaks on 1.4.x
+mesh.smooth_mesh("laplacian", True, my_sdf)
+
+# After (≥1.4.0) — sdf/size_fn keyword-only
+mesh.smooth_mesh("laplacian", True, sdf=my_sdf)
+```
+
+### Migrating a call site
+
+```python
+# Before (≤1.3.x)
+layers = mesh.skeletonize()
+
+# After (≥1.4.0)
+layers = mesh.peel_layers()
+```
+
+To stay compatible across the boundary (support both `chilmesh<1.4` and `>=1.4`):
+
+```python
+peel = getattr(mesh, "peel_layers", None) or mesh.skeletonize
+layers = peel()
+```
+
+### Pin guidance
+
+- Pinning `chilmesh<1.4` → safe for now; plan the rename before widening the pin.
+- Admitting 1.4.x **and** calling any renamed symbol → **broken on upgrade**; rename
+  the call sites (or add the `getattr` shim above) first.
 
 ---
 
@@ -453,7 +522,8 @@ Report at: https://github.com/domattioli/CHILmesh/issues
 | 0.1.1    | ✅ Legacy | ✅ Legacy | ✅ Legacy | Old version, still works |
 | 0.2.0    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Current, use this |
 | 0.2.x    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Bug fixes, recommended |
-| 1.0.0    | TBD | TBD | TBD | Future, full stability |
+| 1.0.0    | ✅ | ✅ | ✅ | `Mesh` alias, C++ backend |
+| 1.4.0+   | ⚠️ | ⚠️ | ⚠️ | **#187 breaking renames — see [above](#-v140-breaking-renames-187)** |
 
 ---
 
@@ -501,7 +571,7 @@ See `examples/` directory for complete working examples:
 
 ---
 
-**Last Updated:** 2026-04-27
-**Guide Version:** 1.0
+**Last Updated:** 2026-07-21
+**Guide Version:** 2.1
 
 For latest information, visit: https://github.com/domattioli/CHILmesh
