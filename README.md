@@ -118,19 +118,21 @@ Reference workload: **EasternPacific_ENPAC2003** — 272,913 vertices · 531,680
 
 | Stage | MATLAB (Octave) ‡ | Python | C++ | Rust |
 |---|---:|---:|---:|---:|
-| Fast init (adj, no peel) | 2.738 s | 6.454 s | 0.769 s | tbd |
-| Peel only | 12.771 s | 5.814 s | 0.669 s | tbd |
-| Full init (adj + peel) | 16.677 s | 12.300 s | 1.438 s | tbd |
-| Quality (signed area) | 75 ms | 51 ms | 7 ms | tbd |
+| Fast init (adj, no peel) | 2.738 s | 6.454 s | 0.769 s | n/a § |
+| Peel only | 12.771 s | 5.814 s | 0.669 s | n/a § |
+| Full init (adj + peel) | 16.677 s | 12.300 s | 1.438 s | 11.98 s § |
+| Quality (signed area) | 75 ms | 51 ms | 7 ms | 2 ms § |
 
 Like-for-like: every backend runs the same operation on the same in-memory arrays. No fort.14 parse, signed-area quality. All resolve `n_layers = 75`; Python↔C++ layers are bit-identical ([`test_backend_equivalence.py`](tests/test_backend_equivalence.py)).
 
 - **C++ leads every stage** — full init 8.6× over Python, 11.6× over Octave.
 - **Octave builds adjacency 2.4× faster than Python** — `sparse()`-accumulated, in compiled built-ins.
 - **Python peels 2.2× faster than Octave** — ~26% ahead on full init overall.
-- **Rust** — the layer peel matches Python on `n_layers`, layer-member sets (OE/IE/OV/IV), per-layer `bEdgeIDs` (full-mesh edge IDs, ascending), full-mesh `Edge2Vert`/`Vert2Edge` ordering, and signed areas — verified by the `rust-equivalence` CI job across all four fixtures incl. `block_o` ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Perf is now measured (the ENPAC cells above stay `tbd` — that mesh lives outside the repo): on the bundled fixtures **Rust full-inits ~3–5× faster than Python but ~2–5× slower than C++**. Its `get_vertex_edges` query path was O(_n_) per call (rebuilt the edge list each call); that defect is **now fixed** — the vertex→edge index is cached, so queries are O(1) (Block_O 954 μs → 0.32 μs, 76/76 equivalence tests still pass). Full data, methodology, the "should Rust replace Python anywhere?" analysis, and the default-backend/opt-in discussion: [`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md). Bottom line: **C++ remains the acceleration path; Rust earns no perf niche over it.**
+- **Rust** — the layer peel matches Python on `n_layers`, layer-member sets (OE/IE/OV/IV), per-layer `bEdgeIDs` (full-mesh edge IDs, ascending), full-mesh `Edge2Vert`/`Vert2Edge` ordering, and signed areas — verified by the `rust-equivalence` CI job across all four fixtures incl. `block_o` ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Perf is now measured at ENPAC scale too (the mesh is reachable in-environment from the [Valence](https://github.com/domattioli/Valence) sibling checkout — [#250](https://github.com/domattioli/CHILmesh/issues/250)): on the bundled fixtures **Rust full-inits ~3–5× faster than Python but ~2–5× slower than C++**, but at the 531,680-element ENPAC2003 workload **Rust full-init closes to ≈ Python (11.98 s vs 11.89 s same-machine) and runs ~15× slower than C++** — the small-mesh Rust-over-Python edge does not hold at scale. Its `get_vertex_edges` query path was O(_n_) per call (rebuilt the edge list each call); that defect is **now fixed** — the vertex→edge index is cached, so queries are O(1) (Block_O 954 μs → 0.32 μs, 76/76 equivalence tests still pass). Full data, methodology, the "should Rust replace Python anywhere?" analysis, and the default-backend/opt-in discussion: [`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md). Bottom line: **C++ remains the acceleration path; Rust earns no perf niche over it.**
 
 ‡ Octave 8.4, interpreter. Times are in-memory compute only — fort.14 parse and rendering excluded. Machine-dependent. Full method: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+
+§ Rust ENPAC2003 cells measured separately on the cloud reference machine (x86_64, Python 3.11, chilmesh 1.4.1) once the mesh became reachable in-environment from the [Valence](https://github.com/domattioli/Valence) sibling checkout ([#250](https://github.com/domattioli/CHILmesh/issues/250)); same-machine controls there were Python full-init 11.89 s / C++ 0.803 s (both within noise of the MATLAB-1.2.2 columns above), so the Rust column is machine-consistent against those controls. Rust doesn't expose `fast_init`/peel separately ([#163](https://github.com/domattioli/CHILmesh/issues/163)) → only full-init + quality are measurable; `n_layers = 75` matched all backends.
 
 <p align="center">
   <img src="docs/gallery/enpac2003_showcase.png?v=1" alt="EasternPacific_ENPAC2003 quality plot and distribution">
@@ -164,7 +166,7 @@ Three algorithms — each preserves boundary nodes, leaves topology unchanged, a
 |---|---|---|
 | **Python** | Reference implementation — the default | `pip install chilmesh` |
 | **C++** | High-performance backend (half-edge) — bit-identical output | `pip install ./src/chilmesh_cpp` (or `bash scripts/build_cpp.sh`) |
-| Rust | ❄️ **Frozen** (experimental quad-edge); output-equivalent to Python (`rust-equivalence` CI, all 4 fixtures incl. `block_o`) but **not developed further**. **Measured ~2–5× slower than C++ on full init** (queries were O(_n_)/call, now cached to O(1)) — [`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md) concludes it earns no perf niche over C++ | source build, not recommended |
+| Rust | ❄️ **Frozen** (experimental quad-edge); output-equivalent to Python (`rust-equivalence` CI, all 4 fixtures incl. `block_o`) but **not developed further**. **Measured ~2–5× slower than C++ on full init** on bundled fixtures (and ~15× slower at the 531k-element ENPAC2003 scale, where it converges to ≈ Python; queries were O(_n_)/call, now cached to O(1)) — [`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md) concludes it earns no perf niche over C++ | source build, not recommended |
 | MATLAB | Original 2017 implementation, archived & unmaintained | [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) |
 
 ```python
