@@ -1,7 +1,9 @@
 name: build-cpp-wheels
 
-# Build-only validation of the chilmesh_cpp binary (manylinux) wheels.
+# Build + functional-smoke validation of the chilmesh_cpp binary (manylinux) wheels.
 # Manual dispatch; uploads wheels as artifacts ONLY — does NOT publish to PyPI.
+# The cibuildwheel test step RUNS full_init on a tiny mesh (not just a hasattr
+# probe) so a broken/empty binary fails the build (#256 Phase 1a).
 # Linux manylinux runs on the free ubuntu runner (not gated by the macOS/Windows
 # runner-billing question in #225), so the binary path can be validated in the
 # real manylinux container before any publish job is wired up. Refs #229, #163, #234.
@@ -31,7 +33,24 @@ jobs:
           CIBW_BUILD: "cp310-* cp311-* cp312-*"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_SKIP: "*-musllinux*"
-          CIBW_TEST_COMMAND: "python -c \"import chilmesh_cpp; assert hasattr(chilmesh_cpp, 'full_init'), 'cpp extension missing full_init'\""
+          CIBW_TEST_REQUIRES: "numpy"
+          # Real functional smoke (#256 Phase 1a): actually RUN full_init on a
+          # 2-triangle unit square and assert the built adjacency + skeleton, not
+          # just that the symbol exists. Topology invariants: 4 verts, 2 elems,
+          # 5 unique edges (4 boundary + 1 shared diagonal), adjacency built,
+          # >=1 peel layer, edge2vert shape (5, 2).
+          CIBW_TEST_COMMAND: >-
+            python -c "import numpy as np, chilmesh_cpp;
+            pts = np.array([[0.,0.],[1.,0.],[1.,1.],[0.,1.]], dtype=np.float64);
+            conn = np.array([[0,1,2],[0,2,3]], dtype=np.int32);
+            m = chilmesh_cpp.full_init(pts, conn);
+            assert m.n_verts == 4, m.n_verts;
+            assert m.n_elems == 2, m.n_elems;
+            assert m.n_edges == 5, m.n_edges;
+            assert m.adjacency_built, 'adjacency not built';
+            assert m.n_layers >= 1, m.n_layers;
+            assert np.asarray(m.edge2vert).shape == (5, 2), np.asarray(m.edge2vert).shape;
+            print('chilmesh_cpp full_init smoke OK:', m.n_verts, 'v', m.n_elems, 'e', m.n_edges, 'edges', m.n_layers, 'layers')"
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
