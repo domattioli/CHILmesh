@@ -1,0 +1,104 @@
+name: publish-cpp-wheels
+
+# Release/tag-gated PyPI publish of the chilmesh_cpp binary wheels + sdist (#256 Phase 2).
+#
+# Triggers ONLY on a published GitHub release or a deliberate manual dispatch —
+# there is NO push trigger, so nothing publishes from `development`. The build
+# leg reuses the manylinux cibuildwheel path validated in build-cpp-wheels.yml
+# (Phase 1a). macOS/Windows legs are intentionally absent here: they are Phase 1b,
+# gated on the runner-billing decision in #225 — add them to the build matrix
+# below once #225 resolves.
+#
+# Auth: PyPI Trusted Publishing (OIDC, id-token: write) is preferred (no
+# long-lived token). A token fallback mirroring publish-pypi.yml is shown as a
+# commented alternative on the publish step. Refs #256, #229, #225, #163, #234.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-manylinux:
+    name: cibuildwheel chilmesh_cpp (manylinux x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.21.3
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse src/chilmesh_cpp
+        env:
+          CIBW_BUILD: "cp310-* cp311-* cp312-*"
+          CIBW_ARCHS_LINUX: "x86_64"
+          CIBW_SKIP: "*-musllinux*"
+          CIBW_TEST_REQUIRES: "numpy"
+          # Same functional smoke as build-cpp-wheels.yml: run full_init on a
+          # 2-triangle unit square and assert adjacency + skeleton so a broken
+          # binary cannot be published.
+          CIBW_TEST_COMMAND: >-
+            python -c "import numpy as np, chilmesh_cpp;
+            pts = np.array([[0.,0.],[1.,0.],[1.,1.],[0.,1.]], dtype=np.float64);
+            conn = np.array([[0,1,2],[0,2,3]], dtype=np.int32);
+            m = chilmesh_cpp.full_init(pts, conn);
+            assert m.n_verts == 4, m.n_verts;
+            assert m.n_elems == 2, m.n_elems;
+            assert m.n_edges == 5, m.n_edges;
+            assert m.adjacency_built, 'adjacency not built';
+            assert m.n_layers >= 1, m.n_layers;
+            assert np.asarray(m.edge2vert).shape == (5, 2), np.asarray(m.edge2vert).shape;
+            print('chilmesh_cpp full_init smoke OK:', m.n_verts, 'v', m.n_elems, 'e', m.n_edges, 'edges', m.n_layers, 'layers')"
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: chilmesh-cpp-manylinux-wheels
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: build chilmesh_cpp sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build sdist
+        run: pipx run build --sdist --outdir dist src/chilmesh_cpp
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: chilmesh-cpp-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: publish chilmesh_cpp to PyPI
+    needs: [build-manylinux, sdist]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Protect with required reviewers in repo settings (Settings → Environments → pypi).
+    environment: pypi
+    permissions:
+      id-token: write   # PyPI Trusted Publishing (OIDC) — no long-lived secret
+    steps:
+      - name: Download all wheel + sdist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Token fallback — if PyPI Trusted Publishing is NOT configured for
+        # chilmesh-cpp, drop the `id-token: write` permission above and uncomment:
+        #   with:
+        #     password: ${{ secrets.PYPI_API_TOKEN }}
+        with:
+          packages-dir: dist
+          skip-existing: true
