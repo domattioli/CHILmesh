@@ -1,5 +1,10 @@
 # CHILmesh Project Plan & Roadmap
 
+> ⚠️ **STALE — historical, not the live roadmap (banner added 2026-07-27).**
+> This document describes the 2026-04-26 `v0.1.1 → v0.2.0` plan. The repo is now **v1.4.1** (stable; C++/Rust half-edge backends, full mutation API `#94`, fort.14/.2dm/fort.13 I/O, lazy `summary()`). The "You are here" / Phase-0 markers below are ~15 months out of date.
+> **Live status & roadmap → [README §Status & Roadmap](../README.md#status--roadmap).**
+> Disposition (retire this file vs. refresh it) is an open operator decision — see [#261](https://github.com/domattioli/CHILmesh/issues/261). Banner added pending that call; the content below is preserved unmodified as a historical record.
+
 **Current Version:** 0.1.1 (Alpha)
 **Planning Date:** 2026-04-26
 **Horizon:** 12 months (through Q1 2027)
