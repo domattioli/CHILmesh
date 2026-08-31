@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 import numpy as np
-from typing import Optional, Tuple, Callable
+from typing import Tuple, Callable
 
 # Module-level constants (no generator imports at module level)
 HBINS = 40

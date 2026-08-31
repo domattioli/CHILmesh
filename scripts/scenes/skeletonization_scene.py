@@ -26,7 +26,6 @@ from manim import (
     Write,
     Create,
     FadeIn,
-    FadeOut,
     Transform,
     config,
 )

@@ -15,7 +15,6 @@ Usage:
 """
 import json
 import platform
-import statistics
 import sys
 import time
 from pathlib import Path

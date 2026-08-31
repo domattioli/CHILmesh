@@ -398,7 +398,6 @@ def main() -> int:
               file=sys.stderr)
         # Still run for interactive use; the gate is advisory.
 
-    from chilmesh import CHILmesh
     conn, pts, n_elems_raw, n_verts_raw, grid_name = _load_fort14_arrays(Path(args.mesh))
     n_layers_ref = None
 

@@ -17,7 +17,6 @@ import numpy as np
 from manim import (
     DOWN,
     UP,
-    LEFT,
     RIGHT,
     Polygon,
     Dot,
@@ -28,7 +27,6 @@ from manim import (
     Write,
     Create,
     FadeIn,
-    FadeOut,
     Transform,
     config,
 )

@@ -27,7 +27,6 @@ from matplotlib.collections import LineCollection, PolyCollection
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-import chilmesh
 from chilmesh import examples
 from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
 

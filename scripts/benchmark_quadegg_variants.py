@@ -108,7 +108,7 @@ def benchmark_backend(backend_name: str, mesh_path: str) -> Dict[str, Tuple[floa
     median, std, peak_mem = measure_operation('query_latency', query_latency, n_trials=2)
     results['query_latency'] = (median, std, peak_mem)
 
-    print(f"✓", file=sys.stderr)
+    print("✓", file=sys.stderr)
 
     return results
 
@@ -133,7 +133,7 @@ def main():
             traceback.print_exc()
             continue
     
-    print(f"", file=sys.stderr)  # newline
+    print("", file=sys.stderr)  # newline
     
     # Write JSON
     output_data = {

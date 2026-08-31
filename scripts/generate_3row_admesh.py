@@ -397,7 +397,7 @@ def main():
     if len(set(counts)) == 1:
         print(f"  ✓ All rows have {counts[0]} elements")
     else:
-        print(f"  ✗ WARNING: Element counts differ!")
+        print("  ✗ WARNING: Element counts differ!")
         print(f"    Unique values: {set(counts)}")
 
     # ========================================================================
