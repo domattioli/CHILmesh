@@ -10,7 +10,6 @@ Reference: domattioli/CHILmesh#196
 
 from __future__ import annotations
 
-import dataclasses
 import inspect
 import tempfile
 from pathlib import Path

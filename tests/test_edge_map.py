@@ -1,7 +1,5 @@
 """Unit tests for EdgeMap class."""
 
-import pytest
-import numpy as np
 from chilmesh.mesh_topology import EdgeMap
 
 

@@ -1,6 +1,5 @@
 """Tests for CHILmesh constructor skip flags (#204)."""
 import numpy as np
-import pytest
 from chilmesh.CHILmesh import CHILmesh
 
 

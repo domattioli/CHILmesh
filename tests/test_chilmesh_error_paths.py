@@ -12,8 +12,6 @@ Covers ValueError, AssertionError, and FileNotFoundError conditions in:
 
 import pytest
 import numpy as np
-import tempfile
-from pathlib import Path
 import chilmesh
 from chilmesh import examples
 

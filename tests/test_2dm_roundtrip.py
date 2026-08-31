@@ -8,10 +8,8 @@ Caveat: ``_write_2dm`` serializes only node coords + element connectivity, NOT
 boundary-segment metadata, so the round-trip is lossless for geometry/topology
 but does not preserve boundary records.
 """
-from pathlib import Path
 
 import numpy as np
-import pytest
 
 import chilmesh
 

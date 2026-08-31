@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from chilmesh import (
-    CHILmesh,
     optimize_with_admesh_truss,
     optimize_with_admesh_truss_arrays,
     examples,
@@ -140,7 +139,7 @@ class TestBoundaryPreservation:
         # Check bit-exact preservation
         output_boundary = mesh_opt.points[boundary_indices, :2]
         assert np.array_equal(output_boundary, input_boundary), \
-            f"Boundary not preserved in CHILmesh form"
+            "Boundary not preserved in CHILmesh form"
 
     def test_vbnd_donut_domain_agnostic(self, donut_mesh, donut_sdf):
         """V_BND on donut: proves domain-agnosticism."""
