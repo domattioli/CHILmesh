@@ -5,7 +5,10 @@ Supports Gmsh format versions 2.2 and 4.1 with triangular and quadrilateral elem
 from __future__ import annotations
 
 import numpy as np
-from typing import Optional as Opt
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .CHILmesh import CHILmesh
 
 
 class GmshParseError(Exception):
@@ -33,7 +36,6 @@ def read_msh(full_file_name: str) -> "CHILmesh":
         GmshParseError: If format is unsupported, required sections missing,
             or file is malformed.
     """
-    from .CHILmesh import CHILmesh
 
     with open(full_file_name, 'r', encoding='utf-8') as f:
         lines = [line.strip() for line in f]
@@ -70,7 +72,6 @@ def read_msh(full_file_name: str) -> "CHILmesh":
 
 def _read_msh_v2_2(lines: list, filename: str) -> "CHILmesh":
     """Parse Gmsh format 2.2."""
-    from .CHILmesh import CHILmesh
 
     nodes = {}
     elements = []
@@ -161,7 +162,6 @@ def _read_msh_v2_2(lines: list, filename: str) -> "CHILmesh":
 
 def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
     """Parse Gmsh format 4.1."""
-    from .CHILmesh import CHILmesh
 
     nodes = {}
     elements = []

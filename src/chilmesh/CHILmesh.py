@@ -6,12 +6,8 @@ import warnings
 from .utils.plot_utils import CHILmeshPlotMixin
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from scipy.spatial import Delaunay, cKDTree
 from typing import List, Tuple, Optional as Opt, Dict, Set, Union, Any
-from scipy.sparse import lil_matrix
-from scipy.sparse.linalg import spsolve
 from copy import deepcopy
 
 __all__ = ['CHILmesh', 'write_fort14']
@@ -688,7 +684,6 @@ class CHILmesh(CHILmeshPlotMixin):
         v2e = self.adjacencies['Vert2Edge']
         v2m = self.adjacencies['Vert2Elem']
         e2v = self.adjacencies['Edge2Vert']
-        e2m = self.adjacencies['Edge2Elem']
 
         # Check: All vertices have entries
         assert len(v2e) == self.n_verts, f"Vert2Edge has {len(v2e)} entries, expected {self.n_verts}"
@@ -2699,7 +2694,7 @@ class CHILmesh(CHILmeshPlotMixin):
         try:
             # NOPE open boundaries
             nope = int(lines[i].split()[0]); i += 1
-            total_nope = int(lines[i].split()[0]); i += 1
+            _ = int(lines[i].split()[0]); i += 1  # total open-boundary nodes (unused)
             boundaries_present = True  # NOPE/NBOU block physically present (#259)
             for _ in range(nope):
                 n_seg = int(lines[i].split()[0]); i += 1
@@ -2712,7 +2707,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 )
             # NBOU flow boundaries
             nbou = int(lines[i].split()[0]); i += 1
-            total_nbou = int(lines[i].split()[0]); i += 1
+            _ = int(lines[i].split()[0]); i += 1  # total flow-boundary nodes (unused)
             for _ in range(nbou):
                 hdr = lines[i].split(); i += 1
                 n_seg = int(hdr[0])

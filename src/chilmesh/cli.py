@@ -191,7 +191,7 @@ def cmd_summary(args: argparse.Namespace) -> int:
     if file_bytes is not None:
         print(f"  File bytes: {file_bytes}")
     else:
-        print(f"  File bytes: N/A")
+        print("  File bytes: N/A")
 
     print(f"  Nodes:      {data.get('n_nodes', 'N/A')}")
     print(f"  Elements:   {data.get('n_elems', 'N/A')}")
