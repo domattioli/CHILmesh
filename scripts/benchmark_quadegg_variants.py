@@ -13,6 +13,7 @@ Usage:
 """
 
 import json
+import os
 import time
 import sys
 import tracemalloc
@@ -24,7 +25,8 @@ from chilmesh import CHILmesh
 
 BACKENDS = ['edgemap', 'halfedge', 'quadegg']
 OPERATIONS = ['fast_init', 'full_init', 'quality_analysis', 'query_latency']
-WNAT_HAGEN_PATH = "/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14"
+_VALENCE_DATA_DIR = os.environ.get("VALENCE_DATA_DIR", os.path.expanduser("~/valence-domains"))
+WNAT_HAGEN_PATH = str(Path(_VALENCE_DATA_DIR) / "registry_data/meshes/WNAT_Hagen.14")
 
 
 def measure_operation(op_name: str, op_fn, n_trials: int = 2) -> Tuple[float, float, float]:
