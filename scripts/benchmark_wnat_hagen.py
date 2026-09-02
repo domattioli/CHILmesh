@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import statistics
 import sys
@@ -45,10 +46,11 @@ def _measure(label: str, fn, *, n: int = 1) -> tuple[str, float]:
 
 
 def _locate_mesh(explicit: str | None) -> Path:
+    valence_dir = os.environ.get("VALENCE_DATA_DIR", os.path.expanduser("~/valence-domains"))
     candidates = [
         explicit,
-        "/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14",
-        "/tmp/valence-domains/WNAT_Hagen.14",
+        str(Path(valence_dir) / "registry_data/meshes/WNAT_Hagen.14"),
+        str(Path(valence_dir) / "WNAT_Hagen.14"),
         str(Path.home() / "WNAT_Hagen.14"),
     ]
     for c in candidates:
@@ -56,8 +58,7 @@ def _locate_mesh(explicit: str | None) -> Path:
             return Path(c)
     raise FileNotFoundError(
         "WNAT_Hagen mesh not found. Clone Valence:\n"
-        "  git clone https://github.com/domattioli/Valence "
-        "/tmp/valence-domains\n"
+        f"  git clone https://github.com/domattioli/Valence {valence_dir}\n"
         "then re-run this script."
     )
 

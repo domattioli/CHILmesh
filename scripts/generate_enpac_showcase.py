@@ -30,7 +30,8 @@ def _candidate_paths() -> list[Path]:
     env = os.environ.get("ENPAC_PATH")
     if env:
         out.append(Path(env))
-    out.append(Path("/tmp/valence-domains/registry_data/meshes/EasternPacific_ENPAC2003.14"))
+    valence_dir = os.environ.get("VALENCE_DATA_DIR", os.path.expanduser("~/valence-domains"))
+    out.append(Path(valence_dir) / "registry_data/meshes/EasternPacific_ENPAC2003.14")
     out.append(Path.home() / "valence-domains/registry_data/meshes/EasternPacific_ENPAC2003.14")
     return out
 
