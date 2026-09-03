@@ -67,7 +67,7 @@ Each finding tagged `H<n>` for cross-referencing.
 
 ### Upstream-relevant (report to DomI#64)
 
-- **H1 — `branch_guard.sh` not installed; CHILmesh re-eats branch-sprawl risk on every session.** Today's session (2026-05-15) was wrapped with `claude/eager-dijkstra-te5Uu`; the assistant caught it via the CLAUDE.md precedence rule, but a hook would be a hard guard. The branch_guard from `commit d11ca39` is the right shape (claude/*, --no-verify, force-push, colon-rename) — proposal is to publish a `repo-scope settings.json` template under `sync-from-domi` so a `/sync-from-domi` run wires it automatically. Evidence: `.claude/CLAUDE.md:251-255` (Branch Sprawl Incidents log: 3 incidents, latest today).
+- **H1 — `branch_guard.sh` not installed; CHILmesh re-eats branch-sprawl risk on every session.** Today's session (2026-05-15) was wrapped with `claude/eager-dijkstra-te5Uu`; the assistant caught it via the CLAUDE.md precedence rule, but a hook would be a hard guard. The branch_guard from `commit d11ca39` is the right shape (claude/*, --no-verify, force-push, colon-rename) — proposal is to publish a `repo-scope settings.json` template under `sync-from-domi` so a `/sync-from-domi` run wires it automatically. Evidence: `CLAUDE.md` § **Branch Sprawl Incidents** (Branch Sprawl Incidents log: 3 incidents, latest today).
 
 - **H2 — `SessionStart` hook is not wired in any consumer repo without manual `.claude/settings.json` work.** `instructions_on_start.sh` exists and behaves correctly when invoked, but `cron`/non-routine sessions skip it entirely. Proposal: `sync-from-domi` skill writes/merges `.claude/settings.json` to wire `SessionStart` → `scripts/hooks/session_start.sh` → `scripts/instructions_on_start.sh`. Evidence: `scripts/instructions_on_start.sh:1-67` exists; no settings.json wires it.
 
@@ -77,7 +77,7 @@ Each finding tagged `H<n>` for cross-referencing.
 
 - **H5 — Stop-hook contract is ambiguous: `stop-hook-git-check.sh` (user-scope, blocks on dirty/unpushed) vs. `stop_introspect.sh` (DomI repo-scope, /introspect reminder).** Both are valuable. Proposal: DomI's `stop_introspect.sh` should *append* to (not replace) any user-scope Stop hook, and document that user-scope hooks fire first. Evidence: `~/.claude/settings.json` already has a Stop hook; if DomI also registers one at repo scope without checking, behavior is harness-defined.
 
-- **H6 — Override-env contract (`CLAUDE_BRANCH_OVERRIDE=1`, `CLAUDE_INTERACTIVE=1`) is undocumented in CHILmesh's CLAUDE.md.** The contract lives only on DomI#64 today. Proposal: ship a contract stub in `.claude/CLAUDE.md` via the `sync-from-domi` skill so every consumer repo carries the same documentation.
+- **H6 — Override-env contract (`CLAUDE_BRANCH_OVERRIDE=1`, `CLAUDE_INTERACTIVE=1`) is undocumented in CHILmesh's CLAUDE.md.** The contract lives only on DomI#64 today. Proposal: ship a contract stub in `CLAUDE.md` via the `sync-from-domi` skill so every consumer repo carries the same documentation.
 
 - **H7 — `hook-bypass.log` telemetry channel (DomI#64 open question 1) deserves a decision.** From this audit's perspective, log entries should live at `~/.claude/hook-bypass.log` (user-scope) but be optionally rolled up by `sync-from-domi` into the periodic introspection issue. No local change needed; just a vote: **yes, log centrally, summarise per session.**
 
@@ -94,7 +94,7 @@ Each finding tagged `H<n>` for cross-referencing.
 ## 4. What blocks installing the scaffold today
 
 1. `~/.claude/plugins/cache/DomI/` is empty on this container. `claude plugin marketplace add domattioli/DomI` + `claude plugin install sync-from-domi@DomI` has not been run here.
-2. The `sync-from-domi` skill (per `.claude/CLAUDE.md:299-304` and `.planning/constitution.md:365-374`) is the canonical channel to drop `scripts/hooks/*.sh` and `.claude/settings.json` into a consumer repo, but the skill itself does not yet write `settings.json` (per #112 issue body table, this is upstream's responsibility).
+2. The `sync-from-domi` skill (per `CLAUDE.md` § **DomI Sync Contract**) is the canonical channel to drop `scripts/hooks/*.sh` and `.claude/settings.json` into a consumer repo, but the skill itself does not yet write `settings.json` (per #112 issue body table, this is upstream's responsibility).
 3. **Action item for upstream (filed on DomI#64):** ship a `scripts/hooks/` directory and a `.claude/settings.json` stub via `sync-from-domi`'s pull set so the next `/sync-from-domi` here lights it up.
 
 ---
@@ -113,4 +113,4 @@ Each finding tagged `H<n>` for cross-referencing.
 - Inventoried: `~/.claude/settings.json`, `~/.claude/stop-hook-git-check.sh`, `.claude/*`, `scripts/*`, `.githooks/*` (absent), `~/.claude/plugins/cache/DomI/*` (absent), `~/.claude/skills/*`.
 - Compared each event to the 5-hook DomI scaffold from `commit d11ca39` (table in #112 issue body).
 - Did not run any hook. Did not modify any settings file.
-- Cross-referenced incident history from `.claude/CLAUDE.md:243-255` (Branch Sprawl Incidents).
+- Cross-referenced incident history from `CLAUDE.md` § **Branch Sprawl Incidents**.

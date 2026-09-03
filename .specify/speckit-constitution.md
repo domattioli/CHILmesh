@@ -270,13 +270,15 @@ CHILmesh's global constitution (`.specify/memory/constitution.md`) takes precede
 - **Global governance principles** (testing, backward compatibility, peer review) → apply as written
 - **Spec structure/format** (file names, metadata) → follow speckit-constitution
 
-### 6.2 Alignment with CLAUDE.md
+### 6.2 Alignment with AGENTS.md / CLAUDE.md
 
-CHILmesh's development guide (`.claude/CLAUDE.md`) dictates:
+CHILmesh's development guide (AGENTS.md § **Branch & commit policy**) dictates:
 
 - **Branch policy:** All work on `development` branch (per DomI `branching.md`; supersedes the deprecated `daily-maintenance`) — not the `spec-branch` variable in spec.md
 - **Testing baseline:** All tests must pass before committing spec changes
 - **Code review:** Peer review required per constitution.md § 3.3
+
+(Claude Code-specific branch handling notes in CLAUDE.md § **Branch handling in Claude Code**.)
 
 ### 6.3 Alignment with project_plan.md
 
