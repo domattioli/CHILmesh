@@ -232,7 +232,7 @@ Single outlier (`test_readme_annulus_regenerates_and_validates`) drives ~8s/24s 
 
 ## 10. Docs & Onboarding
 
-- **No `TESTING.md`.** No `CONTRIBUTING.md` either. New contributors must infer the test entrypoint from `.claude/CLAUDE.md:138-150` or the CI workflow.
+- **No `TESTING.md` — but CONTRIBUTING.md exists.** New contributors can read test info from `AGENTS.md` § **Testing** or `CONTRIBUTING.md`.
 - **README badge is broken:** `README.md:18` links `actions/workflows/test.yml` but the workflow file is `python-package.yml`. The badge image will 404. **F11.**
 - Local-vs-CI parity is otherwise tight: `MPLBACKEND=Agg` is set in CI (`python-package.yml`) and required locally for plot tests (`tests/test_plot_utils.py:7`).
 - `pytest` runs cold for a new contributor with `pip install -e ".[dev]" && python -m pytest -v` — verified during this audit.
@@ -333,4 +333,4 @@ These were considered and intentionally not added to the backlog.
 
 - Suite executed once with `MPLBACKEND=Agg python -m pytest --durations=15 -q` and once with `--cov=src/chilmesh --cov-branch --cov-report=term-missing` against the editable install (`pip install -e ".[dev]"`) under Python 3.11.15.
 - All findings are derived from static reads of `tests/`, `pyproject.toml`, `.github/workflows/`, and runtime output of pytest. No test was modified.
-- The audit deliberately did **not** read `.planning/MODERNIZATION_LESSONS_LEARNED.md` or other planning docs beyond `.claude/CLAUDE.md` and `.planning/constitution.md` — to keep the audit grounded in the suite as it stands, not in what it was promised to be.
+- The audit deliberately did **not** read `.planning/MODERNIZATION_LESSONS_LEARNED.md` or other planning docs beyond `AGENTS.md`, `CLAUDE.md`, and `.planning/constitution.md` — to keep the audit grounded in the suite as it stands, not in what it was promised to be.
