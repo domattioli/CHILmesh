@@ -92,10 +92,11 @@ Edge2Elem: ndarray[n_edges, 2]        # Edge adjacent elements (-1 if boundary)
 
 ### During Development
 1. Create focused commits (one logical change per commit)
-2. Include regression tests (scenarios from existing tests)
-3. Benchmark any algorithmic changes
-4. Keep comments minimal (code clarity first)
-5. Update docstrings if changing public APIs
+2. The number of tokens used to exit files is best minimized, all else being equal. Therefore, when it will not affect the end result, opt first for surgical edits rather than rewriting entire existing files.
+3. Include regression tests (scenarios from existing tests)
+4. Benchmark any algorithmic changes
+5. Keep comments minimal (code clarity first)
+6. Update docstrings if changing public APIs
 
 ### Before Submitting
 1. Run full test suite: `pytest -v`
