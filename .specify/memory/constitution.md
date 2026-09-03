@@ -215,7 +215,7 @@ Enforcement is mechanical via the synced `release-integrity` workflow.
 
 `domattioli/DomI` manages foundational skills and policy used by this repo. `.domi-pin` is committed; session start runs `scripts/instructions_on_start.sh`, which invokes `sync-from-domi/check_pin.sh` and HARD STOPs on drift. `/sync-from-domi` unblocks.
 
-CHILmesh-specific rules (branch policy, API stability) take precedence over DomI universal defaults where they conflict. The precedence flows from the documented session-start read order: `.specify/memory/constitution.md` is read before `.claude/CLAUDE.md`, and both override DomI universal defaults.
+CHILmesh-specific rules (branch policy, API stability) take precedence over DomI universal defaults where they conflict. The precedence flows from the documented session-start read order: DomI universal defaults → `.specify/memory/constitution.md` → `.planning/project_plan.md` → `CLAUDE.md`, with each layer overriding prior defaults.
 
 ---
 

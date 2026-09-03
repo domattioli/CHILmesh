@@ -1,18 +1,18 @@
 facts:
   - id: version-pyproject-1-2-2
     type: cmd-equals
-    doc: .claude/CLAUDE.md
+    doc: AGENTS.md
     extract: '\*\*Current Version:\*\*\s+(\S+)'
     cmd: 'grep "^version" pyproject.toml | head -1 | cut -d= -f2 | tr -d " \""'
     severity: warn
-    note: 'Version claim in .claude/CLAUDE.md must match pyproject.toml; spec-019 doc-fix'
+    note: 'Version claim in AGENTS.md must match pyproject.toml; spec-019 doc-fix'
 
   - id: speedup-claims-15x-not-46x
     type: line-match
-    doc: .claude/CLAUDE.md
+    doc: AGENTS.md
     expect: '~15×'
     severity: warn
-    note: '.claude/CLAUDE.md speedup claim must say ~15× (not 46×/66×); spec-019 doc-fix'
+    note: 'AGENTS.md speedup claim must say ~15× (not 46×/66×); spec-019 doc-fix'
 
   - id: domi-pin-synced-8e259ae
     type: line-match
