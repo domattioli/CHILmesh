@@ -12,6 +12,7 @@ Renders to /home/user/CHILmesh/docs/gallery/skeletonization_toy.mp4
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -38,7 +39,8 @@ config.pixel_width = 1280
 config.pixel_height = 720
 config.background_color = "#0e0e10"
 
-DATA_PATH = Path("/tmp/skeleton_data.json")
+_OUT_DIR = Path(os.environ.get("CHILMESH_OUT_DIR", Path(__file__).resolve().parents[2] / "output"))
+DATA_PATH = _OUT_DIR / "skeleton_data.json"
 
 OV_COLOR = "#5fb0ff"     # outer vertices
 OE_COLOR = "#ff9f43"     # outer elements

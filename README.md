@@ -32,7 +32,7 @@
   </a>
 </p>
 
-> **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>
+> **MATLAB users:** This Python library is the actively-developed successor to the original MATLAB codebase. The original (no longer maintained) is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a> Want the fast C++ backend from MATLAB? Call the Python API through MATLAB's `py.` bridge (e.g. `py.chilmesh.Mesh.read_from_fort14('ocean.14')`) after `pip install chilmesh` — no MEX build.
 
 ---
 
@@ -48,10 +48,10 @@
 
 ## Status & Roadmap
 
-**Current status (June 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; cross-backend equivalence tests across C++ and Rust; fort.14 + .2dm + fort.13 I/O; mixed-element support; full mesh-mutation API (split/swap/merge/collapse, [#94](https://github.com/domattioli/CHILmesh/issues/94)); lazy header-only `summary()`.
+**Current status (July 2026): Stable and actively-maintained.** C++ half-edge backend (up to ~15× faster on full init); bit-identical output verified; cross-backend equivalence tests across C++ and Rust; fort.14 + .2dm + fort.13 I/O; mixed-element support; full mesh-mutation API (split/swap/merge/collapse, [#94](https://github.com/domattioli/CHILmesh/issues/94)); lazy header-only `summary()`.
 
-- **Now:** Pre-built binary wheels (cibuildwheel, manylinux/macOS/Windows); Rust layer-peel completion ([#163](https://github.com/domattioli/CHILmesh/issues/163)).
-- **Next:** performance optimization; parallelization; conda-forge packaging; mkdocs API site; native `.chil` file format
+- **Now:** Publish pre-built binary **C++** wheels to PyPI — `pip install chilmesh[cpp]`, no toolchain ([#256](https://github.com/domattioli/CHILmesh/issues/256)).
+- **Next:** native `.chil` file format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); documentation site.
 - **Future:** formal integration within a unified ecosystem including <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMiAyMSBMMTIgMiBMMjIgMjEgWiBNMTIgMiBMNyAyMSBNMTIgMiBMMTcgMjEgTTcgMjEgTDEyIDEyIEwxNyAyMSBNMTIgMTIgTDEyIDIiLz48L3N2Zz4=" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0iTTMgNCBIMjEgTTMgMTIgSDIxIE0zIDIwIEgyMSBNNCAzIFYyMSBNMTIgMyBWMjEgTTIwIDMgVjIxIi8%2BPC9zdmc%2B" alt="QuADMESH PyPI version"></a>
 
 ---
@@ -72,7 +72,6 @@
 ```bash
 pip install chilmesh                        # PyPI
 uv pip install chilmesh                     # uv
-conda install -c conda-forge chilmesh       # conda-forge (pending)
 pip install -e .                            # from source
 ```
 
@@ -119,10 +118,10 @@ Reference workload: **EasternPacific_ENPAC2003** — 272,913 vertices · 531,680
 
 | Stage | MATLAB (Octave) ‡ | Python | C++ | Rust |
 |---|---:|---:|---:|---:|
-| Fast init (adj, no peel) | 2.738 s | 6.454 s | 0.769 s | tbd |
-| Peel only | 12.771 s | 5.814 s | 0.669 s | tbd |
-| Full init (adj + peel) | 16.677 s | 12.300 s | 1.438 s | tbd |
-| Quality (signed area) | 75 ms | 51 ms | 7 ms | tbd |
+| Fast init (adj, no peel) | 2.738 s | 6.454 s | 0.769 s | n/a § |
+| Peel only | 12.771 s | 5.814 s | 0.669 s | n/a § |
+| Full init (adj + peel) | 16.677 s | 12.300 s | 1.438 s | 11.98 s § |
+| Quality (signed area) | 75 ms | 51 ms | 7 ms | 2 ms § |
 
 Like-for-like: every backend runs the same operation on the same in-memory arrays. No fort.14 parse, signed-area quality. All resolve `n_layers = 75`; Python↔C++ layers are bit-identical ([`test_backend_equivalence.py`](tests/test_backend_equivalence.py)).
 
@@ -132,6 +131,8 @@ Like-for-like: every backend runs the same operation on the same in-memory array
 - **Rust** — the layer peel matches Python on `n_layers`, layer-member sets (OE/IE/OV/IV), per-layer `bEdgeIDs` (full-mesh edge IDs, ascending), full-mesh `Edge2Vert`/`Vert2Edge` ordering, and signed areas — verified by the `rust-equivalence` CI job across all four fixtures incl. `block_o` ([#163](https://github.com/domattioli/CHILmesh/issues/163)). Perf is now measured (the ENPAC cells above stay `tbd` — that mesh lives outside the repo): on the bundled fixtures **Rust full-inits ~3–5× faster than Python but ~2–5× slower than C++**. Its `get_vertex_edges` query path was O(_n_) per call (rebuilt the edge list each call); that defect is **now fixed** — the vertex→edge index is cached, so queries are O(1) (Block_O 954 μs → 0.32 μs, 76/76 equivalence tests still pass). Full data, methodology, the "should Rust replace Python anywhere?" analysis, and the default-backend/opt-in discussion: [`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md). Bottom line: **C++ remains the acceleration path; Rust earns no perf niche over it.**
 
 ‡ Octave 8.4, interpreter. Times are in-memory compute only — fort.14 parse and rendering excluded. Machine-dependent. Full method: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+
+§ Rust ENPAC2003 cells measured separately on the cloud reference machine (x86_64, Python 3.11, chilmesh 1.4.1) once the mesh became reachable in-environment from the [Valence](https://github.com/domattioli/Valence) sibling checkout ([#250](https://github.com/domattioli/CHILmesh/issues/250)); same-machine controls there were Python full-init 11.89 s / C++ 0.803 s (both within noise of the MATLAB-1.2.2 columns above), so the Rust column is machine-consistent against those controls. Rust doesn't expose `fast_init`/peel separately ([#163](https://github.com/domattioli/CHILmesh/issues/163)) → only full-init + quality are measurable; `n_layers = 75` matched all backends.
 
 <p align="center">
   <img src="docs/gallery/enpac2003_showcase.png?v=1" alt="EasternPacific_ENPAC2003 quality plot and distribution">
@@ -223,8 +224,12 @@ Also available as `python -m chilmesh`. Each subcommand has `--help`.
 
 ## Citation
 
-CHILmesh originated in MATLAB as the data structure backing a layer-peel-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc Thesis, 2017) <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf">
-    <img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis"></a>
+<p align="center">
+  <a href="https://doi.org/10.5281/zenodo.21199161"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21199161.svg" alt="Cite via Zenodo DOI"></a>
+  <a href="https://github.com/user-attachments/files/19724263/QuADMESH-Thesis.pdf"><img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis"></a>
+</p>
+
+Cite the **software** via its Zenodo DOI — click the badge above, or use the BibTeX below. CHILmesh originated in MATLAB as the data structure backing a layer-peel-driven indirect tri-to-quad conversion heuristic (Mattioli, OSU MSc Thesis, 2017) — the **thesis** (badge above) is the original method reference.
 ```bibtex
 @software{mattioli_chilmesh,
   author    = {Mattioli, Dominik O. and Kubatko, Ethan J.},
@@ -232,8 +237,8 @@ CHILmesh originated in MATLAB as the data structure backing a layer-peel-driven 
                quadrilateral, and mixed-element grids},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {1.2.2},
-  doi       = {10.5281/zenodo.20263854},
+  version   = {1.4.1},
+  doi       = {10.5281/zenodo.21199161},
   url       = {https://github.com/domattioli/CHILmesh}
 }
 ```

@@ -238,6 +238,29 @@ class TestSummaryFort14SuffixVariant:
         assert result['n_nodes'] == 9, f"Expected n_nodes=9, got {result['n_nodes']}"
 
 
+class TestSummaryGrd:
+    """Test .grd suffix detection (ADCIRC grid file, fort.14 format; #201).
+
+    The mesh_read_guard hook reroutes .grd reads to `chilmesh summary <path>`
+    and the summary() docstring lists .grd as supported, but no test asserted
+    the reroute target actually resolves. Regression guard for that path.
+    """
+
+    def test_grd_suffix_detects_as_fort14(self, tmp_path):
+        """File with .grd suffix detects as fort14 format (same 2-line header)."""
+        mesh_file = tmp_path / "mesh.grd"
+        mesh_file.write_text("ADCIRC grid\n4 9\n")
+
+        result = summary(mesh_file)
+
+        assert result['format'] == 'fort14', (
+            f"Expected format='fort14' for .grd suffix, got {result['format']}"
+        )
+        assert result['n_elems'] == 4, f"Expected n_elems=4, got {result['n_elems']}"
+        assert result['n_nodes'] == 9, f"Expected n_nodes=9, got {result['n_nodes']}"
+        assert result['grid_name'] == 'ADCIRC grid'
+
+
 class TestSummaryFileStatErrors:
     """Test file stat errors (lines 104-105)."""
 

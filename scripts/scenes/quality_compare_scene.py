@@ -16,6 +16,7 @@ Renders 1080p30 mp4.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -47,7 +48,8 @@ config.pixel_height = 1080
 config.frame_rate = 30
 config.background_color = "#0e0e10"
 
-DATA_PATH = Path("/tmp/quality_compare.json")
+_OUT_DIR = Path(os.environ.get("CHILMESH_OUT_DIR", Path(__file__).resolve().parents[2] / "output"))
+DATA_PATH = _OUT_DIR / "quality_compare.json"
 
 # Per-fixture color palette.
 PALETTE = {
