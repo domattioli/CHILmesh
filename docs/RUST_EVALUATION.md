@@ -64,16 +64,10 @@ so that symbol name persists in code while prose says "peel".)*
 - **Machine:** Intel Xeon @ 2.80 GHz (4 cores), 15 GiB RAM, Linux 6.18,
   Python 3.11.15, rustc/cargo 1.94.1, g++ 13.3. Absolute times are
   machine-dependent; the **ratios** are the portable result.
-- **Meshes:** the repo's bundled fixtures (`donut`, `annulus`, `Block_O`), plus
-  the continental-scale **ENPAC2003** reference (531,680 elems), now reachable
-  in-environment from the [Valence](https://github.com/domattioli/Valence)
-  sibling checkout — its previously-`tbd` README Rust cells are filled (#250):
-  full-init **11.98 s** (≈ Python 11.89 s same-machine, ~15× slower than C++
-  0.803 s), quality **2 ms**, `n_layers = 75` matching all backends. Rust
-  `fast_init`/peel stay unmeasurable separately (#163), so those two cells read
-  `n/a`. The small-mesh Rust-over-Python edge does not survive at scale — the
-  ratios below hold, and ENPAC only sharpens the "no perf niche over C++"
-  conclusion.
+- **Meshes:** the repo's bundled fixtures (`donut`, `annulus`, `Block_O`).
+  The continental-scale ENPAC2003 reference mesh is **not** in the repo, so its
+  README perf table keeps its `tbd` Rust cells — this evaluation does not
+  fabricate numbers for a mesh it did not run.
 
 ---
 

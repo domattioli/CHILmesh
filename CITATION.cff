@@ -1,7 +1,7 @@
 # Citation metadata for CHILmesh.
 # Rendered by GitHub as the "Cite this repository" button.
 # Schema: https://citation-file-format.github.io/
-cff-version: 1.2.0
+cff-version: 1.4.1
 title: "CHILmesh: a fast 2D mesh library for triangular, quadrilateral, and mixed-element grids"
 message: "If you use CHILmesh in academic work, please cite it using these metadata."
 type: software
@@ -30,8 +30,8 @@ keywords:
   - python
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.21199161
-    description: Zenodo DOI (first archive — update with concept DOI once a second release lands)
+    value: 10.5281/zenodo.21362772
+    description: Zenodo DOI (v1.4.1, July 14, 2026)
 preferred-citation:
   type: thesis
   title: "QuADMESH+: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models"
