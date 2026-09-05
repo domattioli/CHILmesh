@@ -11,6 +11,7 @@ Renders 1080p mp4 suitable for embedding in README.md.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -41,7 +42,8 @@ config.pixel_height = 1080
 config.frame_rate = 30
 config.background_color = "#0e0e10"
 
-DATA_PATH = Path("/tmp/skeleton_annulus.json")
+_OUT_DIR = Path(os.environ.get("CHILMESH_OUT_DIR", Path(__file__).resolve().parents[2] / "output"))
+DATA_PATH = _OUT_DIR / "skeleton_annulus.json"
 
 OV_COLOR = "#5fb0ff"
 OE_COLOR = "#ff9f43"

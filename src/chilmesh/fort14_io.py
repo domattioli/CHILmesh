@@ -85,6 +85,7 @@ class Fort14Raw:
     elements: dict                  # element id -> tuple of node ids (true arity, file winding)
     open_boundaries: list = field(default_factory=list)
     flow_boundaries: list = field(default_factory=list)
+    boundaries_present: bool = False  # True iff a NOPE/NBOU block was physically parsed (#259)
 
 
 def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
@@ -100,6 +101,12 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
         Fort14ParseError: on a malformed header, node/element block, or
             boundary block. A legacy mesh with no boundary block is accepted
             (empty ``open_boundaries`` / ``flow_boundaries``).
+
+    Note:
+        ``boundaries_present`` is ``True`` only when a NOPE/NBOU block was
+        physically parsed, distinguishing a present-but-empty (0/0) boundary
+        section from an absent one (#259). It stays ``False`` when
+        ``parse_boundaries=False`` (the block was skipped, not inspected).
     """
     path = Path(filename)
     with open(path) as fh:
@@ -144,7 +151,9 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
 
     open_boundaries: list = []
     flow_boundaries: list = []
+    boundaries_present = False
     if parse_boundaries and i < len(lines) and lines[i].strip():
+        boundaries_present = True
         try:
             nope = int(lines[i].split()[0]); i += 1
             i += 1  # NETA (total open nodes) — recomputed on write
@@ -209,6 +218,7 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
         grid_name=grid_name, n_nodes=n_nodes, n_elems=n_elems,
         node_ids=node_ids, coords=coords, elem_ids=elem_ids, elements=elements,
         open_boundaries=open_boundaries, flow_boundaries=flow_boundaries,
+        boundaries_present=boundaries_present,
     )
 
 

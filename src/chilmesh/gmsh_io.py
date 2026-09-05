@@ -13,6 +13,25 @@ class GmshParseError(Exception):
     pass
 
 
+def _require_int(token: str, what: str) -> int:
+    """Parse and validate an integer token.
+
+    Parameters:
+        token: String to parse as integer
+        what: Human-readable description of the field (for error message)
+
+    Returns:
+        Parsed integer value
+
+    Raises:
+        GmshParseError: If token cannot be parsed as integer
+    """
+    try:
+        return int(token)
+    except ValueError as exc:
+        raise GmshParseError(f"malformed {what}: non-numeric {token!r}") from exc
+
+
 def read_msh(full_file_name: str) -> "CHILmesh":
     """
     Load a mesh from a Gmsh ASCII .msh file.
@@ -134,7 +153,7 @@ def _read_msh_v2_2(lines: list, filename: str) -> "CHILmesh":
         if len(parts) < 4:
             raise GmshParseError(f"Element line malformed: {lines[elem_idx]}")
         try:
-            elem_id = int(parts[0])
+            _require_int(parts[0], "element ID")
             elem_type = int(parts[1])
             n_tags = int(parts[2])
             # Skip tag section, extract node list
@@ -189,7 +208,7 @@ def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
         if len(header_parts) < 4:
             raise GmshParseError("$Nodes header malformed")
         num_blocks = int(header_parts[0])
-        num_nodes = int(header_parts[1])
+        _require_int(header_parts[1], "number of nodes")
     except ValueError:
         raise GmshParseError("$Nodes header has non-numeric values")
 
@@ -201,9 +220,9 @@ def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
         if len(block_header) < 4:
             raise GmshParseError(f"Node block {block_idx} header malformed")
         try:
-            dim = int(block_header[0])
-            tag = int(block_header[1])
-            parametric = int(block_header[2])
+            _require_int(block_header[0], f"node block {block_idx} dimension")
+            _require_int(block_header[1], f"node block {block_idx} tag")
+            _require_int(block_header[2], f"node block {block_idx} parametric")
             num_in_block = int(block_header[3])
         except ValueError:
             raise GmshParseError(f"Node block {block_idx} header has non-numeric values")
@@ -250,7 +269,7 @@ def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
         if len(elem_header) < 4:
             raise GmshParseError("$Elements header malformed")
         elem_blocks = int(elem_header[0])
-        elem_total = int(elem_header[1])
+        _require_int(elem_header[1], "total number of elements")
     except ValueError:
         raise GmshParseError("$Elements header has non-numeric values")
 
@@ -262,8 +281,8 @@ def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
         if len(block_header) < 4:
             raise GmshParseError(f"Element block {block_idx} header malformed")
         try:
-            dim = int(block_header[0])
-            tag = int(block_header[1])
+            _require_int(block_header[0], f"element block {block_idx} dimension")
+            _require_int(block_header[1], f"element block {block_idx} tag")
             elem_type = int(block_header[2])
             num_in_block = int(block_header[3])
         except ValueError:
@@ -276,7 +295,7 @@ def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
                 raise GmshParseError(f"Element block {block_idx} incomplete")
             parts = lines[line_idx].split()
             try:
-                elem_tag = int(parts[0])
+                int(parts[0])  # validation only: ValueError -> enclosing except keeps the "Element line malformed" contract
                 if elem_type == 2:  # Triangle
                     if len(parts) < 4:
                         raise GmshParseError(f"Triangle element line too short: {lines[line_idx]}")

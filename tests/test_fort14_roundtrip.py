@@ -9,6 +9,8 @@ Catches B1 (recursive ``write_to_fort14``).
 """
 from __future__ import annotations
 
+import textwrap
+
 import numpy as np
 
 import pytest
@@ -47,3 +49,38 @@ def test_fort14_roundtrip_identity(name, tmp_path):
     assert sorted(orig_sets) == sorted(rel_sets), (
         f"{name}: connectivity vertex-sets differ after roundtrip"
     )
+
+
+def test_chilmesh_boundaries_present_distinguishes_empty_from_absent(tmp_path):
+    """#259: CHILmesh.read_from_fort14 distinguishes present-but-empty from absent."""
+    # Minimal 1-element triangle mesh WITH physical 0/0/0/0 boundary block.
+    with_block = """
+        test mesh with boundaries
+        1 3
+        1 0.0 0.0 0.0
+        2 1.0 0.0 0.0
+        3 0.0 1.0 0.0
+        1 3 1 2 3
+        0
+        0
+        0
+        0
+        """
+    p = tmp_path / "with_block.14"
+    p.write_text(textwrap.dedent(with_block).strip() + "\n", encoding="utf-8")
+    mesh_with = CHILmesh.read_from_fort14(p, compute_layers=False, compute_adjacencies=False)
+    assert mesh_with.boundaries_present is True
+
+    # Same mesh WITHOUT any boundary block at all.
+    without_block = """
+        test mesh no boundaries
+        1 3
+        1 0.0 0.0 0.0
+        2 1.0 0.0 0.0
+        3 0.0 1.0 0.0
+        1 3 1 2 3
+        """
+    p = tmp_path / "without_block.14"
+    p.write_text(textwrap.dedent(without_block).strip() + "\n", encoding="utf-8")
+    mesh_without = CHILmesh.read_from_fort14(p, compute_layers=False, compute_adjacencies=False)
+    assert mesh_without.boundaries_present is False

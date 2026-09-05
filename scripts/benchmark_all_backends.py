@@ -14,6 +14,7 @@ Usage:
     python scripts/benchmark_all_backends.py [MESH_PATH]
 """
 import json
+import os
 import platform
 import statistics
 import sys
@@ -30,10 +31,11 @@ def _fmt(seconds: float, unit: str = "s") -> str:
     return str(seconds)
 
 def _locate_mesh(explicit: str | None) -> Path:
+    tmp_base = os.environ.get("VALENCE_DATA_DIR", os.path.expanduser("~/valence-domains"))
     candidates = [
         explicit,
-        "/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14",
-        "/tmp/WNAT_Hagen.14",
+        str(Path(tmp_base) / "registry_data/meshes/WNAT_Hagen.14"),
+        str(Path(tmp_base) / "WNAT_Hagen.14"),
         str(Path.home() / "WNAT_Hagen.14"),
     ]
     for c in candidates:
@@ -289,7 +291,9 @@ def main() -> int:
         "rust": rs_results,
         "cpp": cpp_results,
     }
-    json_path = Path("/tmp/wnat_all_backends.json")
+    out_dir = Path(os.environ.get("CHILMESH_OUT_DIR", Path(__file__).resolve().parents[1] / "output"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    json_path = out_dir / "wnat_all_backends.json"
     json_path.write_text(json.dumps(output, indent=2))
     print(f"Results saved: {json_path}")
 

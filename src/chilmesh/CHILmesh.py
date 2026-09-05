@@ -294,6 +294,9 @@ class CHILmesh(CHILmeshPlotMixin):
         # node+element-only meshes. Each entry: {"kind": "open"|"flow",
         # "ibtype": Optional[int], "nodes": np.ndarray of 0-based node indices}.
         self.boundary_segments: List[Dict[str, Any]] = []
+        # True iff a NOPE/NBOU boundary block was physically present in the
+        # source fort.14; distinguishes present-but-empty from absent (#259).
+        self.boundaries_present: bool = False
 
         # Hidden properties
         self.adjacencies: Dict[str, Any] = {}
@@ -2692,10 +2695,12 @@ class CHILmesh(CHILmeshPlotMixin):
 
         # --- parse boundary segments (#129) ---
         boundary_segments = []
+        boundaries_present = False
         try:
             # NOPE open boundaries
             nope = int(lines[i].split()[0]); i += 1
             total_nope = int(lines[i].split()[0]); i += 1
+            boundaries_present = True  # NOPE/NBOU block physically present (#259)
             for _ in range(nope):
                 n_seg = int(lines[i].split()[0]); i += 1
                 nodes = []
@@ -2728,6 +2733,7 @@ class CHILmesh(CHILmeshPlotMixin):
             )
 
         mesh.boundary_segments = boundary_segments
+        mesh.boundaries_present = boundaries_present
 
         # Default compute_adjacencies follows compute_layers (mirrors __init__).
         if compute_adjacencies is None:

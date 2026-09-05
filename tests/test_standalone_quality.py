@@ -143,6 +143,22 @@ class TestQualityMetrics:
 
         np.testing.assert_allclose(q1, q2)
 
+    def test_quad_max_angle_reports_obtuse_corner(self):
+        """Skewed quad's max_angle is its true obtuse corner, not a
+        triangle-split under-report (#260).
+
+        Quad [[0,0],[3,0],[2.2,1],[0,1]] has interior angles
+        90 / 51.34 / 128.66 / 90 deg; max_angle must read 128.66 deg.
+        """
+        verts = np.array([[0.0, 0.0], [3.0, 0.0], [2.2, 1.0], [0.0, 1.0]])
+        conn = [[0, 1, 2, 3]]
+
+        mx = float(np.ravel(chilmesh.element_quality(verts, conn, metric="max_angle"))[0])
+        mn = float(np.ravel(chilmesh.element_quality(verts, conn, metric="min_angle"))[0])
+
+        np.testing.assert_allclose(np.degrees(mx), 128.66, atol=0.05)
+        np.testing.assert_allclose(np.degrees(mn), 51.34, atol=0.05)
+
     def test_invalid_metric_raises(self):
         """Invalid metric should raise ValueError."""
         verts = np.array([[0.0, 0.0], [1.0, 0.0], [0.5, 0.5]])

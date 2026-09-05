@@ -8,7 +8,7 @@ type: software
 authors:
   - family-names: Mattioli
     given-names: Dominik O.
-    affiliation: Pennsylvania State University
+    affiliation: Unaffiliated
     # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: fill if available
   - family-names: Kubatko
     given-names: Ethan J.
