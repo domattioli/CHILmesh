@@ -36,7 +36,7 @@ HARD STOP — publishing: Never publish a release without version bump in pyproj
 ## Decision tree
 
 On session start:
-1. Read CLAUDE.md and DomI/specs/consumers/CHILmesh/memory/constitution.md (if present).
+1. Read AGENTS.md and DomI/specs/consumers/CHILmesh/memory/constitution.md (if present).
 2. Check git status — if dirty with unstaged changes from a prior run, commit or stash
    before proceeding. Never silently lose work.
 3. Run the primary task (library feature development, bug fixes, or improvements).
@@ -45,7 +45,7 @@ On session start:
 
 Primary task loop:
 - IF there is an explicit task spec (specs/ directory or GitHub issue), read it first.
-- ELSE fall back to the repo-level mission in CLAUDE.md.
+- ELSE fall back to the repo-level mission in AGENTS.md.
 - Work through the task list top-to-bottom. Check off each item as complete.
 - Do NOT ask for human input. If a decision is ambiguous and not covered by the
   constitution, pick the more conservative option and document the choice.
@@ -60,7 +60,7 @@ On unexpected error:
 
 ## On session start
 
-1. Read CLAUDE.md (if present in the cloned repo).
+1. Read AGENTS.md (if present in the cloned repo).
 2. If CONSTITUTION.md or DomI/specs/consumers/CHILmesh/memory/constitution.md exists, it takes
    precedence over all other instructions.
 3. Run the primary workflow action.

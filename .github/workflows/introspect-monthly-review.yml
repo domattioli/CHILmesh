@@ -45,7 +45,7 @@ jobs:
             "- [ ] Scan \`docs/introspections/*.md\` entries since last review. Record count + date range." \
             "- [ ] Prune stale/duplicate lessons. List each pruned entry (file + reason). None → say so." \
             "- [ ] Recurring pain across entries → route to a DomI \`request: skill\` issue via request-from-domi." \
-            "- [ ] Confirm CLAUDE.md lessons still match real behavior. Fix drift in same PR." \
+            "- [ ] Confirm AGENTS.md guidance still matches real behavior. Fix drift in same PR." \
             "" \
             "## Outcome" \
             "" \
