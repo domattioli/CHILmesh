@@ -53,7 +53,6 @@ prune .planning
 global-exclude .domi-pin
 global-exclude .zenodoignore
 global-exclude .release-ignore.toml
-global-exclude CLAUDE.md
 global-exclude AGENTS.md
 global-exclude claude_routine_instructions.md
 global-exclude instructions_on_start.sh

@@ -7,7 +7,6 @@
 .domi-pin
 .zenodoignore
 .release-ignore.toml
-CLAUDE.md
 AGENTS.md
 claude_routine_instructions.md
 instructions_on_start.sh
