@@ -9,7 +9,7 @@ Claude-Code-specific guidance only; project rules live in AGENTS.md.
 On every session start, `scripts/instructions_on_start.sh` runs and invokes the DomI drift check. Read these files in order:
 
 1. DomI universal rules: https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md
-2. Project governance: `.specify/memory/constitution.md`
+2. Project governance: `DomI/specs/consumers/CHILmesh/memory/constitution.md`
 3. Project roadmap: `.planning/project_plan.md`
 4. This file: `CLAUDE.md`
 
@@ -53,7 +53,7 @@ claude plugin install request-from-domi@DomI    # opt-in (file/vote on skill req
 Every scheduled Claude Code routine targeting CHILmesh uses **this exact session prompt** (paste into the routine config):
 
 ```
-Read https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md then .specify/memory/constitution.md → .planning/project_plan.md → CLAUDE.md.
+Read https://raw.githubusercontent.com/domattioli/DomI/main/claude_routine_instructions.md then DomI/specs/consumers/CHILmesh/memory/constitution.md → .planning/project_plan.md → CLAUDE.md.
 ```
 
 Read order is precedence order: DomI universal defaults are loaded first, then CHILmesh-specific rules layer on top.

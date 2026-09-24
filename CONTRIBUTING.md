@@ -3,7 +3,7 @@
 Thanks for your interest in CHILmesh — a Python library for 2D mesh generation,
 manipulation, and analysis. This is the **canonical** contributor guide
 (day-to-day mechanics). Authoritative project rules live in
-[`.specify/memory/constitution.md`](.specify/memory/constitution.md) (if present);
+[`DomI/specs/consumers/CHILmesh/memory/constitution.md`](https://github.com/domattioli/DomI/tree/development/specs/consumers/CHILmesh/memory/constitution.md) (if present);
 agent + human project guidance is in [AGENTS.md](AGENTS.md) (tool-agnostic) and [CLAUDE.md](CLAUDE.md) (Claude Code-specific).
 
 ## Repo shape
@@ -110,6 +110,6 @@ all changes are reviewed before reaching production.
 
 - [AGENTS.md](AGENTS.md) has development conventions, architecture, testing, and code standards.
 - [CLAUDE.md](CLAUDE.md) has Claude-Code-specific guidance and lessons learned.
-- [`.specify/memory/constitution.md`](.specify/memory/constitution.md) has
+- [`DomI/specs/consumers/CHILmesh/memory/constitution.md`](https://github.com/domattioli/DomI/tree/development/specs/consumers/CHILmesh/memory/constitution.md) has
   authoritative governance and hard rules (if present).
 - Open issues track backlog items and known limitations.

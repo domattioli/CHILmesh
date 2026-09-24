@@ -379,7 +379,7 @@ documentation polish. No public-API breaking changes.
   relocated to `.planning/`.
 - README trimmed 288 → 224 lines; install command above the fold; deep
   content lives under `docs/`.
-- `.specify/memory/constitution.md` consolidated as canonical
+- `DomI/specs/consumers/CHILmesh/memory/constitution.md` consolidated as canonical
   governance; `.planning/constitution.md` retained as redirect stub.
 
 ### 📚 Documentation
@@ -461,7 +461,7 @@ broad consumer-readiness polish.
 - `examples/README.md` indexes the runnable scripts
 - `docs/API.md`: Visualization section added; `plot_boundary` / `plot_interior_edges` documented
 - `TESTING.md` added: pytest invocation patterns, fixture table, debugging tips
-- Constitution consolidated into `.specify/memory/constitution.md` (#107); `.planning/constitution.md` and `.specify/speckit-constitution.md` retained as redirect stubs
+- Constitution consolidated into `DomI/specs/consumers/CHILmesh/memory/constitution.md` (#107); `.planning/constitution.md` and `DomI/specs/consumers/CHILmesh/speckit-constitution.md` retained as redirect stubs
 
 ### 🏛 Governance
 
@@ -508,7 +508,7 @@ These numbers carry forward unchanged into v0.4.0 — Phase 5 spatial queries an
 
 ### 🛠 Packaging
 
-- `MANIFEST.in` added: PyPI sdist excludes `.claude/`, `.planning/`, `.specify/`, `specs/`, `tests/`, `scripts/`, `.github/`, `.domi-pin`. Wheel layout unchanged.
+- `MANIFEST.in` added: PyPI sdist excludes `.claude/`, `.planning/`, `DomI/specs/consumers/CHILmesh/`, `specs/`, `tests/`, `scripts/`, `.github/`, `.domi-pin`. Wheel layout unchanged.
 
 ### 📚 Documentation
 

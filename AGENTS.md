@@ -33,7 +33,7 @@ CHILmesh/
 │   ├── conftest.py            # Test fixtures (annulus, donut, block_o, structured)
 │   ├── test_invariants.py     # Topology & skeletonization tests
 │   └── ...                     # Per-module test files
-├── .specify/memory/
+├── DomI/specs/consumers/CHILmesh/memory/
 │   └── constitution.md        # Project governance rules
 ├── .planning/
 │   ├── project_plan.md        # Roadmap and milestones
@@ -217,7 +217,7 @@ The number of tokens used to edit files is best minimized, all else being equal.
 ## Reference docs
 
 **Project governance & roadmap:**
-- `.specify/memory/constitution.md` — Canonical project governance rules, principles, API stability contract
+- `DomI/specs/consumers/CHILmesh/memory/constitution.md` — Canonical project governance rules, principles, API stability contract
 - `.planning/project_plan.md` — Roadmap, milestones, "where we are today" status
 - `.planning/MODERNIZATION_LESSONS_LEARNED.md` — Design decisions and optimization tradeoffs
 

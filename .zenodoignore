@@ -3,7 +3,6 @@
 .claude-plugin/
 .introspect/
 .githooks/
-.specify/
 .planning/
 .domi-pin
 .zenodoignore

@@ -7,7 +7,6 @@
 .claude-plugin/ export-ignore
 .introspect/ export-ignore
 .githooks/ export-ignore
-.specify/ export-ignore
 .planning/ export-ignore
 .domi-pin export-ignore
 .zenodoignore export-ignore

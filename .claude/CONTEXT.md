@@ -42,4 +42,4 @@ Until #154 is resolved and constitutions amended, `.chil` I/O is NOT in scope fo
 - CHILmesh#149 (prior CONTEXT.md draft, closed)
 - ADMESH-Domains#79 (companion CONTEXT.md + ADR-0001 draft)
 - ADMESH-Domains#80 (Domain lineage graph)
-- `.specify/memory/constitution.md` (CHILmesh governance contract)
+- `DomI/specs/consumers/CHILmesh/memory/constitution.md` (CHILmesh governance contract)
