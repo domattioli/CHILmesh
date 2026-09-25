@@ -7,12 +7,10 @@
 .claude-plugin/ export-ignore
 .introspect/ export-ignore
 .githooks/ export-ignore
-.specify/ export-ignore
 .planning/ export-ignore
 .domi-pin export-ignore
 .zenodoignore export-ignore
 .release-ignore.toml export-ignore
-CLAUDE.md export-ignore
 AGENTS.md export-ignore
 claude_routine_instructions.md export-ignore
 instructions_on_start.sh export-ignore

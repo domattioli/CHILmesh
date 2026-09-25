@@ -22,7 +22,6 @@ prune src/chilmesh_core/target
 # Internal / dev-only paths — exclude from sdist
 prune .claude
 prune .planning
-prune .specify
 prune specs
 prune tests
 prune docs
@@ -50,12 +49,10 @@ prune .claude
 prune .claude-plugin
 prune .introspect
 prune .githooks
-prune .specify
 prune .planning
 global-exclude .domi-pin
 global-exclude .zenodoignore
 global-exclude .release-ignore.toml
-global-exclude CLAUDE.md
 global-exclude AGENTS.md
 global-exclude claude_routine_instructions.md
 global-exclude instructions_on_start.sh
