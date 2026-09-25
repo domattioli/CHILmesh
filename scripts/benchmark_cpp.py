@@ -104,7 +104,6 @@ def bench_rust(pts, conn, fixture_path, n_trials):
         return None
 
     results = {}
-    conn32 = conn.astype(np.int32)
     pts64 = pts.astype(np.float64)
 
     # fast_init: just read + no adjacency
@@ -128,12 +127,10 @@ def bench_rust(pts, conn, fixture_path, n_trials):
     m_full_rust = m
 
     # quality_analysis (Rust doesn't expose this directly; time Python fallback on Rust data)
-    e2v = m_full_rust.get_edge2vert()
     elem2v = m_full_rust.get_elem2vert()
     times = []
     for _ in range(n_trials):
         t0 = time.perf_counter()
-        n_el = m_full_rust.n_elems
         # Compute signed area from elem2vert
         v0 = pts64[elem2v[:, 0]]
         v1 = pts64[elem2v[:, 1]]

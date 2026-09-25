@@ -67,24 +67,24 @@ def benchmark_backend(backend_name: str, mesh_path: str) -> Dict[str, Tuple[floa
     
     # Operation 1: Fast init (adjacencies only)
     def fast_init():
-        mesh = CHILmesh.read_from_fort14(
+        CHILmesh.read_from_fort14(
             mesh_path,
             compute_layers=False,
             compute_adjacencies=True,
             topology_backend=backend_name
         )
-    
+
     median, std, peak_mem = measure_operation('fast_init', fast_init, n_trials=2)
     results['fast_init'] = (median, std, peak_mem)
     
     # Operation 2: Full init (adjacencies + layers)
     def full_init():
-        mesh = CHILmesh.read_from_fort14(
+        CHILmesh.read_from_fort14(
             mesh_path,
             compute_layers=True,
             topology_backend=backend_name
         )
-    
+
     median, std, peak_mem = measure_operation('full_init', full_init, n_trials=2)
     results['full_init'] = (median, std, peak_mem)
 
@@ -110,7 +110,7 @@ def benchmark_backend(backend_name: str, mesh_path: str) -> Dict[str, Tuple[floa
     median, std, peak_mem = measure_operation('query_latency', query_latency, n_trials=2)
     results['query_latency'] = (median, std, peak_mem)
 
-    print(f"✓", file=sys.stderr)
+    print("✓", file=sys.stderr)
 
     return results
 
@@ -135,7 +135,7 @@ def main():
             traceback.print_exc()
             continue
     
-    print(f"", file=sys.stderr)  # newline
+    print("", file=sys.stderr)  # newline
     
     # Write JSON
     output_data = {

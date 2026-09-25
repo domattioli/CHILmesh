@@ -6,11 +6,8 @@ import warnings
 from .utils.plot_utils import CHILmeshPlotMixin
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from scipy.spatial import Delaunay, cKDTree
 from typing import List, Tuple, Optional as Opt, Dict, Set, Union, Any
-from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
 from copy import deepcopy
 
@@ -237,9 +234,12 @@ class CHILmesh(CHILmeshPlotMixin):
             acknowledge_change: If True, acknowledges the change in the mesh
         """
         assert acknowledge_change, "acknowledge_change must be True to change points -- this will change the mesh, make sure you understand this before using this method within a broader algorithm."
-        if new_points.shape[1] == 2:    self.points[:, :2] = new_points
-        elif new_points.shape[1] == 3:  self.points = new_points
-        else:                           raise ValueError("new_points must have 2 or 3 columns")
+        if new_points.shape[1] == 2:
+            self.points[:, :2] = new_points
+        elif new_points.shape[1] == 3:
+            self.points = new_points
+        else:
+            raise ValueError("new_points must have 2 or 3 columns")
 
     def __init__( self, connectivity: Opt[np.ndarray] = None, points: Opt[np.ndarray] = None, grid_name: Opt[str] = None, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None, build_spatial_indices: bool = True, validate: bool = True ) -> None:
         """
@@ -688,7 +688,6 @@ class CHILmesh(CHILmeshPlotMixin):
         v2e = self.adjacencies['Vert2Edge']
         v2m = self.adjacencies['Vert2Elem']
         e2v = self.adjacencies['Edge2Vert']
-        e2m = self.adjacencies['Edge2Elem']
 
         # Check: All vertices have entries
         assert len(v2e) == self.n_verts, f"Vert2Edge has {len(v2e)} entries, expected {self.n_verts}"
@@ -2069,7 +2068,6 @@ class CHILmesh(CHILmeshPlotMixin):
             Proceedings of the 8th International Meshing Roundtable, 189-193.
         """
         from scipy.sparse import csr_matrix, diags
-        from scipy.sparse.linalg import spsolve
 
         p = self.points[:, :2]
         n = self.n_verts
@@ -2699,7 +2697,7 @@ class CHILmesh(CHILmeshPlotMixin):
         try:
             # NOPE open boundaries
             nope = int(lines[i].split()[0]); i += 1
-            total_nope = int(lines[i].split()[0]); i += 1
+            int(lines[i].split()[0]); i += 1  # total_nope (not used)
             boundaries_present = True  # NOPE/NBOU block physically present (#259)
             for _ in range(nope):
                 n_seg = int(lines[i].split()[0]); i += 1
@@ -2712,7 +2710,7 @@ class CHILmesh(CHILmeshPlotMixin):
                 )
             # NBOU flow boundaries
             nbou = int(lines[i].split()[0]); i += 1
-            total_nbou = int(lines[i].split()[0]); i += 1
+            int(lines[i].split()[0]); i += 1  # total_nbou (not used)
             for _ in range(nbou):
                 hdr = lines[i].split(); i += 1
                 n_seg = int(hdr[0])
