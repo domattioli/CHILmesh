@@ -22,7 +22,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from chilmesh import CHILmesh, examples
+from chilmesh import examples
 
 
 class TestSmoothValidation:
@@ -72,7 +72,6 @@ class TestSmoothInPlace:
     def test_modifies_points_in_place(self):
         """smooth() modifies self.points, not a copy."""
         mesh = examples.annulus()
-        orig_id = id(mesh.points)
         mesh.smooth(n_iter=1, weight=0.5)
         # After smoothing, self.points may be reassigned to new_pts (in the loop)
         # But the mesh object's points attribute should be modified

@@ -472,7 +472,6 @@ class TestQuadAspectRatioPreservation:
         """Angle-based smoother should not degrade perfect quad meshes."""
         # The core test: for perfect grids, angle-based forces should not overshoot
         mesh = examples.quad_2x2()
-        orig_pts = mesh.points.copy()
 
         # Compute quality before smoothing
         q_before, _, _ = mesh.elem_quality()
@@ -612,8 +611,8 @@ class TestSmootherIntegration:
 def test_smooth_mesh_sdf_method():
     # donut fixture is triangular (annulus geometry: outer R=1, inner r=0.3)
     m = examples.donut().copy()
-    n_elems_before = m.n_elems
-    sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
+    def sdf(p):
+        return np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
     out = m.smooth_mesh('sdf', acknowledge_change=True, sdf=sdf)
     assert isinstance(out, np.ndarray)
     assert out.shape[1] in (2, 3)
@@ -634,7 +633,8 @@ def test_smooth_mesh_sdf_preserves_grid_name():
     None, poisoning fixture-cached meshes shared across tests)."""
     m = examples.donut().copy()
     assert m.grid_name == "donut"
-    sdf = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
+    def sdf(p):
+        return np.maximum(np.linalg.norm(p, axis=1) - 1.0, 0.3 - np.linalg.norm(p, axis=1))
     m.smooth_mesh('sdf', acknowledge_change=True, sdf=sdf)
     assert m.grid_name == "donut", "sdf smoothing dropped grid_name"
 

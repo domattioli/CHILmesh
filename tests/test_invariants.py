@@ -5,7 +5,6 @@ that hold for any well-formed CHILmesh.
 """
 from __future__ import annotations
 
-from itertools import chain
 
 import numpy as np
 import pytest

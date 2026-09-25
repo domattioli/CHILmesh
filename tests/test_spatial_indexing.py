@@ -182,6 +182,7 @@ class TestSpatialIndexingPerformance:
         for i in range(100):
             point = points[:, i]
             elem_id = mesh.find_element(point)
+            assert elem_id >= -1, "find_element must return a valid element ID or -1 if not found"
         elapsed = time.time() - start
 
         assert elapsed < 5.0, f"100 queries took {elapsed:.2f}s, should be <5s"
