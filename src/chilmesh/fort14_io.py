@@ -109,7 +109,7 @@ def read_fort14_raw(filename, parse_boundaries: bool = True) -> Fort14Raw:
         ``parse_boundaries=False`` (the block was skipped, not inspected).
     """
     path = Path(filename)
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         lines = fh.readlines()
     if len(lines) < 2:
         raise Fort14ParseError(f"{path}: too short to be a fort.14 file")
@@ -232,7 +232,7 @@ def write_fort14_raw(raw: Fort14Raw, filename) -> bool:
     Returns ``True`` on success.
     """
     path = Path(filename)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(f"{raw.grid_name}\n")
         f.write(f"{raw.n_elems} {raw.n_nodes}\n")
         for nid in raw.node_ids:
