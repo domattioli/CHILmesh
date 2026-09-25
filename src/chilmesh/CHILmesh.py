@@ -2544,7 +2544,7 @@ class CHILmesh(CHILmeshPlotMixin):
         ``save('.2dm')`` -> ``read_from_2dm`` roundtrip is lossless for
         geometry and topology but drops boundary records (see issue #228).
         """
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8', newline='\n') as f:
             f.write("MESH2D\n")
             for i, elem in enumerate(self.connectivity_list):
                 if elem.size == 3 or (elem.size == 4 and elem[3] == elem[0]):
@@ -2576,7 +2576,7 @@ class CHILmesh(CHILmeshPlotMixin):
         has_tri = False
         has_quad = False
 
-        with open(filename) as f:
+        with open(filename, encoding='utf-8') as f:
             for line in f:
                 parts = line.split()
                 if not parts:
@@ -2648,7 +2648,7 @@ class CHILmesh(CHILmeshPlotMixin):
             NOPE (open) and NBOU (flow) boundary records.
         """
         filename = Path(filename)
-        with open(filename) as f:
+        with open(filename, encoding='utf-8') as f:
             lines = f.readlines()
 
         i = 0
@@ -2772,7 +2772,7 @@ def write_fort14(mesh, filename: str) -> bool:
         >>> write_fort14(mesh, "output.14")
         True
     """
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding='utf-8', newline='\n') as f:
         name = mesh.grid_name or "CHILmesh"
         f.write(f"{name}\n")
         f.write(f"{mesh.n_elems} {mesh.n_verts}\n")
