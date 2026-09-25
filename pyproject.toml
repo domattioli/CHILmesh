@@ -75,3 +75,26 @@ testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+
+[tool.ruff]
+# Issue #262. Line length is not enforced: the numerical code carries long
+# formula lines and the fort.14/fort.15 readers use `x = int(...); i += 1`
+# cursor idioms. Correctness rules (F) gate CI; style rules (E) are advisory.
+line-length = 100
+extend-exclude = [".venv*", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["F", "E"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Parse-cursor idiom in the ADCIRC readers; rewriting touches I/O logic.
+"src/chilmesh/CHILmesh.py" = ["E702"]
+"src/chilmesh/fort14_io.py" = ["E702"]
+"src/chilmesh/fort15_io.py" = ["E702"]
+"scripts/*" = ["E702"]
+# Optional-backend availability probes and lazy-loading setup.
+"src/chilmesh/__init__.py" = ["F401", "E402"]
+"tests/test_admesh_warmstart.py" = ["F401"]
+"tests/test_backend_info.py" = ["E402"]
+"scripts/benchmark_cpp.py" = ["E402"]

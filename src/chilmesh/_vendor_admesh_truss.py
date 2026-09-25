@@ -169,7 +169,6 @@ def distmesh2d_warmstart(
     nfix = len(pfix_boundary)
 
     # Setup
-    rng = np.random.RandomState(seed)
     geps = geps_factor * h0
     pold = np.full_like(p, np.inf)
     t = np.empty((0, 3), dtype=np.int64)
@@ -263,8 +262,7 @@ def distmesh2d_warmstart(
             Ftot_pressure = np.zeros_like(p)
             for tri in t:
                 # Compute normal direction for internal pressure
-                p0, p1, p2 = p[tri[0]], p[tri[1]], p[tri[2]]
-                edge1 = p1 - p0
+                p0, p2 = p[tri[0]], p[tri[2]]
                 edge2 = p2 - p0
                 normal = np.array([-edge2[1], edge2[0]])  # 2D normal
                 normal_norm = np.linalg.norm(normal)

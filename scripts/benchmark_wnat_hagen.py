@@ -16,7 +16,6 @@ import argparse
 import json
 import os
 import platform
-import statistics
 import sys
 import time
 from pathlib import Path
