@@ -5,7 +5,6 @@ Tests all Fort13ParseError branches in src/chilmesh/fort13_io.py
 """
 import pytest
 import numpy as np
-from pathlib import Path
 
 from chilmesh import read_fort13, write_fort13, Fort13, NodalAttribute
 from chilmesh.fort13_io import Fort13ParseError

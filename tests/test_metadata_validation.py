@@ -1,6 +1,4 @@
 """Tests for metadata validation and contributor workflows (Issue #44)."""
-import tempfile
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest

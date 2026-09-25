@@ -158,7 +158,6 @@ def test_slow_path_warning_when_pure_python(monkeypatch):
     """#202: pure-Python layer peel of a large mesh warns once (non-silent)."""
     if CPP_AVAILABLE or RUST_AVAILABLE:
         pytest.skip("compiled fast backend present; slow-path warning N/A")
-    import chilmesh.CHILmesh  # ensure submodule imported
     cm = sys.modules["chilmesh.CHILmesh"]
     monkeypatch.setattr(cm, "_SLOW_PATH_ELEM_THRESHOLD", 1)
     monkeypatch.setattr(cm, "_SLOW_PATH_WARNED", False)
@@ -172,7 +171,6 @@ def test_no_slow_path_warning_below_threshold(monkeypatch, recwarn):
     """Small meshes never trigger the slow-path warning."""
     if CPP_AVAILABLE or RUST_AVAILABLE:
         pytest.skip("compiled fast backend present; slow-path warning N/A")
-    import chilmesh.CHILmesh  # ensure submodule imported
     cm = sys.modules["chilmesh.CHILmesh"]
     monkeypatch.setattr(cm, "_SLOW_PATH_ELEM_THRESHOLD", 10_000)
     monkeypatch.setattr(cm, "_SLOW_PATH_WARNED", False)

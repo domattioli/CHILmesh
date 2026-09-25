@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-import chilmesh
 from chilmesh import examples as _examples
 
 FIXTURE_NAMES = ["annulus", "donut", "block_o", "structured", "quad_2x2"]

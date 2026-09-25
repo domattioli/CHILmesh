@@ -50,7 +50,6 @@ class TestReepeelLocalBranches:
         that doesn't exist in any layer (e.g., ID beyond n_elems).
         """
         mesh = annulus()
-        original_n_layers = mesh.n_layers
         mutable = MutableMesh(mesh)
 
         # Get an ID that's out of range
@@ -72,7 +71,6 @@ class TestReepeelLocalBranches:
         start_layer = max(0, 0-2) = 0, triggering the branch.
         """
         mesh = annulus()
-        original_n_layers = mesh.n_layers
         mutable = MutableMesh(mesh)
 
         # Get an element from layer 0 (outer elements)

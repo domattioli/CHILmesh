@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from pathlib import Path
 
 from chilmesh import CHILmesh, examples
 from chilmesh.CHILmesh import _check_fort14

@@ -100,8 +100,6 @@ def test_fort13_roundtrip_identity(tmp_path):
 def test_public_exports():
     """Smoke test that all public names are exported from chilmesh."""
     from chilmesh import (
-        Fort13,
-        NodalAttribute,
         read_fort13 as rf13,
         write_fort13 as wf13,
         Fort13ParseError,
