@@ -10,3 +10,4 @@ workflows fail the workflow-conformance gate.
 | `publish-pypi.yml` | PyPI release, tag-triggered — repo-specific release pipeline |
 | `build-cpp-wheels.yml` | build-only manylinux wheel validation for the chilmesh_cpp binary backend (workflow_dispatch, artifacts only, no publish) — repo-specific packaging (#229) |
 | `publish-cpp-wheels.yml` | release/dispatch-gated PyPI publish of chilmesh_cpp wheels + sdist (no push trigger; `environment: pypi` protected; Trusted Publishing/OIDC) — repo-specific packaging (#256 Phase 2) |
+| `code-smell.yml` | ruff F + bandit MEDIUM gate, style/complexity advisory, weekly cron — repo-local static-analysis lane (#267) |
