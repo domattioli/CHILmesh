@@ -22,3 +22,6 @@ specs/ export-ignore
 .github/ export-ignore
 docs/LEXICON_PROPOSAL.md export-ignore
 # <<< release-ignore:end
+
+# Text fixtures are byte-compared in tests; never convert line endings on checkout.
+tests/fixtures/** -text

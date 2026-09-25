@@ -5,6 +5,7 @@ parsing works correctly.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 
@@ -19,7 +20,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "--help"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         assert result.returncode == 0
@@ -32,7 +33,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         # argparse requires a subcommand; should exit with code 2
@@ -46,7 +47,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "--version"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         assert result.returncode == 0
@@ -59,7 +60,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "nonexistent"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         # Unknown subcommand should fail
@@ -71,7 +72,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "info"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         # Missing required positional argument
@@ -84,7 +85,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "convert"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         # Missing required arguments
@@ -96,7 +97,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "smooth", "dummy.14"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         # Missing required -o / --output argument
@@ -108,7 +109,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "plot", "dummy.14"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         # Missing required -o / --output argument
@@ -120,7 +121,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "summary", "--help"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         assert result.returncode == 0
@@ -132,7 +133,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "info", "--help"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         assert result.returncode == 0
@@ -144,7 +145,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "convert", "--help"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         assert result.returncode == 0
@@ -156,7 +157,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "smooth", "--help"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         assert result.returncode == 0
@@ -168,7 +169,7 @@ class TestMainModuleInvocation:
             [sys.executable, "-m", "chilmesh", "plot", "--help"],
             capture_output=True,
             text=True,
-            env={"MPLBACKEND": "Agg"},
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
         assert result.returncode == 0
