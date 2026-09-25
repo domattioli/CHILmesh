@@ -1,5 +1,4 @@
 """Tests for from_admesh_domain entry point and metadata (Issues #42–43)."""
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest

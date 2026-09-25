@@ -98,11 +98,9 @@ class TestAuditDegenerate:
         """
         # Small triangle
         pts_small = np.array([[0.0, 0.0], [0.1, 0.0], [0.05, 0.1]], dtype=np.float64)
-        elems_small = np.array([[0, 1, 2]], dtype=np.int64)
 
         # Large triangle (area >> median)
         pts_large = np.array([[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]], dtype=np.float64)
-        elems_large = np.array([[0, 1, 2]], dtype=np.int64)
 
         # Mix: 5 small + 1 large
         pts_list = [pts_small + np.array([i * 0.2, 0.0]) for i in range(5)]

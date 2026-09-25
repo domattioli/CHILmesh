@@ -9,7 +9,6 @@ layer-sweep cost or calling private methods.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 import chilmesh
 

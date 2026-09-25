@@ -27,13 +27,16 @@ from matplotlib.collections import LineCollection, PolyCollection
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-import chilmesh
 from chilmesh import examples
 from chilmesh._vendor_admesh_truss import distmesh2d_warmstart
 
 # ── config ────────────────────────────────────────────────────────────────────
-SDF = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
-                            0.3 - np.linalg.norm(p, axis=1))
+def _annulus_sdf(p):
+    """Signed distance to annulus boundary (outer R=1.0, inner r=0.3)."""
+    return np.maximum(np.linalg.norm(p, axis=1) - 1.0,
+                      0.3 - np.linalg.norm(p, axis=1))
+
+SDF = _annulus_sdf
 N_SNAPS = 6          # number of iteration snapshots
 TOTAL_ITER = 300     # total truss iterations distributed across snapshots
 H0 = 0.12

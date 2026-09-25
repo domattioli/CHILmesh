@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 import numpy as np
-from typing import Optional, Tuple, Callable
+from typing import Tuple, Callable
 
 # Module-level constants (no generator imports at module level)
 HBINS = 40
@@ -347,7 +347,7 @@ def audit_peel_pixel_equality(
             _draw_hist, _draw_peel_hist, _draw_metrics, _setup_axes,
             BG, HBINS
         )
-    except ImportError as e:
+    except ImportError:
         return False
 
     # Compute ymax (same as generator _stage_data line 233-237)

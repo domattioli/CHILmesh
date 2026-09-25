@@ -16,7 +16,6 @@ Usage:
 import json
 import os
 import platform
-import statistics
 import sys
 import time
 from pathlib import Path
@@ -53,7 +52,7 @@ def bench_python(mesh_path: Path) -> dict:
 
     # Fast init
     t0 = time.perf_counter()
-    mesh_fast = CHILmesh.read_from_fort14(mesh_path, compute_layers=False)
+    CHILmesh.read_from_fort14(mesh_path, compute_layers=False)
     results["fast_init_s"] = time.perf_counter() - t0
 
     # Skeletonization delta (full - fast)
@@ -149,7 +148,7 @@ def bench_cpp(mesh_path: Path) -> dict:
 
     # Fast init (benchmark C++ fast_init on arrays)
     t0 = time.perf_counter()
-    cpp_mesh_fast = chilmesh_cpp.fast_init(points, connectivity)
+    chilmesh_cpp.fast_init(points, connectivity)
     results["fast_init_s"] = time.perf_counter() - t0
 
     # Full init

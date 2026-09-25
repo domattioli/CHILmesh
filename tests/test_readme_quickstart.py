@@ -23,7 +23,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-import pytest
 import warnings
 
 import chilmesh
@@ -33,10 +32,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = REPO_ROOT / "tests" / "output"
 OUTPUT_PNG = OUTPUT_DIR / "annulus_quickstart.png"
 
-_ANNULUS_SDF = lambda p: np.maximum(
-    np.linalg.norm(p, axis=1) - 1.0,
-    0.3 - np.linalg.norm(p, axis=1),
-)
+def _annulus_sdf(p):
+    """Signed distance to annulus boundary (outer R=1.0, inner r=0.3)."""
+    return np.maximum(
+        np.linalg.norm(p, axis=1) - 1.0,
+        0.3 - np.linalg.norm(p, axis=1),
+    )
+
+_ANNULUS_SDF = _annulus_sdf
 
 
 def _assert_valid(mesh, label: str) -> None:

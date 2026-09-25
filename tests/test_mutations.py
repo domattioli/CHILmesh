@@ -85,6 +85,7 @@ class TestSplitTriangle:
             mutable.split_triangle(elem_id=0, point=custom_pt)
             # If successful, verify new point exists
             new_vert_id = triangle_mesh.n_verts - 1
+            assert new_vert_id >= 0, "New vertex ID must be non-negative"
             assert triangle_mesh.n_verts > 0
         except RuntimeError:
             # Point outside mesh is acceptable error
@@ -286,6 +287,7 @@ class TestInsertVertex:
             elem_verts = triangle_mesh.connectivity_list[i * 10, :3]
             point = np.mean(triangle_mesh.points[elem_verts, :2], axis=0)
             new_vert_id = mutable.insert_vertex(point)
+            assert new_vert_id >= 0, "insert_vertex must return a valid vertex ID"
 
             assert triangle_mesh.n_verts == original_n_verts + i + 1
             assert triangle_mesh.n_elems > original_n_elems
@@ -889,7 +891,7 @@ class TestPaddedTrianglePaddingConvention:
         else:
             # Merge first two adjacent triangles to get a quad, padding remaining tris.
             try:
-                quad_id = mutable.merge_elements(0, 1)
+                mutable.merge_elements(0, 1)
             except ValueError as e:
                 if "not adjacent" in str(e):
                     pytest.skip("elements 0 and 1 not adjacent in this fixture")
