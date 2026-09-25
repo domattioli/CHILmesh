@@ -87,3 +87,15 @@ src/chilmesh_cpp/build_local/
 docs/introspections/
 .introspect/
 .planning/introspections/
+
+# Agent-specific files stay local only (operator ruling 2026-09-24): Claude/DomI
+# settings, hooks, pins, planning and session notes are not part of the source repo.
+.claude/
+.domi-pin
+.planning/
+.release-ignore.toml
+.projectmem/
+scripts/hooks/
+scripts/instructions.sh
+scripts/instructions_on_start.sh
+docs/sessions/
