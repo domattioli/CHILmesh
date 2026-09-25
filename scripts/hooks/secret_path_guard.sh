@@ -16,9 +16,8 @@ case "$path" in
 esac
 
 # Block paths matching secret patterns.
-# `.env` matches both top-level `.env` and nested `*/foo.env` per CLAUDE.md
-# hard stop ("Never commit *.env"). Exemptions above (.env.example etc.) run
-# first.
+# `.env` matches both top-level `.env` and nested `*/foo.env` paths.
+# Exemptions above (.env.example etc.) run first.
 if echo "$path" | grep -qE '\.env$|\.pem$|(^|/)credentials\.|(^|/)secrets?(\.|$)|(^|/)token(\.|$)|\.gpg$|id_rsa$|id_ed25519$'; then
   echo "BLOCKED (secret_path_guard): $path matches secret-bearing pattern. If intentional, rename to *.example or *.template variant." >&2
   exit 2

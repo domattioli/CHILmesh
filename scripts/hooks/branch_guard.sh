@@ -1,5 +1,5 @@
 #!/bin/bash
-# PreToolUse:Bash hook — enforces branch policy from CLAUDE.md.
+# PreToolUse:Bash hook — enforces branch policy from AGENTS.md.
 # Blocks: creating claude/* branches, commit/push on claude/*, --no-verify,
 # force-push to main, refspec colon-rename (issue #31 antipattern).
 # Override: CLAUDE_BRANCH_OVERRIDE=1 (logged to ~/.claude/hook-bypass.log).

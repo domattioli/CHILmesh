@@ -130,7 +130,7 @@ labels:
     class: functional
   - name: "lessons-learned"
     color: "ededed"
-    description: "Captures a session-derived lesson; informs CLAUDE.md updates."
+    description: "Captures a session-derived lesson; informs AGENTS.md updates."
     class: functional
   - name: "self-audit"
     color: "ededed"

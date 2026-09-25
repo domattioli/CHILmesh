@@ -1,260 +1,148 @@
 # CHILmesh
 
-CHILmesh is a Python library for 2D triangular, quadrilateral, and mixed-element mesh generation and manipulation. It implements mesh layer-based skeletonization (medial axis extraction) and serves as a bridge library for downstream research projects: MADMESHR, ADMESH, and ADMESH-Domains. **Current Version:** 1.2.2 (Production/Stable — Hybrid Python/C++ Release).
+CHILmesh is a Python library for generating, manipulating, smoothing, and analyzing 2D triangular, quadrilateral, and mixed-element meshes. It supports ADCIRC `fort.14`, SMS `.2dm`, related ADCIRC formats, concentric mesh layerization, mesh-quality analysis, and spatial queries. Python is the reference implementation. Optional C++ and frozen Rust backends provide acceleration and must remain output-equivalent to Python.
 
-## Hard rules
+The original MATLAB implementation remains in `src/@CHILmesh/CHILmesh.m` but is not actively developed.
 
-**API stability & public method signatures:**
-- Public method signatures are stable; no breaking changes without deprecation warnings
-- All existing tests must pass without modification
-- Fort.14 I/O compatibility is non-negotiable
-- Skeletonization algorithm behavior must be preserved
-- Mixed-element (tri + quad) support is required
+## Project hard rules
 
-**Code quality:**
-- Type hints required for public APIs
-- Comments document the "why", not the "what" (code should be self-documenting)
-- Document all adjacency invariants
-- Validate inputs at boundaries (fort.14 I/O, user input)
-
-**No secrets in commits:**
-- Never commit `.env`, `*token*`, `*secret*`, `*.pem`, `*credentials*`
-- No force-push to `main` or shared branches
+- Keep public method signatures stable. Breaking changes require deprecation warnings.
+- Preserve lossless `fort.14` round trips, including boundary metadata.
+- Preserve layer-peel behavior and layer invariants.
+- Keep triangular, quadrilateral, and mixed-element support.
+- Keep Python and compiled backend outputs equivalent. Run backend-equivalence tests after backend changes.
+- Require type hints on public APIs.
+- Validate file input and user input at boundaries.
+- Document every adjacency invariant.
 
 ## Repository layout
 
-```
+```text
 CHILmesh/
-├── src/chilmesh/               # Main package
-│   ├── CHILmesh.py            # Main mesh class
-│   ├── utils/plot_utils.py    # Plotting/visualization
-│   └── ...                     # Supporting modules
-├── tests/
-│   ├── conftest.py            # Test fixtures (annulus, donut, block_o, structured)
-│   ├── test_invariants.py     # Topology & skeletonization tests
-│   └── ...                     # Per-module test files
-├── .specify/memory/
-│   └── constitution.md        # Project governance rules
-├── .planning/
-│   ├── project_plan.md        # Roadmap and milestones
-│   └── MODERNIZATION_LESSONS_LEARNED.md  # Design decisions
-├── pyproject.toml             # Package metadata (Python 3.10+, dependencies)
-└── README.md                  # Project summary
+├── src/chilmesh/              # Python package and reference algorithms
+│   ├── CHILmesh.py            # Mesh class, adjacency build, and layer peel
+│   ├── fort13_io.py           # ADCIRC fort.13 I/O
+│   ├── fort14_io.py           # ADCIRC fort.14 I/O
+│   ├── fort15_io.py           # ADCIRC fort.15 I/O
+│   ├── mesh_topology.py       # Topology helpers
+│   ├── backends/              # Python wrappers for compiled backends
+│   └── data/                  # Built-in mesh fixtures
+├── src/chilmesh_cpp/          # Optional C++ half-edge backend
+├── src/chilmesh_core/         # Frozen Rust backend
+├── src/@CHILmesh/             # Original MATLAB implementation
+├── tests/                     # Pytest suite
+├── examples/                  # Runnable examples
+├── scripts/                   # Build, benchmark, release, and hook scripts
+├── docs/                      # Architecture, API, format, and benchmark docs
+├── .planning/                 # Project plans, audits, and decisions
+└── pyproject.toml             # Package metadata and dependencies
 ```
 
-**Key files:**
-- `src/chilmesh/CHILmesh.py` — Main mesh class
-- `src/chilmesh/utils/plot_utils.py` — Visualization utilities
-- `_skeletonize()` — Medial axis extraction (critical algorithm)
-- `_build_adjacencies()` — Topological relationship construction
-- `adjacencies` dict — Runtime data structure (Elem2Vert, Edge2Vert, Elem2Edge, Vert2Edge, Vert2Elem, Edge2Elem)
-- `layers` dict — Skeletonization output (OE, IE, OV, IV per layer)
+Key implementation points:
 
-**Adjacency data structures:**
-```
-Elem2Vert: ndarray[n_elems, 3|4]      # Element vertices
-Edge2Vert: ndarray[n_edges, 2]        # Edge endpoints
-Elem2Edge: ndarray[n_elems, 3|4]      # Element edge IDs
-Vert2Edge: List[List[int]]            # Vertex incident edges
-Vert2Elem: List[List[int]]            # Vertex incident elements
-Edge2Elem: ndarray[n_edges, 2]        # Edge adjacent elements (-1 if boundary)
-```
+- `_build_adjacencies()` in `src/chilmesh/CHILmesh.py` constructs mesh topology.
+- `_peel()` performs concentric layerization. It is not medial-axis extraction.
+- `layers` contains `OE`, `IE`, `OV`, `IV`, and `bEdgeIDs` entries per layer.
+- `compute_layers=True` requires adjacencies. With `compute_layers=False`, callers may independently request adjacencies and spatial indices.
 
-## Commands
+## Install and run
 
 ```bash
-# Clone and setup
-git clone https://github.com/domattioli/CHILmesh && cd CHILmesh
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Run tests
+# CLI
+chilmesh info mesh.fort.14
+python -m chilmesh --help
+
+# Optional C++ backend from source
+pip install ./src/chilmesh_cpp
+# or
+bash scripts/build_cpp.sh
+```
+
+## Test commands
+
+```bash
+# Full suite
 pytest -v
 
-# Fast subset (excludes slow block_o fixture)
-pytest -k 'not block_o' -v
+# Fast suite
+pytest -m "not slow" -v
 
-# Specific test
+# Specific invariant
 pytest tests/test_invariants.py::test_layers_disjoint_cover -v
 
-# Coverage report
-pytest --cov=src/chilmesh tests/
+# Coverage
+pytest --cov=src/chilmesh --cov-report=html tests/
 
-# Profile performance
-python -c "import cProfile; from chilmesh.examples import block_o; cProfile.run('block_o()')"
-
-# View git history
-git log --oneline -20
-git log --graph --oneline --all | head -30
-
-# Browse recent PRs/issues
-gh pr list -L 10
-gh issue list -L 10
+# Backend parity
+pytest tests/test_backend_equivalence.py -v
 ```
 
-## Conventions
+See `tests/TESTING.md` for markers, backend setup, and external MATLAB parity tests.
 
-### Python style
-- Python 3.10+ minimum (required by chilmesh dependency)
-- Type hints required for public APIs
-- PEP 8 style (enforced by context, not linter)
-- Comments only for "why", not "what" (code should be self-documenting)
+## Code and data conventions
 
-### Data structures
-- Prefer numpy arrays for dense mesh data
-- Use dicts for sparse adjacencies
-- Document all adjacency invariants
-- Validate at boundaries (fort.14 I/O, user input)
+- Support Python 3.10 and newer.
+- Use NumPy arrays for dense mesh data and dictionaries of sets for sparse vertex adjacencies.
+- Keep internal refactors behind the existing public API.
+- Comments explain why a choice exists. Do not narrate obvious code.
+- Use NumPy-style docstrings for public APIs.
+- Add a reproducer for every bug fix.
+- Add feature-specific tests for new behavior.
+- Run the existing suite unchanged for refactors.
+- Include benchmarks and parity tests for algorithmic or backend optimizations.
 
-### Backward compatibility
-- Public API stable until v1.0 (now stable as of v1.0.0)
-- Internal refactoring hidden behind same methods
-- Deprecation warnings required for API changes
-- All existing tests must pass without modification
+### Adjacency invariants
 
-### Docstring template
-```python
-def function_name(arg1, arg2):
-    """Short summary.
+| Structure | Representation | Invariant |
+|---|---|---|
+| `Elem2Vert` | `ndarray[n_elems, 3|4]` | Element vertex IDs are valid. Mixed triangles use the established padding convention. |
+| `Edge2Vert` | `ndarray[n_edges, 2]` | Endpoints are stored in canonical `(min, max)` order. |
+| `Elem2Edge` | `ndarray[n_elems, 3|4]` | Edge IDs follow element-major, slot-minor first-encounter ordering. |
+| `Edge2Elem` | `ndarray[n_edges, 2]` | Boundary edges use `-1` for the missing adjacent element. |
+| `Vert2Edge` | `dict[int, set[int]]` | Every vertex has an entry containing all incident edge IDs. |
+| `Vert2Elem` | `dict[int, set[int]]` | Every vertex has an entry containing all incident element IDs. |
+| `EdgeMap` | hash map | Canonical endpoint pairs map to edge IDs in constant expected time. |
 
-    Longer description of behavior, assumptions, and invariants.
+Topology mutations must rebuild or explicitly invalidate affected adjacencies and layers. Do not return stale topology.
 
-    Parameters
-    ----------
-    arg1 : type
-        Description.
-    arg2 : type
-        Description.
+### Built-in test fixtures
 
-    Returns
-    -------
-    result : type
-        Description.
-    """
-```
+`tests/conftest.py` exposes five fixtures: `annulus`, `donut`, `block_o`, `structured`, and `quad_2x2`. Tests that mutate a cached mesh must copy it first. Parametrize across all applicable element types. Use `TRI_FIXTURE_NAMES` for triangle-only behavior.
 
-## Testing
+## Branch workflow
 
-### Test organization
-- One test module per main module: `tests/test_<module>.py`
-- Parametrize across all four built-in fixtures (annulus, donut, block_o, structured)
-- Performance benchmarks for algorithmic changes
-- Regression tests for any previously fixed bugs
-
-### Test fixtures
-Loaded via `conftest.py`:
-- **annulus**: Small convex mesh, fast (~0.1s load)
-- **donut**: Medium donut-shaped mesh, fast (~0.5s load)
-- **block_o**: Large O-shaped mesh, slow (~30s load on first run)
-- **structured**: Structured quad mesh, medium (~1s load)
-
-Each fixture is parametrized across tests that use `@pytest.mark.parametrize('mesh', ['annulus', 'donut', 'block_o', 'structured'])`.
-
-### Performance baselines (v0.2.0 optimized, v1.0.0 with C++ backend)
-- Annulus adjacency build: <1ms
-- Donut adjacency build: <10ms
-- Structured adjacency build: <20ms
-- Block_O full initialization: ~14.3s (was ~30s in v0.1.1 before Phase 1 optimization; v1.0.0 C++ backend adds ~15× speedup on top)
-- **Historical total improvement:** 937× speedup from v0.1.1 to v0.2.0 (pure-Python Phase 1-4 optimization combined)
-
-### What "tested" means for a PR
-- New feature: regression tests + feature-specific tests
-- Bug fix: reproduction test (scenario that previously failed) + fix verification
-- Refactor: all existing tests pass without modification
-- Optimization: performance benchmarks showing improvement + all tests pass
-
-## Branch & commit policy
-
-**Default branch:** `main` (production-ready)
-**Development branch:** `development` (AI-session staging branch)
-
-### Branching rules
-- Work on `development`, then create PR `development → main`
-- No direct pushes to `main`; all changes flow through PR review + CI
-- If creating feature branches: use `<type>/<slug>` naming where `<type>` ∈ {fix, feat, docs, chore, refactor, test}
-- Delete branches after merge to main
-- No long-lived feature branches; PR and merge promptly
-
-### Commit format
-```
-<type>: <imperative summary>
-
-Optional longer explanation of why this change is needed.
-
-<type> ∈ {fix, feat, docs, chore, refactor, test}
-```
-
-### PR rules
-- Single-purpose PRs only
-- Fill out PR template
-- All CI checks must pass (no admin merge or force-push to bypass)
-- Squash or rebase merge (not plain merge) to keep main history clean
-
-### Hard stops (refuse outright)
-- Force-push to `main` or any shared branch
-- Committing `*.env`, `*token*`, `*secret*`, `*.pem`, `*credentials*`
-- Merging without CI green
-
-## Edit hygiene
-
-The number of tokens used to edit files is best minimized, all else being equal. Therefore, when it will not affect the end result, opt first for surgical edits rather than rewriting entire existing files.
-
-**Stream timeout prevention:**
-- One task per turn; confirm before next
-- ≤150 lines per file write; split if longer
-- Grep short; use `-l`, `--include` flags to limit output
-- If timeout: retry same step, shorter form
-- On >20 tool calls: start a fresh session
+- The default working branch is `development` because `origin/development` exists.
+- Releases flow through a pull request from `development` to `main`.
+- Never push directly to `main`.
+- Never force-push.
+- CI must pass before merge.
 
 ## Related repositories
 
-| Repo | Purpose |
-|------|---------|
-| **MADMESHR** | Downstream research project building on CHILmesh |
-| **ADMESH** | Mesh adaptation framework using CHILmesh |
-| **ADMESH-Domains** | Domain handling for ADMESH |
-
-## Reference docs
-
-**Project governance & roadmap:**
-- `.specify/memory/constitution.md` — Canonical project governance rules, principles, API stability contract
-- `.planning/project_plan.md` — Roadmap, milestones, "where we are today" status
-- `.planning/MODERNIZATION_LESSONS_LEARNED.md` — Design decisions and optimization tradeoffs
-
-**Session handoff & state:**
-- `.planning/.continue-here.md` — Most recent session notes and in-flight context
-
-**Test & CI audit:**
-- `.planning/TEST-AUDIT.md` — What is/isn't tested, test coverage surface
-- `.planning/HOOKS-AUDIT.md` — Pre-commit hook validation
-
-**Repo-local labels:**
-
-These labels have no DomI canonical equivalent and are kept repo-local.
-
-| Label | Meaning |
+| Repository | Relationship |
 |---|---|
-| `admesh` | Cross-repo dependency: ADMESH |
-| `admesh-domains` | Cross-repo dependency: ADMESH-Domains |
-| `API` | Public API surface changes |
-| `benchmark` | Benchmarking / performance measurement work |
-| `bridge` | Phase 3 bridge infrastructure for downstream projects |
-| `code-quality` | Code quality and maintainability work |
-| `coordination` | Cross-repo coordination with sibling repos |
-| `data-structures` | Adjacency / topology data structure design |
-| `design` | Algorithmic or API design decisions |
-| `domi-sync` | DomI sync-contract issues (opened by `notify-downstream.yml`) |
-| `FEM-smoother` | FEM smoother specific work |
-| `integration` | Cross-repo integration work |
-| `io` | fort.14 / .2dm file I/O |
-| `mixed-element` | Tri/quad mixed-element support |
-| `optimization` | Runtime optimization work |
-| `performance` | Performance measurement and improvement |
-| `phase-1` through `phase-5` | Historical milestone tracking (Phases 1–5) |
-| `portability` | Cross-platform portability concerns |
-| `quality` | Mesh quality metrics |
-| `report` | Analysis / benchmark reports |
-| `rust-backend` | Rust backend investigations |
-| `transfer-candidate` | Candidate for transfer to a sibling repo |
-| `types` | Type annotation work |
-| `validation` | Validation logic |
+| MADMESHR | Downstream research project that uses CHILmesh. |
+| ADMESH | Mesh adaptation framework that uses CHILmesh. |
+| ADMESH-Domains | Domain handling used with ADMESH and CHILmesh. |
+| Valence | Registry used by reference benchmark workloads. |
+
+## Project references
+
+- `.planning/constitution.md`: repository governance and project principles.
+- `.planning/project_plan.md`: roadmap and milestone status.
+- `.planning/MODERNIZATION_LESSONS_LEARNED.md`: optimization decisions and tradeoffs.
+- `.planning/TEST-AUDIT.md`: test coverage audit.
+- `.planning/HOOKS-AUDIT.md`: hook audit and historical findings.
+- `docs/ARCHITECTURE.md`: graph engine, adjacency tables, and layerization boundary.
+- `docs/ADJACENCY_STRUCTURES.md`: adjacency details.
+- `docs/RUST_EVALUATION.md`: rationale for freezing the Rust backend.
+
+## Governance
+
+This repository is a downstream consumer of `domattioli/DomI`. Universal git, coding-dispatch, secrets, session-lifecycle, and communication rules live in DomI `.claude/policies/`.
+The `.domi-pin` drift check runs at session start through `scripts/instructions_on_start.sh`.
+Spec-kit artifacts for CHILmesh live in DomI `specs/consumers/CHILmesh/`, never in a local `.specify/` directory.

@@ -55,11 +55,11 @@ body:
     id: routine-eligible
     attributes:
       label: Routine session eligibility
-      description: If checked, the `claude-routine-sessions` label will be added (see CLAUDE.md routine workflow).
+      description: If checked, the `claude-routine-sessions` label will be added (see AGENTS.md).
       options:
         - label: This task is suitable for autonomous Claude Code routine sessions
   - type: textarea
     id: related
     attributes:
       label: Related issues, docs, or external references
-      placeholder: "e.g. #111, .planning/TEST-AUDIT.md, .specify/memory/constitution.md §X"
+      placeholder: "e.g. #111, .planning/TEST-AUDIT.md, DomI/specs/consumers/CHILmesh/memory/constitution.md §X"
