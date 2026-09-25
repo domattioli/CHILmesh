@@ -91,10 +91,10 @@ def _quality(pts, elems):
     p0, p1, p2 = pts[elems[:, 0]], pts[elems[:, 1]], pts[elems[:, 2]]
     area = 0.5 * np.abs((p1[:, 0] - p0[:, 0]) * (p2[:, 1] - p0[:, 1])
                         - (p2[:, 0] - p0[:, 0]) * (p1[:, 1] - p0[:, 1]))
-    l = (np.sum((p1 - p0) ** 2, 1) + np.sum((p2 - p1) ** 2, 1)
-         + np.sum((p0 - p2) ** 2, 1))
+    sum_lengths_sq = (np.sum((p1 - p0) ** 2, 1) + np.sum((p2 - p1) ** 2, 1)
+                      + np.sum((p0 - p2) ** 2, 1))
     with np.errstate(divide="ignore", invalid="ignore"):
-        q = 4.0 * np.sqrt(3.0) * area / l
+        q = 4.0 * np.sqrt(3.0) * area / sum_lengths_sq
     return np.clip(np.nan_to_num(q), 0.0, 1.0)
 
 

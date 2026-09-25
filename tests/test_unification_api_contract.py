@@ -10,7 +10,6 @@ Reference: domattioli/CHILmesh#196
 
 from __future__ import annotations
 
-import dataclasses
 import inspect
 import tempfile
 from pathlib import Path
@@ -247,10 +246,10 @@ def test_layers_structure():
 
     # Per-layer structure: each key maps to a list/dict of arrays
     required_layer_keys = {"OE", "IE", "OV", "IV"}
-    assert "OE" in mesh.layers, "layers must have 'OE' (outer elements)"
-    assert "IE" in mesh.layers, "layers must have 'IE' (inner elements)"
-    assert "OV" in mesh.layers, "layers must have 'OV' (outer vertices)"
-    assert "IV" in mesh.layers, "layers must have 'IV' (inner vertices)"
+    assert set(mesh.layers.keys()) >= required_layer_keys, (
+        f"layers must have all required keys {required_layer_keys}, "
+        f"but has {set(mesh.layers.keys())}"
+    )
 
 
 def test_element_quality_functional():

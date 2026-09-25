@@ -31,12 +31,6 @@ jobs:
         os: ${{ fromJson(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
         python-version: ${{ fromJson(github.event_name == 'pull_request' && '["3.11"]' || '["3.10","3.11","3.12"]') }}
 
-    env:
-      # macOS first-run matplotlib font-cache build dominates wall-clock (~30s).
-      # Per-run tmpdir keeps the cache off `$HOME` so it doesn't survive
-      # the runner cleanup; cheap on ubuntu/windows. #122
-      MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
-
     steps:
       - uses: actions/checkout@v5
 
@@ -57,12 +51,18 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           MPLBACKEND: Agg
+          # Per-run matplotlib cache off `$HOME` (#122). Step-level env: the
+          # `runner` context is not available in job-level env.
+          MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
         run: python -m pytest -n auto -m "not slow"
 
       - name: Run pytest (push — full suite, parallel, coverage-gated)
         if: github.event_name != 'pull_request'
         env:
           MPLBACKEND: Agg
+          # Per-run matplotlib cache off `$HOME` (#122). Step-level env: the
+          # `runner` context is not available in job-level env.
+          MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
         run: python -m pytest -n auto -v --cov=src/chilmesh --cov-report=term --cov-fail-under=80
 
   build-and-smoke:
@@ -136,6 +136,9 @@ jobs:
       - name: Run cross-backend equivalence suite
         env:
           MPLBACKEND: Agg
+          # Per-run matplotlib cache off `$HOME` (#122). Step-level env: the
+          # `runner` context is not available in job-level env.
+          MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
         run: python -m pytest tests/test_backend_equivalence.py -v
 
   rust-equivalence:
@@ -177,4 +180,7 @@ jobs:
       - name: Run cross-backend equivalence suite
         env:
           MPLBACKEND: Agg
+          # Per-run matplotlib cache off `$HOME` (#122). Step-level env: the
+          # `runner` context is not available in job-level env.
+          MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
         run: python -m pytest tests/test_backend_equivalence.py -v

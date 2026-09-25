@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from chilmesh import (
-    CHILmesh,
     optimize_with_admesh_truss,
     optimize_with_admesh_truss_arrays,
     examples,
@@ -140,7 +139,7 @@ class TestBoundaryPreservation:
         # Check bit-exact preservation
         output_boundary = mesh_opt.points[boundary_indices, :2]
         assert np.array_equal(output_boundary, input_boundary), \
-            f"Boundary not preserved in CHILmesh form"
+            "Boundary not preserved in CHILmesh form"
 
     def test_vbnd_donut_domain_agnostic(self, donut_mesh, donut_sdf):
         """V_BND on donut: proves domain-agnosticism."""
@@ -184,7 +183,7 @@ class TestNonDegradation:
         triangles = annulus_mesh.connectivity_list
 
         # Run with enforcement (default)
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             points_opt, triangles_opt = optimize_with_admesh_truss_arrays(
                 points, triangles, annulus_sdf, size_fn=None,
@@ -589,7 +588,6 @@ class TestSnapshotRetriangulate:
             snapshot_strict_interior=False)
 
         # For every snapshot, verify t is a valid Delaunay of p
-        geps = 1e-13
         for pi, ti in hist:
             # Re-triangulate from p using Delaunay
             ref_tri = Delaunay(pi)

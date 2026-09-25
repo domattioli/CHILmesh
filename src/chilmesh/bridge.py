@@ -8,7 +8,7 @@ CHILmesh public API (CAI).
 from __future__ import annotations
 
 
-from typing import Dict, Set, Tuple, List, Optional
+from typing import Dict, Set, List, Optional
 import numpy as np
 
 

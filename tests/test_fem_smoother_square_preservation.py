@@ -24,7 +24,6 @@ then move.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from chilmesh import CHILmesh
 

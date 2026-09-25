@@ -42,8 +42,12 @@ from chilmesh import (
 # Configuration
 # ============================================================================
 
-ANNULUS_SDF = lambda p: np.maximum(np.linalg.norm(p, axis=1) - 1.0,
-                                    0.3 - np.linalg.norm(p, axis=1))
+def _annulus_sdf(p):
+    """Signed distance to annulus boundary (outer R=1.0, inner r=0.3)."""
+    return np.maximum(np.linalg.norm(p, axis=1) - 1.0,
+                      0.3 - np.linalg.norm(p, axis=1))
+
+ANNULUS_SDF = _annulus_sdf
 
 # Element-size grading for the warm-start truss.
 # Edge length grows from H_MIN at the boundary to H_MAX at the annulus midline
@@ -397,7 +401,7 @@ def main():
     if len(set(counts)) == 1:
         print(f"  ✓ All rows have {counts[0]} elements")
     else:
-        print(f"  ✗ WARNING: Element counts differ!")
+        print("  ✗ WARNING: Element counts differ!")
         print(f"    Unique values: {set(counts)}")
 
     # ========================================================================

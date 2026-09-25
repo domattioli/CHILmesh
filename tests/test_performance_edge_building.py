@@ -72,7 +72,6 @@ class TestEdgeBuildingPerformance:
         mesh = examples.donut()
         elem2edge = mesh.adjacencies["Elem2Edge"]
         edge2elem = mesh.adjacencies["Edge2Elem"]
-        edge2vert = mesh.adjacencies["Edge2Vert"]
 
         # For each element, check that its edges are valid
         for elem_id in range(mesh.n_elems):

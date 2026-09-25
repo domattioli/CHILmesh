@@ -514,7 +514,7 @@ class TestSummaryNpy:
         assert result['dtype'] == 'float64', (
             f"Expected dtype='float64', got {result['dtype']}"
         )
-        assert result['fortran_order'] == False, (
+        assert not result['fortran_order'], (
             f"Expected fortran_order=False, got {result['fortran_order']}"
         )
         assert result['file_bytes'] > 0, (

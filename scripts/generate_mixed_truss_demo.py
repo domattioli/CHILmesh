@@ -263,8 +263,6 @@ def build_combined_mesh(
       B .. B+I-1      → ADMESH interior nodes (admesh_pts[B:])
       B+I ..          → original mesh nodes used by gap/kept but not pinned
     """
-    B = len(pinned_global)
-
     all_orig_used = np.unique(np.concatenate([
         gap_tris_global.flatten(),
         kept_quads_global.flatten(),

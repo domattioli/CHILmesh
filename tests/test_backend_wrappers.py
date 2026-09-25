@@ -8,7 +8,6 @@ from __future__ import annotations
 import importlib
 import sys
 import types
-from typing import Any
 
 import numpy as np
 import pytest

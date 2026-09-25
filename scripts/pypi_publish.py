@@ -65,7 +65,7 @@ def detect_pypi_credentials() -> Tuple[bool, Optional[str]]:
             content = pypirc.read_text()
             if "password" in content and "pypi-" in content:
                 return True, "~/.pypirc"
-        except:
+        except Exception:
             pass
 
     # Try twine check (validates tokens)
@@ -90,7 +90,7 @@ def extract_pyproject_data(project_root: str) -> Tuple[Optional[str], Optional[s
         version = version_match.group(1) if version_match else None
 
         return name, version
-    except:
+    except Exception:
         return None, None
 
 
