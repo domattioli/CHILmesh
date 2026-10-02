@@ -7,10 +7,12 @@
 .claude-plugin/ export-ignore
 .introspect/ export-ignore
 .githooks/ export-ignore
+.specify/ export-ignore
 .planning/ export-ignore
 .domi-pin export-ignore
 .zenodoignore export-ignore
 .release-ignore.toml export-ignore
+CLAUDE.md export-ignore
 AGENTS.md export-ignore
 claude_routine_instructions.md export-ignore
 instructions_on_start.sh export-ignore
@@ -21,7 +23,23 @@ specs/ export-ignore
 *introspect*.yml export-ignore
 .github/ export-ignore
 docs/LEXICON_PROPOSAL.md export-ignore
+GEMINI.md export-ignore
+CODEX.md export-ignore
+COPILOT.md export-ignore
+copilot-instructions.md export-ignore
+.cursorrules export-ignore
+.windsurfrules export-ignore
+.clinerules export-ignore
+.aider.conf.yml export-ignore
+.agents/ export-ignore
+.codex/ export-ignore
+.gemini/ export-ignore
+.cursor/ export-ignore
+.windsurf/ export-ignore
+.projectmem/ export-ignore
+.workerbee/ export-ignore
 # <<< release-ignore:end
+
 
 # Text fixtures are byte-compared in tests; never convert line endings on checkout.
 tests/fixtures/** -text
