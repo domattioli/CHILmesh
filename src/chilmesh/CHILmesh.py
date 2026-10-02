@@ -2873,7 +2873,7 @@ class CHILmesh(CHILmeshPlotMixin):
         n_elems, n_verts = int(parts[0]), int(parts[1])
 
         pts, i = _read_fort14_points(lines, i, n_verts)
-        conn, i = _read_fort14_connectivity(lines, i, n_elems)
+        conn, i = _read_fort14_connectivity(lines, i, n_elems, n_verts)
 
         mesh = cls(
             connectivity=conn,
@@ -2922,24 +2922,51 @@ def _read_fort14_points(lines: list, i: int, n_verts: int) -> tuple:
     return pts, i
 
 
-def _read_fort14_connectivity(lines: list, i: int, n_elems: int) -> tuple:
+def _read_fort14_connectivity(lines: list, i: int, n_elems: int, n_verts: int) -> tuple:
     """Parse ``n_elems`` element rows starting at line ``i``.
 
     Triangles are padded to 4 columns (``[v0, v1, v2, v0]``) only when the
     file mixes triangles and quads.
 
+    Parameters
+    ----------
+    lines : list
+        Text lines of the fort.14 file.
+    i : int
+        Starting line index.
+    n_elems : int
+        Number of elements to parse.
+    n_verts : int
+        Total number of vertices; used to validate node ids.
+
     Returns
     -------
     tuple
         ``(connectivity, next_line_index)`` with 0-based vertex ids.
+
+    Raises
+    ------
+    ValueError
+        If any element references a node id < 1 or > n_verts.
     """
     elem_verts = []
     has_tri = False
     has_quad = False
     for j in range(n_elems):
         p = lines[i].split(); i += 1
+        elem_id = int(p[0])
         n_verts_elem = int(p[1])
-        verts = [int(float(x)) - 1 for x in p[2:2 + n_verts_elem]]
+        node_ids_1based = [int(float(x)) for x in p[2:2 + n_verts_elem]]
+
+        # Validate node ids
+        bad_ids = [nid for nid in node_ids_1based if nid < 1 or nid > n_verts]
+        if bad_ids:
+            raise ValueError(
+                f"fort.14 element {elem_id} references node id(s) {sorted(set(bad_ids))}; "
+                f"valid ids are 1..{n_verts}"
+            )
+
+        verts = [nid - 1 for nid in node_ids_1based]
         elem_verts.append(verts)
         if n_verts_elem == 3:
             has_tri = True

@@ -6,7 +6,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+- `read_from_fort14` now raises `ValueError` when encountering a node id of 0 or above the node count instead of silently wrapping to the last vertex ([#282](https://github.com/domattioli/CHILmesh/issues/282)).
 
 ## [1.5.0] — 2026-10-02
 
