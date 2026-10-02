@@ -56,6 +56,13 @@ dev = [
     "twine",
 ]
 
+# Opt-in GPU plot backend (chilplotting_gpu). Minimums are the versions this
+# was developed and measured against (PyPI latest on 2026-10-01).
+gpu = [
+    "pygfx>=0.17",
+    "wgpu>=0.32",
+]
+
 [project.scripts]
 chilmesh = "chilmesh.cli:main"
 
