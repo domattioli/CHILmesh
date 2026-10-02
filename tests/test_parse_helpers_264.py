@@ -267,12 +267,12 @@ def test_fort14_points_and_connectivity_helpers():
     with pytest.raises(ValueError):
         _read_fort14_points(["1 a 0"], 0, 1)
 
-    conn, i = _read_fort14_connectivity(["1 3 1 2 3", "2 4 1 2 3 4"], 0, 2)
+    conn, i = _read_fort14_connectivity(["1 3 1 2 3", "2 4 1 2 3 4"], 0, 2, 4)
     assert conn.tolist() == [[0, 1, 2, 0], [0, 1, 2, 3]] and i == 2
-    tri, _ = _read_fort14_connectivity(["1 3 1 2 3"], 0, 1)
+    tri, _ = _read_fort14_connectivity(["1 3 1 2 3"], 0, 1, 3)
     assert tri.shape == (1, 3)
     with pytest.raises(ValueError):
-        _read_fort14_connectivity(["1 x 1 2 3"], 0, 1)
+        _read_fort14_connectivity(["1 x 1 2 3"], 0, 1, 3)
 
 
 def test_fort14_boundary_segments_helper():
