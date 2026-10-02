@@ -12,7 +12,6 @@ import pytest
 
 from chilmesh import examples, fort13_io, fort14_io, gmsh_io, summary_io
 from chilmesh.CHILmesh import (
-    CHILmesh,
     _read_fort14_boundary_segments,
     _read_fort14_connectivity,
     _read_fort14_points,
