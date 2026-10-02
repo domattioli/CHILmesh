@@ -49,6 +49,10 @@
 > The elimination path makes `solver="iterative"` a drop-in for the direct
 > result (was a meaningfully different mesh under the old shared-penalty path).
 
+> **Size-weighted smoothing (#197):** `direct_smoother(size_fn=...)` and
+> `angle_based_smoother(size_fn=...)` versus their size-blind base on size error, element and angle quality, and runtime:
+> see [`docs/benchmarks/size_smoothing.md`](benchmarks/size_smoothing.md) (regenerate with `python scripts/benchmark_size_smoothing.py`).
+
 ## v1.1.0 — cross-language (single machine, WNAT_Hagen, medians)
 
 | Stage | MATLAB (Octave) | Python | C++ |
