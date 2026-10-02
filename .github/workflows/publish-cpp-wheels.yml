@@ -1,17 +1,17 @@
 name: publish-cpp-wheels
 
-# Release/tag-gated PyPI publish of the chilmesh_cpp binary wheels + sdist (#256 Phase 2).
+# Release/tag-gated PyPI publish of the chilmesh_cpp binary wheels + sdist (#256).
 #
-# Triggers ONLY on a published GitHub release or a deliberate manual dispatch —
-# there is NO push trigger, so nothing publishes from `development`. The build
-# leg reuses the manylinux cibuildwheel path validated in build-cpp-wheels.yml
-# (Phase 1a). macOS/Windows legs are intentionally absent here: they are Phase 1b,
-# gated on the runner-billing decision in #225 — add them to the build matrix
-# below once #225 resolves.
+# Triggers ONLY on a published GitHub release or a deliberate manual dispatch,
+# there is NO push or pull_request trigger, so nothing publishes from
+# `development`. The build matrix (Linux, macOS x86_64 + arm64, Windows) mirrors
+# build-cpp-wheels.yml; keep the two in sync.
 #
-# Auth: PyPI Trusted Publishing (OIDC, id-token: write) is preferred (no
-# long-lived token). A token fallback mirroring publish-pypi.yml is shown as a
-# commented alternative on the publish step. Refs #256, #229, #225, #163, #234.
+# Auth: PyPI Trusted Publishing (OIDC, id-token: write), no long-lived token.
+# A token fallback mirroring publish-pypi.yml is shown as a commented alternative
+# on the publish step. After publish, `smoke` installs the released wheel from
+# PyPI on all three OSes and runs the backend-equivalence suite against it.
+# Refs #256, #229, #225, #163, #234.
 
 on:
   release:
@@ -22,44 +22,46 @@ permissions:
   contents: read
 
 jobs:
-  build-manylinux:
-    name: cibuildwheel chilmesh_cpp (manylinux x86_64)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  build-wheels:
+    name: cibuildwheel chilmesh_cpp (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-latest, archs: x86_64 }
+          # macos-13 (the old Intel runner) was retired by GitHub; macos-15-intel
+          # is its Intel replacement. macos-14 is Apple silicon (arm64).
+          - { name: macos-x86_64, os: macos-15-intel, archs: x86_64 }
+          - { name: macos-arm64, os: macos-14, archs: arm64 }
+          - { name: windows-amd64, os: windows-latest, archs: AMD64 }
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
+      # 3.1.0 made CPython 3.14 a default build target; 3.3.0 is the pin.
       - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.21.3
+        run: python -m pip install cibuildwheel==3.3.0
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse src/chilmesh_cpp
         env:
-          CIBW_BUILD: "cp310-* cp311-* cp312-*"
-          CIBW_ARCHS_LINUX: "x86_64"
+          # cp314t (free-threaded) is not matched by "cp314-*", so it is not built.
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp314-*"
+          CIBW_ARCHS: ${{ matrix.archs }}
           CIBW_SKIP: "*-musllinux*"
+          # C++17 floor for macOS; arm64 is raised to 11.0 automatically.
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
           CIBW_TEST_REQUIRES: "numpy"
-          # Same functional smoke as build-cpp-wheels.yml: run full_init on a
-          # 2-triangle unit square and assert adjacency + skeleton so a broken
-          # binary cannot be published.
-          CIBW_TEST_COMMAND: >-
-            python -c "import numpy as np, chilmesh_cpp;
-            pts = np.array([[0.,0.],[1.,0.],[1.,1.],[0.,1.]], dtype=np.float64);
-            conn = np.array([[0,1,2],[0,2,3]], dtype=np.int32);
-            m = chilmesh_cpp.full_init(pts, conn);
-            assert m.n_verts == 4, m.n_verts;
-            assert m.n_elems == 2, m.n_elems;
-            assert m.n_edges == 5, m.n_edges;
-            assert m.adjacency_built, 'adjacency not built';
-            assert m.n_layers >= 1, m.n_layers;
-            assert np.asarray(m.edge2vert).shape == (5, 2), np.asarray(m.edge2vert).shape;
-            print('chilmesh_cpp full_init smoke OK:', m.n_verts, 'v', m.n_elems, 'e', m.n_edges, 'edges', m.n_layers, 'layers')"
+          # Smoke lives in a file: a folded `python -c` string is run through
+          # cmd.exe on Windows, where nested quoting is fragile.
+          CIBW_TEST_COMMAND: python {package}/smoke_test.py
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: chilmesh-cpp-manylinux-wheels
+          name: chilmesh-cpp-wheels-${{ matrix.name }}
           path: wheelhouse/*.whl
           if-no-files-found: error
 
@@ -80,13 +82,13 @@ jobs:
 
   publish:
     name: publish chilmesh_cpp to PyPI
-    needs: [build-manylinux, sdist]
+    needs: [build-wheels, sdist]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Protect with required reviewers in repo settings (Settings → Environments → pypi).
+    # Protect with required reviewers in repo settings (Settings, Environments, pypi).
     environment: pypi
     permissions:
-      id-token: write   # PyPI Trusted Publishing (OIDC) — no long-lived secret
+      id-token: write   # PyPI Trusted Publishing (OIDC), no long-lived secret
     steps:
       - name: Download all wheel + sdist artifacts
         uses: actions/download-artifact@v4
@@ -95,10 +97,75 @@ jobs:
           merge-multiple: true
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # Token fallback — if PyPI Trusted Publishing is NOT configured for
+        # Token fallback: if PyPI Trusted Publishing is NOT configured for
         # chilmesh-cpp, drop the `id-token: write` permission above and uncomment:
         #   with:
         #     password: ${{ secrets.PYPI_API_TOKEN }}
         with:
           packages-dir: dist
           skip-existing: true
+
+  # Phase 4: install the just-published wheel from PyPI in a clean env on each OS.
+  smoke:
+    name: post-publish smoke (${{ matrix.os }})
+    needs: publish
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Resolve version under test
+        id: ver
+        shell: python
+        run: |
+          # Version comes from the checked-out source, which is the tag on a
+          # release event, so it is the version that was just published.
+          import os, tomllib
+          with open("src/chilmesh_cpp/pyproject.toml", "rb") as f:
+              v = tomllib.load(f)["project"]["version"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"version={v}\n")
+      # Isolation (#163): the wheel and a NON-editable chilmesh go into a clean
+      # venv, and pytest runs from a temp dir holding only a copy of tests/.
+      # The repo's `src/` is therefore never on sys.path, so `src/chilmesh_cpp`
+      # (an empty namespace stub without the compiled module) cannot shadow the
+      # installed wheel and fake CPP_AVAILABLE.
+      - name: Install from PyPI into a clean venv
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          if [ -f "$RUNNER_TEMP/venv/bin/python" ]; then
+            PY="$RUNNER_TEMP/venv/bin/python"
+          else
+            PY="$RUNNER_TEMP/venv/Scripts/python.exe"
+          fi
+          echo "PY=$PY" >> "$GITHUB_ENV"
+          # PyPI index can lag a few seconds behind the upload; retry.
+          for i in 1 2 3 4 5 6; do
+            "$PY" -m pip install --no-cache-dir "chilmesh-cpp==${VERSION}" && break
+            echo "chilmesh-cpp==${VERSION} not visible yet, retry $i"; sleep 20
+          done
+          "$PY" -m pip install --no-cache-dir "chilmesh-cpp==${VERSION}"
+          # Non-editable install of chilmesh from the checkout.
+          "$PY" -m pip install . pytest
+          mkdir "$RUNNER_TEMP/work"
+          cp -R tests "$RUNNER_TEMP/work/tests"
+      - name: Assert C++ backend is selected
+        shell: bash
+        working-directory: ${{ runner.temp }}/work
+        run: |
+          "$PY" -c "import chilmesh; i = chilmesh.backend_info(); print(i); assert i['selected'] == 'cpp', i"
+      - name: Run backend-equivalence suite against the installed wheel
+        shell: bash
+        working-directory: ${{ runner.temp }}/work
+        run: |
+          # --import-mode=importlib: do not prepend the tests dir / rootdir to sys.path.
+          "$PY" -m pytest tests/test_backend_equivalence.py -v --import-mode=importlib -p no:cacheprovider

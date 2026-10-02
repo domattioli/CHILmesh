@@ -44,6 +44,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Prebuilt C++ backend (separate binary-wheel package). Compat contract:
+# chilmesh 1.5.x <-> chilmesh-cpp>=0.6,<0.7; bump both on any extension-API
+# change (docs/dev/PREBUILT_WHEELS_PLAN.md, Phase 0).
+cpp = ["chilmesh-cpp>=0.6,<0.7"]
 dev = [
     "pytest>=7",
     "pytest-cov",
