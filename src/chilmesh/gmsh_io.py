@@ -89,13 +89,16 @@ def read_msh(full_file_name: str) -> "CHILmesh":
         return _read_msh_v4_1(lines, full_file_name)
 
 
-def _read_msh_v2_2(lines: list, filename: str) -> "CHILmesh":
-    """Parse Gmsh format 2.2."""
+def _find_node_and_element_sections(lines: list) -> tuple:
+    """Return the line indices of the last ``$Nodes`` and ``$Elements`` headers.
 
-    nodes = {}
-    elements = []
+    The last occurrence wins, matching the original single-pass scan.
 
-    # Find sections
+    Raises
+    ------
+    GmshParseError
+        If either section header is absent.
+    """
     nodes_idx = None
     elems_idx = None
     for i, line in enumerate(lines):
@@ -108,209 +111,248 @@ def _read_msh_v2_2(lines: list, filename: str) -> "CHILmesh":
         raise GmshParseError("Missing $Nodes section in .msh file")
     if elems_idx is None:
         raise GmshParseError("Missing $Elements section in .msh file")
+    return nodes_idx, elems_idx
 
-    # Parse nodes
-    if nodes_idx + 1 >= len(lines):
-        raise GmshParseError("$Nodes section incomplete")
 
+def _parse_v2_count(lines: list, idx: int, section: str) -> int:
+    """Read the entry count that follows a v2.2 section header at ``idx``."""
+    if idx + 1 >= len(lines):
+        raise GmshParseError(f"{section} section incomplete")
     try:
-        n_nodes = int(lines[nodes_idx + 1])
+        return int(lines[idx + 1])
     except ValueError:
-        raise GmshParseError("$Nodes section count is not an integer")
+        raise GmshParseError(f"{section} section count is not an integer")
 
+
+def _parse_v2_node_line(line: str) -> tuple:
+    """Parse one v2.2 node line into ``(node_id, [x, y, z])``."""
+    parts = line.split()
+    if len(parts) < 4:
+        raise GmshParseError(f"Node line malformed: {line}")
+    try:
+        node_id = int(parts[0])
+        return node_id, [float(parts[1]), float(parts[2]), float(parts[3])]
+    except ValueError:
+        raise GmshParseError(f"Node line has non-numeric values: {line}")
+
+
+def _parse_v2_nodes(lines: list, nodes_idx: int) -> dict:
+    """Parse the v2.2 ``$Nodes`` section into ``{node_id: [x, y, z]}``."""
+    n_nodes = _parse_v2_count(lines, nodes_idx, "$Nodes")
+    nodes = {}
     for i in range(n_nodes):
         line_idx = nodes_idx + 2 + i
         if line_idx >= len(lines):
             raise GmshParseError(f"$Nodes section incomplete: expected {n_nodes} nodes")
-        parts = lines[line_idx].split()
-        if len(parts) < 4:
-            raise GmshParseError(f"Node line malformed: {lines[line_idx]}")
-        try:
-            node_id = int(parts[0])
-            x = float(parts[1])
-            y = float(parts[2])
-            z = float(parts[3])
-            nodes[node_id] = [x, y, z]
-        except ValueError:
-            raise GmshParseError(f"Node line has non-numeric values: {lines[line_idx]}")
+        node_id, coords = _parse_v2_node_line(lines[line_idx])
+        nodes[node_id] = coords
+    return nodes
 
-    if not nodes:
-        raise GmshParseError("No nodes found in .msh file")
 
-    # Parse elements
-    if elems_idx + 1 >= len(lines):
-        raise GmshParseError("$Elements section incomplete")
+def _parse_v2_element_line(line: str):
+    """Parse one v2.2 element line.
 
+    Returns
+    -------
+    tuple or None
+        ``("tri", [v1, v2, v3])`` or ``("quad", [v1, v2, v3, v4])``; ``None``
+        for unsupported element types, which are skipped.
+    """
+    parts = line.split()
+    if len(parts) < 4:
+        raise GmshParseError(f"Element line malformed: {line}")
     try:
-        n_elems = int(lines[elems_idx + 1])
-    except ValueError:
-        raise GmshParseError("$Elements section count is not an integer")
+        _require_int(parts[0], "element ID")
+        elem_type = int(parts[1])
+        n_tags = int(parts[2])
+        # Skip tag section, extract node list
+        node_start = 3 + n_tags
+        if len(parts) < node_start + (3 if elem_type == 2 else 4 if elem_type == 3 else 0):
+            raise GmshParseError(f"Element line too short: {line}")
+        # Index (not slice) so a negative node_start from a negative tag count
+        # behaves exactly as before.
+        if elem_type == 2:  # Triangle
+            return ("tri", [int(parts[node_start + k]) for k in range(3)])
+        if elem_type == 3:  # Quad
+            return ("quad", [int(parts[node_start + k]) for k in range(4)])
+        return None  # Other types are silently skipped
+    except (ValueError, IndexError):
+        raise GmshParseError(f"Element line malformed or non-numeric: {line}")
 
+
+def _parse_v2_elements(lines: list, elems_idx: int) -> list:
+    """Parse the v2.2 ``$Elements`` section into ``(kind, vertices)`` tuples."""
+    n_elems = _parse_v2_count(lines, elems_idx, "$Elements")
+    elements = []
     elem_idx = elems_idx + 2
     for i in range(n_elems):
         if elem_idx >= len(lines):
             raise GmshParseError(f"$Elements section incomplete: expected {n_elems} elements")
-        parts = lines[elem_idx].split()
-        if len(parts) < 4:
-            raise GmshParseError(f"Element line malformed: {lines[elem_idx]}")
-        try:
-            _require_int(parts[0], "element ID")
-            elem_type = int(parts[1])
-            n_tags = int(parts[2])
-            # Skip tag section, extract node list
-            node_start = 3 + n_tags
-            if len(parts) < node_start + (3 if elem_type == 2 else 4 if elem_type == 3 else 0):
-                raise GmshParseError(f"Element line too short: {lines[elem_idx]}")
-            if elem_type == 2:  # Triangle
-                v1, v2, v3 = int(parts[node_start]), int(parts[node_start + 1]), int(parts[node_start + 2])
-                elements.append(("tri", [v1, v2, v3]))
-            elif elem_type == 3:  # Quad
-                v1, v2, v3, v4 = (int(parts[node_start]), int(parts[node_start + 1]),
-                                  int(parts[node_start + 2]), int(parts[node_start + 3]))
-                elements.append(("quad", [v1, v2, v3, v4]))
-            # Other types are silently skipped
-        except (ValueError, IndexError):
-            raise GmshParseError(f"Element line malformed or non-numeric: {lines[elem_idx]}")
+        parsed = _parse_v2_element_line(lines[elem_idx])
+        if parsed is not None:
+            elements.append(parsed)
         elem_idx += 1
+    return elements
 
+
+def _read_msh_v2_2(lines: list, filename: str) -> "CHILmesh":
+    """Parse Gmsh format 2.2."""
+    nodes_idx, elems_idx = _find_node_and_element_sections(lines)
+
+    nodes = _parse_v2_nodes(lines, nodes_idx)
+    if not nodes:
+        raise GmshParseError("No nodes found in .msh file")
+
+    elements = _parse_v2_elements(lines, elems_idx)
     if not elements:
         raise GmshParseError("No supported elements (triangles or quads) found in .msh file")
 
     return _build_mesh(nodes, elements)
 
 
-def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
-    """Parse Gmsh format 4.1."""
+def _parse_v41_section_header(lines: list, idx: int, section: str, total_label: str) -> int:
+    """Read a v4.1 ``$Nodes``/``$Elements`` header and return the block count.
 
-    nodes = {}
-    elements = []
-
-    # Find sections
-    nodes_idx = None
-    elems_idx = None
-    for i, line in enumerate(lines):
-        if line == "$Nodes":
-            nodes_idx = i
-        elif line == "$Elements":
-            elems_idx = i
-
-    if nodes_idx is None:
-        raise GmshParseError("Missing $Nodes section in .msh file")
-    if elems_idx is None:
-        raise GmshParseError("Missing $Elements section in .msh file")
-
-    # Parse nodes (v4.1 format)
-    if nodes_idx + 1 >= len(lines):
-        raise GmshParseError("$Nodes section incomplete")
-
+    The total entity count (second field) is validated but not used.
+    """
+    if idx + 1 >= len(lines):
+        raise GmshParseError(f"{section} section incomplete")
     try:
-        header_parts = lines[nodes_idx + 1].split()
+        header_parts = lines[idx + 1].split()
         if len(header_parts) < 4:
-            raise GmshParseError("$Nodes header malformed")
+            raise GmshParseError(f"{section} header malformed")
         num_blocks = int(header_parts[0])
-        _require_int(header_parts[1], "number of nodes")
+        _require_int(header_parts[1], total_label)
     except ValueError:
-        raise GmshParseError("$Nodes header has non-numeric values")
+        raise GmshParseError(f"{section} header has non-numeric values")
+    return num_blocks
 
+
+def _parse_v41_node_block_header(lines: list, line_idx: int, block_idx: int) -> int:
+    """Return the node count of the v4.1 node block header at ``line_idx``."""
+    if line_idx >= len(lines):
+        raise GmshParseError("$Nodes section incomplete")
+    block_header = lines[line_idx].split()
+    if len(block_header) < 4:
+        raise GmshParseError(f"Node block {block_idx} header malformed")
+    try:
+        _require_int(block_header[0], f"node block {block_idx} dimension")
+        _require_int(block_header[1], f"node block {block_idx} tag")
+        _require_int(block_header[2], f"node block {block_idx} parametric")
+        return int(block_header[3])
+    except ValueError:
+        raise GmshParseError(f"Node block {block_idx} header has non-numeric values")
+
+
+def _parse_v41_node_tags(lines: list, line_idx: int, block_idx: int, count: int) -> list:
+    """Read ``count`` node-tag lines starting at ``line_idx``."""
+    node_tags = []
+    for i in range(count):
+        if line_idx + i >= len(lines):
+            raise GmshParseError(f"Node block {block_idx} node-tags incomplete")
+        try:
+            node_tags.append(int(lines[line_idx + i]))
+        except ValueError:
+            raise GmshParseError(f"Node tag line malformed: {lines[line_idx + i]}")
+    return node_tags
+
+
+def _parse_v41_node_coords(lines: list, line_idx: int, block_idx: int, node_tags: list) -> list:
+    """Read one coordinate line per tag; returns ``[(node_id, [x, y, z]), ...]``."""
+    out = []
+    for i, node_id in enumerate(node_tags):
+        if line_idx + i >= len(lines):
+            raise GmshParseError(f"Node block {block_idx} coordinates incomplete")
+        line = lines[line_idx + i]
+        parts = line.split()
+        if len(parts) < 3:
+            raise GmshParseError(f"Node coordinate line malformed: {line}")
+        try:
+            out.append((node_id, [float(parts[0]), float(parts[1]), float(parts[2])]))
+        except ValueError:
+            raise GmshParseError(f"Node coordinate line has non-numeric values: {line}")
+    return out
+
+
+def _parse_v41_nodes(lines: list, nodes_idx: int) -> dict:
+    """Parse the v4.1 ``$Nodes`` section into ``{node_id: [x, y, z]}``."""
+    num_blocks = _parse_v41_section_header(lines, nodes_idx, "$Nodes", "number of nodes")
+    nodes = {}
     line_idx = nodes_idx + 2
     for block_idx in range(num_blocks):
-        if line_idx >= len(lines):
-            raise GmshParseError("$Nodes section incomplete")
-        block_header = lines[line_idx].split()
-        if len(block_header) < 4:
-            raise GmshParseError(f"Node block {block_idx} header malformed")
-        try:
-            _require_int(block_header[0], f"node block {block_idx} dimension")
-            _require_int(block_header[1], f"node block {block_idx} tag")
-            _require_int(block_header[2], f"node block {block_idx} parametric")
-            num_in_block = int(block_header[3])
-        except ValueError:
-            raise GmshParseError(f"Node block {block_idx} header has non-numeric values")
+        num_in_block = _parse_v41_node_block_header(lines, line_idx, block_idx)
         line_idx += 1
+        node_tags = _parse_v41_node_tags(lines, line_idx, block_idx, num_in_block)
+        # len(node_tags), not num_in_block: a negative count must not move the cursor back.
+        line_idx += len(node_tags)
+        for node_id, coords in _parse_v41_node_coords(lines, line_idx, block_idx, node_tags):
+            nodes[node_id] = coords
+        line_idx += len(node_tags)
+    return nodes
 
-        # Parse node tags
-        node_tags = []
-        for i in range(num_in_block):
-            if line_idx >= len(lines):
-                raise GmshParseError(f"Node block {block_idx} node-tags incomplete")
-            try:
-                node_id = int(lines[line_idx])
-                node_tags.append(node_id)
-            except ValueError:
-                raise GmshParseError(f"Node tag line malformed: {lines[line_idx]}")
-            line_idx += 1
 
-        # Parse coordinates
-        for i in range(num_in_block):
-            if line_idx >= len(lines):
-                raise GmshParseError(f"Node block {block_idx} coordinates incomplete")
-            parts = lines[line_idx].split()
-            if len(parts) < 3:
-                raise GmshParseError(f"Node coordinate line malformed: {lines[line_idx]}")
-            try:
-                x = float(parts[0])
-                y = float(parts[1])
-                z = float(parts[2])
-                node_id = node_tags[i]
-                nodes[node_id] = [x, y, z]
-            except (ValueError, IndexError):
-                raise GmshParseError(f"Node coordinate line has non-numeric values: {lines[line_idx]}")
-            line_idx += 1
-
-    if not nodes:
-        raise GmshParseError("No nodes found in .msh file")
-
-    # Parse elements (v4.1 format)
-    if elems_idx + 1 >= len(lines):
+def _parse_v41_element_block_header(lines: list, line_idx: int, block_idx: int) -> tuple:
+    """Return ``(elem_type, num_in_block)`` for the v4.1 element block header."""
+    if line_idx >= len(lines):
         raise GmshParseError("$Elements section incomplete")
-
+    block_header = lines[line_idx].split()
+    if len(block_header) < 4:
+        raise GmshParseError(f"Element block {block_idx} header malformed")
     try:
-        elem_header = lines[elems_idx + 1].split()
-        if len(elem_header) < 4:
-            raise GmshParseError("$Elements header malformed")
-        elem_blocks = int(elem_header[0])
-        _require_int(elem_header[1], "total number of elements")
+        _require_int(block_header[0], f"element block {block_idx} dimension")
+        _require_int(block_header[1], f"element block {block_idx} tag")
+        return int(block_header[2]), int(block_header[3])
     except ValueError:
-        raise GmshParseError("$Elements header has non-numeric values")
+        raise GmshParseError(f"Element block {block_idx} header has non-numeric values")
 
+
+def _parse_v41_element_line(line: str, elem_type: int):
+    """Parse one v4.1 element line; ``None`` for unsupported types (skipped)."""
+    parts = line.split()
+    try:
+        int(parts[0])  # validation only: ValueError -> enclosing except keeps the "Element line malformed" contract
+        if elem_type == 2:  # Triangle
+            if len(parts) < 4:
+                raise GmshParseError(f"Triangle element line too short: {line}")
+            return ("tri", [int(p) for p in parts[1:4]])
+        if elem_type == 3:  # Quad
+            if len(parts) < 5:
+                raise GmshParseError(f"Quad element line too short: {line}")
+            return ("quad", [int(p) for p in parts[1:5]])
+        return None  # Other types silently skipped
+    except (ValueError, IndexError):
+        raise GmshParseError(f"Element line malformed: {line}")
+
+
+def _parse_v41_elements(lines: list, elems_idx: int) -> list:
+    """Parse the v4.1 ``$Elements`` section into ``(kind, vertices)`` tuples."""
+    elem_blocks = _parse_v41_section_header(
+        lines, elems_idx, "$Elements", "total number of elements"
+    )
+    elements = []
     line_idx = elems_idx + 2
     for block_idx in range(elem_blocks):
-        if line_idx >= len(lines):
-            raise GmshParseError("$Elements section incomplete")
-        block_header = lines[line_idx].split()
-        if len(block_header) < 4:
-            raise GmshParseError(f"Element block {block_idx} header malformed")
-        try:
-            _require_int(block_header[0], f"element block {block_idx} dimension")
-            _require_int(block_header[1], f"element block {block_idx} tag")
-            elem_type = int(block_header[2])
-            num_in_block = int(block_header[3])
-        except ValueError:
-            raise GmshParseError(f"Element block {block_idx} header has non-numeric values")
+        elem_type, num_in_block = _parse_v41_element_block_header(lines, line_idx, block_idx)
         line_idx += 1
-
-        # Parse element lines
         for i in range(num_in_block):
             if line_idx >= len(lines):
                 raise GmshParseError(f"Element block {block_idx} incomplete")
-            parts = lines[line_idx].split()
-            try:
-                int(parts[0])  # validation only: ValueError -> enclosing except keeps the "Element line malformed" contract
-                if elem_type == 2:  # Triangle
-                    if len(parts) < 4:
-                        raise GmshParseError(f"Triangle element line too short: {lines[line_idx]}")
-                    v1, v2, v3 = int(parts[1]), int(parts[2]), int(parts[3])
-                    elements.append(("tri", [v1, v2, v3]))
-                elif elem_type == 3:  # Quad
-                    if len(parts) < 5:
-                        raise GmshParseError(f"Quad element line too short: {lines[line_idx]}")
-                    v1, v2, v3, v4 = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])
-                    elements.append(("quad", [v1, v2, v3, v4]))
-                # Other types silently skipped
-            except (ValueError, IndexError):
-                raise GmshParseError(f"Element line malformed: {lines[line_idx]}")
+            parsed = _parse_v41_element_line(lines[line_idx], elem_type)
+            if parsed is not None:
+                elements.append(parsed)
             line_idx += 1
+    return elements
 
+
+def _read_msh_v4_1(lines: list, filename: str) -> "CHILmesh":
+    """Parse Gmsh format 4.1."""
+    nodes_idx, elems_idx = _find_node_and_element_sections(lines)
+
+    nodes = _parse_v41_nodes(lines, nodes_idx)
+    if not nodes:
+        raise GmshParseError("No nodes found in .msh file")
+
+    elements = _parse_v41_elements(lines, elems_idx)
     if not elements:
         raise GmshParseError("No supported elements (triangles or quads) found in .msh file")
 

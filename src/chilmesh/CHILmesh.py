@@ -2656,32 +2656,8 @@ class CHILmesh(CHILmeshPlotMixin):
         parts = lines[i].split(); i += 1
         n_elems, n_verts = int(parts[0]), int(parts[1])
 
-        pts = np.zeros((n_verts, 3))
-        for j in range(n_verts):
-            p = lines[i].split(); i += 1
-            pts[j] = [float(p[1]), float(p[2]), float(p[3]) if len(p) > 3 else 0.0]
-
-        elem_verts = []
-        has_tri = False
-        has_quad = False
-        for j in range(n_elems):
-            p = lines[i].split(); i += 1
-            n_verts_elem = int(p[1])
-            verts = [int(float(x)) - 1 for x in p[2:2 + n_verts_elem]]
-            elem_verts.append(verts)
-            if n_verts_elem == 3:
-                has_tri = True
-            elif n_verts_elem == 4:
-                has_quad = True
-
-        if has_tri and has_quad:
-            # Mixed mesh: pad triangles to 4 cols by repeating first vertex.
-            conn = np.array(
-                [v if len(v) == 4 else [v[0], v[1], v[2], v[0]] for v in elem_verts],
-                dtype=int,
-            )
-        else:
-            conn = np.array(elem_verts, dtype=int)
+        pts, i = _read_fort14_points(lines, i, n_verts)
+        conn, i = _read_fort14_connectivity(lines, i, n_elems)
 
         mesh = cls(
             connectivity=conn,
@@ -2692,43 +2668,7 @@ class CHILmesh(CHILmeshPlotMixin):
         )
 
         # --- parse boundary segments (#129) ---
-        boundary_segments = []
-        boundaries_present = False
-        try:
-            # NOPE open boundaries
-            nope = int(lines[i].split()[0]); i += 1
-            int(lines[i].split()[0]); i += 1  # total_nope (not used)
-            boundaries_present = True  # NOPE/NBOU block physically present (#259)
-            for _ in range(nope):
-                n_seg = int(lines[i].split()[0]); i += 1
-                nodes = []
-                for _ in range(n_seg):
-                    nodes.append(int(lines[i].split()[0]) - 1)
-                    i += 1
-                boundary_segments.append(
-                    {"kind": "open", "ibtype": None, "nodes": np.array(nodes, dtype=int)}
-                )
-            # NBOU flow boundaries
-            nbou = int(lines[i].split()[0]); i += 1
-            int(lines[i].split()[0]); i += 1  # total_nbou (not used)
-            for _ in range(nbou):
-                hdr = lines[i].split(); i += 1
-                n_seg = int(hdr[0])
-                ibtype = int(hdr[1]) if len(hdr) > 1 else None
-                nodes = []
-                for _ in range(n_seg):
-                    nodes.append(int(lines[i].split()[0]) - 1)
-                    i += 1
-                boundary_segments.append(
-                    {"kind": "flow", "ibtype": ibtype, "nodes": np.array(nodes, dtype=int)}
-                )
-        except IndexError:
-            pass  # Boundary section absent (legacy mesh) — leave segments empty
-        except ValueError:
-            warnings.warn(
-                "Malformed boundary section in fort.14 file; skipping boundary section",
-                UserWarning
-            )
+        boundary_segments, boundaries_present = _read_fort14_boundary_segments(lines, i)
 
         mesh.boundary_segments = boundary_segments
         mesh.boundaries_present = boundaries_present
@@ -2748,6 +2688,154 @@ class CHILmesh(CHILmeshPlotMixin):
         mesh._build_spatial_indices()
 
         return mesh
+
+
+def _read_fort14_points(lines: list, i: int, n_verts: int) -> tuple:
+    """Parse ``n_verts`` node rows starting at line ``i``.
+
+    Returns
+    -------
+    tuple
+        ``(points, next_line_index)`` with ``points`` of shape ``(n_verts, 3)``.
+        Rows are positional; the node id column is ignored.
+    """
+    pts = np.zeros((n_verts, 3))
+    for j in range(n_verts):
+        p = lines[i].split(); i += 1
+        pts[j] = [float(p[1]), float(p[2]), float(p[3]) if len(p) > 3 else 0.0]
+    return pts, i
+
+
+def _read_fort14_connectivity(lines: list, i: int, n_elems: int) -> tuple:
+    """Parse ``n_elems`` element rows starting at line ``i``.
+
+    Triangles are padded to 4 columns (``[v0, v1, v2, v0]``) only when the
+    file mixes triangles and quads.
+
+    Returns
+    -------
+    tuple
+        ``(connectivity, next_line_index)`` with 0-based vertex ids.
+    """
+    elem_verts = []
+    has_tri = False
+    has_quad = False
+    for j in range(n_elems):
+        p = lines[i].split(); i += 1
+        n_verts_elem = int(p[1])
+        verts = [int(float(x)) - 1 for x in p[2:2 + n_verts_elem]]
+        elem_verts.append(verts)
+        if n_verts_elem == 3:
+            has_tri = True
+        elif n_verts_elem == 4:
+            has_quad = True
+
+    if has_tri and has_quad:
+        # Mixed mesh: pad triangles to 4 cols by repeating first vertex.
+        conn = np.array(
+            [v if len(v) == 4 else [v[0], v[1], v[2], v[0]] for v in elem_verts],
+            dtype=int,
+        )
+    else:
+        conn = np.array(elem_verts, dtype=int)
+    return conn, i
+
+
+def _read_fort14_node_list(lines: list, i: int, n_seg: int) -> tuple:
+    """Read ``n_seg`` boundary node rows; returns ``(0-based nodes, next index)``."""
+    nodes = []
+    for _ in range(n_seg):
+        nodes.append(int(lines[i].split()[0]) - 1)
+        i += 1
+    return nodes, i
+
+
+def _read_fort14_open_segments(lines: list, i: int, segments: list, state: dict) -> int:
+    """Parse the NOPE block, appending to ``segments``; returns the next index.
+
+    Sets ``state["present"]`` once the NOPE/NBOU header has been seen so the
+    caller can report it even if a later row is malformed.
+    """
+    nope = int(lines[i].split()[0]); i += 1
+    int(lines[i].split()[0]); i += 1  # total_nope (not used)
+    state["present"] = True  # NOPE/NBOU block physically present (#259)
+    for _ in range(nope):
+        n_seg = int(lines[i].split()[0]); i += 1
+        nodes, i = _read_fort14_node_list(lines, i, n_seg)
+        segments.append({"kind": "open", "ibtype": None, "nodes": np.array(nodes, dtype=int)})
+    return i
+
+
+def _read_fort14_flow_segments(lines: list, i: int, segments: list) -> int:
+    """Parse the NBOU block, appending to ``segments``; returns the next index."""
+    nbou = int(lines[i].split()[0]); i += 1
+    int(lines[i].split()[0]); i += 1  # total_nbou (not used)
+    for _ in range(nbou):
+        hdr = lines[i].split(); i += 1
+        n_seg = int(hdr[0])
+        ibtype = int(hdr[1]) if len(hdr) > 1 else None
+        nodes, i = _read_fort14_node_list(lines, i, n_seg)
+        segments.append({"kind": "flow", "ibtype": ibtype, "nodes": np.array(nodes, dtype=int)})
+    return i
+
+
+def _read_fort14_boundary_segments(lines: list, i: int) -> tuple:
+    """Parse the NOPE/NBOU block into boundary-segment dicts.
+
+    A missing block (``IndexError``) leaves the segments read so far; a
+    non-numeric row (``ValueError``) warns and likewise keeps what was read.
+    Both paths are deliberate: legacy meshes have no boundary block.
+
+    Returns
+    -------
+    tuple
+        ``(boundary_segments, boundaries_present)``.
+    """
+    segments: list = []
+    state = {"present": False}
+    try:
+        i = _read_fort14_open_segments(lines, i, segments, state)
+        _read_fort14_flow_segments(lines, i, segments)
+    except IndexError:
+        pass  # Boundary section absent (legacy mesh) — leave segments empty
+    except ValueError:
+        warnings.warn(
+            "Malformed boundary section in fort.14 file; skipping boundary section",
+            UserWarning
+        )
+    return segments, state["present"]
+
+
+def _write_fort14_boundaries(f, mesh) -> None:
+    """Write the NOPE/NBOU block to the open file ``f``.
+
+    Always emitted — a canonical fort.14 carries the trailing block even with
+    zero open/flow segments (written 0/0/0/0). (#216)
+    """
+    segs = getattr(mesh, 'boundary_segments', None) or []
+    open_segs = [s for s in segs if s["kind"] == "open"]
+    flow_segs = [s for s in segs if s["kind"] == "flow"]
+
+    # NOPE open boundaries
+    total_open_nodes = sum(len(s["nodes"]) for s in open_segs)
+    f.write(f"{len(open_segs)}\n")
+    f.write(f"{total_open_nodes}\n")
+    for seg in open_segs:
+        f.write(f"{len(seg['nodes'])}\n")
+        for node in seg["nodes"]:
+            f.write(f"{node + 1}\n")
+
+    # NBOU flow boundaries
+    total_flow_nodes = sum(len(s["nodes"]) for s in flow_segs)
+    f.write(f"{len(flow_segs)}\n")
+    f.write(f"{total_flow_nodes}\n")
+    for seg in flow_segs:
+        f.write(f"{len(seg['nodes'])}")
+        if seg["ibtype"] is not None:
+            f.write(f" {seg['ibtype']}")
+        f.write("\n")
+        for node in seg["nodes"]:
+            f.write(f"{node + 1}\n")
 
 
 def write_fort14(mesh, filename: str) -> bool:
@@ -2786,33 +2874,7 @@ def write_fort14(mesh, filename: str) -> bool:
                 verts = elem[:4]
                 f.write(f"{i+1} 4 {' '.join(str(v+1) for v in verts)}\n")
 
-        # Write ADCIRC boundary section (NOPE/NBOU). Always emitted — a
-        # canonical fort.14 carries the trailing block even with zero
-        # open/flow segments (written 0/0/0/0). (#216)
-        segs = getattr(mesh, 'boundary_segments', None) or []
-        open_segs = [s for s in segs if s["kind"] == "open"]
-        flow_segs = [s for s in segs if s["kind"] == "flow"]
-
-        # NOPE open boundaries
-        total_open_nodes = sum(len(s["nodes"]) for s in open_segs)
-        f.write(f"{len(open_segs)}\n")
-        f.write(f"{total_open_nodes}\n")
-        for seg in open_segs:
-            f.write(f"{len(seg['nodes'])}\n")
-            for node in seg["nodes"]:
-                f.write(f"{node + 1}\n")
-
-        # NBOU flow boundaries
-        total_flow_nodes = sum(len(s["nodes"]) for s in flow_segs)
-        f.write(f"{len(flow_segs)}\n")
-        f.write(f"{total_flow_nodes}\n")
-        for seg in flow_segs:
-            f.write(f"{len(seg['nodes'])}")
-            if seg["ibtype"] is not None:
-                f.write(f" {seg['ibtype']}")
-            f.write("\n")
-            for node in seg["nodes"]:
-                f.write(f"{node + 1}\n")
+        _write_fort14_boundaries(f, mesh)
 
     return True
 
