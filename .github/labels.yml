@@ -1,9 +1,5 @@
-# DomI canonical label taxonomy — minimal 5-class set.
-# Source-of-truth for `git-issue-label-manager` audit/apply/prune.
+# CHILmesh label taxonomy: a minimal 5-class set.
 # Convention: `<class>: <name>` (colon + space) for class-prefixed labels.
-# Spec 007: https://github.com/DomI/specs/007-minimal-label-taxonomy/
-# ADR-0001: request: skill gates on 5-repo vote threshold + Opus eval (#57).
-# CHANGING LABELS? See docs/LABEL-TAXONOMY.md § "Changing labels" — a label edit is never one file. CI lane label-doc-sync enforces this.
 #
 # Required classes per open issue (enforced soft — audit warns, does not block):
 #   type     (exactly one: bug, feat, docs, chore, refactor)
@@ -12,7 +8,7 @@
 #            blocked, needs-operator, done)
 # Optional / conditional:
 #   request  (≤ one: skill [vote-gated], research, enhancement, audit)
-#   functional (≤ n: domi-sync [auto-opened sync issues], pending-pr [issue on open PR])
+#   functional (≤ n: pending-pr [issue on open PR])
 
 labels:
   # ---- type (exactly one per open issue) ----
@@ -104,10 +100,6 @@ labels:
     class: request
 
   # ---- functional (automation plumbing; ≤ n per issue) ----
-  - name: "domi-sync"
-    color: "ededed"
-    description: "Auto-opened downstream sync issue; consumed by sync-from-domi. Do not strip."
-    class: functional
   - name: "pending-pr"
     color: "ededed"
     description: "Issue is implemented on a branch riding an open PR; see linked PR for status."
@@ -124,17 +116,9 @@ labels:
     color: "ededed"
     description: "Stale PR; no activity within threshold (auto-applied)."
     class: functional
-  - name: "claude-routine-sessions"
-    color: "ededed"
-    description: "Routine-session-touched issue; meta tracking."
-    class: functional
   - name: "lessons-learned"
     color: "ededed"
-    description: "Captures a session-derived lesson; informs AGENTS.md updates."
-    class: functional
-  - name: "self-audit"
-    color: "ededed"
-    description: "Audit of DomI's own infra; not consumer-facing."
+    description: "Captures a lesson learned while working on the project."
     class: functional
   - name: "human-review"
     color: "d93f0b"
@@ -189,7 +173,6 @@ deprecated:
   - "scope: plugin"
   - "scope: ci"
   - "scope: docs"
-  - "scope: claude-md"
   - "scope: testing"
   - "scope: automation"
   - "scope: git"

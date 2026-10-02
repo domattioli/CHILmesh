@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this for audits, investigations, documentation work, or any task that does not fit Bug Report or Feature Request. Routine Claude Code sessions can pick these up if labeled `claude-routine-sessions`.
+        Use this for audits, investigations, documentation work, or any task that does not fit Bug Report or Feature Request.
   - type: textarea
     id: background
     attributes:
@@ -51,15 +51,8 @@ body:
       default: 0
     validations:
       required: true
-  - type: checkboxes
-    id: routine-eligible
-    attributes:
-      label: Routine session eligibility
-      description: If checked, the `claude-routine-sessions` label will be added (see AGENTS.md).
-      options:
-        - label: This task is suitable for autonomous Claude Code routine sessions
   - type: textarea
     id: related
     attributes:
       label: Related issues, docs, or external references
-      placeholder: "e.g. #111, .planning/TEST-AUDIT.md, DomI/specs/consumers/CHILmesh/memory/constitution.md §X"
+      placeholder: "e.g. #111, docs/ARCHITECTURE.md"

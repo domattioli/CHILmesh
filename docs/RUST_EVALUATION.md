@@ -1,7 +1,6 @@
 # Rust Backend Evaluation
 
 **Date:** 2026-07-14
-**Author:** Claude Code (routine session)
 **Backend status:** ❄️ **FROZEN** (2026-07-14, operator-directed) — kept and
 output-equivalent, but not developed further. See `src/chilmesh_core/STATUS.md`.
 **Status:** Evaluation — evidence + recommendation; the O(1) query fix was applied, the
