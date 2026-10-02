@@ -52,3 +52,12 @@ def test_aliases_identical():
     c = element_quality(pts, conn, metric="eas")
     np.testing.assert_array_equal(a, b)
     np.testing.assert_array_equal(a, c)
+
+
+def test_concave_quad_skewness_is_one_by_documented_rule():
+    # #275: unsigned arccos angles of a concave quad sum to < 360 deg, so the
+    # `<= 359.99` check returns the worst value (skewness 1.0, skew 0.0).
+    pts = np.array([[0, 0], [2, 0], [0.8, 0.5], [0, 2]], dtype=float)
+    conn = [[0, 1, 2, 3]]
+    assert element_quality(pts, conn, metric="equiangle_skewness")[0] == 1.0
+    assert element_quality(pts, conn, metric="skew")[0] == 0.0
