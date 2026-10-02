@@ -93,6 +93,54 @@ def _summary_from_mesh(mesh) -> dict:
         raise SummaryError(f"Failed to extract metadata from CHILmesh object: {e}")
 
 
+_SUFFIX_FORMATS = {
+    '.14': 'fort14',
+    '.grd': 'fort14',
+    '.fort14': 'fort14',
+    '.2dm': '2dm',
+    '.13': 'fort13',
+    '.15': 'fort15',
+    '.npy': 'npy',
+    '.npz': 'npz',
+    '.msh': 'gmsh',
+}
+
+
+def _detect_format(path: Path) -> str:
+    """Infer the mesh format name from a file's suffix or generic ``fort.N`` name.
+
+    Raises
+    ------
+    SummaryError
+        If neither the suffix nor the file name is recognized.
+    """
+    suffix = path.suffix.lower()
+    fmt = _SUFFIX_FORMATS.get(suffix)
+    if fmt is not None:
+        return fmt
+    if _FORT_GENERIC_RE.match(path.name.lower()):
+        return 'fort_generic'
+    raise SummaryError(f"Unknown mesh format: {suffix}")
+
+
+def _apply_deep_summary(path: Path, result: dict) -> None:
+    """Load the full mesh and add ``element_type`` and ``bbox`` to ``result``."""
+    try:
+        # Import here to avoid circular dependency
+        from chilmesh import CHILmesh
+        mesh = CHILmesh.load(path, compute_layers=False, compute_adjacencies=False)
+        result['element_type'] = mesh.type
+        points = mesh.points
+        result['bbox'] = {
+            'min_x': float(points[:, 0].min()),
+            'max_x': float(points[:, 0].max()),
+            'min_y': float(points[:, 1].min()),
+            'max_y': float(points[:, 1].max()),
+        }
+    except Exception as e:
+        raise SummaryError(f"Failed to load mesh for deep summary: {e}")
+
+
 def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
     """Extract metadata from a mesh file."""
     # Missing file → FileNotFoundError so CLI exit code matches `info`
@@ -100,29 +148,7 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
     if not path.exists():
         raise FileNotFoundError(f"No such file: {path}")
 
-    # Infer format from file suffix
-    suffix = path.suffix.lower()
-
-    if suffix in ('.14', '.grd'):
-        fmt = 'fort14'
-    elif suffix in ('.fort14',):
-        fmt = 'fort14'
-    elif suffix == '.2dm':
-        fmt = '2dm'
-    elif suffix == '.13':
-        fmt = 'fort13'
-    elif suffix == '.15':
-        fmt = 'fort15'
-    elif suffix == '.npy':
-        fmt = 'npy'
-    elif suffix == '.npz':
-        fmt = 'npz'
-    elif suffix == '.msh':
-        fmt = 'gmsh'
-    elif _FORT_GENERIC_RE.match(path.name.lower()):
-        fmt = 'fort_generic'
-    else:
-        raise SummaryError(f"Unknown mesh format: {suffix}")
+    fmt = _detect_format(path)
 
     # Get file size
     try:
@@ -136,40 +162,24 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         'file_bytes': file_bytes,
     }
 
-    # Format-specific lazy reading
-    if fmt == 'fort14':
-        _read_fort14_header(path, result)
-    elif fmt == '2dm':
-        _read_2dm_header(path, result)
-    elif fmt == 'fort13':
-        _read_fort13_header(path, result)
-    elif fmt == 'fort15':
-        _read_fort15_header(path, result)
-    elif fmt == 'npy':
-        _read_npy_header(path, result)
-    elif fmt == 'npz':
-        _read_npz_header(path, result)
-    elif fmt == 'gmsh':
-        _read_msh_header(path, result)
-    elif fmt == 'fort_generic':
-        _read_fort_generic_header(path, result)
+    # Format-specific lazy reading. Looked up by name at call time so the
+    # reader functions defined later in this module (and any test patches of
+    # them) are resolved when needed.
+    header_readers = {
+        'fort14': _read_fort14_header,
+        '2dm': _read_2dm_header,
+        'fort13': _read_fort13_header,
+        'fort15': _read_fort15_header,
+        'npy': _read_npy_header,
+        'npz': _read_npz_header,
+        'gmsh': _read_msh_header,
+        'fort_generic': _read_fort_generic_header,
+    }
+    header_readers[fmt](path, result)
 
     # If deep=True, load the full mesh for element_type and bbox
     if deep:
-        try:
-            # Import here to avoid circular dependency
-            from chilmesh import CHILmesh
-            mesh = CHILmesh.load(path, compute_layers=False, compute_adjacencies=False)
-            result['element_type'] = mesh.type
-            points = mesh.points
-            result['bbox'] = {
-                'min_x': float(points[:, 0].min()),
-                'max_x': float(points[:, 0].max()),
-                'min_y': float(points[:, 1].min()),
-                'max_y': float(points[:, 1].max()),
-            }
-        except Exception as e:
-            raise SummaryError(f"Failed to load mesh for deep summary: {e}")
+        _apply_deep_summary(path, result)
 
     return result
 
