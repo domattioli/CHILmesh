@@ -7,7 +7,7 @@ from .utils.plot_utils import CHILmeshPlotMixin
 
 import numpy as np
 from scipy.spatial import Delaunay, cKDTree
-from typing import List, Tuple, Optional as Opt, Dict, Set, Union, Any
+from typing import Callable, List, Tuple, Optional as Opt, Dict, Set, Union, Any
 from scipy.sparse.linalg import spsolve
 from copy import deepcopy
 
@@ -20,6 +20,23 @@ __all__ = ['CHILmesh', 'write_fort14']
 # catastrophic. Warn once, only for large meshes where the gap is material.
 _SLOW_PATH_WARNED = False
 _SLOW_PATH_ELEM_THRESHOLD = 50000
+
+def _unique_in_order(row: np.ndarray) -> list:
+    """Vertex IDs of one connectivity row without padding repeats, order kept."""
+    seen: set = set()
+    out = []
+    for x in row.tolist():
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
+
+def _shoelace(xy: np.ndarray) -> float:
+    """Signed polygon area of vertices ``xy`` (K, 2); positive for CCW."""
+    x, y = xy[:, 0], xy[:, 1]
+    return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
+
 
 class CHILmesh(CHILmeshPlotMixin):
     """
@@ -1658,6 +1675,10 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Parameters:
             method: Smoothing method ('FEM','angle-based','sdf')
+                'fem' / 'angle-based': size-blind by default. When ``size_fn`` is
+                given it is forwarded to ``direct_smoother`` /
+                ``angle_based_smoother``, which then pull nodes toward edge
+                lengths that follow ``size_fn`` (see those docstrings).
                 'sdf': spring-based truss optimization against a signed-distance
                 function (ADMESH warm-start). Requires sdf=<callable>; triangle-only;
                 rebuilds the mesh (geometry + topology).
@@ -1677,6 +1698,10 @@ class CHILmesh(CHILmeshPlotMixin):
             if optimized.grid_name is None:
                 self.grid_name = saved_grid_name
             return self.points
+        # size_fn is forwarded only when given so the default call is exactly
+        # the pre-size_fn call (byte-identical output, #197).
+        if size_fn is not None:
+            kwargs['size_fn'] = size_fn
         if method.lower() == 'fem':
             new_points = self.direct_smoother( **kwargs )
         elif method.lower() == 'angle-based':
@@ -1741,8 +1766,13 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return ring
 
+    # Angle-based size term: strength of the edge-length correction, relative to
+    # the angle correction. See ``angle_based_smoother``.
+    _SIZE_PULL_BETA = 1.0
+
     def angle_based_smoother(self, n_iter: int = 100, omega: float = 0.5,
-                              tol: float = 1e-8) -> np.ndarray:
+                              tol: float = 1e-8,
+                              size_fn: Opt[Callable[[np.ndarray], np.ndarray]] = None) -> np.ndarray:
         """
         Iterative angle-based smoother (Zhou & Shimada 2000).
 
@@ -1756,6 +1786,27 @@ class CHILmesh(CHILmeshPlotMixin):
             n_iter: Maximum number of passes over all interior vertices
             omega:  Initial relaxation factor (halved up to 6x in line search)
             tol:    Convergence threshold on max per-vertex displacement
+            size_fn: Optional size function ``size_fn(points) -> h`` taking an
+                ``(K, 2)`` array and returning ``(K,)`` positive target edge
+                lengths (same convention as ``size_fn`` of
+                ``admesh_warmstart.optimize_with_admesh_truss``). ``None``
+                (default) runs the unchanged size-blind algorithm.
+
+                When given, ``h`` is evaluated once at the input vertices and
+                every move gets a second term, an edge-length correction of
+                strength ``beta = 1`` (class constant ``_SIZE_PULL_BETA``, applied with the
+                same ``omega`` as the angle term):
+                ``mean_j (|d_j| - h_vj) * d_j / |d_j|`` with ``d_j = p_j - p_v``
+                and ``h_vj = (h_v + h_j) / 2``. Why: an edge longer than its
+                target pulls the node toward that neighbour and a shorter edge
+                pushes it away, so the term vanishes when edges already match
+                ``h`` (the angle term alone only equalizes angles and says
+                nothing about edge length). The acceptance rule is relaxed
+                by one case: a move is kept when it strictly improves the local
+                minimum quality, or when the resulting quality is positive (no
+                inversion) and not lower than before, since a size-driven move
+                often leaves the worst element unchanged. Boundary nodes stay
+                fixed.
 
         Reference:
             Zhou, M., & Shimada, K. (2000).
@@ -1771,6 +1822,7 @@ class CHILmesh(CHILmeshPlotMixin):
         vert2elem = self.adjacencies['Vert2Elem']
         two_pi = 2.0 * np.pi
         deficit_cap = np.pi / 3.0
+        h_vert = self._eval_size_fn(size_fn, p) if size_fn is not None else None
 
         def _elem_verts(row):
             if row.shape[0] == 4 and row[3] == row[0]:
@@ -1906,18 +1958,18 @@ class CHILmesh(CHILmeshPlotMixin):
 
                 correction = np.sum(deficits[:, np.newaxis] * avg_lens[:, np.newaxis] * normalized_bisector, axis=0)
 
-                if np.linalg.norm(correction) < 1e-14:
+                step = self._angle_move_step(correction, m_ring, omega, v, ring_arr, p, h_vert)
+                if step is None:
                     continue
 
                 current_q = _local_min_quality_fast(v, v_pos, p, cached_ev)
 
-                step = omega * correction / m_ring
                 scale = 1.0
                 accepted = False
                 for _ in range(6):
                     candidate = v_pos + scale * step
                     new_q = _local_min_quality_fast(v, candidate, p, cached_ev)
-                    if new_q > current_q:
+                    if self._angle_move_accepted(new_q, current_q, h_vert is not None):
                         accepted = True
                         break
                     scale *= 0.5
@@ -1935,6 +1987,32 @@ class CHILmesh(CHILmeshPlotMixin):
         new_points[:, :2] = p
         new_points[:, 2] = self.points[:, 2]
         return new_points
+
+    def _angle_move_step(self, correction: np.ndarray, m_ring: int, omega: float,
+                         v: int, ring: np.ndarray, p: np.ndarray,
+                         h_vert: Opt[np.ndarray]) -> Opt[np.ndarray]:
+        """Trial displacement for vertex ``v`` in ``angle_based_smoother``, or None if negligible.
+
+        Without a size field this is the angle correction alone (and the 1e-14
+        skip test uses the correction, as before). With one, the step adds a pull
+        along the ring edges so that each edge approaches its target length.
+        """
+        step = omega * correction / m_ring
+        if h_vert is None:
+            return step if np.linalg.norm(correction) >= 1e-14 else None
+        d = p[ring] - p[v]
+        length = np.linalg.norm(d, axis=1)
+        h_edge = 0.5 * (h_vert[v] + h_vert[ring])
+        # (length - h) > 0: edge too long, node moves toward that neighbour.
+        err = (length - h_edge) / np.where(length > 1e-14, length, np.inf)
+        step = step + omega * self._SIZE_PULL_BETA * (err[:, np.newaxis] * d).mean(axis=0)
+        return step if np.linalg.norm(step) >= 1e-14 else None
+
+    def _angle_move_accepted(self, new_q: float, current_q: float, sized: bool) -> bool:
+        """Line-search acceptance: strict improvement, or (sized) valid and not worse."""
+        if new_q > current_q:
+            return True
+        return sized and new_q > 0.0 and new_q >= current_q
 
     def _detect_element_types(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -2028,64 +2106,75 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return rows, cols, data
 
-    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False,
-                        solver: str = "direct", tol: float = 1e-8,
-                        maxiter: int | None = None) -> np.ndarray:
+    @staticmethod
+    def _eval_size_fn(size_fn: Callable, pts: np.ndarray) -> np.ndarray:
+        """Evaluate ``size_fn(points (K, 2)) -> (K,)`` and validate the result.
+
+        Same calling convention as ``size_fn`` of
+        ``admesh_warmstart.optimize_with_admesh_truss``. Raises ``ValueError``
+        for a wrong shape or non-finite / non-positive sizes, since a size of
+        zero or less has no meaning as a target edge length.
         """
-        Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
-        Supports triangle, quad, and mixed-element meshes.
+        h = np.asarray(size_fn(np.asarray(pts, dtype=float)), dtype=float)
+        if h.ndim == 0:
+            h = np.full(len(pts), float(h))
+        if h.shape != (len(pts),):
+            raise ValueError(f"size_fn must return shape ({len(pts)},), got {h.shape}")
+        if not np.isfinite(h).all() or (h <= 0.0).any():
+            raise ValueError("size_fn must return finite, strictly positive sizes")
+        return h
 
-        Triangles use the Balendran rotation-based stiffness (equilateral target);
-        quads use the Q4 bilinear Laplacian (square target).
+    # Strength of the size-weighted edge-spring term relative to the shape
+    # (Balendran / Q4) stiffness. See ``direct_smoother`` for the rationale.
+    _SIZE_SPRING_ALPHA = 1.0
 
-        Interior RHS F = 0 per Balendran/MATLAB FEMSmooth.m — only boundary
-        pinning terms are non-zero. (#173 fix: removed incorrect
-        _compute_angle_based_forces call from interior RHS.)
+    def _size_spring_stiffness(self, size_fn: Callable, p: np.ndarray, n: int) -> tuple:
+        """Rest-length edge springs for ``direct_smoother``: COO stiffness plus load vector.
 
-        Note (size-field behavior, #168): this smoother is **isotropic**. The
-        Balendran stiffness targets a uniform equilateral triangle (60 deg) /
-        square quad (90 deg) and takes **no size-field input** — it equalizes
-        element *shape*, not *size*. Applied to a graded mesh it grows fine
-        (e.g. coastal) edges and shrinks coarse (offshore) edges, eroding the
-        original sizing. For size-respecting smoothing, supply anisotropic
-        targets (not yet implemented) or run a separate sizing pass afterward.
+        Each unique edge (a, b) is a linear spring with stiffness
+        ``k = alpha * h_ref / h(mid)`` and a rest vector ``h(mid) * u_ab``, where
+        ``mid`` and the unit direction ``u_ab`` (a toward b) come from the input
+        mesh and ``h_ref`` is the mean of ``h`` over all edge midpoints (so ``k``
+        is dimensionless and stays comparable to the shape stiffness in any
+        units). The spring energy ``k/2 |x_b - x_a - h u_ab|^2`` gives the
+        Laplacian stiffness block plus the load ``b_a = -k h u_ab``,
+        ``b_b = +k h u_ab``.
 
-        Parameters:
-            kinf: Large stiffness value for fixed (pinned) vertices.
-            freeze_quad_nodes: When True, pin every vertex that is a corner of any
-                quad element in addition to the boundary.
-            solver: Linear solver choice. 'direct' (default) uses scipy spsolve (dense LU);
-                'iterative' or 'minres' uses a Jacobi-preconditioned MINRES Krylov solve
-                with far lower peak memory for large meshes (#168). The iterative path
-                eliminates pinned DOFs (Dirichlet reduction) so it converges to the same
-                solution as the direct path (parity ~1e-4 absolute at WNAT scale).
-            tol: Convergence tolerance for the iterative solver (ignored if solver='direct').
-            maxiter: Iteration cap for the iterative solver; None uses scipy default.
+        Why rest-length springs, not weights alone (measured, #197): the
+        Balendran and Q4 element energies are scale-free, so scaling element
+        blocks by 1/h leaves each element's own optimum (equilateral / square)
+        intact and moves nodes almost nowhere; a bare 1/h-weighted Laplacian
+        pulls nodes to weighted centroids and degrades a mesh whose edges
+        already match ``h``. With rest vectors the input is a fixed point of the
+        spring term whenever its edge lengths equal ``h``, so the term resists
+        only the size erosion caused by the shape stiffness.
 
-        Reference:
-            Balendran, B. (1999).
-            "A direct smoothing method for surface meshes".
-            Proceedings of the 8th International Meshing Roundtable, 189-193.
+        Returns ``(rows, cols, data, load)`` with ``load`` of shape ``(2n,)``.
         """
-        from scipy.sparse import csr_matrix, diags
+        pairs = []
+        for row in self.connectivity_list:
+            v = _unique_in_order(row)
+            m = len(v)
+            pairs.extend((v[i], v[(i + 1) % m]) for i in range(m))
+        e = np.unique(np.sort(np.asarray(pairs, dtype=int), axis=1), axis=0)
+        d = p[e[:, 1]] - p[e[:, 0]]
+        length = np.linalg.norm(d, axis=1)
+        h = self._eval_size_fn(size_fn, p[e[:, 0]] + 0.5 * d)
+        k = self._SIZE_SPRING_ALPHA * h.mean() / h
+        rest = (k * h / np.where(length > 1e-14, length, np.inf))[:, np.newaxis] * d
+        rows, cols, data = [], [], []
+        load = np.zeros(2 * n)
+        for dim in range(2):
+            ia, ib = 2 * e[:, 0] + dim, 2 * e[:, 1] + dim
+            rows += [ia, ib, ia, ib]
+            cols += [ia, ib, ib, ia]
+            data += [k, k, -k, -k]
+            np.add.at(load, ia, -rest[:, dim])
+            np.add.at(load, ib, rest[:, dim])
+        return np.concatenate(rows), np.concatenate(cols), np.concatenate(data), load
 
-        p = self.points[:, :2]
-        n = self.n_verts
-
-        tri_indices, quad_indices = self._detect_element_types()
-
-        if len(quad_indices) == 0:
-            rows, cols, data = self._tri_stiffness_assembly(tri_indices, p, n)
-        elif len(tri_indices) == 0:
-            rows, cols, data = self._quad_stiffness_assembly(quad_indices, p, n)
-        else:
-            rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
-
-        K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
-
-        # Interior RHS = 0 per Balendran/MATLAB FEMSmooth.m (#173 fix)
-        F = np.zeros(2 * n)
-
+    def _smoother_pinned_nodes(self, quad_indices: np.ndarray, freeze_quad_nodes: bool) -> set:
+        """Vertex IDs held fixed by ``direct_smoother``: boundary (+ quad corners if asked)."""
         if "Edge2Elem" in self.adjacencies:
             edge_verts = self.edge2vert(self.boundary_edges())
             boundary_nodes = np.unique(edge_verts.flatten())
@@ -2103,53 +2192,178 @@ class CHILmesh(CHILmeshPlotMixin):
         if freeze_quad_nodes and len(quad_indices) > 0:
             quad_corner_nodes = np.unique(self.connectivity_list[quad_indices, :4].flatten())
             pinned |= set(int(v) for v in quad_corner_nodes)
+        return pinned
+
+    @staticmethod
+    def _solve_pinned_penalty(K, F: np.ndarray, p: np.ndarray, pinned: set, kinf) -> np.ndarray:
+        """Penalty (large-stiffness) Dirichlet enforcement, solved with spsolve.
+
+        Byte-identical to the prior shared-penalty path; spsolve handles the
+        resulting ill-conditioning via exact LU.
+        """
+        for v in pinned:
+            F[2*v:2*v+2] = kinf * p[v]
+            K[2*v, 2*v] = kinf
+            K[2*v+1, 2*v+1] = kinf
+        return spsolve(K, F)
+
+    @staticmethod
+    def _solve_pinned_minres(K, F: np.ndarray, p: np.ndarray, pinned: set, n: int,
+                             tol: float, maxiter: Opt[int]) -> np.ndarray:
+        """Dirichlet-eliminated, Jacobi-preconditioned MINRES solve (#168 follow-up).
+
+        Rather than the kinf penalty (which gives K a ~1e12 condition number and
+        makes MINRES' residual stop converge to a different solution than spsolve
+        at scale), remove the pinned DOFs and solve the well-conditioned reduced
+        system K_ff x_f = -K_fp x_p. Pinned coords are known (= original
+        positions), so the free-DOF MINRES converges to the true Dirichlet
+        solution while staying matrix-free (no LU fill-in, no OOM at WNAT scale).
+        """
+        from scipy.sparse import diags
+        from scipy.sparse.linalg import minres
+        pin_idx = np.array(sorted(2 * v + d for v in pinned for d in (0, 1)),
+                           dtype=int)
+        is_pinned = np.zeros(2 * n, dtype=bool)
+        is_pinned[pin_idx] = True
+        free = np.where(~is_pinned)[0]
+        x_full = np.zeros(2 * n)
+        flat_p = p.reshape(-1)
+        x_full[pin_idx] = flat_p[pin_idx]
+        K_ff = K[free][:, free].tocsr()
+        # F[free] is zero (size_fn=None) or the size-spring load; the eliminated
+        # pinned coupling is subtracted from it.
+        rhs = F[free] - K[free][:, pin_idx] @ x_full[pin_idx]
+        diag_vals = K_ff.diagonal()
+        diag_vals = np.where(diag_vals != 0.0, diag_vals, 1.0)
+        M = diags(1.0 / diag_vals)
+        try:
+            c_free, info = minres(K_ff, rhs, rtol=tol, maxiter=maxiter, M=M)
+        except TypeError:
+            # scipy < 1.12 uses `tol` instead of `rtol`
+            c_free, info = minres(K_ff, rhs, tol=tol, maxiter=maxiter, M=M)
+        if info != 0:
+            import warnings
+            warnings.warn(
+                f"MINRES did not converge (info={info}) in direct_smoother; "
+                "result may be inaccurate — raise maxiter or loosen tol.",
+                RuntimeWarning, stacklevel=3)
+        x_full[free] = c_free
+        return x_full
+
+    def _backtrack_to_valid(self, p_old: np.ndarray, p_new: np.ndarray) -> np.ndarray:
+        """Largest blend ``p_old + t (p_new - p_old)``, t in {1, 1/2, ...}, with no inverted element.
+
+        The size-weighted spring term has no positivity guarantee, so the full
+        linear-solve step can fold an element. Elements whose signed area
+        (shoelace, padded triangles collapsed) was already non-positive in
+        ``p_old`` are ignored so a mesh that starts with bad elements still
+        smooths. Returns ``p_old`` if even t = 2^-8 inverts something.
+        """
+        polys = [_unique_in_order(row) for row in self.connectivity_list]
+
+        def _bad(pts: np.ndarray) -> np.ndarray:
+            return np.array([_shoelace(pts[v]) <= 0.0 for v in polys])
+
+        was_bad = _bad(p_old)
+        t = 1.0
+        for _ in range(9):
+            cand = p_old + t * (p_new - p_old)
+            if not (_bad(cand) & ~was_bad).any():
+                return cand
+            t *= 0.5
+        return p_old
+
+    def direct_smoother(self, kinf=1e12, freeze_quad_nodes: bool = False,
+                        solver: str = "direct", tol: float = 1e-8,
+                        maxiter: int | None = None,
+                        size_fn: Opt[Callable[[np.ndarray], np.ndarray]] = None) -> np.ndarray:
+        """
+        Perform direct (non-iterative) FEM smoothing with fixed boundary nodes.
+        Supports triangle, quad, and mixed-element meshes.
+
+        Triangles use the Balendran rotation-based stiffness (equilateral target);
+        quads use the Q4 bilinear Laplacian (square target).
+
+        Interior RHS F = 0 per Balendran/MATLAB FEMSmooth.m — only boundary
+        pinning terms are non-zero. (#173 fix: removed incorrect
+        _compute_angle_based_forces call from interior RHS.)
+
+        Note (size-field behavior, #168, #197): by default this smoother is
+        **isotropic**. The Balendran stiffness targets a uniform equilateral
+        triangle (60 deg) / square quad (90 deg) and takes **no size-field
+        input** — it equalizes element *shape*, not *size*. Applied to a graded
+        mesh it grows fine (e.g. coastal) edges and shrinks coarse (offshore)
+        edges, eroding the original sizing. Pass ``size_fn`` to make it
+        size-aware.
+
+        Parameters:
+            kinf: Large stiffness value for fixed (pinned) vertices.
+            freeze_quad_nodes: When True, pin every vertex that is a corner of any
+                quad element in addition to the boundary.
+            solver: Linear solver choice. 'direct' (default) uses scipy spsolve (dense LU);
+                'iterative' or 'minres' uses a Jacobi-preconditioned MINRES Krylov solve
+                with far lower peak memory for large meshes (#168). The iterative path
+                eliminates pinned DOFs (Dirichlet reduction) so it converges to the same
+                solution as the direct path (parity ~1e-4 absolute at WNAT scale).
+            tol: Convergence tolerance for the iterative solver (ignored if solver='direct').
+            maxiter: Iteration cap for the iterative solver; None uses scipy default.
+            size_fn: Optional size function ``size_fn(points) -> h`` taking an
+                ``(K, 2)`` array of coordinates and returning ``(K,)`` positive
+                target edge lengths (same convention as ``size_fn`` of
+                ``admesh_warmstart.optimize_with_admesh_truss``). ``None``
+                (default) runs the unchanged size-blind algorithm.
+
+                When given, a rest-length spring is added on every edge:
+                stiffness ``k = h_ref / h(mid)``, rest vector ``h(mid)`` along
+                the input edge direction (see ``_size_spring_stiffness``), all
+                evaluated once on the input geometry, so the result is still
+                one linear solve. Why: the Balendran / Q4 shape energy is
+                scale-free and shrinks or grows edges toward uniform size,
+                while the springs hold each edge near ``h``; the input is a
+                fixed point of the spring term when its edges already equal
+                ``h``. The shape and size terms compromise (the spring strength
+                is the class constant ``_SIZE_SPRING_ALPHA``). If the full
+                step would invert an element it is backtracked (halved) until
+                no element that was valid on input is inverted. The boundary
+                stays pinned. Works with both ``solver`` choices and on tri,
+                quad and mixed meshes.
+
+        Reference:
+            Balendran, B. (1999).
+            "A direct smoothing method for surface meshes".
+            Proceedings of the 8th International Meshing Roundtable, 189-193.
+        """
+        from scipy.sparse import csr_matrix
+
+        p = self.points[:, :2]
+        n = self.n_verts
+
+        tri_indices, quad_indices = self._detect_element_types()
+
+        if len(quad_indices) == 0:
+            rows, cols, data = self._tri_stiffness_assembly(tri_indices, p, n)
+        elif len(tri_indices) == 0:
+            rows, cols, data = self._quad_stiffness_assembly(quad_indices, p, n)
+        else:
+            rows, cols, data = self._mixed_stiffness_assembly(tri_indices, quad_indices, p, n)
+
+        # Interior RHS = 0 per Balendran/MATLAB FEMSmooth.m (#173 fix); only the
+        # optional size springs add a load.
+        F = np.zeros(2 * n)
+        if size_fn is not None:
+            s_rows, s_cols, s_data, F = self._size_spring_stiffness(size_fn, p, n)
+            rows, cols, data = (np.concatenate([rows, s_rows]),
+                                np.concatenate([cols, s_cols]),
+                                np.concatenate([data, s_data]))
+
+        K = csr_matrix((data, (rows, cols)), shape=(2*n, 2*n))
+
+        pinned = self._smoother_pinned_nodes(quad_indices, freeze_quad_nodes)
 
         if solver == "direct":
-            # Penalty (large-stiffness) Dirichlet enforcement — byte-identical
-            # to the prior shared-penalty path. spsolve handles the resulting
-            # ill-conditioning via exact LU.
-            for v in pinned:
-                F[2*v:2*v+2] = kinf * p[v]
-                K[2*v, 2*v] = kinf
-                K[2*v+1, 2*v+1] = kinf
-            c = spsolve(K, F)
+            c = self._solve_pinned_penalty(K, F, p, pinned, kinf)
         elif solver in ("iterative", "minres"):
-            from scipy.sparse.linalg import minres
-            # Dirichlet elimination (#168 follow-up): rather than the kinf
-            # penalty (which gives K a ~1e12 condition number and makes MINRES'
-            # residual stop converge to a different solution than spsolve at
-            # scale), remove the pinned DOFs and solve the well-conditioned
-            # reduced system K_ff x_f = -K_fp x_p. Pinned coords are known
-            # (= original positions), so the free-DOF MINRES converges to the
-            # true Dirichlet solution — parity with the direct path is restored
-            # while staying matrix-free (no LU fill-in, no OOM at WNAT scale).
-            pin_idx = np.array(sorted(2 * v + d for v in pinned for d in (0, 1)),
-                               dtype=int)
-            is_pinned = np.zeros(2 * n, dtype=bool)
-            is_pinned[pin_idx] = True
-            free = np.where(~is_pinned)[0]
-            x_full = np.zeros(2 * n)
-            flat_p = p.reshape(-1)
-            x_full[pin_idx] = flat_p[pin_idx]
-            K_ff = K[free][:, free].tocsr()
-            # F[free] is the zero interior RHS; only the eliminated coupling remains.
-            rhs = F[free] - K[free][:, pin_idx] @ x_full[pin_idx]
-            diag_vals = K_ff.diagonal()
-            diag_vals = np.where(diag_vals != 0.0, diag_vals, 1.0)
-            M = diags(1.0 / diag_vals)
-            try:
-                c_free, info = minres(K_ff, rhs, rtol=tol, maxiter=maxiter, M=M)
-            except TypeError:
-                # scipy < 1.12 uses `tol` instead of `rtol`
-                c_free, info = minres(K_ff, rhs, tol=tol, maxiter=maxiter, M=M)
-            if info != 0:
-                import warnings
-                warnings.warn(
-                    f"MINRES did not converge (info={info}) in direct_smoother; "
-                    "result may be inaccurate — raise maxiter or loosen tol.",
-                    RuntimeWarning, stacklevel=2)
-            x_full[free] = c_free
-            c = x_full
+            c = self._solve_pinned_minres(K, F, p, pinned, n, tol, maxiter)
         else:
             raise ValueError(
                 f"unknown solver {solver!r}; expected 'direct' or 'iterative'")
@@ -2158,6 +2372,8 @@ class CHILmesh(CHILmeshPlotMixin):
         max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))
         if not np.isfinite(c).all() or max_disp > domain_diag:
             return self.points.copy()
+        if size_fn is not None:
+            new_xy = self._backtrack_to_valid(p, new_xy)
         new_points = np.zeros_like(self.points)
         new_points[:, :2] = new_xy
         new_points[:, 2] = self.points[:, 2]
@@ -2656,32 +2872,8 @@ class CHILmesh(CHILmeshPlotMixin):
         parts = lines[i].split(); i += 1
         n_elems, n_verts = int(parts[0]), int(parts[1])
 
-        pts = np.zeros((n_verts, 3))
-        for j in range(n_verts):
-            p = lines[i].split(); i += 1
-            pts[j] = [float(p[1]), float(p[2]), float(p[3]) if len(p) > 3 else 0.0]
-
-        elem_verts = []
-        has_tri = False
-        has_quad = False
-        for j in range(n_elems):
-            p = lines[i].split(); i += 1
-            n_verts_elem = int(p[1])
-            verts = [int(float(x)) - 1 for x in p[2:2 + n_verts_elem]]
-            elem_verts.append(verts)
-            if n_verts_elem == 3:
-                has_tri = True
-            elif n_verts_elem == 4:
-                has_quad = True
-
-        if has_tri and has_quad:
-            # Mixed mesh: pad triangles to 4 cols by repeating first vertex.
-            conn = np.array(
-                [v if len(v) == 4 else [v[0], v[1], v[2], v[0]] for v in elem_verts],
-                dtype=int,
-            )
-        else:
-            conn = np.array(elem_verts, dtype=int)
+        pts, i = _read_fort14_points(lines, i, n_verts)
+        conn, i = _read_fort14_connectivity(lines, i, n_elems)
 
         mesh = cls(
             connectivity=conn,
@@ -2692,43 +2884,7 @@ class CHILmesh(CHILmeshPlotMixin):
         )
 
         # --- parse boundary segments (#129) ---
-        boundary_segments = []
-        boundaries_present = False
-        try:
-            # NOPE open boundaries
-            nope = int(lines[i].split()[0]); i += 1
-            int(lines[i].split()[0]); i += 1  # total_nope (not used)
-            boundaries_present = True  # NOPE/NBOU block physically present (#259)
-            for _ in range(nope):
-                n_seg = int(lines[i].split()[0]); i += 1
-                nodes = []
-                for _ in range(n_seg):
-                    nodes.append(int(lines[i].split()[0]) - 1)
-                    i += 1
-                boundary_segments.append(
-                    {"kind": "open", "ibtype": None, "nodes": np.array(nodes, dtype=int)}
-                )
-            # NBOU flow boundaries
-            nbou = int(lines[i].split()[0]); i += 1
-            int(lines[i].split()[0]); i += 1  # total_nbou (not used)
-            for _ in range(nbou):
-                hdr = lines[i].split(); i += 1
-                n_seg = int(hdr[0])
-                ibtype = int(hdr[1]) if len(hdr) > 1 else None
-                nodes = []
-                for _ in range(n_seg):
-                    nodes.append(int(lines[i].split()[0]) - 1)
-                    i += 1
-                boundary_segments.append(
-                    {"kind": "flow", "ibtype": ibtype, "nodes": np.array(nodes, dtype=int)}
-                )
-        except IndexError:
-            pass  # Boundary section absent (legacy mesh) — leave segments empty
-        except ValueError:
-            warnings.warn(
-                "Malformed boundary section in fort.14 file; skipping boundary section",
-                UserWarning
-            )
+        boundary_segments, boundaries_present = _read_fort14_boundary_segments(lines, i)
 
         mesh.boundary_segments = boundary_segments
         mesh.boundaries_present = boundaries_present
@@ -2748,6 +2904,154 @@ class CHILmesh(CHILmeshPlotMixin):
         mesh._build_spatial_indices()
 
         return mesh
+
+
+def _read_fort14_points(lines: list, i: int, n_verts: int) -> tuple:
+    """Parse ``n_verts`` node rows starting at line ``i``.
+
+    Returns
+    -------
+    tuple
+        ``(points, next_line_index)`` with ``points`` of shape ``(n_verts, 3)``.
+        Rows are positional; the node id column is ignored.
+    """
+    pts = np.zeros((n_verts, 3))
+    for j in range(n_verts):
+        p = lines[i].split(); i += 1
+        pts[j] = [float(p[1]), float(p[2]), float(p[3]) if len(p) > 3 else 0.0]
+    return pts, i
+
+
+def _read_fort14_connectivity(lines: list, i: int, n_elems: int) -> tuple:
+    """Parse ``n_elems`` element rows starting at line ``i``.
+
+    Triangles are padded to 4 columns (``[v0, v1, v2, v0]``) only when the
+    file mixes triangles and quads.
+
+    Returns
+    -------
+    tuple
+        ``(connectivity, next_line_index)`` with 0-based vertex ids.
+    """
+    elem_verts = []
+    has_tri = False
+    has_quad = False
+    for j in range(n_elems):
+        p = lines[i].split(); i += 1
+        n_verts_elem = int(p[1])
+        verts = [int(float(x)) - 1 for x in p[2:2 + n_verts_elem]]
+        elem_verts.append(verts)
+        if n_verts_elem == 3:
+            has_tri = True
+        elif n_verts_elem == 4:
+            has_quad = True
+
+    if has_tri and has_quad:
+        # Mixed mesh: pad triangles to 4 cols by repeating first vertex.
+        conn = np.array(
+            [v if len(v) == 4 else [v[0], v[1], v[2], v[0]] for v in elem_verts],
+            dtype=int,
+        )
+    else:
+        conn = np.array(elem_verts, dtype=int)
+    return conn, i
+
+
+def _read_fort14_node_list(lines: list, i: int, n_seg: int) -> tuple:
+    """Read ``n_seg`` boundary node rows; returns ``(0-based nodes, next index)``."""
+    nodes = []
+    for _ in range(n_seg):
+        nodes.append(int(lines[i].split()[0]) - 1)
+        i += 1
+    return nodes, i
+
+
+def _read_fort14_open_segments(lines: list, i: int, segments: list, state: dict) -> int:
+    """Parse the NOPE block, appending to ``segments``; returns the next index.
+
+    Sets ``state["present"]`` once the NOPE/NBOU header has been seen so the
+    caller can report it even if a later row is malformed.
+    """
+    nope = int(lines[i].split()[0]); i += 1
+    int(lines[i].split()[0]); i += 1  # total_nope (not used)
+    state["present"] = True  # NOPE/NBOU block physically present (#259)
+    for _ in range(nope):
+        n_seg = int(lines[i].split()[0]); i += 1
+        nodes, i = _read_fort14_node_list(lines, i, n_seg)
+        segments.append({"kind": "open", "ibtype": None, "nodes": np.array(nodes, dtype=int)})
+    return i
+
+
+def _read_fort14_flow_segments(lines: list, i: int, segments: list) -> int:
+    """Parse the NBOU block, appending to ``segments``; returns the next index."""
+    nbou = int(lines[i].split()[0]); i += 1
+    int(lines[i].split()[0]); i += 1  # total_nbou (not used)
+    for _ in range(nbou):
+        hdr = lines[i].split(); i += 1
+        n_seg = int(hdr[0])
+        ibtype = int(hdr[1]) if len(hdr) > 1 else None
+        nodes, i = _read_fort14_node_list(lines, i, n_seg)
+        segments.append({"kind": "flow", "ibtype": ibtype, "nodes": np.array(nodes, dtype=int)})
+    return i
+
+
+def _read_fort14_boundary_segments(lines: list, i: int) -> tuple:
+    """Parse the NOPE/NBOU block into boundary-segment dicts.
+
+    A missing block (``IndexError``) leaves the segments read so far; a
+    non-numeric row (``ValueError``) warns and likewise keeps what was read.
+    Both paths are deliberate: legacy meshes have no boundary block.
+
+    Returns
+    -------
+    tuple
+        ``(boundary_segments, boundaries_present)``.
+    """
+    segments: list = []
+    state = {"present": False}
+    try:
+        i = _read_fort14_open_segments(lines, i, segments, state)
+        _read_fort14_flow_segments(lines, i, segments)
+    except IndexError:
+        pass  # Boundary section absent (legacy mesh) — leave segments empty
+    except ValueError:
+        warnings.warn(
+            "Malformed boundary section in fort.14 file; skipping boundary section",
+            UserWarning
+        )
+    return segments, state["present"]
+
+
+def _write_fort14_boundaries(f, mesh) -> None:
+    """Write the NOPE/NBOU block to the open file ``f``.
+
+    Always emitted — a canonical fort.14 carries the trailing block even with
+    zero open/flow segments (written 0/0/0/0). (#216)
+    """
+    segs = getattr(mesh, 'boundary_segments', None) or []
+    open_segs = [s for s in segs if s["kind"] == "open"]
+    flow_segs = [s for s in segs if s["kind"] == "flow"]
+
+    # NOPE open boundaries
+    total_open_nodes = sum(len(s["nodes"]) for s in open_segs)
+    f.write(f"{len(open_segs)}\n")
+    f.write(f"{total_open_nodes}\n")
+    for seg in open_segs:
+        f.write(f"{len(seg['nodes'])}\n")
+        for node in seg["nodes"]:
+            f.write(f"{node + 1}\n")
+
+    # NBOU flow boundaries
+    total_flow_nodes = sum(len(s["nodes"]) for s in flow_segs)
+    f.write(f"{len(flow_segs)}\n")
+    f.write(f"{total_flow_nodes}\n")
+    for seg in flow_segs:
+        f.write(f"{len(seg['nodes'])}")
+        if seg["ibtype"] is not None:
+            f.write(f" {seg['ibtype']}")
+        f.write("\n")
+        for node in seg["nodes"]:
+            f.write(f"{node + 1}\n")
 
 
 def write_fort14(mesh, filename: str) -> bool:
@@ -2786,33 +3090,7 @@ def write_fort14(mesh, filename: str) -> bool:
                 verts = elem[:4]
                 f.write(f"{i+1} 4 {' '.join(str(v+1) for v in verts)}\n")
 
-        # Write ADCIRC boundary section (NOPE/NBOU). Always emitted — a
-        # canonical fort.14 carries the trailing block even with zero
-        # open/flow segments (written 0/0/0/0). (#216)
-        segs = getattr(mesh, 'boundary_segments', None) or []
-        open_segs = [s for s in segs if s["kind"] == "open"]
-        flow_segs = [s for s in segs if s["kind"] == "flow"]
-
-        # NOPE open boundaries
-        total_open_nodes = sum(len(s["nodes"]) for s in open_segs)
-        f.write(f"{len(open_segs)}\n")
-        f.write(f"{total_open_nodes}\n")
-        for seg in open_segs:
-            f.write(f"{len(seg['nodes'])}\n")
-            for node in seg["nodes"]:
-                f.write(f"{node + 1}\n")
-
-        # NBOU flow boundaries
-        total_flow_nodes = sum(len(s["nodes"]) for s in flow_segs)
-        f.write(f"{len(flow_segs)}\n")
-        f.write(f"{total_flow_nodes}\n")
-        for seg in flow_segs:
-            f.write(f"{len(seg['nodes'])}")
-            if seg["ibtype"] is not None:
-                f.write(f" {seg['ibtype']}")
-            f.write("\n")
-            for node in seg["nodes"]:
-                f.write(f"{node + 1}\n")
+        _write_fort14_boundaries(f, mesh)
 
     return True
 

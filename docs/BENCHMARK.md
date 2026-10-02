@@ -6,7 +6,8 @@
 
 > **Reproduce:** every number below regenerates from the committed harness —
 > `python scripts/benchmark.py --matlab` (Octave column needs `octave` on PATH;
-> C++ column needs `pip install ./src/chilmesh_cpp`). The harness also asserts
+> C++ column needs `pip install "chilmesh[cpp]"` for the prebuilt wheel, or
+> `pip install ./src/chilmesh_cpp` for a source build). The harness also asserts
 > `n_layers` parity across all available implementations, so stale hand-entered
 > figures can't creep back in.
 
@@ -47,6 +48,10 @@
 >
 > The elimination path makes `solver="iterative"` a drop-in for the direct
 > result (was a meaningfully different mesh under the old shared-penalty path).
+
+> **Size-weighted smoothing (#197):** `direct_smoother(size_fn=...)` and
+> `angle_based_smoother(size_fn=...)` versus their size-blind base on size error, element and angle quality, and runtime:
+> see [`docs/benchmarks/size_smoothing.md`](benchmarks/size_smoothing.md) (regenerate with `python scripts/benchmark_size_smoothing.py`).
 
 ## v1.1.0 — cross-language (single machine, WNAT_Hagen, medians)
 

@@ -63,6 +63,14 @@ Revisit only if Model A's two-package version-sync proves painful.
   on any extension-API change. Record the contract in `CONTRIBUTING.md`.
 - Graduate `chilmesh-cpp` off `.dev0` to a real release version (e.g. `0.6.0`).
 
+**Phase 0 decisions (2026-10-02, operator-ratified for #256):**
+
+- Model A ratified.
+- `chilmesh-cpp` graduated `0.6.0.dev0` to `0.6.0`; its `requires-python` raised to `>=3.10` to match `chilmesh`.
+- **Compat pin:** `chilmesh` 1.5.x pairs with `chilmesh-cpp>=0.6,<0.7`, enforced by the `cpp` extra in the root `pyproject.toml`. Bump the pin and both versions together on any extension-API change. Release target: `chilmesh` 1.5.0 and `chilmesh-cpp` 0.6.0 on one GitHub release.
+- Platforms: Linux x86_64, macOS x86_64 + arm64, Windows AMD64; CPython 3.10 to 3.14 (cibuildwheel 3.3.0; 3.1.0 made cp314 a default build target).
+- The Intel macOS leg uses `macos-15-intel` because `macos-13` was retired by GitHub.
+
 ### Phase 1 — expand the build matrix (`build-cpp-wheels.yml`)
 - Add **macOS** (`x86_64` + `arm64` / universal2) and **Windows** (`AMD64`) alongside
   manylinux `x86_64`. Resolve the runner-billing question in **#225** first (macOS/

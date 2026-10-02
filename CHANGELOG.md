@@ -8,6 +8,33 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [1.5.0] — 2026-10-02
+
+**Minor release.** No breaking changes. Existing calls behave as before.
+
+### Added
+- **Prebuilt C++ wheels: `pip install "chilmesh[cpp]"`** ([#256](https://github.com/domattioli/CHILmesh/issues/256)). The new `cpp` extra installs `chilmesh-cpp` 0.6.0, a binary wheel for Linux x86_64, macOS x86_64 and arm64, and Windows x86_64 on CPython 3.10 to 3.14. No compiler is needed. `chilmesh` 1.5.x pairs with `chilmesh-cpp>=0.6,<0.7`. A post-publish CI job installs the wheel from PyPI on all three operating systems and runs the backend-equivalence suite against it.
+- **Experimental GPU renderer: `pip install "chilmesh[gpu]"`** ([#167](https://github.com/domattioli/CHILmesh/issues/167), Phase A). `chilplotting.render_image(..., backend="gpu")` and `GPUMeshView` draw a mesh and a per-element scalar through pygfx and wgpu. `chilplotting.plot_backend_info()` reports the choice, and `CHILMESH_PLOT_BACKEND=mpl|gpu` overrides it. matplotlib stays the default, and `import chilmesh` never imports the GPU stack. On an Apple M4, a steady redraw of the 531,680-element ENPAC2003 mesh takes 12 ms against 1.9 s in matplotlib ([`docs/benchmarks/gpu_render.md`](docs/benchmarks/gpu_render.md)).
+- **Optional size function for the FEM and angle-based smoothers** ([#197](https://github.com/domattioli/CHILmesh/issues/197)). `smooth_mesh(method="fem" | "angle-based", size_fn=...)`, `direct_smoother(size_fn=...)` and `angle_based_smoother(size_fn=...)` accept a target element size, `size_fn(points (K, 2)) -> h (K,)`, the same convention as the truss smoother. With `size_fn=None` both smoothers return the same nodes as 1.4.1. In the benchmark ([`docs/benchmarks/size_smoothing.md`](docs/benchmarks/size_smoothing.md)) the size term lowers the mean size error on every mesh that moves, for example donut FEM 0.145 → 0.130 and Test_Case_2 angle-based 0.059 → 0.048, with no inverted elements. The quality cost is mixed: Test_Case_2 FEM minimum aspect ratio falls from 0.614 to 0.453, and Lake_Erie FEM minimum angle rises from 19.8° to 23.9°. FEM with a size function takes about 1.5 to 2 times as long as without one.
+- **`boundaries_present` flag on `Fort14Raw` and on `Mesh`** ([#259](https://github.com/domattioli/CHILmesh/issues/259)). It is `True` only when the `fort.14` boundary section is in the file. An empty boundary section and a missing one are now different states.
+
+### Fixed
+- **Quad `min_angle` and `max_angle` now use the four interior angles of the quad** ([#260](https://github.com/domattioli/CHILmesh/issues/260)). Before, both metrics came from a split into two triangles. A 128.66° corner read as 90°, and a unit square reported a 45° minimum.
+- **`fort.14` files are byte-stable on every platform.** The writers emit UTF-8 with LF line endings, and the readers decode UTF-8 explicitly. Before, Windows wrote CRLF and cp1252.
+
+
+### Changed
+- **Lower cyclomatic complexity in nine I/O and mutation functions** ([#264](https://github.com/domattioli/CHILmesh/issues/264)). The fort.14, fort.13, gmsh and summary readers, `write_fort14`, `collapse_edge` and `repeel_local` now delegate to private helpers. Each function is rated C or better by radon (was D or E). Output, error types and error messages are unchanged on 2,431 recorded cases, including about 1,300 malformed inputs.
+- **Gmsh reader validation uses one helper** ([#266](https://github.com/domattioli/CHILmesh/issues/266)). Error types and messages are unchanged.
+- **Benchmark and scene scripts no longer write to hard-coded `/tmp` paths** ([#263](https://github.com/domattioli/CHILmesh/issues/263)). Set `CHILMESH_OUT_DIR` and `VALENCE_DATA_DIR` instead.
+- **Static analysis in CI** ([#262](https://github.com/domattioli/CHILmesh/issues/262), [#265](https://github.com/domattioli/CHILmesh/issues/265), [#267](https://github.com/domattioli/CHILmesh/issues/267)). A ruff configuration, and a code-smell lane that gates on ruff `F` and bandit MEDIUM findings.
+
+### Docs
+- **Concave-quad skewness rule documented** ([#275](https://github.com/domattioli/CHILmesh/issues/275)). A concave or degenerate quad reports `equiangle_skewness` 1.0 and `skew` 0.0, the worst values, by design. For nodes (0, 0), (2, 0), (0.8, 0.5), (0, 2) a plain max/min-angle formula would give 0.749. A test locks the rule.
+- **Concept DOI.** The README and `CITATION.cff` cite 10.5281/zenodo.20263853. It always resolves to the latest version. `CITATION.cff` now declares `cff-version: 1.2.0`.
+- **README Status & Roadmap refreshed** for 1.5.0 ([#261](https://github.com/domattioli/CHILmesh/issues/261)).
+- **Releases that shipped without a changelog entry.** The lazy `import chilmesh` ([#255](https://github.com/domattioli/CHILmesh/issues/255)), the `summary()` readers for `.msh`, `fort.13`, `fort.15`, `.npy`, `.npz` and generic `fort.NNN` files ([#201](https://github.com/domattioli/CHILmesh/issues/201)), and `read_fort15(deep=True)` ([#249](https://github.com/domattioli/CHILmesh/issues/249)) shipped in 1.4.1.
+
 ## [1.4.1] — 2026-07-14
 
 ### Fixed
@@ -451,7 +478,7 @@ broad consumer-readiness polish.
 - **F7** — `tests/test_2dm_reader.py` migrated to pytest's `tmp_path` fixture
 - **F9** — `slow` marker registered in `pyproject.toml`
 - **F11** — README test badge points at the correct workflow
-- **F14** — defensive-branch `# pragma: no cover` annotations on truly-unreachable guards in `_skeletonize` and `pinch_points`; behavioural lock-in tests added for `pinch_points` semantics
+- **F14** — defensive-branch `# pragma: no cover` annotations on unreachable guards in `_skeletonize` and `pinch_points`; behavioural lock-in tests added for `pinch_points` semantics
 - Total: 582 tests passing / 13 skipped (was 439 / 9 in the original audit); `CHILmesh.py` line coverage 89% → 90%, total 88% → 89%
 
 ### 📚 Documentation
