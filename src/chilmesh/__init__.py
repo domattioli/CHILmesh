@@ -148,7 +148,7 @@ def backend_info() -> dict:
 
     if CPP_AVAILABLE:
         available.insert(0, "cpp")
-        versions["cpp"] = getattr(_cpp_module, "__version__", "0.6.0.dev0")
+        versions["cpp"] = getattr(_cpp_module, "__version__", "0.6.0")
 
     if RUST_AVAILABLE:
         available.insert(-1 if "cpp" in available else 0, "rust")

@@ -6,7 +6,8 @@
 
 > **Reproduce:** every number below regenerates from the committed harness —
 > `python scripts/benchmark.py --matlab` (Octave column needs `octave` on PATH;
-> C++ column needs `pip install ./src/chilmesh_cpp`). The harness also asserts
+> C++ column needs `pip install "chilmesh[cpp]"` for the prebuilt wheel, or
+> `pip install ./src/chilmesh_cpp` for a source build). The harness also asserts
 > `n_layers` parity across all available implementations, so stale hand-entered
 > figures can't creep back in.
 
