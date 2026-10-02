@@ -21,11 +21,7 @@ Credential Options:
      password = pypi-your_token_here
      Then run: python scripts/pypi_publish.py
 
-  2. Environment variable (in Claude Code):
-     Use: /update-config to set PYPI_TOKEN securely
-     Then run: python scripts/pypi_publish.py
-
-  3. Environment variable (terminal):
+  2. Environment variable (terminal):
      $ PYPI_TOKEN=pypi-your_token_here python scripts/pypi_publish.py
 
 Exit codes:

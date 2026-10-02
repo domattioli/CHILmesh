@@ -128,8 +128,8 @@ adversarial review says belongs upstream in the registry, not here.
 > (which can be huge) themselves — let the .py files do it."*
 
 **Problem.** A WNAT-scale mesh is ~10⁶–10⁷ nodes. A single `cat mesh.14` blows
-an LLM context window, costs tokens, and risks the MCP base64-corruption hazard
-already logged in CLAUDE.md. An agent should never load array bytes into
+an LLM context window, costs tokens, and risks corrupting binary data passed
+through a tool call. An agent should never load array bytes into
 context; only Python should touch them.
 
 **Pattern — frontmatter (text, LLM-owned) + payload (binary, Python-owned).**
@@ -157,15 +157,10 @@ frontmatter **without** the agent ever opening the raw file.
    counts that live in the header).
 2. Emit that dict as the `.chil` `manifest.toml` frontmatter when the
    `write_chil` export adapter (§5.1) lands.
-3. **Agent guardrail** — ✅ shipped as the `scripts/hooks/mesh_read_guard.sh`
-   PreToolUse hook (wired into `.claude/settings.json` for the `Bash` and `Read`
-   matchers, same class as `branch_guard`/`secret_path_guard`). Refuses a raw
-   `Read`/`cat`/`head`/`tail`/… of `*.14`/`*.grd`/`*.2dm`/`*.13`/`*.msh`/`*.npy`/
-   `*.npz`/`fort.NNN` over `CHILMESH_MESH_READ_MAX_KB` (default 64 KB) and reroutes
-   to `chilmesh summary <file>`; bypass with `CHILMESH_MESH_READ_GUARD_BYPASS=1`
-   (logged to `~/.claude/hook-bypass.log`). Mirrors the `mcp-binary-push`
-   refuse-and-reroute pattern in DomI. Smoke test:
-   `scripts/hooks/tests/mesh_read_guard_smoke.sh` (11 scenarios).
+3. **Agent guardrail.** A local development hook (not part of the package)
+   refuses a raw `cat`/`head`/`tail` of `*.14`/`*.grd`/`*.2dm`/`*.13`/`*.msh`/
+   `*.npy`/`*.npz`/`fort.NNN` files over 64 KB and points to
+   `chilmesh summary <file>` instead.
 
 **Net:** the format already points this way (manifest-first); formalizing
 `summarize()` + the read-only-frontmatter agent contract is the cheap win and is
@@ -209,5 +204,4 @@ hole-fill) **iff** a dirty-input ingest path appears (STL/CAD or untrusted
 
 _Investigation for #201. References: #154 (`.chil` design + RESHAPE verdict),
 constitution Principles V/VI/VII, `CHILmesh.py` I/O surface, `gmsh_io.py`
-adapter precedent, `admesh/admesh` (GPL-2.0, STL repair), CLAUDE.md
-token-hygiene + `mcp-binary-push` reroute precedent._
+adapter precedent, `admesh/admesh` (GPL-2.0, STL repair)._

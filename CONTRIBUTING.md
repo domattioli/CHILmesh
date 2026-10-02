@@ -2,9 +2,9 @@
 
 Thanks for your interest in CHILmesh — a Python library for 2D mesh generation,
 manipulation, and analysis. This is the **canonical** contributor guide
-(day-to-day mechanics). Authoritative project rules live in
-[`DomI/specs/consumers/CHILmesh/memory/constitution.md`](https://github.com/domattioli/DomI/tree/development/specs/consumers/CHILmesh/memory/constitution.md) (if present);
-agent and human project guidance is in [AGENTS.md](AGENTS.md).
+(day-to-day mechanics). Architecture and adjacency invariants are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/ADJACENCY_STRUCTURES.md](docs/ADJACENCY_STRUCTURES.md).
 
 ## Repo shape
 
@@ -64,9 +64,8 @@ The full suite runs on all four; the fast subset skips `block_o`.
 
 **All development must happen on the `development` branch.**
 
-- **Do not create `claude/*` branches or any other ephemeral branches.** The
-  session system harness may suggest one; ignore it and check out `development`
-  at session start (`git checkout development`).
+- **Do not create ephemeral branches.** Check out `development`
+  (`git checkout development`) before you start.
 - **Never push directly to `main`.** All changes flow through a PR:
   `development → main` (rolling PR #194).
 - Open a PR on `development`, pass CI, merge to `main` only via PR squash-merge
@@ -108,7 +107,6 @@ all changes are reviewed before reaching production.
 
 ## When in doubt
 
-- [AGENTS.md](AGENTS.md) has development conventions, architecture, testing, and code standards.
-- [`DomI/specs/consumers/CHILmesh/memory/constitution.md`](https://github.com/domattioli/DomI/tree/development/specs/consumers/CHILmesh/memory/constitution.md) has
-  authoritative governance and hard rules (if present).
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the architecture and the layerization boundary.
+- [tests/TESTING.md](tests/TESTING.md) has test markers, backend setup, and parity tests.
 - Open issues track backlog items and known limitations.

@@ -17,11 +17,7 @@ Credential Options:
      $ gh auth login
      Then run: python scripts/github_release.py
 
-  2. Environment variable (in Claude Code):
-     Use: /update-config to set GITHUB_TOKEN securely
-     Then run: python scripts/github_release.py
-
-  3. Environment variable (terminal):
+  2. Environment variable (terminal):
      $ GITHUB_TOKEN=your_token python scripts/github_release.py
 
 Exit codes:

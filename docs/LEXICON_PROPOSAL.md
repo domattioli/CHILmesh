@@ -2,7 +2,7 @@
 
 Status: **DECIDED + swept.** Operator ratified names 2026-07-10; rename shipped same day. No consumers yet → clean rename, no compat aliases.
 
-Caveman-compressed per operator (2026-07-10). Prior full-prose proposal in git history.
+Compressed notes (2026-07-10). The earlier full-prose proposal is in git history.
 
 ---
 
