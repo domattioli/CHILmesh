@@ -58,7 +58,7 @@
 **Shipped: chilmesh 1.5.0 on PyPI (2026-10-02).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. Version 1.5.0 adds prebuilt C++ wheels (`pip install "chilmesh[cpp]"`), a size function for the FEM and angle-based smoothers, and an experimental GPU renderer (`pip install "chilmesh[gpu]"`). The full feature list is in [Capabilities](#5-capabilities); release notes are in [`CHANGELOG.md`](CHANGELOG.md).
 
 - **Now:** a native `.chil` container format, built on a sandbox branch first ([#201](https://github.com/domattioli/CHILmesh/issues/201)).
-- **Next:** a documentation site; a streaming GPU mesh view for live mesh generation ([#167](https://github.com/domattioli/CHILmesh/issues/167)).
+- **Next:** a documentation site; a streaming GPU mesh view for live mesh generation and a faster CPU renderer ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the global STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
 - **Research:** a medial-axis `skeletonize()` ([#223](https://github.com/domattioli/CHILmesh/issues/223)); size-controlled mesh cartograms ([#219](https://github.com/domattioli/CHILmesh/issues/219)).
 - **Later:** one ecosystem with <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3" alt="QuADMESH PyPI version"></a>.
 
@@ -245,6 +245,8 @@ chilmesh plot mesh.fort.14 -o mesh.png --quality             # render
   url       = {https://github.com/domattioli/CHILmesh}
 }
 ```
+
+The concept DOI above always resolves to the latest release. To cite version 1.5.0 exactly, use [10.5281/zenodo.23096013](https://doi.org/10.5281/zenodo.23096013).
 
 ### Original method
 
