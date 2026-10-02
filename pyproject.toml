@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chilmesh"
-version = "1.4.1"
+version = "1.5.0"
 description = "Fast 2D mesh library for hydrodynamic domains — Python API with optional C++ acceleration"
 authors = [{name = "Dominik Mattioli"}]
 license = {text = "PolyForm Noncommercial License 1.0.0"}
@@ -44,12 +44,23 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Prebuilt C++ backend (separate binary-wheel package). Compat contract:
+# chilmesh 1.5.x <-> chilmesh-cpp>=0.6,<0.7; bump both on any extension-API
+# change (docs/dev/PREBUILT_WHEELS_PLAN.md, Phase 0).
+cpp = ["chilmesh-cpp>=0.6,<0.7"]
 dev = [
     "pytest>=7",
     "pytest-cov",
     "pytest-xdist",
     "build",
     "twine",
+]
+
+# Opt-in GPU plot backend (chilplotting_gpu). Minimums are the versions this
+# was developed and measured against (PyPI latest on 2026-10-01).
+gpu = [
+    "pygfx>=0.17",
+    "wgpu>=0.32",
 ]
 
 [project.scripts]

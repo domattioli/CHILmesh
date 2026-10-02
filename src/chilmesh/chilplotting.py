@@ -26,8 +26,14 @@ All public functions return ``(Figure, Axes)`` (or ``Axes`` for
 Rendering is vectorised — one ``LineCollection`` / ``PolyCollection`` per call —
 so it scales to large meshes.
 
-GPU-accelerated live animation of very large meshes (CHILmesh #75) is a
-separate, future effort and intentionally out of scope here.
+Render backends (CHILmesh #167): every function above draws with matplotlib,
+which stays the default and the headless/CI fallback. :func:`render_image`
+additionally offers an opt-in GPU path (``pygfx``/``wgpu``, ``pip install
+chilmesh[gpu]``) implemented in :mod:`chilmesh.chilplotting_gpu` and imported
+lazily. :func:`plot_backend_info` mirrors ``chilmesh.backend_info()`` (the
+compute-backend selector in ``chilmesh/__init__.py``): same ``available`` /
+``selected`` / ``versions`` keys and an environment override, here
+``CHILMESH_PLOT_BACKEND={mpl,gpu}``.
 """
 from __future__ import annotations
 
@@ -37,9 +43,15 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.colors import BoundaryNorm, Normalize
+import os
+import warnings
+from importlib.util import find_spec
 from typing import Optional, Sequence, Tuple
 
 __all__ = [
+    # render backend selection (GPU backend is opt-in; matplotlib is the default)
+    "plot_backend_info",
+    "render_image",
     # array primitives (generator-agnostic)
     "configure_axes",
     "build_polygons",
@@ -68,6 +80,87 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Array primitives — operate on raw points + connectivity. No mesh required.
 # ---------------------------------------------------------------------------
+
+def plot_backend_info() -> dict:
+    """Return the available and selected plot render backends.
+
+    Mirrors ``chilmesh.backend_info()``. ``matplotlib`` is always ``"mpl"``;
+    ``"gpu"`` is listed when ``pygfx`` and ``wgpu`` are installed (checked
+    without importing them, so this call is cheap and never touches a GPU).
+    Whether a GPU adapter exists is only known at render time;
+    :func:`render_image` falls back to matplotlib with a warning if it does not.
+
+    Returns
+    -------
+    dict
+        ``available`` (list of names), ``selected`` (name used when
+        ``render_image`` gets no ``backend=``), ``versions`` (name -> version).
+        ``selected`` is ``"mpl"`` unless ``CHILMESH_PLOT_BACKEND=gpu`` is set
+        and the GPU backend is available.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    available = ["mpl"]
+    versions = {"mpl": matplotlib.__version__}
+    if find_spec("pygfx") is not None and find_spec("wgpu") is not None:
+        available.append("gpu")
+        try:
+            versions["gpu"] = f"pygfx {version('pygfx')}, wgpu {version('wgpu')}"
+        except PackageNotFoundError:  # pragma: no cover - spec found, metadata missing
+            versions["gpu"] = "unknown"
+    env_override = os.environ.get("CHILMESH_PLOT_BACKEND", "").strip().lower()
+    selected = env_override if env_override in available else "mpl"
+    return {"available": available, "selected": selected, "versions": versions}
+
+
+def render_image(points: np.ndarray, connectivity: np.ndarray, *,
+                 values: Optional[np.ndarray] = None, cmap: str = "viridis",
+                 vmin: Optional[float] = None, vmax: Optional[float] = None,
+                 edge_color: Optional[str] = "k", linewidth: float = 1.0,
+                 size: Tuple[int, int] = (800, 600),
+                 backend: Optional[str] = None) -> np.ndarray:
+    """Render a mesh to an ``(height, width, 4)`` uint8 RGBA array.
+
+    Parameters
+    ----------
+    points, connectivity : ndarray
+        Bare mesh arrays (triangles, quads, or padded mixed connectivity).
+    values : ndarray, optional
+        One scalar per element, drawn through ``cmap``.
+    backend : {"mpl", "gpu"}, optional
+        Defaults to ``plot_backend_info()["selected"]``. ``"gpu"`` falls back
+        to matplotlib with a ``RuntimeWarning`` when no GPU adapter is found.
+    """
+    name = (backend or plot_backend_info()["selected"]).lower()
+    if name not in ("mpl", "gpu"):
+        raise ValueError(f"backend must be 'mpl' or 'gpu', got {backend!r}")
+    if name == "gpu":
+        try:
+            from . import chilplotting_gpu as _gpu
+            if _gpu.gpu_available():
+                return _gpu.render_offscreen(
+                    points, connectivity, values=values, cmap=cmap, vmin=vmin,
+                    vmax=vmax, edge_color=edge_color, linewidth=linewidth,
+                    size=size)
+            reason = "no GPU adapter found"
+        except ImportError as exc:
+            reason = str(exc)
+        warnings.warn(f"GPU plot backend unavailable ({reason}); using matplotlib",
+                      RuntimeWarning, stacklevel=2)
+
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(size[0] / 100, size[1] / 100), dpi=100)
+    FigureCanvasAgg(fig)
+    ax = fig.add_axes([0, 0, 1, 1])
+    plot_filled(points, connectivity, values=values, cmap=cmap, vmin=vmin,
+                vmax=vmax, edgecolor=edge_color if edge_color else "none",
+                linewidth=linewidth, ax=ax)
+    ax.set_axis_off()
+    fig.canvas.draw()
+    return np.asarray(fig.canvas.buffer_rgba()).copy()
+
 
 def configure_axes(points: np.ndarray, ax: Optional[plt.Axes] = None,
                    pad_frac: float = 0.01) -> plt.Axes:

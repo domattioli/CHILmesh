@@ -52,6 +52,124 @@ class Fort13:
         return arr
 
 
+def _parse_f13_header(lines: list) -> tuple:
+    """Return ``(grid_name, num_nodes, num_attrs)`` from the first 3 lines."""
+    if len(lines) < 3:
+        raise Fort13ParseError("fort.13 file too short (need at least 3 lines)")
+    grid_name = lines[0]
+    try:
+        num_nodes = int(lines[1])
+        num_attrs = int(lines[2])
+    except ValueError as e:
+        raise Fort13ParseError(f"fort.13 header parse error: {e}")
+    return grid_name, num_nodes, num_attrs
+
+
+def _parse_f13_attribute_meta(lines: list, line_idx: int) -> tuple:
+    """Parse one metadata entry (name, units, count, defaults).
+
+    Returns
+    -------
+    tuple
+        ``(NodalAttribute, next_line_index)``.
+    """
+    if line_idx + 3 > len(lines):
+        raise Fort13ParseError("fort.13 metadata section incomplete")
+
+    attr_name = lines[line_idx]
+    units = lines[line_idx + 1]
+    try:
+        vpn = int(lines[line_idx + 2])
+    except ValueError as e:
+        raise Fort13ParseError(f"values_per_node parse error at line {line_idx + 2}: {e}")
+
+    line_idx += 3
+
+    if line_idx >= len(lines):
+        raise Fort13ParseError("fort.13 default values line missing")
+
+    default_tokens = lines[line_idx].split()
+    if len(default_tokens) != vpn:
+        raise Fort13ParseError(
+            f"Attribute '{attr_name}' expects {vpn} default values, got {len(default_tokens)}"
+        )
+
+    try:
+        default_values = np.array([float(tok) for tok in default_tokens], dtype=np.float64)
+    except ValueError as e:
+        raise Fort13ParseError(f"Default values parse error: {e}")
+
+    attr = NodalAttribute(
+        name=attr_name,
+        units=units,
+        values_per_node=vpn,
+        default_values=default_values,
+        nondefault={}
+    )
+    return attr, line_idx + 1
+
+
+def _parse_f13_data_row(line: str, attr: NodalAttribute, num_nodes: int) -> tuple:
+    """Parse one nondefault row into ``(0-based node id, values)``."""
+    tokens = line.split()
+    if len(tokens) != 1 + attr.values_per_node:
+        raise Fort13ParseError(
+            f"Data row for '{attr.name}' expects 1 + {attr.values_per_node} tokens, "
+            f"got {len(tokens)}"
+        )
+
+    try:
+        # Convert 1-based node id to 0-based
+        node_id_1based = int(float(tokens[0]))
+        node_id = node_id_1based - 1
+
+        if not (0 <= node_id < num_nodes):
+            raise Fort13ParseError(f"Node ID {node_id_1based} out of range [1, {num_nodes}]")
+
+        values = np.array([float(tok) for tok in tokens[1:]], dtype=np.float64)
+    except (ValueError, IndexError) as e:
+        # Fort13ParseError is a ValueError, so the range error is re-wrapped
+        # here; existing callers see the "Data row parse error" prefix.
+        raise Fort13ParseError(f"Data row parse error: {e}")
+    return node_id, values
+
+
+def _parse_f13_data_block(
+    lines: list, line_idx: int, attributes: list, num_nodes: int
+) -> int:
+    """Parse one attribute data block into the matching attribute.
+
+    Returns the index of the first line after the block.
+    """
+    if line_idx >= len(lines):
+        raise Fort13ParseError("fort.13 data section incomplete")
+
+    attr_name = lines[line_idx]
+    if attr_name not in [a.name for a in attributes]:
+        raise Fort13ParseError(f"Unknown attribute '{attr_name}' in data section")
+
+    attr_obj = next(a for a in attributes if a.name == attr_name)
+
+    line_idx += 1
+    if line_idx >= len(lines):
+        raise Fort13ParseError(f"fort.13 num_nondefault line missing for '{attr_name}'")
+
+    try:
+        num_nondefault = int(lines[line_idx])
+    except ValueError as e:
+        raise Fort13ParseError(f"num_nondefault parse error: {e}")
+
+    line_idx += 1
+
+    for _ in range(num_nondefault):
+        if line_idx >= len(lines):
+            raise Fort13ParseError(f"fort.13 data row missing for '{attr_name}'")
+        node_id, values = _parse_f13_data_row(lines[line_idx], attr_obj, num_nodes)
+        attr_obj.nondefault[node_id] = values
+        line_idx += 1
+    return line_idx
+
+
 def read_fort13(filename: str | Path) -> Fort13:
     """Read a fort.13 nodal attribute file.
 
@@ -73,110 +191,16 @@ def read_fort13(filename: str | Path) -> Fort13:
     # Skip blank lines
     lines = [line for line in lines if line]
 
-    if len(lines) < 3:
-        raise Fort13ParseError("fort.13 file too short (need at least 3 lines)")
+    grid_name, num_nodes, num_attrs = _parse_f13_header(lines)
 
-    # Parse header
-    grid_name = lines[0]
-    try:
-        num_nodes = int(lines[1])
-        num_attrs = int(lines[2])
-    except ValueError as e:
-        raise Fort13ParseError(f"fort.13 header parse error: {e}")
-
-    # Parse metadata section
     attributes: list[NodalAttribute] = []
     line_idx = 3
-    attr_names_in_order = []
+    for _ in range(num_attrs):
+        attr, line_idx = _parse_f13_attribute_meta(lines, line_idx)
+        attributes.append(attr)
 
     for _ in range(num_attrs):
-        if line_idx + 3 > len(lines):
-            raise Fort13ParseError("fort.13 metadata section incomplete")
-
-        attr_name = lines[line_idx]
-        units = lines[line_idx + 1]
-        try:
-            vpn = int(lines[line_idx + 2])
-        except ValueError as e:
-            raise Fort13ParseError(f"values_per_node parse error at line {line_idx + 2}: {e}")
-
-        line_idx += 3
-
-        # Parse default values
-        if line_idx >= len(lines):
-            raise Fort13ParseError("fort.13 default values line missing")
-
-        default_tokens = lines[line_idx].split()
-        if len(default_tokens) != vpn:
-            raise Fort13ParseError(
-                f"Attribute '{attr_name}' expects {vpn} default values, got {len(default_tokens)}"
-            )
-
-        try:
-            default_values = np.array([float(tok) for tok in default_tokens], dtype=np.float64)
-        except ValueError as e:
-            raise Fort13ParseError(f"Default values parse error: {e}")
-
-        line_idx += 1
-
-        attributes.append(NodalAttribute(
-            name=attr_name,
-            units=units,
-            values_per_node=vpn,
-            default_values=default_values,
-            nondefault={}
-        ))
-        attr_names_in_order.append(attr_name)
-
-    # Parse data section
-    for _ in range(num_attrs):
-        if line_idx >= len(lines):
-            raise Fort13ParseError("fort.13 data section incomplete")
-
-        attr_name = lines[line_idx]
-        if attr_name not in attr_names_in_order:
-            raise Fort13ParseError(f"Unknown attribute '{attr_name}' in data section")
-
-        # Find the attribute object
-        attr_obj = next(a for a in attributes if a.name == attr_name)
-
-        line_idx += 1
-        if line_idx >= len(lines):
-            raise Fort13ParseError(f"fort.13 num_nondefault line missing for '{attr_name}'")
-
-        try:
-            num_nondefault = int(lines[line_idx])
-        except ValueError as e:
-            raise Fort13ParseError(f"num_nondefault parse error: {e}")
-
-        line_idx += 1
-
-        # Parse nondefault rows
-        for _ in range(num_nondefault):
-            if line_idx >= len(lines):
-                raise Fort13ParseError(f"fort.13 data row missing for '{attr_name}'")
-
-            tokens = lines[line_idx].split()
-            if len(tokens) != 1 + attr_obj.values_per_node:
-                raise Fort13ParseError(
-                    f"Data row for '{attr_name}' expects 1 + {attr_obj.values_per_node} tokens, "
-                    f"got {len(tokens)}"
-                )
-
-            try:
-                # Convert 1-based node id to 0-based
-                node_id_1based = int(float(tokens[0]))
-                node_id = node_id_1based - 1
-
-                if not (0 <= node_id < num_nodes):
-                    raise Fort13ParseError(f"Node ID {node_id_1based} out of range [1, {num_nodes}]")
-
-                values = np.array([float(tok) for tok in tokens[1:]], dtype=np.float64)
-                attr_obj.nondefault[node_id] = values
-            except (ValueError, IndexError) as e:
-                raise Fort13ParseError(f"Data row parse error: {e}")
-
-            line_idx += 1
+        line_idx = _parse_f13_data_block(lines, line_idx, attributes, num_nodes)
 
     return Fort13(
         grid_name=grid_name,

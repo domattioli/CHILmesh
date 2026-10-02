@@ -525,28 +525,8 @@ class MutableMesh:
         conn = self.mesh.connectivity_list
         n_cols = conn.shape[1]
 
-        # Elements (excluding the two collapsing ones) that reference the removed
-        # endpoint. Validate none invert under the substitution BEFORE mutating.
-        affected = []
-        for eid in range(self.mesh.n_elems):
-            if eid in collapsing:
-                continue
-            row = conn[eid]
-            if int(row[0]) < 0:  # tombstoned
-                continue
-            if removed in (int(v) for v in row):
-                affected.append(eid)
-
-        for eid in affected:
-            before = self._element_signed_area(conn[eid])
-            after_row = np.array(
-                [survivor if int(v) == removed else int(v) for v in conn[eid]]
-            )
-            after = self._element_signed_area(after_row)
-            if (before > 0 and after <= 1e-12) or (before < 0 and after >= -1e-12):
-                raise RuntimeError(
-                    f"collapse_edge({edge_id}) would invert element {eid}; aborted"
-                )
+        affected = self._elems_referencing_vertex(removed, exclude=collapsing)
+        self._check_collapse_no_inversion(edge_id, affected, survivor, removed)
 
         # Commit: rewrite survivors, tombstone the two collapsed elements.
         for eid in affected:
@@ -560,6 +540,43 @@ class MutableMesh:
         self.mesh._build_spatial_indices()
         self._validate_invariants()
         return survivor
+
+    def _elems_referencing_vertex(self, vert_id: int, exclude: set) -> list:
+        """Return live element IDs (not in ``exclude``) that use ``vert_id``.
+
+        Tombstoned rows (first entry ``< 0``) are skipped.
+        """
+        conn = self.mesh.connectivity_list
+        affected = []
+        for eid in range(self.mesh.n_elems):
+            if eid in exclude:
+                continue
+            row = conn[eid]
+            if int(row[0]) < 0:  # tombstoned
+                continue
+            if vert_id in (int(v) for v in row):
+                affected.append(eid)
+        return affected
+
+    def _check_collapse_no_inversion(
+        self, edge_id: int, affected: list, survivor: int, removed: int
+    ) -> None:
+        """Raise ``RuntimeError`` if substituting ``survivor`` for ``removed``
+        would flip the signed area of any element in ``affected``.
+
+        Runs before any mutation so a rejected collapse leaves the mesh intact.
+        """
+        conn = self.mesh.connectivity_list
+        for eid in affected:
+            before = self._element_signed_area(conn[eid])
+            after_row = np.array(
+                [survivor if int(v) == removed else int(v) for v in conn[eid]]
+            )
+            after = self._element_signed_area(after_row)
+            if (before > 0 and after <= 1e-12) or (before < 0 and after >= -1e-12):
+                raise RuntimeError(
+                    f"collapse_edge({edge_id}) would invert element {eid}; aborted"
+                )
 
     def move_boundary_node(self, vert_id: int, new_xy: np.ndarray) -> None:
         """Move a boundary vertex to new coordinates with inversion guard.
@@ -745,16 +762,7 @@ class MutableMesh:
             self.mesh._peel()
             return
 
-        # Find the first layer that contains any of the changed elements.
-        elem_set = set(int(e) for e in elem_ids)
-        affected_layer = None
-        for iL in range(self.mesh.n_layers):
-            oe_set = set(int(e) for e in layers['OE'][iL])
-            ie_set = set(int(e) for e in layers['IE'][iL])
-            if elem_set & (oe_set | ie_set):
-                affected_layer = iL
-                break
-
+        affected_layer = self._first_layer_containing(set(int(e) for e in elem_ids))
         if affected_layer is None:
             # Changed elements not in any existing layer — full rebuild.
             self.mesh._peel()
@@ -765,10 +773,48 @@ class MutableMesh:
             self.mesh._peel()
             return
 
-        # Replay consumption of layers 0..(start_layer-1) to restore the
-        # working arrays at that checkpoint.  Element/vertex IDs are stable
-        # across _build_adjacencies, so this replay is valid even when edge
-        # IDs have been reassigned.
+        edge2vert_work, edge2elem_work = self._replay_consumed_layers(start_layer)
+
+        # Build new layers dict: keep 0..(start_layer-1), re-peel the rest.
+        new_layers: dict = {
+            key: list(layers[key][:start_layer])
+            for key in ('OE', 'IE', 'OV', 'IV', 'bEdgeIDs')
+        }
+
+        while np.any(edge2elem_work >= 0):
+            if not self._peel_one_layer(edge2vert_work, edge2elem_work, new_layers):
+                break
+
+        self.mesh.layers = new_layers
+        self.mesh.n_layers = len(new_layers['OE'])
+
+    def _first_layer_containing(self, elem_set: set):
+        """Return the index of the first layer holding any element in ``elem_set``.
+
+        Returns ``None`` when no existing layer contains one of them.
+        """
+        layers = self.mesh.layers
+        for iL in range(self.mesh.n_layers):
+            oe_set = set(int(e) for e in layers['OE'][iL])
+            ie_set = set(int(e) for e in layers['IE'][iL])
+            if elem_set & (oe_set | ie_set):
+                return iL
+        return None
+
+    def _replay_consumed_layers(self, start_layer: int) -> tuple:
+        """Rebuild the peel working arrays as they were before ``start_layer``.
+
+        Replays consumption of layers ``0..start_layer-1``. Element/vertex IDs
+        are stable across ``_build_adjacencies``, so this replay is valid even
+        when edge IDs have been reassigned.
+
+        Returns
+        -------
+        tuple
+            ``(edge2vert_work, edge2elem_work)`` copies with consumed entries
+            set to ``-1``.
+        """
+        layers = self.mesh.layers
         edge2vert_work = self.mesh.adjacencies['Edge2Vert'].copy()
         edge2elem_work = self.mesh.adjacencies['Edge2Elem'].copy()
 
@@ -782,61 +828,59 @@ class MutableMesh:
                 edge2vert_work[np.isin(edge2vert_work, ov)] = -1
             if len(ie) > 0:
                 edge2elem_work[np.isin(edge2elem_work, ie)] = -1
+        return edge2vert_work, edge2elem_work
 
-        # Build new layers dict: keep 0..(start_layer-1), re-peel the rest.
-        new_layers: dict = {
-            'OE': list(layers['OE'][:start_layer]),
-            'IE': list(layers['IE'][:start_layer]),
-            'OV': list(layers['OV'][:start_layer]),
-            'IV': list(layers['IV'][:start_layer]),
-            'bEdgeIDs': list(layers['bEdgeIDs'][:start_layer]),
-        }
+    def _peel_one_layer(
+        self, edge2vert_work: np.ndarray, edge2elem_work: np.ndarray, new_layers: dict
+    ) -> bool:
+        """Peel one layer from the working arrays and append it to ``new_layers``.
 
-        iL = start_layer
-        while np.any(edge2elem_work >= 0):
-            active_count = np.sum(edge2elem_work >= 0, axis=1)
-            iLbEdgeIDs = np.where(active_count == 1)[0]
-            if len(iLbEdgeIDs) == 0:
-                break
+        Mutates ``edge2vert_work`` / ``edge2elem_work`` in place.
 
-            ov_raw = edge2vert_work[iLbEdgeIDs].ravel()
-            ov = np.unique(ov_raw[ov_raw >= 0]).astype(int)
-            new_layers['OV'].append(ov)
-            new_layers['bEdgeIDs'].append(iLbEdgeIDs)
+        Returns
+        -------
+        bool
+            ``False`` if no boundary edge remains (nothing appended), else ``True``.
+        """
+        active_count = np.sum(edge2elem_work >= 0, axis=1)
+        iLbEdgeIDs = np.where(active_count == 1)[0]
+        if len(iLbEdgeIDs) == 0:
+            return False
 
-            oe_raw = edge2elem_work[iLbEdgeIDs].ravel()
-            oe = np.unique(oe_raw[oe_raw >= 0]).astype(int)
-            new_layers['OE'].append(oe)
-            if len(oe) > 0:
-                edge2elem_work[np.isin(edge2elem_work, oe)] = -1
+        ov_raw = edge2vert_work[iLbEdgeIDs].ravel()
+        ov = np.unique(ov_raw[ov_raw >= 0]).astype(int)
+        new_layers['OV'].append(ov)
+        new_layers['bEdgeIDs'].append(iLbEdgeIDs)
 
-            ov_edge_mask = np.any(np.isin(edge2vert_work, ov), axis=1)
-            ov_edge_indices = np.where(ov_edge_mask)[0]
-            if len(ov_edge_indices) > 0:
-                ie_raw = edge2elem_work[ov_edge_indices].ravel()
-                ie = np.unique(ie_raw[ie_raw >= 0]).astype(int)
-            else:
-                ie = np.empty(0, dtype=int)
-            new_layers['IE'].append(ie)
+        oe_raw = edge2elem_work[iLbEdgeIDs].ravel()
+        oe = np.unique(oe_raw[oe_raw >= 0]).astype(int)
+        new_layers['OE'].append(oe)
+        if len(oe) > 0:
+            edge2elem_work[np.isin(edge2elem_work, oe)] = -1
 
-            if len(ov) > 0:
-                edge2vert_work[np.isin(edge2vert_work, ov)] = -1
-            if len(ie) > 0:
-                edge2elem_work[np.isin(edge2elem_work, ie)] = -1
+        ov_edge_mask = np.any(np.isin(edge2vert_work, ov), axis=1)
+        ov_edge_indices = np.where(ov_edge_mask)[0]
+        if len(ov_edge_indices) > 0:
+            ie_raw = edge2elem_work[ov_edge_indices].ravel()
+            ie = np.unique(ie_raw[ie_raw >= 0]).astype(int)
+        else:
+            ie = np.empty(0, dtype=int)
+        new_layers['IE'].append(ie)
 
-            if len(oe) > 0 or len(ie) > 0:
-                layer_elems = np.concatenate((oe, ie))
-                lv = self.mesh.connectivity_list[layer_elems].ravel()
-                lv = lv[lv >= 0]
-                iv = np.setdiff1d(np.unique(lv), ov).astype(int)
-            else:
-                iv = np.empty(0, dtype=int)
-            new_layers['IV'].append(iv)
+        if len(ov) > 0:
+            edge2vert_work[np.isin(edge2vert_work, ov)] = -1
+        if len(ie) > 0:
+            edge2elem_work[np.isin(edge2elem_work, ie)] = -1
 
-            iL += 1
-
-        self.mesh.layers = new_layers
-        self.mesh.n_layers = len(new_layers['OE'])
+        if len(oe) > 0 or len(ie) > 0:
+            layer_elems = np.concatenate((oe, ie))
+            lv = self.mesh.connectivity_list[layer_elems].ravel()
+            lv = lv[lv >= 0]
+            iv = np.setdiff1d(np.unique(lv), ov).astype(int)
+        else:
+            iv = np.empty(0, dtype=int)
+        new_layers['IV'].append(iv)
+        return True
 
     def layers_diff(self, prev_layers: dict) -> dict:
         """Run a full re-peel and return which elements changed layer.

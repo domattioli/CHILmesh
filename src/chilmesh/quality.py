@@ -259,6 +259,24 @@ def element_quality(
     ValueError
         If metric is not one of the supported values.
 
+    Notes
+    -----
+    Quad angle convention (#260, #275). Quad interior angles come from an
+    unsigned ``arccos`` of the two edge directions at each corner, so every
+    angle lies in [0, 180] degrees. Consequently:
+
+    - ``min_angle`` / ``max_angle`` on a quad return the minimum / maximum of
+      the four unsigned interior angles. A concave quad's reflex angle
+      theta > 180 degrees is therefore reported as ``360 - theta``.
+    - For a concave or degenerate quad the unsigned angles sum to less than
+      360 degrees. The ``<= 359.99`` check on that sum then makes
+      ``equiangle_skewness`` return 1.0 (the worst value) and ``skew``
+      return 0.0 (the worst value) instead of a max/min-angle formula.
+      Example: nodes (0, 0), (2, 0), (0.8, 0.5), (0, 2) give
+      ``equiangle_skewness`` 1.0, where a plain max/min-angle formula on the
+      same unsigned angles would give about 0.749. This rule is intentional
+      and kept stable across releases: 1.0 is the "bad element" signal.
+
     Examples
     --------
     >>> import numpy as np
