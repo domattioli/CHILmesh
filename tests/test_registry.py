@@ -143,12 +143,25 @@ def test_missing_token(monkeypatch):
     assert m.call_count == 0
 
 
-def test_missing_url(monkeypatch):
+def test_default_url_used_when_unset(monkeypatch):
     monkeypatch.delenv("VALENCE_API_URL")
-    with patch([]) as m:
-        with pytest.raises(reg.RegistryUnavailableError, match="VALENCE_API_URL"):
-            reg.list_meshes()
-    assert m.call_count == 0
+    with patch([J([])]) as m:
+        reg.list_meshes()
+    assert m.call_args[0][0].full_url.startswith("https://valence-api.iqh766c2.workers.dev/")
+
+
+def test_url_override_wins():
+    with patch([J([])]) as m:
+        reg.list_meshes()
+    assert m.call_args[0][0].full_url.startswith("https://api.example.test/")
+
+
+def test_user_agent_not_urllib_default():
+    with patch([J([])]) as m:
+        reg.list_meshes()
+    ua = m.call_args[0][0].get_header("User-agent")
+    assert ua == "chilmesh-registry/1"
+    assert not ua.startswith("Python-urllib")
 
 
 @pytest.mark.parametrize("bad", ["../x", "a/b", "", "..", ".", "a b", "a%2Fb"])

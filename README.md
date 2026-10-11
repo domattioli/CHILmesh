@@ -113,14 +113,15 @@ mesh.write_to_fort14("ocean_smoothed.14")
 
 `chilmesh.registry` downloads meshes from a token-gated registry API. It uses only the standard library. Each download is checked against the SHA-256 hash that the API reports.
 
-To get a token, sign in with GitHub at `<API URL>/auth/github`. The operator approves each request manually. After approval, sign in again. The API shows the token once, so copy it then. A token expires after 1 year. The API allows 120 requests per minute.
+To get a token, sign in with GitHub at https://valence-api.iqh766c2.workers.dev. The operator approves each request manually. After approval, sign in again. The API shows the token once, so copy it then. A token expires after 1 year. The API allows 120 requests per minute.
 
-Set the token and the API URL in your environment:
+Set the token in your environment:
 
 ```bash
 export VALENCE_TOKEN=<your token>
-export VALENCE_API_URL=<API URL>
 ```
+
+The client talks to https://valence-api.iqh766c2.workers.dev by default. Set `VALENCE_API_URL` only to override it.
 
 ```python
 from chilmesh import registry

@@ -9,6 +9,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - `chilmesh.registry`: a standard-library client for a token-gated mesh registry API. It provides `list_meshes`, `fetch_hash`, `fetch_mesh_bytes`, `fetch_mesh`, `download_mesh`, and five `Registry*Error` classes. Every download is verified against its SHA-256 hash. Configure with `VALENCE_TOKEN` and `VALENCE_API_URL`.
 
+### Changed
+- `chilmesh.registry` now defaults to the public Valence API (https://valence-api.iqh766c2.workers.dev). `VALENCE_API_URL` is an optional override; only `VALENCE_TOKEN` is required.
+- `chilmesh.registry` sends an explicit `User-Agent: chilmesh-registry/1` header. Cloudflare blocks the default `Python-urllib` agent with error 1010.
+
 ### Fixed
 - `read_from_fort14` now raises `ValueError` when encountering a node id of 0 or above the node count instead of silently wrapping to the last vertex ([#282](https://github.com/domattioli/CHILmesh/issues/282)).
 
