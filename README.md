@@ -109,6 +109,36 @@ mesh.write_to_fort14("ocean_smoothed.14")
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
+## Fetching meshes from the Valence registry
+
+`chilmesh.registry` downloads meshes from a token-gated registry API. It uses only the standard library. Each download is checked against the SHA-256 hash that the API reports.
+
+To get a token, sign in with GitHub at `<API URL>/auth/github`. The operator approves each request manually. After approval, sign in again. The API shows the token once, so copy it then. A token expires after 1 year. The API allows 120 requests per minute.
+
+Set the token and the API URL in your environment:
+
+```bash
+export VALENCE_TOKEN=<your token>
+export VALENCE_API_URL=<API URL>
+```
+
+```python
+from chilmesh import registry
+
+names = registry.list_meshes()
+mesh = registry.fetch_mesh(names[0])               # verified download, returns a CHILmesh
+registry.download_mesh(names[0], "mesh.14")        # or save the verified bytes to a file
+```
+
+Errors derive from `registry.RegistryError`:
+
+- `RegistryAuthError`: the token is missing, invalid, or expired.
+- `RegistryNotFoundError` (also a `ValueError`): the mesh name is unknown or invalid.
+- `RegistryUnavailableError`: no API URL is set, the network failed, or the API is rate limited or down.
+- `RegistryIntegrityError`: the downloaded bytes do not match the reported hash, or a response is malformed.
+
+<div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
+
 ## 5. Capabilities
 
 | Area | What ships | Entry points |
