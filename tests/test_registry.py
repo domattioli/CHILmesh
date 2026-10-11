@@ -78,7 +78,7 @@ def test_hash_ok():
 
 @pytest.mark.parametrize(
     "body",
-    [{"sha256": "abc"}, {"sha256": "g" * 64}, [1], {"sha256": "a" * 64, "size": 3}, {}],
+    [{"sha256": "abc"}, {"sha256": "g" * 64}, {"sha256": "a" * 64 + "\n"}, {"sha256": "A" * 64}, [1], {"sha256": "a" * 64, "size": 3}, {}],
 )
 def test_hash_malformed(body):
     with patch([J(body)]):
@@ -103,7 +103,6 @@ def test_integrity_mismatch():
     [
         (401, reg.RegistryAuthError),
         (404, reg.RegistryNotFoundError),
-        (405, reg.RegistryUnavailableError),
         (429, reg.RegistryUnavailableError),
         (503, reg.RegistryUnavailableError),
     ],
@@ -113,6 +112,14 @@ def test_status_mapping(code, exc):
         with pytest.raises(exc) as ei:
             reg.list_meshes()
     assert TOK not in str(ei.value)
+
+
+def test_405_is_hard_error():
+    # Contract: 401/404/405 are hard errors; 405 must not look transient.
+    with patch(http_err(405)):
+        with pytest.raises(reg.RegistryError) as ei:
+            reg.list_meshes()
+    assert type(ei.value) is reg.RegistryError
 
 
 def test_429_retry_after():

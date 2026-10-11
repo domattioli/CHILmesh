@@ -42,7 +42,7 @@ _TIMEOUT_S = 30.0
 _TOKEN_VAR = "VALENCE_TOKEN"
 _URL_VAR = "VALENCE_API_URL"
 _NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-_HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+_HEX64_RE = re.compile(r"[0-9a-f]{64}")  # contract: 64 lowercase hex; use fullmatch
 
 
 class RegistryError(RuntimeError):
@@ -110,6 +110,11 @@ def _get(path: str) -> bytes:
             else:
                 msg += " Retry later."
             raise RegistryUnavailableError(msg) from None
+        if code == 405:
+            # Contract: 405 is a hard error, not a transient outage.
+            raise RegistryError(
+                "Registry rejected the request method (HTTP 405)."
+            ) from None
         raise RegistryUnavailableError(
             f"Registry API unavailable (HTTP {code})."
         ) from None
@@ -142,7 +147,7 @@ def fetch_hash(name: str) -> str:
         not isinstance(data, dict)
         or set(data) != {"sha256"}
         or not isinstance(data["sha256"], str)
-        or not _HEX64_RE.match(data["sha256"])
+        or not _HEX64_RE.fullmatch(data["sha256"])
     ):
         raise RegistryIntegrityError("Registry returned a malformed hash.")
     return data["sha256"].lower()
