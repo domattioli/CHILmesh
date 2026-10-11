@@ -208,3 +208,26 @@ def test_fetch_mesh_real(tmp_path):
         mesh = reg.fetch_mesh("quad.14", compute_layers=False)
     assert isinstance(mesh, CHILmesh)
     assert mesh.n_elems > 0
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["file:///etc/passwd", "ftp://example.com/", "http://example.com/", "example.com"],
+)
+def test_base_url_scheme_rejected(monkeypatch, url):
+    monkeypatch.setenv("VALENCE_API_URL", url)
+    with patch([]) as m:
+        with pytest.raises(reg.RegistryError, match="https"):
+            reg.list_meshes()
+    assert m.call_count == 0
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://localhost:8787/", "http://127.0.0.1:8787", "https://api.example.test/"],
+)
+def test_base_url_scheme_allowed(monkeypatch, url):
+    monkeypatch.setenv("VALENCE_API_URL", url)
+    with patch([J([])]) as m:
+        reg.list_meshes()
+    assert m.call_count == 1
