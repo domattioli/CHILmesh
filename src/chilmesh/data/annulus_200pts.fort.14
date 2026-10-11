@@ -960,3 +960,7 @@ Annulus_200pts.fort.14
 578 3 307 323 214
 579 3 307 305 339
 580 3 307 214 305
+0 = Number of open boundaries
+0 = Total number of open boundary nodes
+0 = Number of land boundaries
+0 = Total number of land boundary nodes

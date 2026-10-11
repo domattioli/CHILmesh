@@ -1034,3 +1034,7 @@ The mesh with no name
 374 3 372.000000 373.000000 362.000000
 374 3 362.000000 373.000000 363.000000
 374 3 373.000000 374.000000 363.000000
+0 = Number of open boundaries
+0 = Total number of open boundary nodes
+0 = Number of land boundaries
+0 = Total number of land boundary nodes
