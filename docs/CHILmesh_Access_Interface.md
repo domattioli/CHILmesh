@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-**CAI** defines stable, documented public API that downstream projects (MADMESHR, ADMESH, Valence) can depend on. All methods listed here maintain signatures, return types, and semantics through v1.0. Breaking changes require major version bump + minimum 2-week advance notice.
+**CAI** defines stable, documented public API that downstream projects (an earlier internal prototype, ADMESH, Valence) can depend on. All methods listed here maintain signatures, return types, and semantics through v1.0. Breaking changes require major version bump + minimum 2-week advance notice.
 
 ---
 

@@ -12,7 +12,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - `chilmesh.registry` now defaults to the public Valence API (https://valence-api.iqh766c2.workers.dev). `VALENCE_API_URL` is an optional override; only `VALENCE_TOKEN` is required.
 - `chilmesh.registry` sends an explicit `User-Agent: chilmesh-registry/1` header. Cloudflare blocks the default `Python-urllib` agent with error 1010.
-- Bundled mesh data bytes changed: `Block_O.14`, `structuredMesh1.14`, `annulus_200pts.fort.14` and `donut_domain.fort.14` now carry header-only boundary fixes and a neutral title line (the file's own name, with no provenance text), so their SHA-256 values match the bytes the Valence registry serves. Node and element data are unchanged.
+- Bundled mesh data bytes changed: `Block_O.14`, `structuredMesh1.14`, `annulus_200pts.fort.14` and `donut_domain.fort.14` now carry header-only boundary fixes and a neutral title line (the file's own name, with no origin text), so their SHA-256 values match the bytes the Valence registry serves. Node and element data are unchanged.
 
 ### Fixed
 - `read_from_fort14` now raises `ValueError` when encountering a node id of 0 or above the node count instead of silently wrapping to the last vertex ([#282](https://github.com/domattioli/CHILmesh/issues/282)).
@@ -128,7 +128,7 @@ _Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). 
 ## [1.2.2] — 2026-06-15
 
 ### Changed
-- Renamed registry references `ADMESH-Domains` → `Valence` / `valence-domains` (registry was renamed). Public API names (`from_admesh_domain`, `admesh_metadata`) unchanged.
+- Renamed registry references `the former registry package` → `Valence` / `its former name` (registry was renamed). Public API names (`from_admesh_domain`, `admesh_metadata`) unchanged.
 - Removed internal design proposals from the published source tree.
 
 ## [1.2.0] — 2026-05-24
@@ -215,7 +215,7 @@ _Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). 
 ## [1.0.0] — 2026-05-22
 
 First **stable** release. CHILmesh is now the production backbone for ADMESH,
-MADMESHR, and Valence.
+an earlier internal prototype, and Valence.
 
 ### 🚀 Headline
 
@@ -236,7 +236,7 @@ MADMESHR, and Valence.
 - **`from chilmesh import Mesh`** — preferred class name (alias of `CHILmesh`).
 - **`chilmesh.backend_info()`** — returns `{available, selected, versions}` dict
   describing the active backend trio. Honors `CHILMESH_BACKEND` env override.
-- **`MeshAdapterForMADMESHR`**, **`MeshAdapterForADMESH`**,
+- **the legacy research adapter**, **`MeshAdapterForADMESH`**,
   **`MeshAdapterForADMESHDomains`** re-exported at the package root.
 - **`tests/test_backend_equivalence.py`** — cross-backend correctness gate
   (36 cases).
@@ -313,7 +313,7 @@ MADMESHR, and Valence.
   `compute_layers=False, compute_adjacencies=True` builds the full
   adjacency dict bundle (`Vert2Edge`, `Vert2Elem`, `Edge2Vert`,
   `Edge2Elem`, `Elem2Edge`, `EdgeMap`) without paying the layer-sweep
-  cost — needed by downstream consumers (quadmesh-matlab, MADMESHR) that
+  cost — needed by downstream consumers (quadmesh-matlab, an earlier internal prototype) that
   previously had to call the private `_build_adjacencies()` method to
   exercise the public adjacency API. Layer-sweep still implicitly forces
   adjacency construction (it depends on it), so
@@ -393,7 +393,7 @@ documentation polish. No public-API breaking changes.
   the top; full breakdown stays in `docs/BENCHMARK.md`.
 - README badges: Zenodo DOI badge added (repo id 693749657).
 - README "Citation": 1-2 line context paragraph above the bibtex block
-  explaining the QuADMESH+ → CHILmesh lineage.
+  explaining the QuADMESH+ → CHILmesh development path.
 - README Installation: snippets for pip, [uv](https://docs.astral.sh/uv/),
   conda-forge (pending acceptance), and from-source.
 
@@ -605,7 +605,7 @@ See [DOWNSTREAM_MIGRATION_GUIDE.md](docs/DOWNSTREAM_MIGRATION_GUIDE.md) for migr
 
 #### Phase 3: Bridge Infrastructure (Domain-Specific APIs)
 
-**MeshAdapterForMADMESHR** (mesh adaptation research)
+**the legacy research adapter** (mesh adaptation research)
 - `get_element_neighbors(elem_id)` - Find adjacent elements
 - `get_element_quality_neighborhood(elem_id)` - Local quality assessment  
 - `get_refinement_region(elem_ids)` - Identify refinement zones
@@ -618,7 +618,7 @@ See [DOWNSTREAM_MIGRATION_GUIDE.md](docs/DOWNSTREAM_MIGRATION_GUIDE.md) for migr
 - `get_domain_boundaries()` - Extract boundary vertices
 - `get_mesh_connectivity_info()` - Connectivity statistics
 
-#### Phase 4: Advancing-Front API (MADMESHR)
+#### Phase 4: Advancing-Front API (an earlier internal prototype)
 
 ```python
 # Get boundary for element placement
@@ -637,7 +637,7 @@ pinches = mesh.pinch_points(width_threshold=0.3)
 #### Documentation & Release Infrastructure
 - `API.md` - Complete 25+ method reference with stability guarantees
 - `BENCHMARK.md` - Performance comparison v0.1.1 vs v0.2.0 with real-world impact
-- `DOWNSTREAM_MIGRATION_GUIDE.md` - Integration guide for MADMESHR, ADMESH, Valence
+- `DOWNSTREAM_MIGRATION_GUIDE.md` - Integration guide for an earlier internal prototype, ADMESH, Valence
 - `docs/CHILmesh_Access_Interface.md` - Stability guarantees and usage patterns
 - Stable API contract (CAI) through v1.0
 
@@ -660,7 +660,7 @@ pinches = mesh.pinch_points(width_threshold=0.3)
 | Vertex neighbors | ~3,500μs | **0.7μs** | **5,000x** |
 | Element neighbors | ~4,500μs | **4.4μs** | **1,022x** |
 
-#### Real-World Impact (MADMESHR)
+#### Real-World Impact (an earlier internal prototype)
 - Mesh adaptation workflow: 3,800s → 14.7s (**259x speedup**)
 - Interactive development instead of hourly batch operations
 
@@ -750,15 +750,15 @@ fixtures inside the wheel so the quickstart actually works.
 
 ### Changed
 - Bumped `requires-python` to `>=3.10` (drops EOL 3.8/3.9).
-- `requirements.txt` reduced from a 60-line MADMESHR ML environment
+- `requirements.txt` reduced from a 60-line an earlier internal prototype ML environment
   freeze to the three actual runtime dependencies (`numpy`, `scipy`,
   `matplotlib`).
 - README quickstart rewritten around `chilmesh.examples.annulus()`;
   the broken `/kaggle/working/...` path is gone, the install command
   now includes `-r`, the stale "pip installation" TODO is removed,
-  an alpha-status banner has been added, and the MADMESHR "Future Work"
+  an alpha-status banner has been added, and the an earlier internal prototype "Future Work"
   badge has been reframed as a "See also / Downstream projects"
-  section that explicitly notes CHILmesh is agnostic to MADMESHR.
+  section that explicitly notes CHILmesh is agnostic to an earlier internal prototype.
 
 ### Investigated, no fix needed
 - **B2** (`signed_area` quad shoelace): the audit reported the formula
@@ -774,4 +774,4 @@ fixtures inside the wheel so the quickstart actually works.
 - Coverage gating, Hypothesis property tests, mixed-element smoothing
   characterisation, Windows + Python 3.13 CI matrix.
 
-[0.1.1]: https://github.com/domattioli/CHILmesh/releases/tag/v0.1.1
+[0.1.1]: https://github.com/domattioli/CHILmesh/compare/v0.1.0...v0.3.0

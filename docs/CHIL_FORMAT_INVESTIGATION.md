@@ -77,8 +77,8 @@ If/when the RESHAPE blockers clear, integration is **localized**:
 
 1. **New module `src/chilmesh/chil_io.py`** — mirror `gmsh_io.py`: `read_chil()`
    / `write_chil()` returning/consuming a `CHILmesh`. Container per #154 Q12 is a
-   zip of `manifest.toml` + `vertices.npy` + `triangles.npy`/`quads.npy` +
-   `boundaries.toml` + `provenance.toml`.
+   zip of `manifest.json` + `vertices.npy` + `triangles.npy`/`quads.npy` +
+   `boundaries.toml` + `origin.toml`.
 2. **Two suffix branches** in `CHILmesh.save`/`load` (`CHILmesh.py:2346`/`2354`)
    — `.chil` → `chil_io.write_chil`/`read_chil`. Zero churn to other call sites.
 3. **`from_admesh_domain` becomes the primary producer.** Per #154 Q14 `.chil`
@@ -136,10 +136,10 @@ context; only Python should touch them.
 
 | Layer | Content | Who reads/writes | Size |
 |---|---|---|---|
-| **Frontmatter** | `manifest.toml`: counts (NP/NE), bbox, per-field stats (min/max/mean of depth, quality), layer summary (`n_layers`, per-layer counts), `provenance`/`lineage`, sha256 of each payload, CRS | LLM + Python | ~1 KB |
+| **Frontmatter** | `manifest.json`: counts (NP/NE), bbox, per-field stats (min/max/mean of depth, quality), layer summary (`n_layers`, per-layer counts), `origin`, sha256 of each payload, CRS | LLM + Python | ~1 KB |
 | **Payload** | points / connectivity / nodal-attribute arrays (`.npy`/`.npz`, or referenced `fort.14`+`fort.13` by path+sha) | **Python only** | MB–GB |
 
-This is the same **"stdlib-queryable `manifest.toml` as first archive entry"**
+This is the same **"stdlib-queryable `manifest.json` as first archive entry"**
 already recommended in the Fable review (comment 4680372228 §3). The new framing
 is the *agent contract*, not just the format: an agent inspecting a mesh reads
 **only** the frontmatter; any operation on the arrays goes through a Python
@@ -155,7 +155,7 @@ frontmatter **without** the agent ever opening the raw file.
 1. `chilmesh.summary(path_or_mesh) -> dict` + `python -m chilmesh summary <file>`
    CLI — parses header/metadata only (lazy; never loads the full array block for
    counts that live in the header).
-2. Emit that dict as the `.chil` `manifest.toml` frontmatter when the
+2. Emit that dict as the `.chil` `manifest.json` frontmatter when the
    `write_chil` export adapter (§5.1) lands.
 3. **Agent guardrail.** A local development hook (not part of the package)
    refuses a raw `cat`/`head`/`tail` of `*.14`/`*.grd`/`*.2dm`/`*.13`/`*.msh`/

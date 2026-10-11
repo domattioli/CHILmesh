@@ -2,7 +2,7 @@
 
 This repository's source code is licensed under the **PolyForm Noncommercial
 License 1.0.0 with an additional No-AI/ML-Training restriction** — see
-[`LICENSE`](LICENSE).
+[`LICENSE`](../LICENSE).
 
 ## Not permitted without a separate written license
 - Using this code (in whole or part) as training, fine-tuning, or evaluation

@@ -116,3 +116,13 @@ When in doubt: **what is the input and what is the output?** A *domain* in,
 a *field* out → distance. A field's ridge → medial axis. A topology-preserving
 1-wide thinning → skeleton. A *mesh* in, an *integer band per element* out →
 layers.
+
+
+---
+
+## Limitations moved from the README
+
+- **The layer peel is not a medial axis, skeleton or distance transform.** See the definitions above.
+- **The size function can trade worst-element quality for size accuracy.** On the 1.5.0 benchmark it lowers the mean size error by 4% to 20% but can lower the minimum aspect ratio, for example 0.614 → 0.453 on Test_Case_2 with FEM. Its two strength constants were tuned on the same meshes ([`benchmarks/size_smoothing.md`](benchmarks/size_smoothing.md)).
+- **The .2dm writer drops boundary records.** `save('.2dm')` then `read_from_2dm` is lossless for geometry and topology but not for fort.14 boundary metadata ([#228](https://github.com/domattioli/CHILmesh/issues/228)).
+- **Smoothing does not change topology.** Quality gains come from vertex moves only; the ADMESH truss smoother is triangle-only. Topological repair is the separate mutation API.

@@ -14,85 +14,51 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/chilmesh/">
-    <img src="https://img.shields.io/pypi/v/chilmesh?logo=pypi&logoColor=white" alt="PyPI">
-  </a>
-  <a href="https://www.python.org/downloads/">
-    <img src="https://img.shields.io/badge/python-3.10%2B-306998?logo=python&logoColor=FFD43B" alt="Python 3.10+">
-  </a>
-  <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests">
-  </a>
-  <a href="https://github.com/domattioli/CHILmesh/issues">
-    <img src="https://img.shields.io/github/issues/domattioli/CHILmesh.svg?color=orange" alt="Open issues">
-  </a>
+    <a href="https://pypi.org/project/chilmesh/"><img src="https://img.shields.io/pypi/v/chilmesh?logo=pypi&logoColor=white" alt="PyPI"></a>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-306998?logo=python&logoColor=FFD43B" alt="Python 3.10+"></a>
+    <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
+    <a href="https://github.com/domattioli/CHILmesh/issues"><img src="https://img.shields.io/github/issues/domattioli/CHILmesh.svg?color=orange" alt="Open issues"></a>
   <a href="https://doi.org/10.5281/zenodo.20263853"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.20263853.svg" alt="DOI"></a>
-  <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License">
-  </a>
+    <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License"></a>
 </p>
 
-
-> **MATLAB users.** This Python library is the maintained successor to the original MATLAB code. The MATLAB code is no longer maintained; it is at [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) and on <a href="https://www.mathworks.com/matlabcentral/fileexchange/135632-chilmesh"><img src=".github/badges/matlab-file-exchange.svg" alt="MATLAB File Exchange"></a>. To call the Python library from MATLAB, run `pip install chilmesh` and use the `py.` bridge, for example `py.chilmesh.Mesh.read_from_fort14('ocean.14')`. No MEX build is needed.
-
----
+> **MATLAB users.** The Python library is the maintained successor to the original MATLAB code, which is no longer maintained ([`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m)). Run `pip install chilmesh` and call it through the `py.` bridge, for example `py.chilmesh.Mesh.read_from_fort14('ocean.14')`.
 
 ## Table of Contents
 
 1. [Status & Roadmap](#1-status--roadmap)
-2. [Why CHILmesh](#2-why-chilmesh)
-3. [Installation](#3-installation)
-4. [Quick start](#4-quick-start)
-5. [Capabilities](#5-capabilities)
-6. [Performance](#6-performance)
-7. [Backends](#7-backends)
-8. [Examples and CLI](#8-examples-and-cli)
-9. [Limitations](#9-limitations)
-10. [Documentation](#10-documentation)
-11. [Citation](#11-citation)
-12. [Contributing](#12-contributing)
-13. [License](#13-license)
+2. [Installation](#2-installation)
+3. [Quick start](#3-quick-start)
+4. [Fetching meshes from Valence](#4-fetching-meshes-from-valence)
+5. [Examples and CLI](#5-examples-and-cli)
+6. [Limitations](#6-limitations)
+7. [Documentation](#7-documentation)
+8. [Citation](#8-citation)
+9. [Contributing](#9-contributing)
+10. [License](#10-license)
 
 ## 1. Status & Roadmap
 
-**Shipped: chilmesh 1.5.0 on PyPI (2026-10-02).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. Version 1.5.0 adds prebuilt C++ wheels (`pip install "chilmesh[cpp]"`), a size function for the FEM and angle-based smoothers, and an experimental GPU renderer (`pip install "chilmesh[gpu]"`). The full feature list is in [Capabilities](#5-capabilities); release notes are in [`CHANGELOG.md`](CHANGELOG.md).
+**Current release: 1.5.0 (2026-10-02). Next: 1.5.5 (unreleased); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
 
-- **Now:** a native `.chil` container format, built on a sandbox branch first ([#201](https://github.com/domattioli/CHILmesh/issues/201)).
-- **Next:** a documentation site; a streaming GPU mesh view for live mesh generation and a faster CPU renderer ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the global STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
-- **Research:** a medial-axis `skeletonize()` ([#223](https://github.com/domattioli/CHILmesh/issues/223)); size-controlled mesh cartograms ([#219](https://github.com/domattioli/CHILmesh/issues/219)).
+- **Now:** a native `.chil` container format on a sandbox branch ([#201](https://github.com/domattioli/CHILmesh/issues/201))  — **Next:** a documentation site and a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)).
 - **Later:** one ecosystem with <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3" alt="QuADMESH PyPI version"></a>.
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 2. Why CHILmesh
-
-CHILmesh began in 2015-2017 at The Ohio State University as the data structure behind QuADMESH+, a layer-peel-driven indirect triangle-to-quadrilateral conversion heuristic for hydrodynamic models (Mattioli, MSc thesis, 2017; see [Citation](#11-citation)). The mesh generator needed three things no single tool provided: one adjacency model that treats triangles, quadrilaterals and mixed meshes identically; a concentric layer decomposition of the domain, from the boundary inward; and the ADCIRC and SMS file formats that coastal-ocean models read.
-
-The Python library keeps that scope and adds the engineering the MATLAB code lacked. Seven adjacency tables are built once ([`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)), giving O(1) edge lookup, O(n) layer peel and O(log n) spatial queries. Every algorithm has one reference implementation in Python. The C++ backend reproduces it bit-for-bit, verified by 76 parametrized equivalence cases in [`tests/test_backend_equivalence.py`](tests/test_backend_equivalence.py). Terminology is fixed in [`docs/CONCEPTS.md`](docs/CONCEPTS.md): a layer is a concentric band of elements, distinct from a distance field, a medial axis or a skeleton ("vertex", "node" and "point" are interchangeable throughout this documentation).
-
-<div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
-
-## 3. Installation
+## 2. Installation
 
 ```bash
 pip install chilmesh             # PyPI, pure Python
 pip install "chilmesh[cpp]"      # adds the prebuilt C++ backend
 pip install "chilmesh[gpu]"      # adds the experimental GPU renderer
-uv pip install chilmesh          # uv
-pip install -e ".[dev]"          # from source, with the test suite
 ```
 
-The `[cpp]` extra installs `chilmesh-cpp`, a prebuilt binary wheel for CPython 3.10 to 3.14 on Linux x86_64, macOS x86_64 and arm64, and Windows x86_64. No compiler is needed. Check the result with `chilmesh.backend_info()`; it reports `'selected': 'cpp'`. On any other platform, pip builds `chilmesh-cpp` from source, which needs a C++ toolchain and CMake. To build from a clone of this repository:
-
-```bash
-pip install ./src/chilmesh_cpp    # or: bash scripts/build_cpp.sh
-```
-
-Python 3.10 or newer is required.
+Python 3.10 or newer. Prebuilt C++ wheels cover Linux x86_64, macOS (x86_64, arm64) and Windows x86_64; other platforms build from source (`pip install ./src/chilmesh_cpp`, needs a C++ toolchain and CMake). Check with `chilmesh.backend_info()`. Backend details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 4. Quick start
+## 3. Quick start
 
 ```python
 import numpy as np
@@ -105,207 +71,80 @@ elem = mesh.find_element(np.array([-75.2, 35.1]))  # O(log n) point location
 mesh.write_to_fort14("ocean_smoothed.14")
 ```
 
-`chilmesh.CHILmesh` remains as an alias of `Mesh`. Four fixtures ship with the package: `chilmesh.examples.{annulus, donut, block_o, structured}()`.
-
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## Fetching meshes from the Valence registry
+## 4. Fetching meshes from Valence
 
-`chilmesh.registry` downloads meshes from a token-gated registry API. It uses only the standard library. Each download is checked against the SHA-256 hash that the API reports.
-
-To get a token, sign in with GitHub at https://valence-api.iqh766c2.workers.dev. The operator approves each request manually. After approval, sign in again. The API shows the token once, so copy it then. A token expires after 1 year. The API allows 120 requests per minute.
-
-Set the token in your environment:
+The `chilmesh.registry` module ships in 1.5.5 (unreleased). Meshes come through Valence, a token-gated mesh service. Sign in with GitHub at https://valence-api.iqh766c2.workers.dev. A GitHub account at least 30 days old gets a token at once; it is shown once. A token allows 500 downloads per day (the count resets at midnight UTC) and expires after one year.
 
 ```bash
 export VALENCE_TOKEN=<your token>
-```
-
-The client talks to https://valence-api.iqh766c2.workers.dev by default. Set `VALENCE_API_URL` only to override it.
-
-```python
+python - <<'EOF'
 from chilmesh import registry
-
-names = registry.list_meshes()                       # filenames, e.g. "Block_O.14"
-mesh = registry.fetch_mesh("Block_O.14")            # verified download, returns a CHILmesh
-registry.download_mesh("Block_O.14", "mesh.14")      # or save the verified bytes to a file
+names = registry.list_meshes()
+mesh = registry.fetch_mesh("Block_O.14")
+EOF
 ```
 
-Errors derive from `registry.RegistryError`:
-
-- `RegistryAuthError`: the token is missing, invalid, or expired.
-- `RegistryNotFoundError` (also a `ValueError`): the mesh name is unknown or invalid.
-- `RegistryUnavailableError`: no API URL is set, the network failed, or the API is rate limited or down.
-- `RegistryIntegrityError`: the downloaded bytes do not match the reported hash, or a response is malformed.
+Error classes and options: [`docs/API.md`](docs/API.md).
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 5. Capabilities
+## 5. Examples and CLI
 
-| Area | What ships | Entry points |
-|---|---|---|
-| File formats | ADCIRC fort.14 (lossless round trip, boundary records kept), fort.13 nodal attributes, fort.15 control file; SMS Aquaveo .2dm; Gmsh .msh 2.2 and 4.1; header-only `summary()` for fort.14, .2dm, fort.13, fort.15, .msh, .npy and .npz without loading the mesh | `Mesh.read_from_fort14`, `read_fort13`, `read_fort15`, `Mesh.read_from_2dm`, `Mesh.read_from_msh`, `chilmesh.summary` |
-| Topology | Triangular, quadrilateral and mixed meshes on one API; seven adjacency tables; concentric layer peel with per-layer `OE`, `IE`, `OV`, `IV` and boundary-edge IDs | `Mesh.peel_layers`, `mesh.layers` |
-| Quality | Skew quality and interior angles per element; per-edge Courant number and a CFL gate from depths and a time step | `Mesh.elem_quality`, `courant_number`, `cfl_gate` |
-| Smoothing | Balendran direct FEM; Zhou-Shimada angle-based; ADMESH spring-based truss against a signed distance function; plain Laplacian. FEM, angle-based and truss accept an optional target size function. Boundary nodes fixed, topology unchanged, mixed meshes accepted | `Mesh.smooth_mesh(method=...)`, `Mesh.smooth` |
-| Mutation | 13 topology operations: split triangle, split edge, split boundary edge, swap edge, merge elements, remove vertex, collapse edge, insert vertex, move boundary node, split triangles, topological smoothing, local re-peel, layer diff | `chilmesh.mutations` |
-| Boundary editing | Advancing-front element addition, boundary-loop removal, pinch-point detection in narrow channels | `Mesh.add_advancing_front_element`, `Mesh.remove_boundary_loop`, `Mesh.pinch_points` |
-| Spatial queries | Point-in-element, radius search, k-nearest vertices, all O(log n) after a one-time index | `Mesh.find_element`, `Mesh.find_elements_in_radius`, `Mesh.nearest_vertices` |
-| Geometry | Haversine distance, convex hull, Hausdorff distance, antimeridian-aware bounding boxes | `chilmesh.geometry` |
-| Interop | ADMESH domain adapter and truss warm start; renumbering-tolerant node matching between two meshes with nodal-field deltas | `Mesh.from_admesh_domain`, `chilmesh.admesh_warmstart`, `match_nodes` |
-| Plotting | Mesh, per-element quality map, matched-colormap quality histogram, layer paths; experimental GPU rendering through the `[gpu]` extra | `Mesh.plot`, `Mesh.plot_quality`, `Mesh.plot_quality_histogram`, `chilplotting.render_image(backend="gpu")` |
+Run `python examples/01_quickstart.py` (four scripts in [`examples/`](examples/)), or use the CLI: `chilmesh info|summary|convert|smooth|plot` (`python -m chilmesh` is equivalent; every subcommand takes `--help`).
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 6. Performance
+## 6. Limitations
 
-**The C++ backend full-initializes the 531,680-element ENPAC2003 mesh in 1.44 s against 12.30 s in Python, an 8.6× speedup; on the 98,365-element WNAT_Hagen mesh the ratio is 14.7× (1.65 s → 0.112 s).** Reference workload: EasternPacific_ENPAC2003, 272,913 vertices, 531,680 elements, 75 layers, from the [Valence](https://github.com/domattioli/Valence) registry. Medians of 3 runs on one machine at chilmesh 1.2.2; the algorithms have not changed since, and a 1.4.1 rerun on a second machine gave Python 11.89 s and C++ 0.803 s for full init.
-
-| Stage | MATLAB (Octave 8.4) | Python | C++ | Rust |
-|---|---:|---:|---:|---:|
-| Fast init (adjacency, no peel) | 2.738 s | 6.454 s | 0.769 s | not exposed |
-| Peel only | 12.771 s | 5.814 s | 0.669 s | not exposed |
-| Full init (adjacency + peel) | 16.677 s | 12.300 s | 1.438 s | 11.98 s † |
-| Quality (signed area) | 75 ms | 51 ms | 7 ms | 2 ms † |
-
-Every backend runs the same operation on the same in-memory arrays; fort.14 parsing and rendering are excluded. All four resolve `n_layers = 75`, and Python and C++ layers are bit-identical. Octave builds adjacency 2.4× faster than Python through `sparse()` accumulation, and Python peels 2.2× faster than Octave. † Rust measured at chilmesh 1.4.1 on the second machine, where the same-machine controls were Python 11.89 s and C++ 0.803 s. Method, raw data and a 557-to-273k-vertex layer-parity catalog: [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
-
-<p align="center">
-  <img src="docs/gallery/enpac2003_showcase.png?v=1" alt="EasternPacific_ENPAC2003 quality plot and distribution">
-  <br>
-  <sub><em><strong>Figure 1.</strong> EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> draws the matched-colormap distribution beneath. Reproduce with <code>python scripts/generate_enpac_showcase.py</code>.</em></sub>
-</p>
-
-<p align="center">
-  <img src="docs/gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
-  <br>
-  <sub><em><strong>Figure 2.</strong> Distance is a scalar field; its ridge is the medial axis; the skeleton is a thinned discrete curve; layers are the concentric element bands CHILmesh peels. Definitions and algorithms: <a href="docs/CONCEPTS.md">docs/CONCEPTS.md</a>. Reproduce with <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
-</p>
+- **Two-dimensional only.** Vertices carry a z value, but topology, quality and smoothing operate in the plane.
+- **A plain install runs at Python speed.** Add the `[cpp]` extra for the C++ backend.
+- **The GPU renderer is experimental**, and Rust is frozen ([`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md)).
+- **Smoothing does not change topology**, and the size function can trade worst-element quality for size accuracy; further caveats are in [`docs/CONCEPTS.md`](docs/CONCEPTS.md).
+- **Benchmarks are single-machine medians of three runs.** Ratios between backends are the reproducible quantity.
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 7. Backends
+## 7. Documentation
 
-| Backend | Role | Status | How to get it |
-|---|---|---|---|
-| Python | Reference implementation; every other backend is validated against it | Default | `pip install chilmesh` |
-| C++ (half-edge) | Accelerator, bit-identical output, 8.6× to 14.7× on full init | Recommended | `pip install "chilmesh[cpp]"` (prebuilt wheel), or `pip install ./src/chilmesh_cpp` (source build) |
-| Rust (quad-edge) | Output-equivalent on all four fixtures (`rust-equivalence` CI); measured 2× to 5× slower than C++ on full init | Frozen, not developed further ([`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md)) | `maturin build` in `src/chilmesh_core`, not recommended |
-| MATLAB | Original 2017 implementation | Archived | [`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m) |
-
-With `CHILMESH_BACKEND` unset, CHILmesh selects the fastest available backend in the order C++, Rust, Python. Force one with `CHILMESH_BACKEND=python|cpp|rust` and inspect the choice with `chilmesh.backend_info()`:
-
-```python
-import chilmesh
-chilmesh.backend_info()
-# After `pip install "chilmesh[cpp]"` or a source build of the C++ extension:
-# {'available': ['cpp', 'python'], 'selected': 'cpp',
-#  'versions': {'cpp': '0.6.0', 'python': '1.5.0'}}
-```
-
-chilmesh 1.5.x requires `chilmesh-cpp>=0.6,<0.7`; both version numbers change together when the extension API changes. Platform coverage is listed in [Installation](#3-installation).
-
-Parity is gated in CI. The `cpp-equivalence` and `rust-equivalence` jobs build each extension and run the equivalence suite on every pull request to `main` and every push to `main`. After each `chilmesh-cpp` release, a further CI job installs the published wheel from PyPI on Linux, macOS and Windows and runs the same suite.
+- [`docs/API.md`](docs/API.md): API reference, capabilities table, registry errors
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): adjacency tables, backends
+- [`docs/BENCHMARK.md`](docs/BENCHMARK.md): benchmark method, tables, figures
+- [`docs/CONCEPTS.md`](docs/CONCEPTS.md): layers, medial axis, skeleton; extra limitations
+- [`tests/TESTING.md`](tests/TESTING.md): pytest markers and parity tests
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 8. Examples and CLI
+## 8. Citation
 
-```bash
-python examples/01_quickstart.py        # load, stats, plot
-python examples/02_fort14_roundtrip.py  # fort.14 read and write
-python examples/03_smoothing.py         # angle-based smoother
-python examples/04_spatial_queries.py   # find_element, radius search, k-nearest
-```
-
-```bash
-chilmesh info mesh.fort.14                                   # vertex, element and layer counts
-chilmesh summary mesh.fort.14                                # header-only metadata, no full parse
-chilmesh convert mesh.2dm mesh.fort.14                       # format conversion
-chilmesh smooth mesh.fort.14 -o out.fort.14 --method fem     # smooth and write
-chilmesh plot mesh.fort.14 -o mesh.png --quality             # render
-```
-
-`python -m chilmesh` is equivalent; every subcommand takes `--help`.
-
-<div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
-
-## 9. Limitations
-
-- **Two-dimensional only.** Vertices carry a z value for bathymetry, but all topology, quality and smoothing operate in the plane. Surface and volume meshes are out of scope.
-- **A plain install runs at Python speed.** `pip install chilmesh` has no compiled code. Add the `[cpp]` extra for the C++ column of the table above. Prebuilt C++ wheels cover Linux x86_64, macOS x86_64 and arm64, and Windows x86_64 only; Linux on ARM builds from source.
-- **The GPU renderer is experimental.** The `[gpu]` extra draws a static mesh and a per-element scalar. Streaming views and element picking are not available yet ([#167](https://github.com/domattioli/CHILmesh/issues/167)). Off-screen rendering is tested; the interactive window is not.
-- **Rust is frozen.** It stays output-equivalent to Python but receives no new work. It exposes no separate fast-init or peel timing.
-- **Smoothing does not change topology.** Quality gains come from vertex moves only; the ADMESH truss smoother is triangle-only. Topological repair is the separate mutation API.
-- **The size function can trade worst-element quality for size accuracy.** On the 1.5.0 benchmark it lowers the mean size error by 4% to 20% but can lower the minimum aspect ratio, for example 0.614 → 0.453 on Test_Case_2 with FEM. Its two strength constants were tuned on the same meshes ([`docs/benchmarks/size_smoothing.md`](docs/benchmarks/size_smoothing.md)).
-- **The .2dm writer drops boundary records.** `save('.2dm')` then `read_from_2dm` is lossless for geometry and topology but not for fort.14 boundary metadata ([#228](https://github.com/domattioli/CHILmesh/issues/228)).
-- **Benchmarks are single-machine medians of three runs.** Absolute times are machine-dependent; ratios between backends are the reproducible quantity.
-- **The layer peel is not a medial axis, skeleton or distance transform.** [`docs/CONCEPTS.md`](docs/CONCEPTS.md) defines what the layers represent and what they do not.
-
-<div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
-
-## 10. Documentation
-
-- [`docs/API.md`](docs/API.md): API reference
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): adjacency tables, complexities and the layerization boundary
-- [`docs/BENCHMARK.md`](docs/BENCHMARK.md): benchmark method and raw data
-- [`docs/CONCEPTS.md`](docs/CONCEPTS.md): distance field, medial axis, skeleton and layers
-- [`docs/RUST_EVALUATION.md`](docs/RUST_EVALUATION.md): the measured case for freezing the Rust backend
-- [`tests/TESTING.md`](tests/TESTING.md): pytest markers, backend setup, parity tests
-- [`examples/`](examples/): runnable scripts
-
-<div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
-
-## 11. Citation
-
-### Software
-
-<p align="center">
-  <a href="https://doi.org/10.5281/zenodo.20263853"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.20263853.svg" alt="Cite via Zenodo DOI"></a>
-</p>
+[![Cite via Zenodo DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20263853.svg)](https://doi.org/10.5281/zenodo.20263853) [![QuADMESH Thesis](https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8)](https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf)
 
 ```bibtex
 @software{mattioli_chilmesh,
-  author    = {Mattioli, Dominik O. and Kubatko, Ethan J.},
-  title     = {{CHILmesh}: a fast 2D mesh library for triangular,
-               quadrilateral, and mixed-element grids},
-  year      = {2026},
-  publisher = {Zenodo},
-  version   = {1.5.0},
-  doi       = {10.5281/zenodo.20263853},
-  url       = {https://github.com/domattioli/CHILmesh}
+  author = {Mattioli, Dominik O. and Kubatko, Ethan J.},
+  title = {{CHILmesh}: a fast 2D mesh library for triangular, quadrilateral, and mixed-element grids},
+  year = {2026}, publisher = {Zenodo}, version = {1.5.0},
+  doi = {10.5281/zenodo.20263853}, url = {https://github.com/domattioli/CHILmesh}
 }
-```
-
-The concept DOI above always resolves to the latest release. To cite version 1.5.0 exactly, use [10.5281/zenodo.23096013](https://doi.org/10.5281/zenodo.23096013).
-
-### Original method
-
-<p align="center">
-  <a href="https://github.com/user-attachments/files/19727573/QuADMESH__Thesis_Doc.pdf"><img src="https://img.shields.io/badge/Thesis-QuADMESH-ba0c2f?style=flat-square&logo=book&logoColor=white&labelColor=cfd4d8" alt="QuADMESH Thesis"></a>
-</p>
-
-```bibtex
 @mastersthesis{mattioli2017quadmesh,
   author = {Mattioli, Dominik O.},
-  title  = {{QuADMESH+}: A Quadrangular ADvanced Mesh Generator
-            for Hydrodynamic Models},
-  school = {The Ohio State University},
-  year   = {2017},
-  url    = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
+  title = {{QuADMESH+}: A Quadrangular ADvanced Mesh Generator for Hydrodynamic Models},
+  school = {The Ohio State University}, year = {2017},
+  url = {http://rave.ohiolink.edu/etdc/view?acc_num=osu1500627779532088}
 }
 ```
 
-CHILmesh is a by-product of a project funded by Aquaveo at The Ohio State University in 2015-2017.
+The concept DOI above always resolves to the latest release. To cite version 1.5.0 exactly, use [10.5281/zenodo.23096013](https://doi.org/10.5281/zenodo.23096013). CHILmesh is a by-product of a project funded by Aquaveo at The Ohio State University in 2015-2017.
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 12. Contributing
+## 9. Contributing
 
 Issues and pull requests at [github.com/domattioli/CHILmesh](https://github.com/domattioli/CHILmesh). Run `pytest -v` before opening a PR; markers and backend setup are in [`tests/TESTING.md`](tests/TESTING.md).
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
-## 13. License
+## 10. License
 
 **Noncommercial and research use only.** PolyForm Noncommercial License 1.0.0 with an additional No-AI/ML-training restriction; see [LICENSE](LICENSE) and [docs/AI-USAGE.md](docs/AI-USAGE.md). Commercial use, and use as training, fine-tuning or evaluation data for any model, require a separate written license from [github.com/domattioli](https://github.com/domattioli).

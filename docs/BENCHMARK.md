@@ -1,7 +1,7 @@
 # CHILmesh Performance Benchmarks
 
 **Version:** 1.2.2
-**Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers) — continental-scale ADCIRC mesh from the [Valence](https://github.com/domattioli/Valence) registry.
+**Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers) — continental-scale ADCIRC mesh, available through Valence (see `chilmesh.registry`).
 **Parity reference mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers) — retained as the historical cross-language baseline.
 
 > **Reproduce:** every number below regenerates from the committed harness —
@@ -146,7 +146,7 @@ Times every post-generation stage. Generation itself excluded (per #155). Refere
 ## v1.2.0 — real-world regional meshes (Valence registry, #155)
 
 Lifecycle profiled on genuine ADCIRC regional meshes from the Valence registry
-(`registry_data/meshes/`), 2026-06-08. Pure-Python backend (C++ extension not
+(local mesh directory), 2026-06-08. Pure-Python backend (C++ extension not
 built in this environment). Supersedes prior "blocked — mesh not in environment"
 status: the regional meshes are on disk and runnable; only the global
 STOFS-2D-Global mesh (24.9M elems, 1.73 GB) remains out-of-environment.
@@ -170,7 +170,7 @@ real WNAT mesh.
 > `active_count == 1` peel from a3ce406; the #129 seed-node layer-0 filter is
 > preserved. Regression guarded by `tests/test_peel_termination.py`.
 
-> **Reproduce:** `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh <valence>/registry_data/meshes/WNAT_Hagen.14 --sdf none --smooth-iters 3 --truss-iters 3`
+> **Reproduce:** `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh <mesh dir>/WNAT_Hagen.14 --sdf none --smooth-iters 3 --truss-iters 3`
 
 > **Still blocked:** STOFS-2D-Global global mesh (24.9M elems, 1.73 GB) lifecycle
 > needs a hosted runner to stage the file (Valence #77) and an iterative/GPU
@@ -326,7 +326,7 @@ O(n²) algorithms for critical ops:
 
 ## Real-World Impact
 
-### MADMESHR Use Case (WNAT_Hagen)
+### Earlier-prototype Use Case (WNAT_Hagen)
 
 **Before (v0.1.1):**
 ```
@@ -364,14 +364,16 @@ Total:             14.7s ✅ Interactive development
 ## How to Reproduce
 
 ```bash
-git clone https://github.com/domattioli/Valence /tmp/valence-domains
-
+# Needs chilmesh 1.5.5 (unreleased; 1.5.0 is the current release). Set VALENCE_TOKEN first: export VALENCE_TOKEN=<your token>
 python3 << 'PYTHON'
+from chilmesh import registry
+registry.download_mesh("EasternPacific_ENPAC2003.14", "enpac.14")
+
 from chilmesh import CHILmesh
 from pathlib import Path
 import time
 
-mesh_path = Path("/tmp/valence-domains/registry_data/meshes/WNAT_Hagen.14")
+mesh_path = Path("enpac.14")
 
 start = time.time()
 mesh = CHILmesh.read_from_fort14(mesh_path, compute_layers=False)
@@ -462,3 +464,31 @@ Element + connectivity quality on ENPAC2003 (531,680 mostly-triangular elements)
 | Mean interior valence | 6.0 | — |
 
 Skew and aspect ratio apply to triangles and quads; valence regularity compares each interior vertex against its ideal degree (6 for triangles, 4 for quads), so the irregular-vertex fraction flags topological defects independent of geometry.
+
+
+---
+
+## Headline results and figures (moved from the README)
+
+**The C++ backend full-initializes the 531,680-element ENPAC2003 mesh in 1.44 s against 12.30 s in Python, an 8.6× speedup; on the 98,365-element WNAT_Hagen mesh the ratio is 14.7× (1.65 s → 0.112 s).** Reference workload: EasternPacific_ENPAC2003, 272,913 vertices, 531,680 elements, 75 layers, available through Valence. Medians of 3 runs on one machine at chilmesh 1.2.2; the algorithms have not changed since, and a 1.4.1 rerun on a second machine gave Python 11.89 s and C++ 0.803 s for full init.
+
+| Stage | MATLAB (Octave 8.4) | Python | C++ | Rust |
+|---|---:|---:|---:|---:|
+| Fast init (adjacency, no peel) | 2.738 s | 6.454 s | 0.769 s | not exposed |
+| Peel only | 12.771 s | 5.814 s | 0.669 s | not exposed |
+| Full init (adjacency + peel) | 16.677 s | 12.300 s | 1.438 s | 11.98 s † |
+| Quality (signed area) | 75 ms | 51 ms | 7 ms | 2 ms † |
+
+Every backend runs the same operation on the same in-memory arrays; fort.14 parsing and rendering are excluded. All four resolve `n_layers = 75`, and Python and C++ layers are bit-identical. Octave builds adjacency 2.4× faster than Python through `sparse()` accumulation, and Python peels 2.2× faster than Octave. † Rust measured at chilmesh 1.4.1 on the second machine, where the same-machine controls were Python 11.89 s and C++ 0.803 s. Method, raw data and a 557-to-273k-vertex layer-parity catalog: this document.
+
+<p align="center">
+  <img src="gallery/enpac2003_showcase.png?v=1" alt="EasternPacific_ENPAC2003 quality plot and distribution">
+  <br>
+  <sub><em><strong>Figure 1.</strong> EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements). <code>plot_quality()</code> renders per-element skew quality; <code>plot_quality_histogram()</code> draws the matched-colormap distribution beneath. Reproduce with <code>python scripts/generate_enpac_showcase.py</code>.</em></sub>
+</p>
+
+<p align="center">
+  <img src="gallery/mesh_concepts.png" alt="distance field vs medial axis vs skeleton vs layers" width="900">
+  <br>
+  <sub><em><strong>Figure 2.</strong> Distance is a scalar field; its ridge is the medial axis; the skeleton is a thinned discrete curve; layers are the concentric element bands CHILmesh peels. Definitions and algorithms: <a href="CONCEPTS.md">CONCEPTS.md</a>. Reproduce with <code>python scripts/illustrate_mesh_concepts.py</code>.</em></sub>
+</p>

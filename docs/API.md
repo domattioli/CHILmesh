@@ -14,7 +14,6 @@ CHILmesh provides an API for 2D mesh processing, smoothing, and analysis on tria
 ```python
 from chilmesh import CHILmesh, write_fort14
 from chilmesh.bridge import (
-    MeshAdapterForMADMESHR,
     MeshAdapterForADMESH,
     MeshAdapterForADMESHDomains,
 )
@@ -260,7 +259,7 @@ Direct smoothing method. Returns new point coordinates.
 
 ## Bridge Adapters (v0.2.0+)
 
-### MeshAdapterForMADMESHR
+### Legacy research adapter
 
 | Method | Description |
 |--------|-------------|
@@ -369,3 +368,66 @@ while len(boundary) > 4:
 
 **Last Updated:** 2026-04-27  
 **API Version:** 1.0
+
+
+---
+
+## Capabilities overview
+
+| Area | What ships | Entry points |
+|---|---|---|
+| File formats | ADCIRC fort.14 (lossless round trip, boundary records kept), fort.13 nodal attributes, fort.15 control file; SMS Aquaveo .2dm; Gmsh .msh 2.2 and 4.1; header-only `summary()` for fort.14, .2dm, fort.13, fort.15, .msh, .npy and .npz without loading the mesh | `Mesh.read_from_fort14`, `read_fort13`, `read_fort15`, `Mesh.read_from_2dm`, `Mesh.read_from_msh`, `chilmesh.summary` |
+| Topology | Triangular, quadrilateral and mixed meshes on one API; seven adjacency tables; concentric layer peel with per-layer `OE`, `IE`, `OV`, `IV` and boundary-edge IDs | `Mesh.peel_layers`, `mesh.layers` |
+| Quality | Skew quality and interior angles per element; per-edge Courant number and a CFL gate from depths and a time step | `Mesh.elem_quality`, `courant_number`, `cfl_gate` |
+| Smoothing | Balendran direct FEM; Zhou-Shimada angle-based; ADMESH spring-based truss against a signed distance function; plain Laplacian. FEM, angle-based and truss accept an optional target size function. Boundary nodes fixed, topology unchanged, mixed meshes accepted | `Mesh.smooth_mesh(method=...)`, `Mesh.smooth` |
+| Mutation | 13 topology operations: split triangle, split edge, split boundary edge, swap edge, merge elements, remove vertex, collapse edge, insert vertex, move boundary node, split triangles, topological smoothing, local re-peel, layer diff | `chilmesh.mutations` |
+| Boundary editing | Advancing-front element addition, boundary-loop removal, pinch-point detection in narrow channels | `Mesh.add_advancing_front_element`, `Mesh.remove_boundary_loop`, `Mesh.pinch_points` |
+| Spatial queries | Point-in-element, radius search, k-nearest vertices, all O(log n) after a one-time index | `Mesh.find_element`, `Mesh.find_elements_in_radius`, `Mesh.nearest_vertices` |
+| Geometry | Haversine distance, convex hull, Hausdorff distance, antimeridian-aware bounding boxes | `chilmesh.geometry` |
+| Interop | ADMESH domain adapter and truss warm start; renumbering-tolerant node matching between two meshes with nodal-field deltas | `Mesh.from_admesh_domain`, `chilmesh.admesh_warmstart`, `match_nodes` |
+| Plotting | Mesh, per-element quality map, matched-colormap quality histogram, layer paths; experimental GPU rendering through the `[gpu]` extra | `Mesh.plot`, `Mesh.plot_quality`, `Mesh.plot_quality_histogram`, `chilplotting.render_image(backend="gpu")` |
+
+## Fetching meshes with `chilmesh.registry`
+
+The `chilmesh.registry` module ships in 1.5.5 (unreleased). It uses only the standard library and checks each download against the SHA-256 hash that the service reports. The client talks to https://valence-api.iqh766c2.workers.dev by default; set `VALENCE_API_URL` only to override it. The service allows 500 downloads per token per day.
+
+```python
+from chilmesh import registry
+
+names = registry.list_meshes()                       # filenames, e.g. "Block_O.14"
+mesh = registry.fetch_mesh("Block_O.14")            # verified download, returns a CHILmesh
+registry.download_mesh("Block_O.14", "mesh.14")      # or save the verified bytes to a file
+```
+
+Errors derive from `registry.RegistryError`:
+
+- `RegistryAuthError`: the token is missing, invalid, or expired.
+- `RegistryNotFoundError` (also a `ValueError`): the mesh name is unknown or invalid.
+- `RegistryUnavailableError`: no API URL is set, the network failed, or the API is rate limited or down.
+- `RegistryIntegrityError`: the downloaded bytes do not match the reported hash, or a response is malformed.
+
+## Examples and CLI (moved from the README)
+
+```bash
+python ../examples/01_quickstart.py        # load, stats, plot
+python ../examples/02_fort14_roundtrip.py  # fort.14 read and write
+python ../examples/03_smoothing.py         # angle-based smoother
+python ../examples/04_spatial_queries.py   # find_element, radius search, k-nearest
+```
+
+```bash
+chilmesh info mesh.fort.14                                   # vertex, element and layer counts
+chilmesh summary mesh.fort.14                                # header-only metadata, no full parse
+chilmesh convert mesh.2dm mesh.fort.14                       # format conversion
+chilmesh smooth mesh.fort.14 -o out.fort.14 --method fem     # smooth and write
+chilmesh plot mesh.fort.14 -o mesh.png --quality             # render
+```
+
+`python -m chilmesh` is equivalent; every subcommand takes `--help`.
+
+Four fixtures ship with the package: `chilmesh.examples.{annulus, donut, block_o, structured}()`. `chilmesh.CHILmesh` remains an alias of `Mesh`.
+
+## Roadmap items moved from the README
+
+- Next: a faster CPU renderer and a full-lifecycle benchmark on the global STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
+- Research: a medial-axis `skeletonize()` ([#223](https://github.com/domattioli/CHILmesh/issues/223)); size-controlled mesh cartograms ([#219](https://github.com/domattioli/CHILmesh/issues/219)).

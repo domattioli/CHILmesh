@@ -2,7 +2,7 @@
 
 **Version:** 2.1 (adds v1.4.0 #187 breaking-rename migration)
 **CHILmesh Version:** 1.4.0+
-**Target Projects:** MADMESHR, ADMESH, Valence
+**Target Projects:** an earlier internal prototype, ADMESH, Valence
 
 ---
 
@@ -117,7 +117,7 @@ Force a specific backend with the `CHILMESH_BACKEND` environment variable
 > See [`RUST_EVALUATION.md`](RUST_EVALUATION.md).
 
 ### New Public Surface (cumulative since v0.4.1)
-- `MeshAdapterForMADMESHR`, `MeshAdapterForADMESH`, `MeshAdapterForADMESHDomains` re-exported at package root.
+- the legacy research adapter, `MeshAdapterForADMESH`, `MeshAdapterForADMESHDomains` re-exported at package root.
 - `CHILmesh.submesh(elem_ids)` — public sub-mesh factory (#138).
 - `CHILmesh.rebuild_adjacencies()` / `invalidate_adjacencies()` — for mid-sweep mutation flows (#143).
 - `CHILmesh.ccw_edges_around_vert(vert_id)` — counter-clockwise edge walk (#133).
@@ -147,7 +147,7 @@ Force a specific backend with the `CHILMESH_BACKEND` environment variable
 
 ## Quick Start by Project
 
-### MADMESHR Quick Start
+### Legacy research adapter Quick Start
 
 #### Before (v0.1.1)
 ```python
@@ -194,10 +194,10 @@ neighbors = get_neighbors(mesh, 0)
 #### Recommended Update (Optional)
 ```python
 from chilmesh import CHILmesh
-from chilmesh.bridge import MeshAdapterForMADMESHR
+from chilmesh.bridge import MeshAdapterForADMESH
 
 mesh = CHILmesh.read_from_fort14("domain.fort.14")
-adapter = MeshAdapterForMADMESHR(mesh)
+adapter = MeshAdapterForADMESH(mesh)
 
 # Much clearer - adapter handles the logic
 neighbors = adapter.get_element_neighbors(0)
@@ -349,8 +349,8 @@ def get_neighbors(mesh, elem_id):
 
 **New (v0.2.0+ with adapter):**
 ```python
-from chilmesh.bridge import MeshAdapterForMADMESHR
-adapter = MeshAdapterForMADMESHR(mesh)
+from chilmesh.bridge import MeshAdapterForADMESH
+adapter = MeshAdapterForADMESH(mesh)
 neighbors = adapter.get_element_neighbors(elem_id)
 ```
 
@@ -412,7 +412,7 @@ pip install --upgrade 'chilmesh>=1.0.0'
 **Fix:**
 ```bash
 pip install --upgrade 'chilmesh>=1.0.0'
-python -c "from chilmesh.bridge import MeshAdapterForMADMESHR; print('OK')"
+python -c "from chilmesh.bridge import MeshAdapterForADMESH; print('OK')"
 ```
 
 ### Error: "KeyError: 'Vert2Edge'"
@@ -452,7 +452,7 @@ edges = mesh.get_vertex_edges(v)
 
 ## API Reference by Project
 
-### MADMESHR: Mesh Adaptation Research
+### Legacy research adapter: Mesh Adaptation Research
 
 **Relevant CAI Methods:**
 ```python
@@ -509,7 +509,7 @@ Include:
 - Python version: `python --version`
 - Minimal reproducible example
 - Full error traceback
-- Downstream project name (MADMESHR/ADMESH/Valence)
+- Downstream project name (ADMESH/Valence)
 
 Report at: https://github.com/domattioli/CHILmesh/issues
 
@@ -517,7 +517,7 @@ Report at: https://github.com/domattioli/CHILmesh/issues
 
 ## Version Compatibility
 
-| CHILmesh | MADMESHR | ADMESH | Valence | Notes |
+| CHILmesh | an earlier internal prototype | ADMESH | Valence | Notes |
 |----------|----------|--------|----------------|-------|
 | 0.1.1    | ✅ Legacy | ✅ Legacy | ✅ Legacy | Old version, still works |
 | 0.2.0    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Current, use this |
@@ -552,9 +552,9 @@ None required. Migration completely optional.
 ## Example Integration Projects
 
 See `examples/` directory for complete working examples:
-- `madmeshr_refinement.py` - MADMESHR mesh adaptation workflow
+- `refinement.py` - legacy research mesh adaptation workflow
 - `admesh_quality.py` - ADMESH quality assessment
-- `admesh_domains_setup.py` - Valence domain initialization
+- `registry_setup.py` - Valence domain initialization
 
 ---
 

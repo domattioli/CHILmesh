@@ -53,7 +53,7 @@ fix and disclosure timeline with you.
 ## Out of scope
 
 - Findings that require a compromised maintainer machine or stolen credentials.
-- Denial of service against optional external services (e.g. HuggingFace Hub
+- Denial of service against optional external services (e.g. a model-hosting service Hub
   connectivity for domain registry lookups).
 - Dependency vulnerabilities in transitive (not direct) packages, unless we can
   confirm CHILmesh's usage amplifies the risk.
