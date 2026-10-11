@@ -171,7 +171,7 @@ def test_user_agent_not_urllib_default():
     assert not ua.startswith("Python-urllib")
 
 
-@pytest.mark.parametrize("bad", ["../x", "a/b", "", "..", ".", "a b", "a%2Fb"])
+@pytest.mark.parametrize("bad", ["../x", "a/b", "", "..", ".", "a b", "a%2Fb", "a.14\n"])
 def test_bad_names(bad):
     with patch([]) as m:
         for fn in (reg.fetch_hash, reg.fetch_mesh_bytes, reg.fetch_mesh):

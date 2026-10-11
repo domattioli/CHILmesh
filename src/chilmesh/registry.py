@@ -77,7 +77,7 @@ def _config() -> tuple[str, str]:
 
 
 def _check_name(name: str) -> str:
-    if not isinstance(name, str) or not _NAME_RE.match(name) or name in (".", ".."):
+    if not isinstance(name, str) or not _NAME_RE.fullmatch(name) or name in (".", ".."):
         raise RegistryNotFoundError("Invalid mesh name.")
     return name
 

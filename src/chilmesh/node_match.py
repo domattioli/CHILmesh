@@ -1,10 +1,8 @@
 """Cross-mesh node matching + nodal-field deltas (#239).
 
 A numpy-native, renumbering-tolerant node matcher between two meshes, plus a
-generic per-node field-delta helper. Ports the grid-hash nearest-neighbour
-matcher from domattioli/Valence (``packages/valence_domains/diff.py``
-``match_nodes``) into CHILmesh, using scipy's cKDTree for the spatial query
-(CHILmesh already depends on scipy) instead of a hand-rolled grid hash.
+generic per-node field-delta helper. Nearest-neighbour matching uses scipy's
+cKDTree for the spatial query (CHILmesh already depends on scipy).
 
 The matcher survives node renumbering because it matches on coordinates, not
 ids; ``nodal_field_delta`` then compares any per-node scalar (bathymetry,
@@ -56,8 +54,8 @@ def derive_tolerance(
     """Data-derived match radius = ``fraction`` * finer mesh's median NN spacing.
 
     A node that moved less than this is treated as the same node displaced, not
-    an add + remove. Mirrors Valence's ``derive_tolerance`` but derives spacing
-    from nearest-neighbour distances (no connectivity required).
+    an add + remove. Spacing is derived from nearest-neighbour distances (no
+    connectivity required).
     """
     xa, xb = _as_xy(points_a), _as_xy(points_b)
     spacings = [s for s in (_median_nn_distance(xa), _median_nn_distance(xb)) if s > 0]
