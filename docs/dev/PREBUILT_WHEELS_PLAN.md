@@ -1,67 +1,70 @@
 # Plan: Prebuilt C++ Binary Wheels on PyPI
 
 **Date:** 2026-07-14
-**Status:** Plan — not yet implemented
+**Status:** Plan, not yet implemented
 **Tracking:** [#229](https://github.com/domattioli/CHILmesh/issues/229) (PyPI ships pure-Python), [#225](https://github.com/domattioli/CHILmesh/issues/225) (macOS/Windows runner billing), [#234](https://github.com/domattioli/CHILmesh/issues/234)
 **Related:** [`docs/RUST_EVALUATION.md`](../RUST_EVALUATION.md) (why C++, not Rust, is the wheel to ship)
 
-## Goal — the consumer outcome
+## Summary
 
-Make the C++ speedup the **default** for a plain install, with **no toolchain on the
-user's side**:
+Publish `chilmesh-cpp` on PyPI as its own binary-wheel package (Model A). Add a `chilmesh[cpp]` extra that depends on it.
+A plain install then gets the C++ speedup by default, with no compiler on the user's machine.
+Runtime detection already works, so the remaining gap is packaging and distribution.
 
 ```bash
 pip install chilmesh[cpp]     # downloads a prebuilt binary; no compiler needed
 ```
 
-Today `pip install chilmesh` is pure-Python (the compiled extension must be built
-from source — a C++ compiler + CMake barrier that most users, especially on
-managed/HPC/Windows machines, will not clear). Prebuilding the wheel once per
-platform in CI and publishing it to PyPI removes that barrier entirely: `pip`
-downloads the already-compiled binary matching the user's OS + Python.
+## Goal
 
-**Non-goal:** Rust wheels. The Rust backend is **frozen** (see
-[`RUST_EVALUATION.md`](../RUST_EVALUATION.md)); it earns no perf niche over C++ and
-is not part of the distribution story.
+Today `pip install chilmesh` is pure-Python.
+The compiled extension must be built from source.
+That needs a C++ compiler and CMake, which many users cannot get, especially on managed, HPC, or Windows machines.
 
-## Current state (accurate as of this plan)
+CI prebuilds the wheel once per platform and publishes it to PyPI.
+Then `pip` downloads the compiled binary that matches the user's OS and Python.
+
+**Non-goal:** Rust wheels.
+The Rust backend is frozen (see [`RUST_EVALUATION.md`](../RUST_EVALUATION.md)).
+It has no performance niche over C++, so it is outside the distribution plan.
+
+## Current state
 
 | Piece | State |
 |---|---|
 | `chilmesh` (main pkg) | pure-Python, setuptools, `requires-python >=3.10`, PyPI = no compiled ext (#229) |
 | `chilmesh-cpp` (`src/chilmesh_cpp`) | separate package, scikit-build-core + pybind11, version `0.6.0.dev0`, **not on PyPI** |
-| `build-cpp-wheels.yml` | **build-only**: cibuildwheel manylinux **x86_64 only**, `cp310–312`, musllinux skipped, asserts `import chilmesh_cpp` — uploads **artifacts only, no publish**; manual dispatch |
+| `build-cpp-wheels.yml` | **build-only**: cibuildwheel manylinux **x86_64 only**, `cp310–312`, musllinux skipped, asserts `import chilmesh_cpp`; uploads **artifacts only, no publish**; manual dispatch |
 | `publish-pypi.yml` | publishes the **main** pkg on `release`; `twine` + `PYPI_API_TOKEN` secret |
-| Backend selection | `chilmesh.backend_info()` auto-detects `import chilmesh_cpp` and picks it — **no code change needed** once the wheel is installable |
+| Backend selection | `chilmesh.backend_info()` auto-detects `import chilmesh_cpp` and picks it; **no code change needed** once the wheel is installable |
 
-So the runtime detection already works; the entire gap is **packaging + distribution**.
+## Design decision: distribution model
 
-## Design decision — distribution model
+**Model A (recommended):** publish `chilmesh-cpp` as its own binary-wheel package, and add a `chilmesh[cpp]` extra that depends on it.
 
-**Model A (recommended): publish `chilmesh-cpp` as its own binary-wheel package; add a
-`chilmesh[cpp]` extra that depends on it.**
+- `chilmesh` stays pure-Python. It is the universal default and fallback, so the sdist and uncovered platforms still work.
+- `chilmesh[cpp]` pulls the prebuilt `chilmesh-cpp` binary. The backend is auto-selected at import.
+- Churn is minimal. The layout matches the existing two-package structure and the existing `import chilmesh_cpp` detection.
+- The build backend of `chilmesh` does not change.
 
-- `chilmesh` stays pure-Python (universal default + fallback; sdist/uncovered
-  platforms still work).
-- `chilmesh[cpp]` pulls the prebuilt `chilmesh-cpp` binary → auto-selected at import.
-- Minimal churn: matches the existing two-package layout and the existing
-  `import chilmesh_cpp` detection. No change to `chilmesh`'s build backend.
+**Model B (rejected for now):** bundle the C++ extension into the main `chilmesh` wheel.
 
-**Model B (rejected for now): bundle the C++ extension into the main `chilmesh` wheel.**
-Would turn `chilmesh` itself into a per-platform binary package (change its build
-backend to scikit-build-core, ship a pure-Python sdist fallback). More invasive, and
-it couples the pure-Python reference release cadence to the compiled build matrix.
-Revisit only if Model A's two-package version-sync proves painful.
+- `chilmesh` itself would become a per-platform binary package.
+- Its build backend would change to scikit-build-core, with a pure-Python sdist fallback.
+- It is more invasive.
+- It couples the release cadence of the pure-Python reference to the compiled build matrix.
+- Revisit it only if the two-package version sync of Model A proves painful.
 
 ## Phased plan
 
-### Phase 0 — decide + pin (design, no CI yet)
-- Ratify Model A.
-- Define the **version-compatibility contract** between `chilmesh` and `chilmesh-cpp`
-  (they version independently today: `chilmesh` 1.4.x vs `chilmesh-cpp` `0.6.0.dev0`). Pin a compatible range
-  in the extra, e.g. `chilmesh[cpp]` → `chilmesh-cpp>=0.6,<0.7`, and bump them together
-  on any extension-API change. Record the contract in `CONTRIBUTING.md`.
-- Graduate `chilmesh-cpp` off `.dev0` to a real release version (e.g. `0.6.0`).
+### Phase 0: decide and pin (design, no CI yet)
+
+1. Ratify Model A.
+2. Define the version-compatibility contract between `chilmesh` and `chilmesh-cpp`. They version independently today: `chilmesh` 1.4.x and `chilmesh-cpp` `0.6.0.dev0`.
+3. Pin a compatible range in the extra, for example `chilmesh[cpp]` → `chilmesh-cpp>=0.6,<0.7`.
+4. Bump both versions together on any extension-API change.
+5. Record the contract in `CONTRIBUTING.md`.
+6. Graduate `chilmesh-cpp` off `.dev0` to a real release version (for example `0.6.0`).
 
 **Phase 0 decisions (2026-10-02, operator-ratified for #256):**
 
@@ -71,81 +74,80 @@ Revisit only if Model A's two-package version-sync proves painful.
 - Platforms: Linux x86_64, macOS x86_64 + arm64, Windows AMD64; CPython 3.10 to 3.14 (cibuildwheel 3.3.0; 3.1.0 made cp314 a default build target).
 - The Intel macOS leg uses `macos-15-intel` because `macos-13` was retired by GitHub.
 
-### Phase 1 — expand the build matrix (`build-cpp-wheels.yml`)
-- Add **macOS** (`x86_64` + `arm64` / universal2) and **Windows** (`AMD64`) alongside
-  manylinux `x86_64`. Resolve the runner-billing question in **#225** first (macOS/
-  Windows are paid GitHub runners).
-- Keep `cp310 cp311 cp312`; add `cp313` once pybind11/deps support it. (pybind11 needs a
-  wheel **per Python version** — this matrix is inherently `platforms × versions`. This
-  is the one place Rust's maturin `abi3` single-wheel would be simpler — noted, but out
-  of scope since C++ wins on perf.)
-- Decide musllinux (currently skipped) and linux `aarch64` (emulated builds are slow) —
-  defer both unless a consumer needs them.
-- Strengthen `CIBW_TEST_COMMAND`: import **and** run one real `full_init` on a tiny mesh,
-  not just `hasattr(full_init)`.
+### Phase 1: expand the build matrix (`build-cpp-wheels.yml`)
 
-### Phase 2 — add a publish job
-- New job (or new workflow `publish-cpp-wheels.yml`) that, on a `chilmesh-cpp` **release
-  tag**, builds the full matrix + sdist and `twine upload`s to PyPI.
-- Auth: reuse the `PYPI_API_TOKEN` pattern from `publish-pypi.yml`, **or** migrate to
-  PyPI **Trusted Publishing** (OIDC, `id-token: write`) — preferred, no long-lived token.
-- Guard strictly on the tag/release event so nothing publishes from `development`.
+1. Resolve the runner-billing question in #225 first. macOS and Windows are paid GitHub runners.
+2. Add macOS (`x86_64` + `arm64` / universal2) and Windows (`AMD64`) next to manylinux `x86_64`.
+3. Keep `cp310 cp311 cp312`. Add `cp313` once pybind11 and the dependencies support it.
+4. Defer musllinux (currently skipped) and linux `aarch64` (emulated builds are slow) unless a consumer needs them.
+5. Strengthen `CIBW_TEST_COMMAND`: import the module and run one real `full_init` on a tiny mesh, not just `hasattr(full_init)`.
 
-### Phase 3 — wire the consumer-facing extra
-- In `chilmesh`'s `pyproject.toml`:
+pybind11 needs one wheel per Python version, so the matrix is `platforms × versions`.
+Rust's maturin `abi3` single wheel would be simpler here.
+That is out of scope, since C++ wins on performance.
+
+### Phase 2: add a publish job
+
+1. Add a new job, or a new workflow `publish-cpp-wheels.yml`.
+2. On a `chilmesh-cpp` release tag, build the full matrix and the sdist, then `twine upload` to PyPI.
+3. Authenticate with PyPI Trusted Publishing (OIDC, `id-token: write`). This is preferred because it needs no long-lived token.
+4. As an alternative, reuse the `PYPI_API_TOKEN` pattern from `publish-pypi.yml`.
+5. Guard strictly on the tag or release event, so nothing publishes from `development`.
+
+### Phase 3: wire the consumer-facing extra
+
+1. In the `pyproject.toml` of `chilmesh`, add the extra:
+
   ```toml
   [project.optional-dependencies]
   cpp = ["chilmesh-cpp>=0.6,<0.7"]
   ```
-- No backend code change — `backend_info()` already imports `chilmesh_cpp`.
-- README + docs: document `pip install chilmesh[cpp]`; update the "PyPI installs are
-  pure-Python" note (#229) to "plain install = pure-Python; `chilmesh[cpp]` = prebuilt
-  C++ where a wheel exists, pure-Python fallback elsewhere."
 
-### Phase 4 — validate + close out
-- Post-publish smoke: in a **clean** environment on each platform,
-  `pip install chilmesh[cpp]` then assert `backend_info()['selected'] == 'cpp'` and run
-  `tests/test_backend_equivalence.py` against the **installed wheel** (not `src/` — avoid
-  the namespace-stub shadowing from #163: run from outside the repo tree).
-- Update `docs/BENCHMARK.md` / README wheel-availability notes; close **#229**.
+2. Make no backend code change. `backend_info()` already imports `chilmesh_cpp`.
+3. Document `pip install chilmesh[cpp]` in the README and docs.
+4. Replace the "PyPI installs are pure-Python" note (#229) with this: plain install = pure-Python; `chilmesh[cpp]` = prebuilt C++ where a wheel exists, pure-Python fallback elsewhere.
 
-## Risks & considerations
-- **Runner cost (#225):** macOS/Windows runners are billed; Phase 1 is gated on that
-  decision. manylinux (Linux) is free on `ubuntu-latest` and can ship first.
-- **Matrix size:** pybind11 → one wheel per (platform × Python version). Manageable at
-  3–4 Python versions × 3 platforms, but it grows.
-- **macOS arm64:** cross-build/`universal2` needs care in cibuildwheel; test on Apple
-  silicon if possible.
-- **glibc target:** pick a manylinux baseline (e.g. `manylinux_2_28`) broad enough for
-  HPC/older distros.
-- **Version sync:** the `chilmesh` ↔ `chilmesh-cpp` compatibility pin must be maintained
-  on every extension-API change (Phase 0 contract).
-- **Test isolation:** always validate against the installed wheel, never the `src/`
-  source dir on `sys.path` (#163 false-positive `CPP_AVAILABLE`).
+### Phase 4: validate and close out
+
+1. In a clean environment on each platform, run `pip install chilmesh[cpp]`.
+2. Assert `backend_info()['selected'] == 'cpp'`.
+3. Run `tests/test_backend_equivalence.py` against the installed wheel, not `src/`.
+4. Run from outside the repo tree to avoid the namespace-stub shadowing from #163.
+5. Update the wheel-availability notes in `docs/BENCHMARK.md` and the README.
+6. Close #229.
+
+## Risks and considerations
+
+- **Runner cost (#225):** macOS and Windows runners are billed, so Phase 1 is gated on that decision. manylinux (Linux) is free on `ubuntu-latest` and can ship first.
+- **Matrix size:** pybind11 gives one wheel per (platform × Python version). That is manageable at 3–4 Python versions × 3 platforms, but it grows.
+- **macOS arm64:** cross-build or `universal2` needs care in cibuildwheel. Test on Apple silicon if possible.
+- **glibc target:** pick a manylinux baseline (for example `manylinux_2_28`) that is broad enough for HPC and older distros.
+- **Version sync:** maintain the `chilmesh` ↔ `chilmesh-cpp` compatibility pin on every extension-API change (Phase 0 contract).
+- **Test isolation:** always validate against the installed wheel, never the `src/` source dir on `sys.path` (#163 false-positive `CPP_AVAILABLE`).
 
 ## Sequencing
-1. Phase 0 (design/pin) — cheap, unblocks everything.
-2. Phase 1 Linux-only publish first (free runners) → real prebuilt wheel on PyPI for the
-   largest user base, fastest win.
-3. Resolve #225, then add macOS/Windows (Phase 1 remainder) + Phase 2 publish job.
-4. Phase 3 extra + docs, Phase 4 validation, close #229.
+
+1. Phase 0 (design and pin). It is cheap and unblocks everything.
+2. Phase 1, Linux-only publish first (free runners). This puts a real prebuilt wheel on PyPI for the largest user base, the fastest win.
+3. Resolve #225, then add macOS and Windows (Phase 1 remainder) and the Phase 2 publish job.
+4. Phase 3 extra and docs, then Phase 4 validation, then close #229.
 
 ---
 
-## Appendix — ready-to-apply snippets
+## Appendix: ready-to-apply snippets
 
-> **PROPOSED — not yet applied.** These are copy-paste-ready but intentionally
+> **PROPOSED: not yet applied.** These are copy-paste-ready but intentionally
 > *inert* (they are documentation, not live workflow files). Apply them only after
 > Model A is ratified (Phase 0) and the macOS/Windows runner-billing question
 > (#225) is resolved. The `macos-latest` / `windows-latest` matrix legs and the
 > publish job are the parts that incur runner cost or perform the **irreversible,
-> outward** act of uploading to PyPI — those need operator sign-off before they go
+> outward** act of uploading to PyPI; those need operator sign-off before they go
 > live. The Linux-only build leg is free and safe to enable first.
 
-### A1 — Phase 1: expand `build-cpp-wheels.yml` (matrix + real smoke test)
+### A1: Phase 1: expand `build-cpp-wheels.yml` (matrix + real smoke test)
 
 Replace the single `build-manylinux` job with a matrixed build. macOS/Windows legs
-are gated on #225 — drop them from `matrix.os` to ship Linux-only first.
+are gated on #225: drop them from `matrix.os` to ship Linux-only first.
 
 ```yaml
 jobs:
@@ -187,7 +189,7 @@ jobs:
           if-no-files-found: error
 ```
 
-### A2 — Phase 2: `publish-cpp-wheels.yml` (tag/release-gated publish)
+### A2: Phase 2: `publish-cpp-wheels.yml` (tag/release-gated publish)
 
 New workflow. Prefer **Trusted Publishing** (OIDC, no long-lived token); the
 token variant (mirroring `publish-pypi.yml`) is shown as a fallback comment. The
@@ -225,9 +227,9 @@ jobs:
         #   with: { password: ${{ secrets.PYPI_API_TOKEN }} }
 ```
 
-### A3 — Phase 3: consumer-facing extra + docs
+### A3: Phase 3: consumer-facing extra + docs
 
-`chilmesh/pyproject.toml` (add alongside the existing `dev` extra) — **land this in
+`chilmesh/pyproject.toml` (add alongside the existing `dev` extra), **land this in
 the same change that publishes `chilmesh-cpp`, never before**, or
 `pip install chilmesh[cpp]` resolves to a package that isn't on PyPI yet:
 
@@ -243,5 +245,5 @@ pip install chilmesh          # pure-Python, runs everywhere
 pip install chilmesh[cpp]     # + prebuilt C++ acceleration where a wheel exists
 ```
 
-No backend code changes — `chilmesh.backend_info()` already imports `chilmesh_cpp`
+No backend code changes: `chilmesh.backend_info()` already imports `chilmesh_cpp`
 and auto-selects it.

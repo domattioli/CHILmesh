@@ -1,18 +1,16 @@
-# CHILmesh Access Interface (CAI) Specification
+# The CHILmesh Access Interface (CAI) fixes the public API that downstream projects can depend on
 
-**Version:** 1.0  
-**Effective:** CHILmesh 0.2.0+  
-**Stability:** Guaranteed stable through v1.0  
+The CHILmesh Access Interface (CAI) is the stable, documented public API of CHILmesh. Downstream projects (an earlier internal prototype, ADMESH, Valence) can depend on it. Every method listed here keeps its signatures, return types, and semantics through v1.0. A breaking change needs a major version bump and a minimum 2-week advance notice.
 
----
-
-## Executive Summary
-
-**CAI** defines stable, documented public API that downstream projects (MADMESHR, ADMESH, Valence) can depend on. All methods listed here maintain signatures, return types, and semantics through v1.0. Breaking changes require major version bump + minimum 2-week advance notice.
+- **Version:** 1.0
+- **Effective:** CHILmesh 0.2.0+
+- **Stability:** stable through v1.0
 
 ---
 
-## 1. Core Mesh Properties
+## 1. Core mesh properties
+
+All of these attributes are read-only.
 
 ```python
 # All read-only public attributes
@@ -30,11 +28,16 @@ mesh.grid_name: str                     # Optional mesh name
 mesh.boundary_condition: dict | None    # Optional boundary conditions (fort.14 format)
 ```
 
-**Invariants:** `points.shape[0] == n_verts`; `connectivity_list.shape[0] == n_elems`; all vertex indices ∈ [0, n_verts); `type` matches actual composition
+These invariants hold:
+
+- `points.shape[0] == n_verts`
+- `connectivity_list.shape[0] == n_elems`
+- All vertex indices ∈ [0, n_verts).
+- `type` matches the actual composition.
 
 ---
 
-## 2. Topology Query Methods
+## 2. Topology query methods
 
 ```python
 def boundary_edges(self) -> np.ndarray:
@@ -83,7 +86,7 @@ def edge2elem(self, edge_ids: Optional[Union[int, List[int], np.ndarray]]) -> np
 
 ---
 
-## 3. Quality & Geometry Methods
+## 3. Quality and geometry methods
 
 ```python
 def signed_area(self, elem_ids=None) -> np.ndarray:
@@ -113,7 +116,9 @@ def elem_quality(self, elem_ids=None, quality_type: str = 'skew') -> Tuple[np.nd
 
 ---
 
-## 4. File I/O Methods
+## 4. File I/O methods
+
+Meshes come through Valence.
 
 ```python
 @staticmethod
@@ -137,7 +142,7 @@ def write_to_fort14(self, filename: str, grid_name: Optional[str] = None) -> boo
 
 ---
 
-## 5. Utility Methods
+## 5. Utility methods
 
 ```python
 def copy(self) -> "CHILmesh":
@@ -152,32 +157,35 @@ def admesh_metadata(self) -> Dict[str, Any]:
 
 ---
 
-## 6. Stability Guarantees
+## 6. Stability guarantees
 
-**Guaranteed stable (until v2.0):**
+### Guaranteed stable (until v2.0)
+
 - All method signatures listed above
-- Return types (numpy arrays, Sets, Dicts maintain structure)
+- Return types (numpy arrays, Sets, and Dicts keep their structure)
 - Behavior and semantics
 - Public attribute types
 
-**NOT guaranteed (implementation details):**
+### Not guaranteed (implementation details)
+
 - Internal adjacency data structures
 - Exact layer ordering in skeletonization
 - Memory layout and caching strategies
 - Specific error message text
 - Performance within order of magnitude
 
-**Breaking change policy:**
-- Before v1.0: breaking changes only in minor versions (0.3.0, 0.4.0)
-- From v1.0+: breaking changes only in major versions (2.0.0)
-- Notice: minimum 2 weeks via GitHub issue tagged `breaking-change`
-- Transition: old API deprecated for at least 2 releases before removal
+### Breaking change policy
+
+- Before v1.0: breaking changes only in minor versions (0.3.0, 0.4.0).
+- From v1.0+: breaking changes only in major versions (2.0.0).
+- Notice: minimum 2 weeks, given in a GitHub issue tagged `breaking-change`.
+- Transition: the old API stays deprecated for at least 2 releases before removal.
 
 ---
 
-## 7. Common Usage Patterns
+## 7. Common usage patterns
 
-### Reading and Inspecting
+### Reading and inspecting
 ```python
 from chilmesh import CHILmesh
 from pathlib import Path
@@ -188,7 +196,7 @@ print(f"Vertices: {mesh.n_verts}, Elements: {mesh.n_elems}")
 coords = mesh.points[0:10]
 ```
 
-### Finding Element Neighbors
+### Finding element neighbors
 ```python
 def get_element_neighbors(mesh, elem_id):
     neighbors = set()
@@ -200,7 +208,7 @@ def get_element_neighbors(mesh, elem_id):
     return neighbors
 ```
 
-### Finding Vertex Neighbors
+### Finding vertex neighbors
 ```python
 def get_vertex_neighbors(mesh, vert_id):
     neighbors = set()
@@ -210,7 +218,7 @@ def get_vertex_neighbors(mesh, vert_id):
     return neighbors
 ```
 
-### Quality Assessment
+### Quality assessment
 ```python
 quality, angles, stats = mesh.elem_quality()
 poor_elems = np.where(quality < 0.3)[0]
@@ -219,9 +227,9 @@ print(f"Mean quality: {stats['mean']:.3f}, Poor elements: {len(poor_elems)}")
 
 ---
 
-## 8. Error Handling
+## 8. Error handling
 
-| Exception | When Raised |
+| Exception | When raised |
 |-----------|------------|
 | `ValueError` | Invalid input bounds |
 | `FileNotFoundError` | File I/O fails |
@@ -230,13 +238,13 @@ print(f"Mean quality: {stats['mean']:.3f}, Poor elements: {len(poor_elems)}")
 
 ---
 
-## 9. Backward Compatibility (v0.1.x → 0.2.0+)
+## 9. Backward compatibility (v0.1.x → 0.2.0+)
 
-All existing code continues to work. New features are additive (new methods added, existing methods unchanged). **No code changes required**, but migration to new methods recommended for clarity.
+Existing code keeps working. New features are additive: new methods appear and existing methods stay unchanged. No code changes are required. Migrate to the new methods for clarity.
 
 ---
 
-## Summary Table
+## Summary table
 
 | Feature | Signature | Guarantee |
 |---------|-----------|-----------|
@@ -260,5 +268,4 @@ All existing code continues to work. New features are additive (new methods adde
 
 ---
 
-**Last Updated:** 2026-04-27  
-**CAI Version:** 1.0
+Last updated: 2026-04-27. CAI version: 1.0.

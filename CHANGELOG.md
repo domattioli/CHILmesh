@@ -4,11 +4,20 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.5.5] - 2026-10-11
 
-_Nothing yet._
+### Added
+- `chilmesh.registry`: a standard-library client for a token-gated mesh registry API. It provides `list_meshes`, `fetch_hash`, `fetch_mesh_bytes`, `fetch_mesh`, `download_mesh`, and five `Registry*Error` classes. Every download is verified against its SHA-256 hash. Configure with `VALENCE_TOKEN` and `VALENCE_API_URL`.
 
-## [1.5.0] — 2026-10-02
+### Changed
+- `chilmesh.registry` now defaults to the public Valence API (https://valence-api.iqh766c2.workers.dev). `VALENCE_API_URL` is an optional override; only `VALENCE_TOKEN` is required.
+- `chilmesh.registry` sends an explicit `User-Agent: chilmesh-registry/1` header. Cloudflare blocks the default `Python-urllib` agent with error 1010.
+- Bundled mesh data bytes changed: `Block_O.14`, `structuredMesh1.14`, `annulus_200pts.fort.14` and `donut_domain.fort.14` now carry header-only boundary fixes and a neutral title line (the file's own name, with no origin text), so their SHA-256 values match the bytes the Valence registry serves. Node and element data are unchanged.
+
+### Fixed
+- `read_from_fort14` now raises `ValueError` when encountering a node id of 0 or above the node count instead of silently wrapping to the last vertex ([#282](https://github.com/domattioli/CHILmesh/issues/282)).
+
+## [1.5.0] - 2026-10-02
 
 **Minor release.** No breaking changes. Existing calls behave as before.
 
@@ -35,75 +44,75 @@ _Nothing yet._
 - **README Status & Roadmap refreshed** for 1.5.0 ([#261](https://github.com/domattioli/CHILmesh/issues/261)).
 - **Releases that shipped without a changelog entry.** The lazy `import chilmesh` ([#255](https://github.com/domattioli/CHILmesh/issues/255)), the `summary()` readers for `.msh`, `fort.13`, `fort.15`, `.npy`, `.npz` and generic `fort.NNN` files ([#201](https://github.com/domattioli/CHILmesh/issues/201)), and `read_fort15(deep=True)` ([#249](https://github.com/domattioli/CHILmesh/issues/249)) shipped in 1.4.1.
 
-## [1.4.1] — 2026-07-14
+## [1.4.1] - 2026-07-14
 
 ### Fixed
-- **Rust backend `get_vertex_edges` was O(_n_) per call** — it rebuilt the full canonical edge list on every call (100–1800× slower than C++/Python, growing with mesh size). `build_adjacencies` now caches the vertex→edge index once (built from the same `to_edge2vert` source, so output is bit-identical); queries are O(1) (Block_O 954 μs → 0.32 μs). All 76 `test_backend_equivalence.py` cases still pass.
+- **Rust backend `get_vertex_edges` was O(_n_) per call**: it rebuilt the full canonical edge list on every call (100–1800× slower than C++/Python, growing with mesh size). `build_adjacencies` now caches the vertex→edge index once (built from the same `to_edge2vert` source, so output is bit-identical); queries are O(1) (Block_O 954 μs → 0.32 μs). All 76 `test_backend_equivalence.py` cases still pass.
 
 ### Changed
-- **Rust backend (`chilmesh_core`) is now FROZEN** — kept and output-equivalent to Python (layer-peel parity reached — `n_layers`, layer members, edge ordering — #163 closed), but **not developed further** and not the recommended accelerator. A measured cross-backend evaluation found it ~2–5× slower than C++ on full init with no performance niche over it; C++ remains the acceleration path. Supersedes the earlier "Rust skeletonization is incomplete" limitation. Status banner: `src/chilmesh_core/STATUS.md`.
+- **Rust backend (`chilmesh_core`) is now FROZEN**: kept and output-equivalent to Python (layer-peel parity reached; `n_layers`, layer members, edge ordering; #163 closed), but **not developed further** and not the recommended accelerator. A measured cross-backend evaluation found it ~2–5× slower than C++ on full init with no performance niche over it; C++ remains the acceleration path. Supersedes the earlier "Rust skeletonization is incomplete" limitation. Status banner: `src/chilmesh_core/STATUS.md`.
 
 ### Docs
-- **`docs/RUST_EVALUATION.md`** — first like-for-like measured comparison of the Python / C++ / Rust backends, the "could Rust replace Python as the default?" analysis, and the freeze recommendation.
-- **`docs/dev/PREBUILT_WHEELS_PLAN.md`** — phased plan to publish prebuilt C++ binary wheels to PyPI (`pip install chilmesh[cpp]`) so the C++ speedup needs no user toolchain (#229). README "Backends" now documents the selection order (C++ → Rust → Python) and opt-in reality (both compiled backends are source builds; neither is lighter).
+- **`docs/RUST_EVALUATION.md`**: first like-for-like measured comparison of the Python / C++ / Rust backends, the "could Rust replace Python as the default?" analysis, and the freeze recommendation.
+- **`docs/dev/PREBUILT_WHEELS_PLAN.md`**: phased plan to publish prebuilt C++ binary wheels to PyPI (`pip install chilmesh[cpp]`) so the C++ speedup needs no user toolchain (#229). README "Backends" now documents the selection order (C++ → Rust → Python) and opt-in reality (both compiled backends are source builds; neither is lighter).
 
-## [1.4.0] — 2026-07-11
+## [1.4.0] - 2026-07-11
 
 **Minor release.** The #187 lexicon ratification renames public API symbols with no compatibility aliases. These renames occur during the pre-adoption window with **no known downstream consumers**, so the release is versioned as a minor bump (1.3.0 → 1.4.0) rather than a major one; anyone pinning the old names should pin `chilmesh<1.4` and migrate at their convenience. Also consolidates the Valence→CHILmesh upstreaming (geometry + CFL gate) and fort.14 robustness fixes, and ships the reworked README hero animation.
 
-### Changed — #187 layer-lexicon ratification (API renames, no compat aliases)
+### Changed: #187 layer-lexicon ratification (API renames, no compat aliases)
 
-Operator-ratified naming (math frame: a stored ring is a discrete *level set*; the construction is *onion peeling*; the front-collision locus is the *medial axis* — distinct constructs, distinct names):
+Operator-ratified naming (math frame: a stored ring is a discrete *level set*; the construction is *onion peeling*; the front-collision locus is the *medial axis*; distinct constructs, distinct names):
 
 | Removed / renamed | Replacement |
 |---|---|
 | `MutableMesh.reskeletonize_local()` | `MutableMesh.repeel_local()` |
 | `MutableMesh.skeletonize_diff()` | `MutableMesh.layers_diff()` |
-| `CHILmesh._skeletonize` (alias) | removed — use `_peel()` / `peel_layers()` |
+| `CHILmesh._skeletonize` (alias) | removed; use `_peel()` / `peel_layers()` |
 | `CHILmesh._layerize()` (private) | `CHILmesh._peel()` |
 
-- **New public `CHILmesh.peel_layers()`** — canonical public entry for the onion-peel layer decomposition; returns `self.layers`.
+- **New public `CHILmesh.peel_layers()`**: canonical public entry for the onion-peel layer decomposition; returns `self.layers`.
 - `skeletonize` is now **reserved** for the future medial-axis operation (#223). It survives only as the compiled cpp/rust backend extension-API method name (cross-language rename deferred to a backend release cycle).
 - Decision record: `docs/LEXICON_PROPOSAL.md`; concept taxonomy: `docs/CONCEPTS.md`.
 
-### Fixed — `smooth_mesh` signature (#251)
+### Fixed: `smooth_mesh` signature (#251)
 
 - `smooth_mesh(method, acknowledge_change, *kwargs, sdf=None, size_fn=None)` → `smooth_mesh(method, acknowledge_change=False, *, sdf=None, size_fn=None, **kwargs)`. The single-star `*kwargs` collected extra **positional** args and forwarded them positionally, so keyword smoother options (`n_iter`, `omega`, `freeze_quad_nodes`) raised `TypeError`. Keyword options now pass through to `direct_smoother` / `angle_based_smoother`; the undocumented positional-splat call shape is removed.
 
 ### Added
 
 - **`chilmesh.geometry` module** (Valence→CHILmesh consolidation, #240 + #241): `haversine_m` (vectorized great-circle metres), `edge_lengths(p1, p2, crs="cartesian"|"spherical")` (CRS-aware, resolvable from fort.15 ICS), `convex_hull` (Andrew's monotone chain), `is_antimeridian_wrapping` / `split_antimeridian_bbox`, `bbox_iou` (antimeridian-aware), `hausdorff_distance` (discrete symmetric, cartesian or spherical). Pure numpy, package-level exports.
-- **CFL / Courant quality gate** (#238): `quality.courant_number(points, edges, depths, dt, crs)` — per-edge shallow-water Courant `C = sqrt(g·h)·dt/dx` — and `quality.cfl_gate(...)` (pass/fail vs `courant_max`, max/median/p95 stats, worst-offender list). Raw-array, numpy-only, mirrors `element_quality`.
-- **`read_fort14_raw(parse_boundaries=False)`** — table-only read mode; returns after the node/element table for identity consumers that keep their own boundary parser.
+- **CFL / Courant quality gate** (#238): `quality.courant_number(points, edges, depths, dt, crs)`; per-edge shallow-water Courant `C = sqrt(g·h)·dt/dx`; and `quality.cfl_gate(...)` (pass/fail vs `courant_max`, max/median/p95 stats, worst-offender list). Raw-array, numpy-only, mirrors `element_quality`.
+- **`read_fort14_raw(parse_boundaries=False)`**: table-only read mode; returns after the node/element table for identity consumers that keep their own boundary parser.
 
 ### Fixed
 
-- **fort.14 boundary parsing robustness** (#253): default-mode `read_fort14_raw` no longer raises on prose-annotated NOPE/NBOU headers (`24 = Number of nodes …`) — `_lead_int()` extracts the leading integer and ignores trailing prose — and over-declared boundary counts no longer hit `IndexError` (EOF guards). Rescues 10/41 Valence registry corpus meshes.
+- **fort.14 boundary parsing robustness** (#253): default-mode `read_fort14_raw` no longer raises on prose-annotated NOPE/NBOU headers (`24 = Number of nodes …`); `_lead_int()` extracts the leading integer and ignores trailing prose; and over-declared boundary counts no longer hit `IndexError` (EOF guards). Rescues 10/41 Valence registry corpus meshes.
 - **Float-formatted fort.14 tokens**: node/element/header ids and element vertex indices written as floats (`1.000000`) now parse via `int(float(v))`.
 
 ### Documentation
 
 - **README hero animation reworked** (#179, spec 002): the ADMESH-truss stage now plays back **actual per-iteration solver snapshots** (via an additive, default-off `distmesh2d_warmstart(snapshot_retriangulate=...)` capture hook) instead of interpolated positions, with equal-motion pacing so the relaxation reads at a uniform speed. The peel stage reveals `peel_layers()` layers one at a time from the boundary inward, recoloring each layer while the quality histogram converts to a matching stacked composition; the histogram carries color-keyed Median (green) and Mean (red) reference lines. Regenerated at 2.2 MB (256-colour re-encode).
 
-## [1.3.0] — 2026-07-04
+## [1.3.0] - 2026-07-04
 
 _Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). Tagged v1.3.0; published to PyPI. (This section was staged under [Unreleased] at release time and retitled retroactively.)_
 
 ### Added
 
-- **`fort14_io` — byte-faithful ADCIRC fort.14 reader/writer** (`read_fort14_raw` / `write_fort14_raw` → `Fort14Raw`). Preserves the node/element **id columns**, original file **winding** (no CCW reorientation), true per-element **arity** (mixed tri/quad, no padding), and the full NOPE/NBOU **boundary block including barrier/weir columns** (`back_nodes`/`heights`/`coeffs`) — the gaps in `CHILmesh.read_from_fort14` that break byte-parity for identity/registry consumers. Additive; the existing lossy `read_from_fort14` and the CCW-normalizing constructor are untouched. (Valence #214)
+- **`fort14_io`: byte-faithful ADCIRC fort.14 reader/writer** (`read_fort14_raw` / `write_fort14_raw` → `Fort14Raw`). Preserves the node/element **id columns**, original file **winding** (no CCW reorientation), true per-element **arity** (mixed tri/quad, no padding), and the full NOPE/NBOU **boundary block including barrier/weir columns** (`back_nodes`/`heights`/`coeffs`); the gaps in `CHILmesh.read_from_fort14` that break byte-parity for identity/registry consumers. Additive; the existing lossy `read_from_fort14` and the CCW-normalizing constructor are untouched. (Valence #214)
 
-- **`equiangle_skewness` element-quality metric** — `quality.element_quality(..., metric="equiangle_skewness")` (aliases `"equiangle skewness"`, `"eas"`). Returns the raw ANSYS/Fluent equiangle skewness Qeas ∈ [0, 1] (0 = ideal equilateral/rectangular, 1 = degenerate) — the exact complement of the existing `skew` metric (which is 1 = ideal). Lets downstream quality gates use the standard skewness convention without an inverting shim. Purely additive; the existing `skew`/`skewness`/`angular_skewness` metrics are unchanged. (Valence #217)
+- **`equiangle_skewness` element-quality metric**: `quality.element_quality(..., metric="equiangle_skewness")` (aliases `"equiangle skewness"`, `"eas"`). Returns the raw ANSYS/Fluent equiangle skewness Qeas ∈ [0, 1] (0 = ideal equilateral/rectangular, 1 = degenerate); the exact complement of the existing `skew` metric (which is 1 = ideal). Lets downstream quality gates use the standard skewness convention without an inverting shim. Purely additive; the existing `skew`/`skewness`/`angular_skewness` metrics are unchanged. (Valence #217)
 
 ### Changed
 
-- **`write_fort14` now always emits the trailing NOPE/NBOU boundary block.** A canonical ADCIRC fort.14 carries the boundary block even when the mesh has zero open/flow segments (written as `0`/`0`/`0`/`0`). Previously the block was omitted entirely when `boundary_segments` was empty. The module-level `write_fort14` now **returns `True`** on success (was `-> None`); `CHILmesh.write_to_fort14` continues to return `True`. Round-trips are unaffected — a `0/0/0/0` trailer reads back as an empty `boundary_segments` list. (Valence #216)
+- **`write_fort14` now always emits the trailing NOPE/NBOU boundary block.** A canonical ADCIRC fort.14 carries the boundary block even when the mesh has zero open/flow segments (written as `0`/`0`/`0`/`0`). Previously the block was omitted entirely when `boundary_segments` was empty. The module-level `write_fort14` now **returns `True`** on success (was `-> None`); `CHILmesh.write_to_fort14` continues to return `True`. Round-trips are unaffected; a `0/0/0/0` trailer reads back as an empty `boundary_segments` list. (Valence #216)
 
 ### Documentation
 
-- **`signed_area` numeric contract documented.** The method is a float64 shoelace computation: signed (positive = CCW winding), includes the ½ factor (true geometric area), and for a *near*-degenerate (nearly collinear) element returns a tiny non-zero float from floating-point rounding — **not** exactly `0.0`. Callers using an exact `== 0.0` zero-area test must account for this (prefer a tolerance). Documents the boundary that Valence's HARD connectivity gate depends on. (Valence #217)
+- **`signed_area` numeric contract documented.** The method is a float64 shoelace computation: signed (positive = CCW winding), includes the ½ factor (true geometric area), and for a *near*-degenerate (nearly collinear) element returns a tiny non-zero float from floating-point rounding; **not** exactly `0.0`. Callers using an exact `== 0.0` zero-area test must account for this (prefer a tolerance). Documents the boundary that Valence's HARD connectivity gate depends on. (Valence #217)
 
-### Documentation — SemVer record correction
+### Documentation: SemVer record correction
 
 - **`write_fort14` signature change (retroactive note).** The public
   `write_fort14` was changed from `write_fort14(path, points, elements, name)`
@@ -111,59 +120,59 @@ _Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). 
   object form; also writes ADCIRC NOPE/NBOU boundary sections) in
   [#184](https://github.com/domattioli/CHILmesh/issues/184) (2026-06-08). This was a
   **breaking public-API change that shipped in a patch/minor release rather than a
-  major bump** — a SemVer violation, recorded here for the record. Callers passing
+  major bump**: a SemVer violation, recorded here for the record. Callers passing
   raw arrays must construct a `CHILmesh(connectivity=..., points=..., grid_name=...)`
   first, then call `write_fort14(mesh, filename)`. The new `api-semver-gate` CI job
   (this branch) prevents a recurrence going forward.
 
-## [1.2.2] — 2026-06-15
+## [1.2.2] - 2026-06-15
 
 ### Changed
-- Renamed registry references `ADMESH-Domains` → `Valence` / `valence-domains` (registry was renamed). Public API names (`from_admesh_domain`, `admesh_metadata`) unchanged.
+- Renamed registry references `the former registry package` → `Valence` / `its former name` (registry was renamed). Public API names (`from_admesh_domain`, `admesh_metadata`) unchanged.
 - Removed internal design proposals from the published source tree.
 
-## [1.2.0] — 2026-05-24
+## [1.2.0] - 2026-05-24
 
 ### ✨ Added
 
-- **`MutableMesh.remove_vertex(vert_id)`** — remove an interior vertex and fan
+- **`MutableMesh.remove_vertex(vert_id)`**: remove an interior vertex and fan
   re-triangulate the resulting cavity. Rejects boundary vertices; deleted
   elements use the negative-vertex sentinel and the removed vertex is left
   orphaned (IDs stay stable). ([#158](https://github.com/domattioli/CHILmesh/issues/158))
-- **`MutableMesh.collapse_edge(edge_id) -> survivor`** — collapse an interior
+- **`MutableMesh.collapse_edge(edge_id) -> survivor`**: collapse an interior
   edge into its first endpoint, deleting the two incident triangles. Rejects
   boundary edges and any collapse that would invert an incident element (no
   mutation on rejection). ([#159](https://github.com/domattioli/CHILmesh/issues/159))
-- **`MutableMesh.move_boundary_node(vert_id, new_xy)`** — move a boundary vertex
+- **`MutableMesh.move_boundary_node(vert_id, new_xy)`**: move a boundary vertex
   to new coordinates while preserving topology. Rejects non-boundary vertices;
   aborts (no mutation) if any incident element would become non-positive-area.
   ([#160](https://github.com/domattioli/CHILmesh/issues/160))
-- **`MutableMesh.split_triangles(elem_ids)`** — atomic bulk triangle split;
+- **`MutableMesh.split_triangles(elem_ids)`**: atomic bulk triangle split;
   rebuilds adjacencies once at the end. Full rollback on any per-element
   precondition failure.
   ([#161](https://github.com/domattioli/CHILmesh/issues/161))
-- **`MutableMesh.smooth_topology(metric_threshold, max_passes) -> int`** —
+- **`MutableMesh.smooth_topology(metric_threshold, max_passes) -> int`**:
   iteratively swap interior edges that raise the minimum angle of adjacent
   triangles; monotone, terminates at fixpoint.
   ([#161](https://github.com/domattioli/CHILmesh/issues/161))
-- **`MutableMesh.reskeletonize_local(elem_ids, radius=2)`** — partial
+- **`MutableMesh.reskeletonize_local(elem_ids, radius=2)`**: partial
   re-skeletonization starting from the first affected layer minus `radius`.
   Falls back to full `_skeletonize()` when affected elements are in the
   outermost layers. Local update is O(start_layer × n_edges + tail_layers ×
   n_edges) vs O(n_layers × n_edges) for a full rebuild.
   ([#93](https://github.com/domattioli/CHILmesh/issues/93))
-- **`MutableMesh.skeletonize_diff(prev_layers) -> dict`** — run full
+- **`MutableMesh.skeletonize_diff(prev_layers) -> dict`**: run full
   re-skeletonization and return per-element layer changes (old/new kind+index).
   ([#93](https://github.com/domattioli/CHILmesh/issues/93))
-- **`MutableMesh._snapshot_layers()`** — capture layer arrays for diff.
+- **`MutableMesh._snapshot_layers()`**: capture layer arrays for diff.
   ([#93](https://github.com/domattioli/CHILmesh/issues/93))
-- **Incremental adjacency patch for `swap_edge`** — `_patch_swap_adjacency`
+- **Incremental adjacency patch for `swap_edge`**: `_patch_swap_adjacency`
   updates the 5 adjacency structures in O(1) instead of O(n\_elems) per swap.
   KD-trees rebuilt once at the end of `smooth_topology` instead of per swap.
   Benchmark: `smooth_topology` now completes in < 10s (was hours on large meshes).
   ([#162](https://github.com/domattioli/CHILmesh/issues/162))
 
-## [1.1.0] — 2026-05-23
+## [1.1.0] - 2026-05-23
 
 ### ✨ Added
 
@@ -174,7 +183,7 @@ _Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). 
   keep their exact shape in mixed meshes. ([#105](https://github.com/domattioli/CHILmesh/issues/105))
 - **Public mesh-query helpers**: `ccw_edges_around_vert`, `rebuild_adjacencies`,
   `invalidate_adjacencies`, `submesh`. ([#133](https://github.com/domattioli/CHILmesh/issues/133), [#143](https://github.com/domattioli/CHILmesh/issues/143), [#138](https://github.com/domattioli/CHILmesh/issues/138))
-- **`scripts/benchmark.py`** — reproducible cross-language (Python / C++ / MATLAB
+- **`scripts/benchmark.py`**: reproducible cross-language (Python / C++ / MATLAB
   via Octave) timing + `n_layers` parity harness behind the Performance and
   Validation tables.
 
@@ -189,7 +198,7 @@ _Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). 
 
 ### 🐛 Fixed
 
-- **C++ wheel was empty** — `chilmesh_cpp` shipped no compiled module because
+- **C++ wheel was empty**: `chilmesh_cpp` shipped no compiled module because
   CMake had no `install()` rule, so `import chilmesh_cpp` resolved to an empty
   namespace stub and `CPP_AVAILABLE` was a false positive. The extension now
   packages correctly and `CPP_AVAILABLE` asserts the real API. ([#163](https://github.com/domattioli/CHILmesh/issues/163))
@@ -203,10 +212,10 @@ _Unblocked Valence #214 + #216 + #217 (CHILmesh-adoption umbrella Valence#212). 
 - Python `_build_adjacencies` is the remaining perf bottleneck (~4× behind
   vectorized MATLAB); vectorization tracked separately.
 
-## [1.0.0] — 2026-05-22
+## [1.0.0] - 2026-05-22
 
 First **stable** release. CHILmesh is now the production backbone for ADMESH,
-MADMESHR, and Valence.
+an earlier internal prototype, and Valence.
 
 ### 🚀 Headline
 
@@ -215,7 +224,7 @@ MADMESHR, and Valence.
   WNAT_Hagen (52,774 verts · 98,365 elements): Python 3.21 s → **C++ 0.069 s**
   (46× speedup). Skeletonization in isolation: **C++ 0.033 s vs Python 2.20 s
   (66×)**. Both backends produce identical layer membership across all 4 built-in
-  fixtures and WNAT_Hagen — verified by `tests/test_backend_equivalence.py`
+  fixtures and WNAT_Hagen: verified by `tests/test_backend_equivalence.py`
   (36 parametrized cases across OE / IE / OV / IV / bEdgeIDs / signed_area /
   Vert2Edge).
 - **Rust quad-edge backend (`chilmesh_core`)** also ships; fast init 0.029 s
@@ -224,14 +233,14 @@ MADMESHR, and Valence.
 
 ### ✨ v1.0.0 Added
 
-- **`from chilmesh import Mesh`** — preferred class name (alias of `CHILmesh`).
-- **`chilmesh.backend_info()`** — returns `{available, selected, versions}` dict
+- **`from chilmesh import Mesh`**: preferred class name (alias of `CHILmesh`).
+- **`chilmesh.backend_info()`**: returns `{available, selected, versions}` dict
   describing the active backend trio. Honors `CHILMESH_BACKEND` env override.
-- **`MeshAdapterForMADMESHR`**, **`MeshAdapterForADMESH`**,
+- **the legacy research adapter**, **`MeshAdapterForADMESH`**,
   **`MeshAdapterForADMESHDomains`** re-exported at the package root.
-- **`tests/test_backend_equivalence.py`** — cross-backend correctness gate
+- **`tests/test_backend_equivalence.py`**: cross-backend correctness gate
   (36 cases).
-- **`scripts/benchmark_all_backends.py`** — multi-backend WNAT_Hagen benchmark
+- **`scripts/benchmark_all_backends.py`**: multi-backend WNAT_Hagen benchmark
   with JSON archival.
 
 ### 🔧 v1.0.0 Fixed
@@ -241,19 +250,19 @@ MADMESHR, and Valence.
   layers); `IE` is now computed against `OV` only (was: every OE vertex,
   overinclusive); `IV` is computed after `IE` so inner-ring vertices are
   included (was: missing IE vertices).
-- **C++ `bEdgeIDs`** — boundary edge IDs now exposed alongside OE/IE/OV/IV
+- **C++ `bEdgeIDs`**: boundary edge IDs now exposed alongside OE/IE/OV/IV
   in the per-layer dict (was: absent, breaking `paths_on_outer_vertices` and
   bridge adapters).
 
 ### 🔨 v1.0.0 Changed
 
-- **Version bump** 0.4.1 → 1.0.0. Public API now under semver — breaking
+- **Version bump** 0.4.1 → 1.0.0. Public API now under semver, breaking
   changes require a 2.x bump.
 - **Python requirement** `>=3.8` → `>=3.10` to match the active CI matrix and
   shed end-of-life interpreters.
 - **`Development Status`** classifier: Alpha → Production/Stable.
 - **`Programming Language :: C++`** classifier added.
-- **`[tool.setuptools] packages`** list now includes `chilmesh.backends` —
+- **`[tool.setuptools] packages`** list now includes `chilmesh.backends`:
   the backend wrappers ship in the installed wheel (previously dropped silently).
 - **MANIFEST.in** ships C++ source (`*.cpp`, `*.hpp`, `CMakeLists.txt`,
   `pyproject.toml`) and Rust source (`*.rs`, `Cargo.toml`, `Cargo.lock`)
@@ -261,11 +270,11 @@ MADMESHR, and Valence.
 
 ### 🗑 v1.0.0 Removed
 
-- **`src/@CHILmesh/`** — legacy MATLAB class definition (no longer maintained;
+- **`src/@CHILmesh/`**: legacy MATLAB class definition (no longer maintained;
   Python is the active successor).
-- **`specs/`** — 10 historical phase spec directories (preserved in git
+- **`specs/`**: 10 historical phase spec directories (preserved in git
   history; `.planning/` is the canonical location for ongoing planning).
-- **`scripts/cloud-setup.sh`** — pinned to a deprecated branch.
+- **`scripts/cloud-setup.sh`**: pinned to a deprecated branch.
 
 ### 📚 v1.0.0 Docs
 
@@ -276,12 +285,12 @@ MADMESHR, and Valence.
 ### ⏳ Deferred to v1.1.0
 
 - Pre-built binary wheels (`cibuildwheel` for manylinux / macOS / Windows).
-- `Mesh.read_from_fort14(..., backend='cpp')` keyword — for now backends are
+- `Mesh.read_from_fort14(..., backend='cpp')` keyword: for now backends are
   used via direct `chilmesh_cpp` / `chilmesh_core` imports.
 
 ### ✨ Public API additions since v0.4.1
 
-- **`CHILmesh.submesh(elem_ids) -> CHILmesh`** (#138) — a public sub-mesh
+- **`CHILmesh.submesh(elem_ids) -> CHILmesh`** (#138): a public sub-mesh
   factory that returns a new `CHILmesh` restricted to the given element
   indices, with vertex indices remapped to a compact `[0, k)` numbering
   and `points` sliced to the referenced vertices only. Forwards
@@ -290,7 +299,7 @@ MADMESHR, and Valence.
   Padded-triangle rows are preserved bit-for-bit through the remap.
   Boundary detection runs fresh on the sub-mesh topology, so edges that
   were interior in the parent become boundary edges in the sub-mesh
-  when their partner falls outside the selection — the contract
+  when their partner falls outside the selection, the contract
   downstream `two_part_smoother`-style routines need to apply
   region-differential smoothing without calling private APIs. Covered
   by `tests/test_submesh.py` (91 tests across all five built-in
@@ -304,13 +313,13 @@ MADMESHR, and Valence.
   `compute_layers=False, compute_adjacencies=True` builds the full
   adjacency dict bundle (`Vert2Edge`, `Vert2Elem`, `Edge2Vert`,
   `Edge2Elem`, `Elem2Edge`, `EdgeMap`) without paying the layer-sweep
-  cost — needed by downstream consumers (quadmesh-matlab, MADMESHR) that
+  cost: needed by downstream consumers (quadmesh-matlab, an earlier internal prototype) that
   previously had to call the private `_build_adjacencies()` method to
   exercise the public adjacency API. Layer-sweep still implicitly forces
   adjacency construction (it depends on it), so
   `compute_layers=True, compute_adjacencies=False` is silently coerced
   to `True/True`. Covered by `tests/test_compute_adjacencies_flag.py`.
-- **`CHILmesh.ccw_edges_around_vert(vert_id) -> list[int]`** (#133) — the
+- **`CHILmesh.ccw_edges_around_vert(vert_id) -> list[int]`** (#133): the
   edges incident to a vertex returned in counterclockwise order
   (`atan2(dy, dx)` from the vertex to its other endpoint, ascending; ties
   broken by edge id for determinism). Lets downstream packages delete the
@@ -342,7 +351,7 @@ MADMESHR, and Valence.
 
 - `tests/conftest.py`: documented xdist safety of session-scope
   `_MESH_CACHE` (#122). pytest-xdist's process-per-worker model gives
-  each worker an independent dict — no shared-state race. Empirically
+  each worker an independent dict, no shared-state race. Empirically
   confirmed via `pytest -n auto -k "not block_o"` (649 passed,
   deterministic across runs).
 - **Coverage gate** (#122, TEST-AUDIT F13). Push-to-`main` /
@@ -353,29 +362,29 @@ MADMESHR, and Valence.
   83 % on the fast subset. TESTING.md "CI & Release Gates" documents
   the policy.
 
-## [0.4.1] — 2026-05-18 (Consumer-Readiness + Zenodo Patch)
+## [0.4.1] - 2026-05-18 (Consumer-Readiness + Zenodo Patch)
 
 Patch release primarily for Zenodo first-archive and consumer-facing
 documentation polish. No public-API breaking changes.
 
 ### ✨ Added
 
-- `plot_quality_histogram(bins, cmap, auto_norm, ax)` — 1-D companion to
+- `plot_quality_histogram(bins, cmap, auto_norm, ax)`: 1-D companion to
   `plot_quality`. Bars are coloured by colormap midpoint so the
   distribution reads as a horizontal slice of the 2-D quality plot.
   `auto_norm=True` compresses the colormap to the observed quality range
   for narrow distributions; default `False` keeps the [0, 1] norm to
   match `plot_quality` colours pixel-for-pixel.
-- `scripts/generate_wnat_showcase.py` — stacks `plot_quality` over
+- `scripts/generate_wnat_showcase.py`: stacks `plot_quality` over
   `plot_quality_histogram` to regenerate `output/wnat_hagen_showcase.png`.
   Falls back to the largest bundled fixture if WNAT_Hagen.14 is not on
   disk; honours `--mesh` / `WNAT_HAGEN_PATH` env var.
-- `CITATION.cff` at repo root — GitHub renders the "Cite this repository"
+- `CITATION.cff` at repo root, GitHub renders the "Cite this repository"
   button. Includes author / affiliation / version metadata; identifiers
   block ready to fill once Zenodo mints DOIs.
-- `conda/meta.yaml` + `conda/README.md` — conda-forge recipe scaffold +
+- `conda/meta.yaml` + `conda/README.md`: conda-forge recipe scaffold +
   submission workflow.
-- `.planning/ZENODO-SETUP.md` — five-minute one-time auth runbook plus
+- `.planning/ZENODO-SETUP.md`: five-minute one-time auth runbook plus
   per-release maintenance steps.
 - README Gallery: figures wrapped in centred `<p>` blocks with
   `<sub><em>` caption styling, figure numbers, and tighter
@@ -384,7 +393,7 @@ documentation polish. No public-API breaking changes.
   the top; full breakdown stays in `docs/BENCHMARK.md`.
 - README badges: Zenodo DOI badge added (repo id 693749657).
 - README "Citation": 1-2 line context paragraph above the bibtex block
-  explaining the QuADMESH+ → CHILmesh lineage.
+  explaining the QuADMESH+ → CHILmesh development path.
 - README Installation: snippets for pip, [uv](https://docs.astral.sh/uv/),
   conda-forge (pending acceptance), and from-source.
 
@@ -412,7 +421,7 @@ documentation polish. No public-API breaking changes.
 ### 📚 Documentation
 
 - "Mesh generation" wording removed from README tagline and
-  `docs/API.md` overview — replaced with "processing, smoothing, and
+  `docs/API.md` overview: replaced with "processing, smoothing, and
   analysis" to accurately scope the library. Advancing-front-related
   API references retain the "generation" terminology where it applies.
 - Smoothing section rewritten to enumerate the three algorithms
@@ -427,12 +436,12 @@ documentation polish. No public-API breaking changes.
 - Issues #101, #105 normalised onto the `priority:*` convention
   (was `low-priority` / `high-priority` legacy form).
 - Issues #94, #93, #110, #111 received explicit `priority:*` labels.
-- Issue #92 (Phase 5 spatial indexing) closed as completed — shipped
+- Issue #92 (Phase 5 spatial indexing) closed as completed, shipped
   in v0.4.0.
 
 ---
 
-## [0.4.0] — 2026-05-18 (Spatial Indexing + Layer-Paths + CLI + Audit Polish)
+## [0.4.0] - 2026-05-18 (Spatial Indexing + Layer-Paths + CLI + Audit Polish)
 
 Builds on the v0.3.0 vectorisation foundation with first-class spatial
 queries, a shell-friendly CLI, an outer-vertex traversal port, and
@@ -442,43 +451,43 @@ broad consumer-readiness polish.
 
 #### Command-line interface (issue #117)
 - `chilmesh` CLI with four subcommands wrapping the existing public API
-  - `chilmesh info <mesh>` — vert/elem/edge/layer counts + skew-quality stats
-  - `chilmesh convert <in> <out>` — format conversion (.14/.fort.14/.2dm in, .14/.fort.14 out)
-  - `chilmesh smooth <in> -o <out> --method {angle-based,fem,laplacian} --iter N` — in-place relaxation; reports median/min quality delta
-  - `chilmesh plot <in> -o <fig> [--layers|--quality]` — static PNG/PDF/SVG by suffix
+  - `chilmesh info <mesh>`: vert/elem/edge/layer counts + skew-quality stats
+  - `chilmesh convert <in> <out>`: format conversion (.14/.fort.14/.2dm in, .14/.fort.14 out)
+  - `chilmesh smooth <in> -o <out> --method {angle-based,fem,laplacian} --iter N`: in-place relaxation; reports median/min quality delta
+  - `chilmesh plot <in> -o <fig> [--layers|--quality]`: static PNG/PDF/SVG by suffix
 - New module `src/chilmesh/cli.py` + `__main__.py` so `python -m chilmesh ...` also works
 - `[project.scripts] chilmesh = "chilmesh.cli:main"` entry point in `pyproject.toml`
 - `tests/test_cli.py` exercises each subcommand via `subprocess.run([sys.executable, "-m", "chilmesh", ...])` on the bundled `annulus` fixture
-- No new runtime dependencies — stdlib `argparse` over the existing public API
+- No new runtime dependencies; stdlib `argparse` over the existing public API
 
 #### Layer-paths feature (PR #118)
-- `chilmesh.layer_paths` module — port of MATLAB `PathsOnOV` vertex-ordering heuristic for outer-vertex traversal
-- `tests/test_layer_paths.py` — regression suite (207 LOC)
+- `chilmesh.layer_paths` module: port of MATLAB `PathsOnOV` vertex-ordering heuristic for outer-vertex traversal
+- `tests/test_layer_paths.py`: regression suite (207 LOC)
 - Scoped subgraph build: `O(L*m)` → `O(m)` per layer
 - Demo visualization: `output/annulus_layer1_paths.png`
 
-#### Phase 5 — Spatial query API (PR #115)
-- `find_element(point)` — locate the element containing a 2D point via centroid kd-tree narrowing + barycentric check; returns `-1` outside the mesh
-- `find_elements_in_radius(point, radius)` — ball-tree query returning all elements within `radius` of a point
-- `nearest_vertices(point, k)` — k-nearest-neighbour vertex lookup
-- `insert_vertex(point)` — vertex insertion primitive (initial mesh-mutation surface; see #94 for the full Phase 5 mutation API)
+#### Phase 5: Spatial query API (PR #115)
+- `find_element(point)`: locate the element containing a 2D point via centroid kd-tree narrowing + barycentric check; returns `-1` outside the mesh
+- `find_elements_in_radius(point, radius)`: ball-tree query returning all elements within `radius` of a point
+- `nearest_vertices(point, k)`: k-nearest-neighbour vertex lookup
+- `insert_vertex(point)`: vertex insertion primitive (initial mesh-mutation surface; see #94 for the full Phase 5 mutation API)
 - Lazy-built kd-tree on element centroids; bounded `< 0.5s` build on WNAT_Hagen, `< 50μs` per `find_element` call
 
 #### Examples directory
-- `examples/01_quickstart.py`, `02_fort14_roundtrip.py`, `03_smoothing.py`, `04_spatial_queries.py` — runnable consumer scripts against the bundled fixtures; no external mesh files required
+- `examples/01_quickstart.py`, `02_fort14_roundtrip.py`, `03_smoothing.py`, `04_spatial_queries.py`: runnable consumer scripts against the bundled fixtures; no external mesh files required
 
 ### 🧪 Testing
 
 #### Test-suite holistic audit (#110, see `.planning/TEST-AUDIT.md`)
-- **F1** — `tests/test_angle_based_smoother.py` (21 tests) covering the Zhou-Shimada angle-based smoother; `CHILmesh.py` line coverage 73% → 89%
-- **F2** — `tests/test_plot_utils.py` (104 tests) promoted from smoke tests to real assertions (artist counts, axis limits, titles, colormaps)
-- **F4** — `TRI_FIXTURE_NAMES` centralised in `conftest.py`
-- **F5** — `tests/test_copy.py` (65 tests) locks the deep-copy contract the fixture cache relies on
-- **F6** — assertion messages added to numerical comparisons in 5 test files
-- **F7** — `tests/test_2dm_reader.py` migrated to pytest's `tmp_path` fixture
-- **F9** — `slow` marker registered in `pyproject.toml`
-- **F11** — README test badge points at the correct workflow
-- **F14** — defensive-branch `# pragma: no cover` annotations on unreachable guards in `_skeletonize` and `pinch_points`; behavioural lock-in tests added for `pinch_points` semantics
+- **F1**: `tests/test_angle_based_smoother.py` (21 tests) covering the Zhou-Shimada angle-based smoother; `CHILmesh.py` line coverage 73% → 89%
+- **F2**: `tests/test_plot_utils.py` (104 tests) promoted from smoke tests to real assertions (artist counts, axis limits, titles, colormaps)
+- **F4**: `TRI_FIXTURE_NAMES` centralised in `conftest.py`
+- **F5**: `tests/test_copy.py` (65 tests) locks the deep-copy contract the fixture cache relies on
+- **F6**: assertion messages added to numerical comparisons in 5 test files
+- **F7**: `tests/test_2dm_reader.py` migrated to pytest's `tmp_path` fixture
+- **F9**: `slow` marker registered in `pyproject.toml`
+- **F11**: README test badge points at the correct workflow
+- **F14**: defensive-branch `# pragma: no cover` annotations on unreachable guards in `_skeletonize` and `pinch_points`; behavioural lock-in tests added for `pinch_points` semantics
 - Total: 582 tests passing / 13 skipped (was 439 / 9 in the original audit); `CHILmesh.py` line coverage 89% → 90%, total 88% → 89%
 
 ### 📚 Documentation
@@ -503,19 +512,19 @@ broad consumer-readiness polish.
 
 ---
 
-## [0.3.0] — 2026-05-10 (Vectorization & Benchmark Validation)
+## [0.3.0] - 2026-05-10 (Vectorization & Benchmark Validation)
 
 Tag `v0.3.0` (commit `cf8f399`, PR #91) shipped the core-operation vectorisation pass and the reproducible benchmark harness.
 
 ### ✨ Added
 
 #### New public methods
-- `boundary_node_indices()` — returns unique boundary vertex indices (PR #86, closes README API gap)
-- `plot_boundary()` — convenience plot for boundary edges only
-- `plot_interior_edges()` — convenience plot for interior edges only
+- `boundary_node_indices()`: returns unique boundary vertex indices (PR #86, closes README API gap)
+- `plot_boundary()`: convenience plot for boundary edges only
+- `plot_interior_edges()`: convenience plot for interior edges only
 
 #### Reproducible benchmarking
-- `scripts/benchmark_wnat_hagen.py` — measures init/quality/query performance on WNAT_Hagen reference mesh; markdown report + optional `--json` for CI archival (issue #55)
+- `scripts/benchmark_wnat_hagen.py`: measures init/quality/query performance on WNAT_Hagen reference mesh; markdown report + optional `--json` for CI archival (issue #55)
 
 ### ⚡ Performance
 
@@ -531,7 +540,7 @@ Tag `v0.3.0` (commit `cf8f399`, PR #91) shipped the core-operation vectorisation
 - Quality analysis: 6.6 s → **0.07 s** (94× faster than v0.2.0)
 - `Vert2Edge` lookup: 0.7 μs → **0.17 μs** per call
 
-These numbers carry forward unchanged into v0.4.0 — Phase 5 spatial queries and layer-paths are additive features, not workflow-level speedups.
+These numbers carry forward unchanged into v0.4.0; Phase 5 spatial queries and layer-paths are additive features, not workflow-level speedups.
 
 ### 🛠 Packaging
 
@@ -541,7 +550,7 @@ These numbers carry forward unchanged into v0.4.0 — Phase 5 spatial queries an
 
 - `docs/BENCHMARK.md`: appended May 2026 re-run section preserving original April 2026 baselines
 
-## [0.2.1] — TBD (Bug Fix Release)
+## [0.2.1] - TBD (Bug Fix Release)
 
 ### 🐛 Fixed
 
@@ -562,7 +571,7 @@ These numbers carry forward unchanged into v0.4.0 — Phase 5 spatial queries an
 - `test_skeletonization_matlab_parity_external.py`: External Valence catalog parity validation
 - `test_smoothing.py`: Comprehensive FEM smoother tests for triangles, quads, and mixed-element meshes
 
-## [0.2.0] — 2026-04-27 (Modernization Release)
+## [0.2.0] - 2026-04-27 (Modernization Release)
 
 This is a major performance and architecture modernization release. **All existing APIs remain backward compatible** (no code changes needed) while internal data structures are redesigned for 150x+ performance improvement on large meshes.
 
@@ -596,7 +605,7 @@ See [DOWNSTREAM_MIGRATION_GUIDE.md](docs/DOWNSTREAM_MIGRATION_GUIDE.md) for migr
 
 #### Phase 3: Bridge Infrastructure (Domain-Specific APIs)
 
-**MeshAdapterForMADMESHR** (mesh adaptation research)
+**the legacy research adapter** (mesh adaptation research)
 - `get_element_neighbors(elem_id)` - Find adjacent elements
 - `get_element_quality_neighborhood(elem_id)` - Local quality assessment  
 - `get_refinement_region(elem_ids)` - Identify refinement zones
@@ -609,7 +618,7 @@ See [DOWNSTREAM_MIGRATION_GUIDE.md](docs/DOWNSTREAM_MIGRATION_GUIDE.md) for migr
 - `get_domain_boundaries()` - Extract boundary vertices
 - `get_mesh_connectivity_info()` - Connectivity statistics
 
-#### Phase 4: Advancing-Front API (MADMESHR)
+#### Phase 4: Advancing-Front API (an earlier internal prototype)
 
 ```python
 # Get boundary for element placement
@@ -628,7 +637,7 @@ pinches = mesh.pinch_points(width_threshold=0.3)
 #### Documentation & Release Infrastructure
 - `API.md` - Complete 25+ method reference with stability guarantees
 - `BENCHMARK.md` - Performance comparison v0.1.1 vs v0.2.0 with real-world impact
-- `DOWNSTREAM_MIGRATION_GUIDE.md` - Integration guide for MADMESHR, ADMESH, Valence
+- `DOWNSTREAM_MIGRATION_GUIDE.md` - Integration guide for an earlier internal prototype, ADMESH, Valence
 - `docs/CHILmesh_Access_Interface.md` - Stability guarantees and usage patterns
 - Stable API contract (CAI) through v1.0
 
@@ -651,7 +660,7 @@ pinches = mesh.pinch_points(width_threshold=0.3)
 | Vertex neighbors | ~3,500μs | **0.7μs** | **5,000x** |
 | Element neighbors | ~4,500μs | **4.4μs** | **1,022x** |
 
-#### Real-World Impact (MADMESHR)
+#### Real-World Impact (an earlier internal prototype)
 - Mesh adaptation workflow: 3,800s → 14.7s (**259x speedup**)
 - Interactive development instead of hourly batch operations
 
@@ -700,7 +709,7 @@ No changes from v0.1.1:
 
 [0.2.0]: https://github.com/domattioli/CHILmesh/releases/tag/v0.2.0
 
-## [0.1.1] — 2026-04-07
+## [0.1.1] - 2026-04-07
 
 This is an honest hotfix release. 0.1.0 shipped with three latent
 data-corruption bugs and a README quickstart that no pip user could run.
@@ -741,15 +750,15 @@ fixtures inside the wheel so the quickstart actually works.
 
 ### Changed
 - Bumped `requires-python` to `>=3.10` (drops EOL 3.8/3.9).
-- `requirements.txt` reduced from a 60-line MADMESHR ML environment
+- `requirements.txt` reduced from a 60-line an earlier internal prototype ML environment
   freeze to the three actual runtime dependencies (`numpy`, `scipy`,
   `matplotlib`).
 - README quickstart rewritten around `chilmesh.examples.annulus()`;
   the broken `/kaggle/working/...` path is gone, the install command
   now includes `-r`, the stale "pip installation" TODO is removed,
-  an alpha-status banner has been added, and the MADMESHR "Future Work"
+  an alpha-status banner has been added, and the an earlier internal prototype "Future Work"
   badge has been reframed as a "See also / Downstream projects"
-  section that explicitly notes CHILmesh is agnostic to MADMESHR.
+  section that explicitly notes CHILmesh is agnostic to an earlier internal prototype.
 
 ### Investigated, no fix needed
 - **B2** (`signed_area` quad shoelace): the audit reported the formula
@@ -765,4 +774,4 @@ fixtures inside the wheel so the quickstart actually works.
 - Coverage gating, Hypothesis property tests, mixed-element smoothing
   characterisation, Windows + Python 3.13 CI matrix.
 
-[0.1.1]: https://github.com/domattioli/CHILmesh/releases/tag/v0.1.1
+[0.1.1]: https://github.com/domattioli/CHILmesh/compare/v0.1.0...v0.3.0

@@ -1,0 +1,26 @@
+{
+  "contract_version": 1,
+  "name_pattern": "^[A-Za-z0-9._-]+$",
+  "hash": {"shape": {"sha256": "64 lowercase hex"}},
+  "authentication": {"header": "Authorization", "scheme": "Bearer"},
+  "client_requirements": {"user_agent": "must be non-default; Cloudflare edge returns 403/error 1010 for Python-urllib"},
+  "endpoints": ["GET /meshes", "GET /meshes/{name}/hash", "GET /meshes/{name}"],
+  "error_body": "{\"error\": <code>} JSON; clients treat 429 and 503 as retryable/transient, 401/404/405 as hard errors",
+  "errors": {
+    "401": {"error": "unauthorized"},
+    "404": {"error": "not_found"},
+    "405": {"error": "method_not_allowed"},
+    "429": [{"error": "rate_limited"}, {"error": "daily_limit"}],
+    "503": {"error": "unavailable"}
+  },
+  "transcript": [
+    {"request": {"method": "GET", "path": "/meshes", "authorization": "Bearer valid"}, "response": {"status": 200, "headers": {"content-type": "application/json"}, "body": ["WNAT.14"]}},
+    {"request": {"method": "GET", "path": "/meshes/WNAT.14/hash", "authorization": "Bearer valid"}, "response": {"status": 200, "headers": {"content-type": "application/json"}, "body": {"sha256": "21b3b73e5cd1cba72fc5573cc44450935cd83b0a491d50afb39c26e8ce1c2b22"}}},
+    {"request": {"method": "GET", "path": "/meshes/WNAT.14", "authorization": "Bearer valid"}, "response": {"status": 200, "headers": {"content-type": "application/octet-stream", "etag": "\"21b3b73e5cd1cba72fc5573cc44450935cd83b0a491d50afb39c26e8ce1c2b22\""}, "body_text": "mesh bytes"}},
+    {"request": {"method": "GET", "path": "/meshes", "authorization": null}, "response": {"status": 401, "body": {"error": "unauthorized"}}},
+    {"request": {"method": "GET", "path": "/meshes/missing.14/hash", "authorization": "Bearer valid"}, "response": {"status": 404, "body": {"error": "not_found"}}},
+    {"request": {"method": "POST", "path": "/meshes", "authorization": "Bearer valid"}, "response": {"status": 405, "headers": {"allow": "GET"}, "body": {"error": "method_not_allowed"}}},
+    {"setup": "rate_limit_exhausted", "request": {"method": "GET", "path": "/meshes", "authorization": "Bearer valid"}, "response": {"status": 429, "headers_present": ["retry-after"], "body": {"error": "rate_limited"}}},
+    {"setup": "upstream_500", "request": {"method": "GET", "path": "/meshes/WNAT.14", "authorization": "Bearer valid"}, "response": {"status": 503, "body": {"error": "unavailable"}}}
+  ]
+}

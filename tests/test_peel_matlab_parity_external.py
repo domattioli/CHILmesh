@@ -79,6 +79,10 @@ MATLAB_REFERENCE_LAYER_COUNTS: dict[str, Optional[int | Tuple[int, int]]] = {
 }
 
 
+# Quarantined in the Valence registry (Valence#358).
+_QUARANTINED = {"baranja-hill@default-v1", "delaware-bay@refined-100-20000-v1"}
+
+
 def _admesh_domains_available() -> bool:
     try:
         import admesh_domains  # noqa: F401
@@ -121,7 +125,14 @@ _SKIP_REASON_EXTERNAL = (
 )
 @pytest.mark.parametrize(
     "catalog_id,expected",
-    [(cid, exp) for cid, exp in MATLAB_REFERENCE_LAYER_COUNTS.items() if exp is not None],
+    [
+        pytest.param(
+            cid, exp,
+            marks=pytest.mark.skip(reason="quarantined, Valence#358")
+            if cid in _QUARANTINED else (),
+        )
+        for cid, exp in MATLAB_REFERENCE_LAYER_COUNTS.items() if exp is not None
+    ],
 )
 def test_layer_count_matches_matlab_reference(catalog_id: str, expected) -> None:
     """For each Valence mesh with a known MATLAB ``n_layers``,

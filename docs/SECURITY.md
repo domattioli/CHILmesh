@@ -18,7 +18,7 @@ at risk.
 
 Report privately through one of:
 
-1. **GitHub private vulnerability reporting** (preferred) — on this repository,
+1. **GitHub private vulnerability reporting** (preferred), on this repository,
    go to the **Security** tab → **Report a vulnerability**. This opens a private
    advisory visible only to you and the maintainers.
 2. Contact the maintainer directly via the GitHub profile
