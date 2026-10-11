@@ -1,16 +1,33 @@
 # CHILmesh Public API Reference
 
+CHILmesh processes, smooths, and analyzes 2D triangular, quadrilateral, and mixed-element meshes. Every public method in this file is stable through v1.0. This file lists the methods first, then the capabilities, the mesh registry, and the command-line tools.
+
 **Version:** 0.2.0  
 **Stability:** Stable (guaranteed through v1.0)  
-**Access Interface:** CHILmesh Access Interface (CAI)
+**Access Interface:** CHILmesh Access Interface (CAI)  
+**Last Updated:** 2026-04-27  
+**API Version:** 1.0
+
+## Contents
+
+1. [Import](#import)
+2. [Core class: CHILmesh](#core-class-chilmesh)
+3. [Bridge adapters](#bridge-adapters-v020)
+4. [Module functions](#module-functions)
+5. [Stability, deprecations, and errors](#stability-guarantees)
+6. [Performance notes](#performance-notes)
+7. [Examples](#examples)
+8. [Capabilities overview](#capabilities-overview)
+9. [Fetching meshes](#fetching-meshes-with-chilmeshregistry)
+10. [Command-line tools and examples](#examples-and-cli-moved-from-the-readme)
+11. [Roadmap](#roadmap-items-moved-from-the-readme)
 
 ---
 
-## Overview
+## Import
 
-CHILmesh provides an API for 2D mesh processing, smoothing, and analysis on triangular, quadrilateral, and mixed-element meshes (with limited mutation primitives such as `insert_vertex` and the advancing-front addition path). All public methods below are guaranteed stable through v1.0.
+The API covers mutation only through limited primitives, such as `insert_vertex` and the advancing-front addition path.
 
-**Import:**
 ```python
 from chilmesh import CHILmesh, write_fort14
 from chilmesh.bridge import (
@@ -21,16 +38,19 @@ from chilmesh.bridge import (
 
 ---
 
-## Core Class: CHILmesh
+## Core class: CHILmesh
 
-### File I/O Methods
+### File I/O methods
 
 #### `read_from_fort14(path: Path, compute_layers: bool = True) -> CHILmesh`
 **Stability:** Stable | **Complexity:** O(n log n)
 
-Load mesh from ADCIRC `.fort.14` file.
+Loads a mesh from an ADCIRC `.fort.14` file.
 
-**Parameters:** `path`; fort.14 file path; `compute_layers`; if False, skip skeletonization (fast bulk loading)
+**Parameters:**
+
+- `path`: the fort.14 file path.
+- `compute_layers`: if False, the method skips skeletonization (fast bulk loading).
 
 ```python
 mesh = CHILmesh.read_from_fort14(Path("mesh.fort.14"))
@@ -42,14 +62,14 @@ mesh_fast = CHILmesh.read_from_fort14(Path("mesh.fort.14"), compute_layers=False
 #### `read_from_2dm(path: Path, compute_layers: bool = True) -> CHILmesh`
 **Stability:** Stable | **Complexity:** O(n log n)
 
-Load mesh from SMS `.2dm` file.
+Loads a mesh from an SMS `.2dm` file.
 
 ---
 
 #### `write_to_fort14(filename: str, grid_name: str = "CHILmesh Grid") -> bool`
 **Stability:** Stable | **Complexity:** O(n)
 
-Write mesh to ADCIRC `.fort.14` format. Returns True on success.
+Writes the mesh in ADCIRC `.fort.14` format. Returns True on success.
 
 ```python
 success = mesh.write_to_fort14("output.fort.14", grid_name="My Mesh")
@@ -60,23 +80,23 @@ success = mesh.write_to_fort14("output.fort.14", grid_name="My Mesh")
 #### `from_admesh_domain(record, compute_layers: bool = True) -> CHILmesh`
 **Stability:** Stable | **Complexity:** O(n log n)
 
-Load mesh from Valence catalog record (duck-typed).
+Loads a mesh from a Valence catalog record (duck-typed).
 
 ---
 
 #### `copy() -> CHILmesh`
 **Stability:** Stable | **Complexity:** O(n)
 
-Deep copy of mesh.
+Returns a deep copy of the mesh.
 
 ---
 
-### Adjacency & Topology Methods
+### Adjacency and topology methods
 
 #### `boundary_edges() -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(n_edges)
 
-Returns array of boundary edge IDs.
+Returns an array of boundary edge IDs.
 
 ```python
 boundary = mesh.boundary_edges()
@@ -89,21 +109,21 @@ for edge_id in boundary:
 #### `get_vertex_edges(vert_id: int) -> Set[int]`
 **Stability:** Stable | **Complexity:** O(k) where k = vertex degree
 
-Returns set of edge IDs incident to vertex. Raises `ValueError` if vert_id out of range.
+Returns the set of edge IDs incident to a vertex. Raises `ValueError` if vert_id is out of range.
 
 ---
 
 #### `get_vertex_elements(vert_id: int) -> Set[int]`
 **Stability:** Stable | **Complexity:** O(k)
 
-Returns set of element IDs incident to vertex. Raises `ValueError` if vert_id out of range.
+Returns the set of element IDs incident to a vertex. Raises `ValueError` if vert_id is out of range.
 
 ---
 
 #### `edge2vert(edge_ids: Optional[int|List[int]]) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(m)
 
-Returns array of shape (m, 2) with vertex indices for specified edges (None = all).
+Returns an array of shape (m, 2) with the vertex indices of the specified edges (None = all).
 
 ```python
 v1, v2 = mesh.edge2vert(5)[0]
@@ -115,23 +135,23 @@ all_verts = mesh.edge2vert()
 #### `elem2edge(elem_ids: Optional[int|List[int]]) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(m)
 
-Returns array of shape (m, 3|4) with edge IDs for specified elements (None = all).
+Returns an array of shape (m, 3|4) with the edge IDs of the specified elements (None = all).
 
 ---
 
 #### `edge2elem(edge_ids: Optional[int|List[int]]) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(m)
 
-Returns array of shape (m, 2); col 0: first adjacent element; col 1: second element (-1 for boundary).
+Returns an array of shape (m, 2). Column 0 holds the first adjacent element. Column 1 holds the second element (-1 for a boundary edge).
 
 ---
 
-### Analysis & Quality Methods
+### Analysis and quality methods
 
 #### `elem_quality(elem_ids: Optional[List[int]] = None, quality_type: str = 'skew') -> Tuple[np.ndarray, np.ndarray, Dict]`
 **Stability:** Stable | **Complexity:** O(m)
 
-Returns `(quality_array, angles_array, stats_dict)` where stats_dict has keys 'mean', 'min', 'max', 'std'.
+Returns `(quality_array, angles_array, stats_dict)`. The stats_dict has the keys 'mean', 'min', 'max', 'std'.
 
 ```python
 quality, angles, stats = mesh.elem_quality()
@@ -143,14 +163,14 @@ poor_count = np.sum(quality < 0.3)
 #### `interior_angles(elem_ids: Optional[List[int]] = None) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(m)
 
-Returns array of angles in degrees for specified elements.
+Returns an array of angles in degrees for the specified elements.
 
 ---
 
 #### `get_layer(layer_idx: int) -> Dict[str, np.ndarray]`
 **Stability:** Stable | **Complexity:** O(1)
 
-Returns dict with keys 'OE' (outer edges), 'IE' (inner edges), 'OV' (outer verts), 'IV' (inner verts) for layer at `layer_idx`.
+Returns a dict for the layer at `layer_idx`, with the keys 'OE' (outer edges), 'IE' (inner edges), 'OV' (outer verts), and 'IV' (inner verts).
 
 ```python
 layer = mesh.get_layer(0)
@@ -162,18 +182,21 @@ outer_verts = layer['OV']
 #### `admesh_metadata() -> Dict[str, Any]`
 **Stability:** Stable | **Complexity:** O(1)
 
-Returns dict: `node_count`, `element_count`, `element_type` ('tri'/'quad'/'mixed'), `bounding_box` ((x_min, y_min), (x_max, y_max)), `element_types`.
+Returns a dict with `node_count`, `element_count`, `element_type` ('tri'/'quad'/'mixed'), `bounding_box` ((x_min, y_min), (x_max, y_max)), and `element_types`.
 
 ---
 
-### Mesh Modification Methods (v0.2.0+)
+### Mesh modification methods (v0.2.0+)
 
 #### `add_advancing_front_element(vertices: List[int], elem_type: str = "tri") -> int`
 **Stability:** Stable | **Complexity:** O(k)
 
-Add element during advancing-front generation. Returns new element ID.
+Adds an element during advancing-front generation. Returns the new element ID.
 
-**Parameters:** `vertices`; [v0, v1, v2] for tri or [v0, v1, v2, v3] for quad; `elem_type`, 'tri' or 'quad'
+**Parameters:**
+
+- `vertices`: [v0, v1, v2] for a tri or [v0, v1, v2, v3] for a quad.
+- `elem_type`: 'tri' or 'quad'.
 
 ```python
 new_elem_id = mesh.add_advancing_front_element([v1, v2, v3], 'tri')
@@ -184,7 +207,7 @@ new_elem_id = mesh.add_advancing_front_element([v1, v2, v3], 'tri')
 #### `remove_boundary_loop(edge_ids: List[int]) -> None`
 **Stability:** Stable | **Complexity:** O(m + n)
 
-Remove boundary loop elements (residual closure).
+Removes the elements of a boundary loop (residual closure).
 
 ```python
 boundary = mesh.advancing_front_boundary_edges()[:4]
@@ -196,7 +219,7 @@ mesh.remove_boundary_loop(boundary)
 #### `advancing_front_boundary_edges() -> List[int]`
 **Stability:** Stable | **Complexity:** O(n_edges)
 
-Returns sorted list of boundary edge IDs for advancing-front placement.
+Returns a sorted list of boundary edge IDs for advancing-front placement.
 
 ```python
 boundary = mesh.advancing_front_boundary_edges()
@@ -209,9 +232,11 @@ for edge_id in boundary[:10]:
 #### `pinch_points(width_threshold: float = 0.5) -> List[int]`
 **Stability:** Stable | **Complexity:** O(n_verts * k)
 
-Returns sorted list of bottleneck vertex IDs for domain splitting.
+Returns a sorted list of bottleneck vertex IDs for domain splitting.
 
-**Parameters:** `width_threshold`, ratio threshold [0, 1]
+**Parameters:**
+
+- `width_threshold`: the ratio threshold, in [0, 1].
 
 ```python
 pinches = mesh.pinch_points(width_threshold=0.3)
@@ -219,30 +244,30 @@ pinches = mesh.pinch_points(width_threshold=0.3)
 
 ---
 
-### Smoothing & Optimization Methods
+### Smoothing and optimization methods
 
 #### `smooth_mesh(method: str, acknowledge_change: bool = False, **kwargs) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(iterations * n)
 
-Smooth mesh using 'direct' or 'angle_based' method. `acknowledge_change` must be True.
+Smooths the mesh with the 'direct' or 'angle_based' method. `acknowledge_change` must be True.
 
 ---
 
 #### `angle_based_smoother(angle_limit: float = 30.0) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(n)
 
-Enforce minimum interior angle. Returns new point coordinates.
+Enforces a minimum interior angle. Returns the new point coordinates.
 
 ---
 
 #### `direct_smoother(kinf: float = 1e12) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(n)
 
-Direct smoothing method. Returns new point coordinates.
+Applies the direct smoothing method. Returns the new point coordinates.
 
 ---
 
-### Properties & Data Access
+### Properties and data access
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -257,7 +282,7 @@ Direct smoothing method. Returns new point coordinates.
 
 ---
 
-## Bridge Adapters (v0.2.0+)
+## Bridge adapters (v0.2.0+)
 
 ### Legacy research adapter
 
@@ -283,32 +308,32 @@ Direct smoothing method. Returns new point coordinates.
 
 ---
 
-## Module Functions
+## Module functions
 
 #### `write_fort14(filename: Path, points: np.ndarray, elements: np.ndarray, grid_name: str) -> bool`
-Write mesh data directly to fort.14 (without CHILmesh instance). O(n).
+
+Writes mesh data directly to fort.14, without a CHILmesh instance. Complexity: O(n).
 
 ---
 
-## Deprecations (v0.1.1 → v0.2.0)
+## Stability guarantees
 
-- ❌ `adjacencies['Vert2Edge']` as list-of-lists → ✅ `get_vertex_edges(v)`
-- ❌ `adjacencies['Vert2Elem']` as list-of-lists → ✅ `get_vertex_elements(v)`
+Every method in this document is stable through v1.0:
 
----
+- Signatures do not change.
+- Return types do not change.
+- Behavior does not change.
 
-## Stability Guarantees
+**Breaking changes policy:** a major version bump, a 2-week deprecation notice, and migration guidance.
 
-✅ All methods in this document stable through v1.0  
-✅ Signatures will not change  
-✅ Return types will not change  
-✅ Behavior will not change  
+### Deprecations (v0.1.1 to v0.2.0)
 
-**Breaking changes policy:** major version bump + 2-week deprecation notice + migration guidance
+| Deprecated | Use instead |
+|------------|-------------|
+| `adjacencies['Vert2Edge']` as list-of-lists | `get_vertex_edges(v)` |
+| `adjacencies['Vert2Elem']` as list-of-lists | `get_vertex_elements(v)` |
 
----
-
-## Error Handling
+### Error handling
 
 | Exception | Cause | Resolution |
 |-----------|-------|-----------|
@@ -319,21 +344,20 @@ Write mesh data directly to fort.14 (without CHILmesh instance). O(n).
 
 ---
 
-## Performance Notes
+## Performance notes
 
-**O(1):** `get_vertex_edges(v)`, `get_vertex_elements(v)`, individual `elem2edge()`/`edge2vert()` calls
+Phase 1-3 optimizations eliminated the O(n²) behaviors of v0.1.1. Current complexity classes:
 
-**O(n):** `boundary_edges()`, `elem_quality()`, `pinch_points()`
-
-**O(n log n):** `read_from_fort14()`, `read_from_2dm()`
-
-✅ Phase 1-3 optimizations eliminated O(n²) behaviors from v0.1.1
+- **O(1):** `get_vertex_edges(v)`, `get_vertex_elements(v)`, individual `elem2edge()` and `edge2vert()` calls.
+- **O(n):** `boundary_edges()`, `elem_quality()`, `pinch_points()`.
+- **O(n log n):** `read_from_fort14()`, `read_from_2dm()`.
 
 ---
 
 ## Examples
 
-### Load and Analyze
+### Load and analyze
+
 ```python
 from chilmesh import CHILmesh
 from pathlib import Path
@@ -345,7 +369,8 @@ quality, angles, stats = mesh.elem_quality()
 print(f"Mean quality: {stats['mean']:.3f}")
 ```
 
-### Use Bridge Adapter
+### Use a bridge adapter
+
 ```python
 from chilmesh.bridge import MeshAdapterForADMESH
 
@@ -354,7 +379,8 @@ report = adapter.get_mesh_quality_report()
 print(f"Poor elements: {report['poor_count']}")
 ```
 
-### Advancing-Front Generation
+### Advancing-front generation
+
 ```python
 boundary = mesh.advancing_front_boundary_edges()
 while len(boundary) > 4:
@@ -363,12 +389,6 @@ while len(boundary) > 4:
     new_elem = mesh.add_advancing_front_element([v1, v2, v3], 'tri')
     boundary = mesh.advancing_front_boundary_edges()
 ```
-
----
-
-**Last Updated:** 2026-04-27  
-**API Version:** 1.0
-
 
 ---
 
@@ -387,9 +407,16 @@ while len(boundary) > 4:
 | Interop | ADMESH domain adapter and truss warm start; renumbering-tolerant node matching between two meshes with nodal-field deltas | `Mesh.from_admesh_domain`, `chilmesh.admesh_warmstart`, `match_nodes` |
 | Plotting | Mesh, per-element quality map, matched-colormap quality histogram, layer paths; experimental GPU rendering through the `[gpu]` extra | `Mesh.plot`, `Mesh.plot_quality`, `Mesh.plot_quality_histogram`, `chilplotting.render_image(backend="gpu")` |
 
+---
+
 ## Fetching meshes with `chilmesh.registry`
 
-The `chilmesh.registry` module ships in 1.5.5 (unreleased). It uses only the standard library and checks each download against the SHA-256 hash that the service reports. The client talks to https://valence-api.iqh766c2.workers.dev by default; set `VALENCE_API_URL` only to override it. The service allows 500 downloads per token per day.
+Meshes come through Valence. The `chilmesh.registry` module ships in 1.5.5 (unreleased).
+
+1. The module uses only the standard library.
+2. It checks each download against the SHA-256 hash that the service reports.
+3. The client talks to https://valence-api.iqh766c2.workers.dev by default. Set `VALENCE_API_URL` only to override it.
+4. The service allows 500 downloads per token per day.
 
 ```python
 from chilmesh import registry
@@ -406,7 +433,11 @@ Errors derive from `registry.RegistryError`:
 - `RegistryUnavailableError`: no API URL is set, the network failed, or the API is rate limited or down.
 - `RegistryIntegrityError`: the downloaded bytes do not match the reported hash, or a response is malformed.
 
+---
+
 ## Examples and CLI (moved from the README)
+
+Run the example scripts:
 
 ```bash
 python ../examples/01_quickstart.py        # load, stats, plot
@@ -414,6 +445,8 @@ python ../examples/02_fort14_roundtrip.py  # fort.14 read and write
 python ../examples/03_smoothing.py         # angle-based smoother
 python ../examples/04_spatial_queries.py   # find_element, radius search, k-nearest
 ```
+
+Use the command-line tool:
 
 ```bash
 chilmesh info mesh.fort.14                                   # vertex, element and layer counts
@@ -423,9 +456,11 @@ chilmesh smooth mesh.fort.14 -o out.fort.14 --method fem     # smooth and write
 chilmesh plot mesh.fort.14 -o mesh.png --quality             # render
 ```
 
-`python -m chilmesh` is equivalent; every subcommand takes `--help`.
+`python -m chilmesh` is equivalent, and every subcommand takes `--help`.
 
 Four fixtures ship with the package: `chilmesh.examples.{annulus, donut, block_o, structured}()`. `chilmesh.CHILmesh` remains an alias of `Mesh`.
+
+---
 
 ## Roadmap items moved from the README
 
