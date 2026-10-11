@@ -2,53 +2,57 @@
 
 **Version:** 2.1 (adds v1.4.0 #187 breaking-rename migration)
 **CHILmesh Version:** 1.4.0+
-**Target Projects:** MADMESHR, ADMESH, Valence
+**Target Projects:** an earlier internal prototype, ADMESH, Valence
 
 ---
 
 ## Overview
 
-Guide for developers of downstream research projects integrating with CHILmesh v1.0.0+.
+Most existing code keeps working with CHILmesh v1.0.0+; `CHILmesh` is still importable. The one exception is v1.4.0, which renamed several symbols without aliases. Read [v1.4.0 Breaking Renames](#-v140-breaking-renames-187) before you widen a `chilmesh` pin.
 
-**TL;DR:** Existing code keeps working — `CHILmesh` is still importable. The new `Mesh` alias is the v1.0.0 preferred idiom; adopt it when convenient. Optional C++ backend gives 46× speedup with bit-identical output.
+- The `Mesh` alias is the preferred idiom since v1.0.0. Adopt it when convenient.
+- The optional C++ backend gives a 46× speedup with bit-identical output.
+- This guide is for developers of downstream research projects.
 
-> **⚠️ v1.4.0 is the exception to "existing code keeps working."** The #187 lexicon
-> ratification renamed several public/semi-public symbols **without compatibility
-> aliases**. If you allow `chilmesh` 1.4.x and still call an old name, you break on
-> upgrade (silently at install, `AttributeError` at runtime). See
-> [v1.4.0 Breaking Renames](#-v140-breaking-renames-187) below **before** widening a pin.
+> **⚠️ v1.4.0 breaks existing code.** The #187 lexicon
+> ratification renamed several public and semi-public symbols **without compatibility
+> aliases**. If your pin allows `chilmesh` 1.4.x and you still call an old name, the code breaks
+> on upgrade (silently at install, `AttributeError` at runtime).
 
 ---
 
 ## ⚠️ v1.4.0 Breaking Renames (#187)
 
-v1.4.0 (2026-07-11) ratified the CHILmesh skeleton/layer lexicon (#187) and renamed
-the symbols below **with no compatibility aliases**. Because it shipped as a *minor*
-bump, a `chilmesh>=1.x,<2` / caret pin does **not** exclude it — a consumer that (a)
-admits 1.4.x and (b) still calls a renamed symbol breaks on upgrade. The
-`smooth_mesh` signature change (#251) shipped in the same release and is a second
-break vector.
+v1.4.0 (2026-07-11) ratified the CHILmesh skeleton/layer lexicon (#187). It renamed the symbols below with no compatibility aliases.
+
+The release was a *minor* bump, so a `chilmesh>=1.x,<2` or caret pin does not exclude it. A consumer breaks on upgrade when both conditions hold:
+
+1. The pin admits 1.4.x.
+2. The code still calls a renamed symbol.
+
+The `smooth_mesh` signature change (#251) shipped in the same release. It is a second break vector.
 
 ### Rename map
 
 | Old (≤1.3.x) | New (≥1.4.0) | Surface |
 |---|---|---|
 | `mesh.skeletonize()` | `mesh.peel_layers()` | `CHILmesh` public |
-| `mesh._skeletonize()` | `mesh._peel()` | `CHILmesh` private (**removed** — no alias) |
+| `mesh._skeletonize()` | `mesh._peel()` | `CHILmesh` private (**removed**; no alias) |
 | `_layerize` | `_peel` | `CHILmesh` private |
 | `MutableMesh.reskeletonize_local(...)` | `MutableMesh.repeel_local(...)` | `chilmesh.mutations` |
 | `MutableMesh.skeletonize_diff(...)` | `MutableMesh.layers_diff(...)` | `chilmesh.mutations` |
 | `smooth_mesh(...)` positional splat | `smooth_mesh(method, acknowledge_change=False, *, sdf=None, size_fn=None, **kwargs)` | `CHILmesh` public (#251) |
 
-`skeletonize` / `_skeletonize` / `_layerize` / `reskeletonize_local` / `skeletonize_diff`
-no longer exist under their old names — grep your tree for those five groups.
+The names `skeletonize`, `_skeletonize`, `_layerize`, `reskeletonize_local`, and `skeletonize_diff` no longer exist. Grep your tree for those five groups.
 
 ### `smooth_mesh` signature (#251)
 
-`method` and `acknowledge_change` remain positional-or-keyword, so an existing
-`mesh.smooth_mesh("laplacian", True)` or `mesh.smooth_mesh(method=..., acknowledge_change=True)`
-call is safe. What changed: `sdf` and `size_fn` are now **keyword-only** — any call
-that passed them positionally must switch to keyword form.
+`method` and `acknowledge_change` stay positional-or-keyword. These calls are safe:
+
+- `mesh.smooth_mesh("laplacian", True)`
+- `mesh.smooth_mesh(method=..., acknowledge_change=True)`
+
+`sdf` and `size_fn` are now **keyword-only**. Switch any call that passed them positionally to keyword form.
 
 ```python
 # Before (≤1.3.x) — positional sdf breaks on 1.4.x
@@ -68,7 +72,7 @@ layers = mesh.skeletonize()
 layers = mesh.peel_layers()
 ```
 
-To stay compatible across the boundary (support both `chilmesh<1.4` and `>=1.4`):
+To support both `chilmesh<1.4` and `>=1.4`, use this shim:
 
 ```python
 peel = getattr(mesh, "peel_layers", None) or mesh.skeletonize
@@ -77,9 +81,22 @@ layers = peel()
 
 ### Pin guidance
 
-- Pinning `chilmesh<1.4` → safe for now; plan the rename before widening the pin.
-- Admitting 1.4.x **and** calling any renamed symbol → **broken on upgrade**; rename
-  the call sites (or add the `getattr` shim above) first.
+- Pin `chilmesh<1.4`: safe for now. Plan the rename before you widen the pin.
+- Admit 1.4.x and call any renamed symbol: broken on upgrade. Rename the call sites first, or add the `getattr` shim above.
+
+---
+
+## Do I Need to Change My Code?
+
+**No**, apart from the v1.4.0 renames above. Existing code works without modification.
+
+You should update eventually. The benefits are better performance (1.5x improvement), clearer code (bridge adapters), better error messages, and new quality metrics.
+
+Migration timeline:
+
+- **Now**: Update and test. The update should be a drop-in replacement.
+- **Later**: Optionally adopt bridge adapters for clearer code.
+- **No rush**: Confirm that your tests pass first.
 
 ---
 
@@ -92,7 +109,7 @@ from chilmesh import Mesh
 mesh = Mesh.read_from_fort14("ocean.14")
 ```
 
-`Mesh` is an alias for `CHILmesh` — no behaviour change. Existing imports continue to work through the v1.x series. A `DeprecationWarning` lands in v1.1.0; removal no earlier than v2.0.0.
+`Mesh` is an alias for `CHILmesh` with no behaviour change. Existing imports work through the v1.x series. A `DeprecationWarning` lands in v1.1.0. Removal comes no earlier than v2.0.0.
 
 ### Optional C++ Acceleration
 Heavy initialization workloads can opt into the bundled C++ half-edge extension. Output is bit-identical to Python (verified by `tests/test_backend_equivalence.py`, 36 parametrized cases).
@@ -108,46 +125,36 @@ On WNAT_Hagen (52,774 verts · 98,365 elements):
 - C++ full init: **0.069 s** (46×)
 - C++ skeletonization in isolation: **0.033 s vs Python 2.20 s (66×)**
 
-Force a specific backend with the `CHILMESH_BACKEND` environment variable
-(`python`, `cpp`, or `rust`). When unset, the fastest available is auto-selected
-(order: C++ → Rust → Python).
+Set the `CHILMESH_BACKEND` environment variable to force a backend (`python`, `cpp`, or `rust`). When it is unset, CHILmesh selects the fastest available backend (order: C++ → Rust → Python).
 
-> **Downstream note:** the **Rust** backend is **frozen** — kept and
-> output-equivalent, but not developed further; build **C++** for acceleration.
+> **Downstream note:** the **Rust** backend is **frozen**. It stays output-equivalent but gets no further development. Build **C++** for acceleration.
 > See [`RUST_EVALUATION.md`](RUST_EVALUATION.md).
 
 ### New Public Surface (cumulative since v0.4.1)
-- `MeshAdapterForMADMESHR`, `MeshAdapterForADMESH`, `MeshAdapterForADMESHDomains` re-exported at package root.
-- `CHILmesh.submesh(elem_ids)` — public sub-mesh factory (#138).
-- `CHILmesh.rebuild_adjacencies()` / `invalidate_adjacencies()` — for mid-sweep mutation flows (#143).
-- `CHILmesh.ccw_edges_around_vert(vert_id)` — counter-clockwise edge walk (#133).
+- the legacy research adapter, `MeshAdapterForADMESH`, `MeshAdapterForADMESHDomains` re-exported at package root.
+- `CHILmesh.submesh(elem_ids)`: public sub-mesh factory (#138).
+- `CHILmesh.rebuild_adjacencies()` / `invalidate_adjacencies()`: for mid-sweep mutation flows (#143).
+- `CHILmesh.ccw_edges_around_vert(vert_id)`: counter-clockwise edge walk (#133).
 - `compute_adjacencies` kwarg on the constructor and `read_from_fort14` / `read_from_2dm` / `from_admesh_domain` (#134).
-- `chilmesh.backend_info()` — runtime backend introspection.
+- `chilmesh.backend_info()`: runtime backend introspection.
 
 ### Guarantees
-- **Public API frozen under semver.** Breaking changes require a v2.x bump.
-- `CHILmesh` import preserved through v1.x; DeprecationWarning in v1.1, earliest removal v2.0.
-- C++ / Rust backends produce bit-identical output to Python on the official fixture set.
-- Python `>=3.10` (3.8 / 3.9 dropped — EOL).
-
----
-
-## Do I Need to Change My Code?
-
-**No.** Existing code continues to work without modification.
-
-**Should I update?** Yes, eventually. Benefits: better performance (1.5x improvement), clearer code (bridge adapters), better error messages, new quality metrics.
-
-**Migration timeline:**
-- **Now**: Update and test (should be drop-in replacement)
-- **Later**: Optionally adopt bridge adapters for clearer code
-- **No rush**: Take time to validate tests pass first
+- The public API is frozen under semver. Breaking changes require a v2.x bump.
+- The `CHILmesh` import stays through v1.x. A DeprecationWarning arrives in v1.1. Earliest removal is v2.0.
+- The C++ and Rust backends produce bit-identical output to Python on the official fixture set.
+- Python `>=3.10` is required (3.8 and 3.9 are dropped; EOL).
 
 ---
 
 ## Quick Start by Project
 
-### MADMESHR Quick Start
+Each project below follows the same three steps:
+
+1. Run your old (v0.1.1) code. It still works.
+2. Optionally switch to a bridge adapter.
+3. Run your tests.
+
+### Legacy research adapter Quick Start
 
 #### Before (v0.1.1)
 ```python
@@ -194,10 +201,10 @@ neighbors = get_neighbors(mesh, 0)
 #### Recommended Update (Optional)
 ```python
 from chilmesh import CHILmesh
-from chilmesh.bridge import MeshAdapterForMADMESHR
+from chilmesh.bridge import MeshAdapterForADMESH
 
 mesh = CHILmesh.read_from_fort14("domain.fort.14")
-adapter = MeshAdapterForMADMESHR(mesh)
+adapter = MeshAdapterForADMESH(mesh)
 
 # Much clearer - adapter handles the logic
 neighbors = adapter.get_element_neighbors(0)
@@ -307,25 +314,26 @@ pip install --upgrade 'chilmesh>=1.0.0'
 ```
 
 ### Phase 2: Test Compatibility (30 minutes)
-Run existing test suite. Everything should pass without code changes.
+Run your existing test suite. Everything should pass without code changes.
 
-**If tests fail:**
-- Check error messages
-- Report issue at: https://github.com/domattioli/CHILmesh/issues
-- Include: CHILmesh version, code snippet, error traceback
+If tests fail:
+
+1. Check the error messages.
+2. Report the issue at: https://github.com/domattioli/CHILmesh/issues
+3. Include the CHILmesh version, a code snippet, and the error traceback.
 
 ### Phase 3: Adopt Bridge Adapters (Optional, 2-4 hours)
-Gradually replace verbose patterns with adapter methods:
-1. Find mesh interactions in your code
-2. Check if adapter has convenience method for your use case
-3. Refactor to use adapter (code becomes clearer)
-4. Run tests to verify behavior unchanged
+Replace verbose patterns with adapter methods, one at a time:
+1. Find mesh interactions in your code.
+2. Check whether the adapter has a convenience method for your use case.
+3. Refactor to use the adapter.
+4. Run tests to verify that behavior is unchanged.
 
 ### Phase 4: Performance Profiling (Optional, 1-2 hours)
 ```bash
 python -m cProfile -s cumtime your_script.py > profile.txt
 ```
-Compare before/after upgrade. Bridge adapters often run faster than manual patterns.
+Compare the profile before and after the upgrade. Bridge adapters often run faster than manual patterns.
 
 ---
 
@@ -349,8 +357,8 @@ def get_neighbors(mesh, elem_id):
 
 **New (v0.2.0+ with adapter):**
 ```python
-from chilmesh.bridge import MeshAdapterForMADMESHR
-adapter = MeshAdapterForMADMESHR(mesh)
+from chilmesh.bridge import MeshAdapterForADMESH
+adapter = MeshAdapterForADMESH(mesh)
 neighbors = adapter.get_element_neighbors(elem_id)
 ```
 
@@ -394,65 +402,9 @@ boundary_verts = boundaries[0]
 
 ---
 
-## Troubleshooting
-
-### Error: "AttributeError: CHILmesh has no attribute 'get_vertex_edges'"
-
-**Cause:** Using CHILmesh < 1.0.0
-
-**Fix:**
-```bash
-pip install --upgrade 'chilmesh>=1.0.0'
-```
-
-### Error: "ModuleNotFoundError: No module named 'chilmesh.bridge'"
-
-**Cause:** Using CHILmesh < 1.0.0, or bridge module not found
-
-**Fix:**
-```bash
-pip install --upgrade 'chilmesh>=1.0.0'
-python -c "from chilmesh.bridge import MeshAdapterForMADMESHR; print('OK')"
-```
-
-### Error: "KeyError: 'Vert2Edge'"
-
-**Cause:** Accessing internal adjacency structures directly
-
-**Old (broken in 0.2.0):**
-```python
-# DON'T do this - it breaks in 0.2.0
-edges = mesh.adjacencies['Vert2Edge'][v]
-```
-
-**New (recommended):**
-```python
-# Use the public API instead
-edges = mesh.get_vertex_edges(v)
-```
-
-### Performance Issues
-
-**Problem:** Code slower after upgrading? (Rare — should be faster.)
-
-1. **Verify 0.2.0+:**
-   ```python
-   import chilmesh
-   print(chilmesh.__version__)  # Should be 0.2.0 or later
-   ```
-
-2. **Profile:**
-   ```bash
-   python -m cProfile -s cumtime your_script.py > profile.txt
-   ```
-
-3. **Report** with CHILmesh version, minimal code, timing before/after, mesh size.
-
----
-
 ## API Reference by Project
 
-### MADMESHR: Mesh Adaptation Research
+### Legacy research adapter: Mesh Adaptation Research
 
 **Relevant CAI Methods:**
 ```python
@@ -496,65 +448,121 @@ connectivity_info = adapter.get_mesh_connectivity_info()
 
 ---
 
-## Getting Help
+## Troubleshooting
 
-### Questions About Migration
-1. Check this guide
-2. Review `docs/CHILmesh_Access_Interface.md`
-3. Look at `tests/test_bridge_adapters.py`
+### Error: "AttributeError: CHILmesh has no attribute 'get_vertex_edges'"
 
-### Bug Reports
-Include:
-- CHILmesh version: `python -c "import chilmesh; print(chilmesh.__version__)"`
-- Python version: `python --version`
-- Minimal reproducible example
-- Full error traceback
-- Downstream project name (MADMESHR/ADMESH/Valence)
+**Cause:** You use CHILmesh < 1.0.0.
 
-Report at: https://github.com/domattioli/CHILmesh/issues
+**Fix:**
+```bash
+pip install --upgrade 'chilmesh>=1.0.0'
+```
+
+### Error: "ModuleNotFoundError: No module named 'chilmesh.bridge'"
+
+**Cause:** You use CHILmesh < 1.0.0, or Python cannot find the bridge module.
+
+**Fix:**
+```bash
+pip install --upgrade 'chilmesh>=1.0.0'
+python -c "from chilmesh.bridge import MeshAdapterForADMESH; print('OK')"
+```
+
+### Error: "KeyError: 'Vert2Edge'"
+
+**Cause:** Your code accesses internal adjacency structures directly.
+
+**Old (broken in 0.2.0):**
+```python
+# DON'T do this - it breaks in 0.2.0
+edges = mesh.adjacencies['Vert2Edge'][v]
+```
+
+**New (recommended):**
+```python
+# Use the public API instead
+edges = mesh.get_vertex_edges(v)
+```
+
+### Performance Issues
+
+**Problem:** Code runs slower after the upgrade. This is rare; it should run faster.
+
+1. Verify that you run 0.2.0 or later:
+   ```python
+   import chilmesh
+   print(chilmesh.__version__)  # Should be 0.2.0 or later
+   ```
+
+2. Profile:
+   ```bash
+   python -m cProfile -s cumtime your_script.py > profile.txt
+   ```
+
+3. Report the CHILmesh version, a minimal code sample, timing before and after, and the mesh size.
 
 ---
 
 ## Version Compatibility
 
-| CHILmesh | MADMESHR | ADMESH | Valence | Notes |
+| CHILmesh | an earlier internal prototype | ADMESH | Valence | Notes |
 |----------|----------|--------|----------------|-------|
 | 0.1.1    | ✅ Legacy | ✅ Legacy | ✅ Legacy | Old version, still works |
 | 0.2.0    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Current, use this |
 | 0.2.x    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Bug fixes, recommended |
 | 1.0.0    | ✅ | ✅ | ✅ | `Mesh` alias, C++ backend |
-| 1.4.0+   | ⚠️ | ⚠️ | ⚠️ | **#187 breaking renames — see [above](#-v140-breaking-renames-187)** |
+| 1.4.0+   | ⚠️ | ⚠️ | ⚠️ | **#187 breaking renames; see [above](#-v140-breaking-renames-187)** |
 
 ---
 
 ## FAQ
 
 **Q: Will my code break when upgrading?**
-No. CHILmesh 0.2.0 is backward compatible. All existing APIs work unchanged.
+Not from 0.2.0 alone; CHILmesh 0.2.0 is backward compatible and all existing APIs work unchanged. Version 1.4.0 is the exception: see [v1.4.0 Breaking Renames](#-v140-breaking-renames-187).
 
 **Q: Should I use the bridge adapters?**
-Optional but recommended. Code becomes clearer and often runs faster. Adopt at your own pace.
+Optional but recommended. Code becomes clearer and often runs faster. Adopt them at your own pace.
 
 **Q: What if I need old behavior?**
-Stick with v0.1.1. But upgrade recommended for performance benefits.
+Stay on v0.1.1. Upgrading is recommended for the performance benefits.
 
 **Q: Can I mix old and new code?**
-Yes. Both old patterns and bridge adapters work in same codebase during migration.
+Yes. Old patterns and bridge adapters work in the same codebase during migration.
 
-**Q: Is bridge adapter API stable?**
-Yes. Adapter methods are part of CAI, guaranteed stable through v1.0.
+**Q: Is the bridge adapter API stable?**
+Yes. Adapter methods are part of CAI and stay stable through v1.0.
 
 **Q: How much code do I need to change?**
-None required. Migration completely optional.
+None is required. Migration is optional.
+
+---
+
+## Getting Help
+
+### Questions About Migration
+1. Check this guide.
+2. Review `docs/CHILmesh_Access_Interface.md`.
+3. Look at `tests/test_bridge_adapters.py`.
+
+### Bug Reports
+Include:
+- CHILmesh version: `python -c "import chilmesh; print(chilmesh.__version__)"`
+- Python version: `python --version`
+- A minimal reproducible example
+- The full error traceback
+- The downstream project name (ADMESH/Valence)
+
+Report at: https://github.com/domattioli/CHILmesh/issues
 
 ---
 
 ## Example Integration Projects
 
-See `examples/` directory for complete working examples:
-- `madmeshr_refinement.py` - MADMESHR mesh adaptation workflow
+The `examples/` directory holds complete working examples:
+- `refinement.py` - legacy research mesh adaptation workflow
 - `admesh_quality.py` - ADMESH quality assessment
-- `admesh_domains_setup.py` - Valence domain initialization
+- `registry_setup.py` - Valence domain initialization
 
 ---
 
@@ -566,8 +574,8 @@ See `examples/` directory for complete working examples:
 - Security support: Until 1.0.0 release
 
 **Migration Support:**
-- Expect 1-4 hours updating your project
-- Most time spent testing, not code changes
+- Expect 1-4 hours to update your project.
+- Most of that time goes to testing, not code changes.
 
 ---
 
