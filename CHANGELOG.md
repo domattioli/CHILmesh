@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.6.0] (unreleased)
+## [1.5.5] — 2026-10-11
 
 ### Added
 - `chilmesh.registry`: a standard-library client for a token-gated mesh registry API. It provides `list_meshes`, `fetch_hash`, `fetch_mesh_bytes`, `fetch_mesh`, `download_mesh`, and five `Registry*Error` classes. Every download is verified against its SHA-256 hash. Configure with `VALENCE_TOKEN` and `VALENCE_API_URL`.
