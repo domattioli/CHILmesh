@@ -73,7 +73,25 @@ def _config() -> tuple[str, str]:
             "environment variable."
         )
     base = os.environ.get(_URL_VAR, "").strip() or _DEFAULT_BASE_URL
+    _check_base_url(base)
     return base.rstrip("/"), token
+
+
+_LOCAL_HTTP_HOSTS = ("localhost", "127.0.0.1")
+
+
+def _check_base_url(base: str) -> None:
+    """Allow https only; allow http for localhost and 127.0.0.1 (tests)."""
+    parts = urllib.parse.urlsplit(base)
+    scheme = parts.scheme.lower()
+    if scheme == "https" and parts.hostname:
+        return
+    if scheme == "http" and parts.hostname in _LOCAL_HTTP_HOSTS:
+        return
+    raise RegistryError(
+        f"{_URL_VAR} must be an https:// URL (http is allowed only for "
+        f"localhost and 127.0.0.1). Got scheme {scheme or '(none)'!r}."
+    )
 
 
 def _check_name(name: str) -> str:
@@ -88,7 +106,7 @@ def _get(path: str) -> bytes:
         base + path, headers={"Authorization": f"Bearer {token}", "User-Agent": "chilmesh-registry/1"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:  # nosec B310 - scheme checked in _check_base_url
             return resp.read()
     except urllib.error.HTTPError as e:
         code = e.code
