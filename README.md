@@ -125,9 +125,9 @@ export VALENCE_API_URL=<API URL>
 ```python
 from chilmesh import registry
 
-names = registry.list_meshes()
-mesh = registry.fetch_mesh(names[0])               # verified download, returns a CHILmesh
-registry.download_mesh(names[0], "mesh.14")        # or save the verified bytes to a file
+names = registry.list_meshes()                       # filenames, e.g. "Block_O.14"
+mesh = registry.fetch_mesh("Block_O.14")            # verified download, returns a CHILmesh
+registry.download_mesh("Block_O.14", "mesh.14")      # or save the verified bytes to a file
 ```
 
 Errors derive from `registry.RegistryError`:
