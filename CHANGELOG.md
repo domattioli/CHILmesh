@@ -12,7 +12,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - `chilmesh.registry` now defaults to the public Valence API (https://valence-api.iqh766c2.workers.dev). `VALENCE_API_URL` is an optional override; only `VALENCE_TOKEN` is required.
 - `chilmesh.registry` sends an explicit `User-Agent: chilmesh-registry/1` header. Cloudflare blocks the default `Python-urllib` agent with error 1010.
-- Bundled mesh data bytes changed: `Block_O.14`, `structuredMesh1.14`, `annulus_200pts.fort.14` and `donut_domain.fort.14` now carry header-only boundary fixes, so their SHA-256 values match the bytes the Valence registry serves. Node and element data are unchanged.
+- Bundled mesh data bytes changed: `Block_O.14`, `structuredMesh1.14`, `annulus_200pts.fort.14` and `donut_domain.fort.14` now carry header-only boundary fixes and a neutral title line (the file's own name, with no provenance text), so their SHA-256 values match the bytes the Valence registry serves. Node and element data are unchanged.
 
 ### Fixed
 - `read_from_fort14` now raises `ValueError` when encountering a node id of 0 or above the node count instead of silently wrapping to the last vertex ([#282](https://github.com/domattioli/CHILmesh/issues/282)).
