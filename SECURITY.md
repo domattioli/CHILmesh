@@ -9,12 +9,11 @@ and source repository.
 
 | Version | Supported |
 |---|---|
-| `1.2.x` (current PyPI release) | ✅ — receives fixes |
-| `< 1.2` (older tags) | ⚠️ — best-effort only |
+| `1.2.x` (current PyPI release) | ✅ receives fixes |
+| `< 1.2` (older tags) | ⚠️ best-effort only |
 
-The current stable release is `1.2.2`. We prioritize security fixes for the latest
-`1.2.x` series; patches for older major/minor versions are made on a best-effort
-basis and are not guaranteed.
+The current stable release is `1.2.2`. Security fixes go to the latest `1.2.x` series first.
+Patches for older versions are best-effort and not guaranteed.
 
 ## Reporting a vulnerability
 
@@ -33,8 +32,7 @@ When reporting, please include:
 - Affected components (library API, C++ extension, test utilities, CI).
 - Any suggested remediation.
 
-We aim to acknowledge a report within a reasonable window and will coordinate a
-fix and disclosure timeline with you.
+We acknowledge each report and agree a fix and disclosure timeline with you.
 
 ## Scope notes
 
@@ -53,7 +51,6 @@ fix and disclosure timeline with you.
 ## Out of scope
 
 - Findings that require a compromised maintainer machine or stolen credentials.
-- Denial of service against optional external services (e.g. a model-hosting service Hub
-  connectivity for domain registry lookups).
+- Denial of service against optional external services (e.g. connectivity to Valence for registry lookups).
 - Dependency vulnerabilities in transitive (not direct) packages, unless we can
   confirm CHILmesh's usage amplifies the risk.

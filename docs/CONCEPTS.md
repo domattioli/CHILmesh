@@ -1,8 +1,8 @@
-# Distance, medial axis, skeleton, layers — four related, distinct constructs
+# Distance, medial axis, skeleton, layers: four related, distinct constructs
 
-These four terms are routinely conflated (CHILmesh itself shipped a layerization
-routine misnamed `_skeletonize` until #221, renamed `_peel` in #187). They form a chain — each derives
-from the one before — but they are **not** interchangeable. This note fixes the
+These four terms are routinely conflated (CHILmesh named its layerization
+routine `_peel` in #187 and #221; `skeletonize()` is reserved for the real skeleton). They form a chain in which each derives
+from the one before, but they are **not** interchangeable. This note fixes the
 vocabulary used throughout CHILmesh and explains the differences at a high,
 algorithmic, and mathematical level.
 
@@ -16,7 +16,7 @@ algorithmic, and mathematical level.
 |---|---|---|---|---|
 | **Distance field** | scalar: distance from each interior point to the boundary | continuous field over the domain | distance transform, EDT, wall distance, `d(x)`; *signed* variant = SDF | not yet (roadmap; lives in ADMESH for generation) |
 | **Medial axis** | the ridge of the distance field: centers of maximal inscribed disks | continuous 1-D curve/graph (the domain's "spine") | MAT (medial axis transform), symmetric axis, grassfire locus | not directly |
-| **Skeleton** | a 1-wide, connectivity-preserving thinning of the shape | discrete 1-px / 1-element curve | thinning, morphological skeleton, centerline | `skeletonize()` — reserved, medial-axis only (#223, unimplemented) |
+| **Skeleton** | a 1-wide, connectivity-preserving thinning of the shape | discrete 1-px / 1-element curve | thinning, morphological skeleton, centerline | `skeletonize()`; reserved, medial-axis only (#223, unimplemented) |
 | **Layers** | the mesh's elements grouped into concentric bands peeled boundary-inward | partition of elements (integer layer index) | onion peeling, concentric layering, advancing-front layers | `peel_layers()` / `_peel()` → `.layers`, `.n_layers` |
 
 The chain: **distance is a field → its ridge is the medial axis → the skeleton
@@ -37,13 +37,13 @@ of which the innermost approximate the medial region.**
 
 ## Medial axis
 
-- **High level.** The shape's central spine — the set of points that are
+- **High level.** The shape's central spine: the set of points that are
   equidistant from two or more nearest boundary points. Equivalently, the
   centers of all maximal inscribed disks.
 - **Math.** `MA(Ω) = { x ∈ Ω : |argmin_{b ∈ ∂Ω} ‖x − b‖| ≥ 2 }`. It coincides
   with the **ridge set of the distance field** (where `∇d` is discontinuous).
   The *medial axis transform* (MAT) pairs each axis point with its inscribed
-  radius `d(x)` — enough to reconstruct the shape exactly.
+  radius `d(x)`: enough to reconstruct the shape exactly.
 - **Algorithm.** Distance-ridge detection, Voronoi-diagram of the boundary
   sampling, or the grassfire (wavefront-collision) model.
 - **Why it differs from the skeleton.** The medial axis is a *geometric* object
@@ -58,7 +58,7 @@ of which the innermost approximate the medial region.**
   1-wide connected curve.
 - **Math.** A subset `S ⊆ Ω` that is **homotopy-equivalent** to `Ω` (same
   connectivity / holes) and is locally thin (width 1). Produced by removing
-  *simple points* — points whose deletion preserves topology — until the result
+  *simple points*: points whose deletion preserves topology, until the result
   is idempotent.
 - **Algorithm.** Iterative morphological thinning (e.g. Zhang–Suen): each pass
   deletes simple boundary points; repeat until a pass changes nothing.
@@ -76,9 +76,9 @@ of which the innermost approximate the medial region.**
 - **Math.** Define the layer index `ℓ(e)` of element `e` as the iteration at
   which it is peeled, where each iteration removes **all** elements currently
   adjacent to the (receding) boundary. `n_layers = max_e ℓ(e) + 1`. This is a
-  *quantized, mesh-discrete analogue of the distance field* — `ℓ(e)` tracks
+  *quantized, mesh-discrete analogue of the distance field*, `ℓ(e)` tracks
   graph-distance-to-boundary in elements, not Euclidean distance.
-- **Algorithm.** CHILmesh `_peel()` (formerly mis-named `_skeletonize`):
+- **Algorithm.** CHILmesh `_peel()`:
   vectorized boundary-ring removal, `O(n)` in element count, storing
   `OE`/`IE`/`OV`/`IV` (outer/inner elements and vertices) per layer.
 - **Why it is not skeletonization.** Layerization removes **every** boundary
@@ -100,8 +100,8 @@ difference.
 | Output | layer index per element; concentric bands | skeleton elements + the peel order that produced them |
 | Discrete analogue of | the distance field (banded) | the medial axis (thinned) |
 
-So `skeletonize()` *mimics* the peel machinery — peel, record, repeat until
-you cannot peel — but with the **skeletonization peel** (drop only simple,
+So `skeletonize()` *mimics* the peel machinery (peel, record, repeat until
+you cannot peel), but with the **skeletonization peel** (drop only simple,
 topology-safe elements) rather than the **peel** (drop the whole ring).
 
 ## Synonyms seen in the wild

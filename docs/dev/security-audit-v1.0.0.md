@@ -1,11 +1,11 @@
 <!--
-INTERNAL ENGINEERING ARTIFACT — NOT the project's security policy.
+INTERNAL ENGINEERING ARTIFACT: NOT the project's security policy.
 This is a point-in-time audit report, not a vulnerability-disclosure policy.
 The disclosure policy lives at repo-root `SECURITY.md` (GitHub Security tab).
 Findings A1 and A5 were "added but unverified" at audit time; do not treat
 their mitigations as confirmed until the C++ backend is rebuilt and tested in
 CI. NOTE: this repo is public, so this path (and git history) remain publicly
-readable — if A1/A5 stay unverified, prefer a private GHSA advisory over any
+readable: if A1/A5 stay unverified, prefer a private GHSA advisory over any
 tracked file. Moved out of `docs/SECURITY.md` 2026-06-25 so it stops populating
 the GitHub Security tab as if it were the disclosure policy.
 -->

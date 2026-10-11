@@ -1,7 +1,7 @@
 # AI / Automated-Use Policy
 
 This repository's source code is licensed under the **PolyForm Noncommercial
-License 1.0.0 with an additional No-AI/ML-Training restriction** — see
+License 1.0.0 with an additional No-AI/ML-Training restriction**: see
 [`LICENSE`](../LICENSE).
 
 ## Not permitted without a separate written license

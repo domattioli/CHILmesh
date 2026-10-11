@@ -8,9 +8,9 @@ CHILmesh maintains multiple topology representations for efficient queries. This
 
 ### Core Data
 
-**points**: `ndarray[n_verts, 3]` — vertex coordinates (x, y, z); access: `mesh.points[vert_id]`
+**points**: `ndarray[n_verts, 3]`; vertex coordinates (x, y, z); access: `mesh.points[vert_id]`
 
-**connectivity_list**: `ndarray[n_elems, 3|4]` — element vertex indices; triangles: 3 unique + 1 repeated; quads: 4 vertices; mixed: consistent 4-column format; access: `mesh.connectivity_list[elem_id]`
+**connectivity_list**: `ndarray[n_elems, 3|4]`; element vertex indices; triangles: 3 unique + 1 repeated; quads: 4 vertices; mixed: consistent 4-column format; access: `mesh.connectivity_list[elem_id]`
 
 ### Adjacency Dictionary
 
@@ -18,19 +18,19 @@ All structures stored in `mesh.adjacencies`:
 
 #### Dense Adjacencies (numpy arrays)
 
-**Edge2Vert**: `ndarray[n_edges, 2]` — maps edge ID → `[v_min, v_max]` (canonical, always sorted); access: `v1, v2 = mesh.edge2vert(edge_id)`
+**Edge2Vert**: `ndarray[n_edges, 2]`; maps edge ID → `[v_min, v_max]` (canonical, always sorted); access: `v1, v2 = mesh.edge2vert(edge_id)`
 
-**Elem2Edge**: `ndarray[n_elems, 3|4]` — maps element ID → edge IDs; triangles: 3 edges (col 3 unused); quads: 4 edges; all edge IDs valid [0, n_edges)
+**Elem2Edge**: `ndarray[n_elems, 3|4]`; maps element ID → edge IDs; triangles: 3 edges (col 3 unused); quads: 4 edges; all edge IDs valid [0, n_edges)
 
-**Edge2Elem**: `ndarray[n_edges, 2]` — maps edge ID → `[elem1, elem2]`; elem2 = -1 for boundary; access: `elem1, elem2 = mesh.edge2elem(edge_id)`
+**Edge2Elem**: `ndarray[n_edges, 2]`; maps edge ID → `[elem1, elem2]`; elem2 = -1 for boundary; access: `elem1, elem2 = mesh.edge2elem(edge_id)`
 
 #### Sparse Adjacencies (dicts + sets)
 
-**Vert2Edge**: `Dict[int, Set[int]]` — vertex ID → incident edge IDs; invariant: if edge (v1,v2) exists, both vert2edge[v1] and vert2edge[v2] contain it; typical degree: 4-6 per vertex; access: `mesh.get_vertex_edges(vert_id)`
+**Vert2Edge**: `Dict[int, Set[int]]`; vertex ID → incident edge IDs; invariant: if edge (v1,v2) exists, both vert2edge[v1] and vert2edge[v2] contain it; typical degree: 4-6 per vertex; access: `mesh.get_vertex_edges(vert_id)`
 
-**Vert2Elem**: `Dict[int, Set[int]]` — vertex ID → incident element IDs; invariant: if elem contains v, then v ∈ vert2elem[v]; typical degree: 4-8 per vertex; access: `mesh.get_vertex_elements(vert_id)`
+**Vert2Elem**: `Dict[int, Set[int]]`; vertex ID → incident element IDs; invariant: if elem contains v, then v ∈ vert2elem[v]; typical degree: 4-8 per vertex; access: `mesh.get_vertex_elements(vert_id)`
 
-**EdgeMap**: Internal hash table for O(1) edge lookup by vertex pair — not public API; maps (v1,v2) → edge_id with automatic canonical form.
+**EdgeMap**: Internal hash table for O(1) edge lookup by vertex pair; not public API; maps (v1,v2) → edge_id with automatic canonical form.
 
 ## Access Patterns
 
@@ -93,7 +93,7 @@ for edge_id in edges:
 - Layer sizes decrease monotonically
 - No element missing or duplicated across layers
 
-## Structure Comparison: Old vs New
+## Structure Comparison: Phase 1 vs Phase 2
 
 | Aspect | Old (Phase 1) | New (Phase 2) |
 |--------|---------------|---------------|
@@ -129,13 +129,13 @@ except AssertionError as e:
 
 ### Common Errors
 
-**`AssertionError: Vert2Edge has X entries, expected Y`** — missing/extra vertices; fix: rebuild via `_build_adjacencies()`
+**`AssertionError: Vert2Edge has X entries, expected Y`**: missing/extra vertices; fix: rebuild via `_build_adjacencies()`
 
-**`AssertionError: Vert2Edge[V] is not a set`** — data corrupted (list instead of set); fix: check code modifying `adjacencies` dict directly
+**`AssertionError: Vert2Edge[V] is not a set`**: data corrupted (list instead of set); fix: check code modifying `adjacencies` dict directly
 
-**`AssertionError: Invalid edge ID X in Vert2Edge[V]`** — edge ID out of range; fix: verify edge building
+**`AssertionError: Invalid edge ID X in Vert2Edge[V]`**: edge ID out of range; fix: verify edge building
 
-**`AssertionError: Vertex V not endpoint of edge E`** — wrong edge in vert2edge; fix: check canonical form enforcement
+**`AssertionError: Vertex V not endpoint of edge E`**: wrong edge in vert2edge; fix: check canonical form enforcement
 
 ## References
 

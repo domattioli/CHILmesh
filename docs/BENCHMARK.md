@@ -1,10 +1,10 @@
 # CHILmesh Performance Benchmarks
 
 **Version:** 1.2.2
-**Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers) — continental-scale ADCIRC mesh, available through Valence (see `chilmesh.registry`).
-**Parity reference mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers) — retained as the historical cross-language baseline.
+**Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers); continental-scale ADCIRC mesh, available through Valence (see `chilmesh.registry`).
+**Parity reference mesh:** WNAT_Hagen (52,774 vertices, 98,365 elements, 151,248 edges, 30 layers), retained as the historical cross-language baseline.
 
-> **Reproduce:** every number below regenerates from the committed harness —
+> **Reproduce:** every number below regenerates from the committed harness:
 > `python scripts/benchmark.py --matlab` (Octave column needs `octave` on PATH;
 > C++ column needs `pip install "chilmesh[cpp]"` for the prebuilt wheel, or
 > `pip install ./src/chilmesh_cpp` for a source build). The harness also asserts
@@ -12,12 +12,12 @@
 > figures can't creep back in.
 
 > **Heavy meshes (`--max-elements`, #155):** the lifecycle report's FEM direct
-> smoother and ADMESH truss stages OOM/timeout at WNAT scale (~4M DOF — the FEM
+> smoother and ADMESH truss stages OOM/timeout at WNAT scale (~4M DOF; the FEM
 > direct sparse solver alone exceeds typical CI RAM, see #168). Pass
 > `--max-elements N` to skip those two stages when a mesh exceeds `N` elements;
 > the scalable stages (adjacency, skeletonization, quality, angle smoother)
 > still report. `N=0` (default) runs every stage, so local/manual profiling is
-> unaffected — CI passes a finite `N` to keep WNAT-scale meshes manual-only.
+> unaffected; CI passes a finite `N` to keep WNAT-scale meshes manual-only.
 > Example: `python scripts/benchmark.py --mesh wnat.14 --max-elements 500000`.
 > With `--fem-solver iterative`, the FEM stage is profiled even above
 > `--max-elements` (the MINRES/Dirichlet path is memory-safe, #168); only the
@@ -29,7 +29,7 @@
 > LU fill-in that OOM-kills the default direct `spsolve`. The iterative path
 > enforces the fixed boundary by **Dirichlet elimination** (it removes the
 > pinned DOFs and solves the well-conditioned reduced system `K_ff x_f = -K_fp x_p`),
-> *not* the `kinf=1e12` penalty the direct path uses — a penalised system has
+> *not* the `kinf=1e12` penalty the direct path uses, a penalised system has
 > condition number ~1e12, so MINRES' residual-based stop would converge to a
 > visibly different mesh at scale. Pass `--fem-solver iterative` to profile the
 > FEM stage at scale without the gate skip. Example:
@@ -47,13 +47,13 @@
 > | nodes ‖Δxy‖ > 1e-2 | 31,154 / 52,774 (59%) | **0** |
 >
 > The elimination path makes `solver="iterative"` a drop-in for the direct
-> result (was a meaningfully different mesh under the old shared-penalty path).
+> result (the shared-penalty path gives a different mesh).
 
 > **Size-weighted smoothing (#197):** `direct_smoother(size_fn=...)` and
 > `angle_based_smoother(size_fn=...)` versus their size-blind base on size error, element and angle quality, and runtime:
 > see [`docs/benchmarks/size_smoothing.md`](benchmarks/size_smoothing.md) (regenerate with `python scripts/benchmark_size_smoothing.py`).
 
-## v1.1.0 — cross-language (single machine, WNAT_Hagen, medians)
+## v1.1.0: cross-language (single machine, WNAT_Hagen, medians)
 
 | Stage | MATLAB (Octave) | Python | C++ |
 |---|---:|---:|---:|
@@ -66,7 +66,7 @@
 class under GNU Octave 8.4 (interpreter, not MATLAB JIT); Python's
 skeletonization now beats Octave, with adjacency build (pure-Python loops) the
 remaining gap; C++ leads throughout. Rust is excluded from this WNAT table
-(measured separately on the bundled fixtures — see below). Absolute times are
+(measured separately on the bundled fixtures; see below). Absolute times are
 machine-dependent.
 
 > **Rust backend (measured 2026-07-14).** #163 is closed and Rust is now
@@ -74,12 +74,12 @@ machine-dependent.
 > exclusion is stale. On the bundled fixtures Rust full-inits ~3–5× faster than
 > Python but **~2–5× slower than C++** (≈5× behind on `Block_O`). Its
 > `get_vertex_edges` query path was O(_n_) per call (100–1800× slower than
-> C++/Python — it rebuilt the edge list every call); that defect is **now fixed**
-> — the vertex→edge index is cached in `build_adjacencies`, so queries are O(1)
+> C++/Python: it rebuilt the edge list every call); that defect is **now fixed**:
+> the vertex→edge index is cached in `build_adjacencies`, so queries are O(1)
 > (Block_O 954 μs → 0.32 μs, on par with C++/Python, 76/76 equivalence tests
 > still pass). C++ remains the acceleration path; even with queries fixed, Rust
 > earns no perf niche over C++ on the hot path. The backend is now **frozen**
-> (kept + output-equivalent, not developed further — `src/chilmesh_core/STATUS.md`).
+> (kept + output-equivalent, not developed further; `src/chilmesh_core/STATUS.md`).
 > Full measured tables (incl. the before/after query column), methodology, the
 > "could Rust replace Python anywhere?" analysis, and the default-backend / opt-in
 > discussion: [`RUST_EVALUATION.md`](RUST_EVALUATION.md). The path to zero-opt-in
@@ -87,16 +87,16 @@ machine-dependent.
 
 ---
 
-## v1.2.2 — cross-language at continental scale (EasternPacific_ENPAC2003, medians)
+## v1.2.2: cross-language at continental scale (EasternPacific_ENPAC2003, medians)
 
 Medians of three runs, single machine, chilmesh 1.2.2, via
 `python scripts/benchmark.py --matlab --mesh EasternPacific_ENPAC2003.14 --max-elements 600000`
 (`octave` on PATH for the MATLAB column). The mesh (272,913 vertices, 531,680
-elements, 804,728 edges) is ~5× WNAT_Hagen — the largest single-domain mesh
+elements, 804,728 edges) is ~5× WNAT_Hagen, the largest single-domain mesh
 profiled cross-language to date.
 
 All three backends time the **same operation on the same in-memory
-`(connectivity, points)` arrays** for every row — `_build_adjacencies` (fast
+`(connectivity, points)` arrays** for every row, `_build_adjacencies` (fast
 init), `_peel` (layer peel), the two combined (full init), and
 `signed_area` (quality). No backend reads the fort.14 file inside the timed
 region.
@@ -109,10 +109,10 @@ region.
 | Quality (signed area) | 75 ms | 51 ms | 7 ms |
 
 `n_layers = 75` on all three backends (parity ✅, Python↔C++ layers asserted
-bit-identical by `tests/test_backend_equivalence.py`). **C++ leads every stage** —
+bit-identical by `tests/test_backend_equivalence.py`). **C++ leads every stage**:
 full init 8.6× over Python and 11.6× over Octave. The two interpreted backends
 split the initialization work: Octave's `sparse()`-accumulated adjacency builds
-2.4× faster than Python's (2.738 s vs 6.454 s — `sparse`/`sort` are compiled
+2.4× faster than Python's (2.738 s vs 6.454 s; `sparse`/`sort` are compiled
 built-ins), while Python's skeletonization runs 2.2× faster than Octave's
 (5.814 s vs 12.771 s), so Python finishes full init ~26% ahead of Octave. With
 the quality row now signed-area on every backend, Python (51 ms) edges out Octave
@@ -122,7 +122,7 @@ Absolute times are machine-dependent.
 
 ---
 
-## v1.1.0 — mesh lifecycle (Python, post-generation) (#155)
+## v1.1.0: mesh lifecycle (Python, post-generation) (#155)
 
 Times every post-generation stage. Generation itself excluded (per #155). Reference mesh: `donut_domain.fort.14` (188 vertices, 276 elements) with `--sdf donut`, 5 smoother/truss iterations, 3 repeats.
 
@@ -143,11 +143,11 @@ Times every post-generation stage. Generation itself excluded (per #155). Refere
 
 ---
 
-## v1.2.0 — real-world regional meshes (Valence registry, #155)
+## v1.2.0: real-world regional meshes (Valence registry, #155)
 
-Lifecycle profiled on genuine ADCIRC regional meshes from the Valence registry
+Lifecycle profiled on real ADCIRC regional meshes from the Valence registry
 (local mesh directory), 2026-06-08. Pure-Python backend (C++ extension not
-built in this environment). Supersedes prior "blocked — mesh not in environment"
+built in this environment). Supersedes prior "blocked, mesh not in environment"
 status: the regional meshes are on disk and runnable; only the global
 STOFS-2D-Global mesh (24.9M elems, 1.73 GB) remains out-of-environment.
 
@@ -155,11 +155,11 @@ STOFS-2D-Global mesh (24.9M elems, 1.73 GB) remains out-of-environment.
 |---|---:|---:|---:|---:|---:|---:|
 | WNAT_Hagen | 52,774 | 98,365 | 1.07 s | 332 ms | 30 | 37.5 s (3 it) |
 | WNAT_Onur | 127,572 | 246,186 | 6.87 s | (incl.) | 39 | 32.6 s |
-| Great_Lakes | 132,162 | 250,905 | 7.03 s | (incl.) | 46 | — |
-| EasternPacific_ENPAC2003 | 272,913 | 531,680 | 13.92 s | 11.40 s | 75 | — _(skipped: >--max-elements gate)_ |
+| Great_Lakes | 132,162 | 250,905 | 7.03 s | (incl.) | 46 | - |
+| EasternPacific_ENPAC2003 | 272,913 | 531,680 | 13.92 s | 11.40 s | 75 | - _(skipped: >--max-elements gate)_ |
 
 WNAT_Hagen full lifecycle (FEM direct smoother 4.38 s + angle smoother 37.5 s,
-3 iters each) completes in ~45 s end-to-end — the first full-lifecycle run on a
+3 iters each) completes in ~45 s end-to-end, the first full-lifecycle run on a
 real WNAT mesh.
 
 > **Skeletonization regression fixed (this session):** `_peel()` (then named `_skeletonize`) hung
@@ -192,9 +192,9 @@ committed harness and were captured on the maintainer's hardware.
 
 CHILmesh's performance arc, by tagged release:
 
-- **v0.2.0 — Phases 1–3** — hash-mapped edge / vertex adjacencies; O(n²) → amortised O(n) topology build. Headline workflow 14.3 s on WNAT_Hagen.
-- **v0.3.0 — Vectorisation pass (#75, PR #91)** — `signed_area`, `interior_angles`, `elem_quality`, `_plot_polys`, `plot_point` lifted to numpy array ops. Headline workflow 14.3 s → **3.33 s**; quality analysis 6.6 s → 0.07 s; `Vert2Edge` lookup 0.7 μs → 0.17 μs.
-- **v0.4.0 — Phase 5 spatial queries (#115) + layer-paths (#118)** — `find_element`, `find_elements_in_radius`, `nearest_vertices` backed by lazy centroid kd-tree (`< 0.5 s` build, `< 50 μs` per call). Layer-paths outer-vertex traversal scoped to layer elements: `O(L·m)` → `O(m)`. **Workflow timings unchanged from v0.3.0** — these are additive features.
+- **v0.2.0: Phases 1–3**; hash-mapped edge / vertex adjacencies; O(n²) → amortised O(n) topology build. Headline workflow 14.3 s on WNAT_Hagen.
+- **v0.3.0: Vectorisation pass (#75, PR #91)**; `signed_area`, `interior_angles`, `elem_quality`, `_plot_polys`, `plot_point` lifted to numpy array ops. Headline workflow 14.3 s → **3.33 s**; quality analysis 6.6 s → 0.07 s; `Vert2Edge` lookup 0.7 μs → 0.17 μs.
+- **v0.4.0: Phase 5 spatial queries (#115) + layer-paths (#118)**; `find_element`, `find_elements_in_radius`, `nearest_vertices` backed by lazy centroid kd-tree (`< 0.5 s` build, `< 50 μs` per call). Layer-paths outer-vertex traversal scoped to layer elements: `O(L·m)` → `O(m)`. **Workflow timings unchanged from v0.3.0**, these are additive features.
 
 The 3.33 s end-to-end figure for init + quality analysis on WNAT_Hagen is therefore a v0.3.0 result that carries through v0.4.0 unchanged.
 
@@ -209,7 +209,7 @@ The 3.33 s end-to-end figure for init + quality analysis on WNAT_Hagen is theref
 | Fast init (no layers) | 3.9 s | 0.44 s | 0.44 s | **1.214 s** | 3.2× |
 | Full init (with layers) | 7.7 s | 3.26 s | 3.26 s | **4.568 s** | 1.7× |
 | Quality analysis | 6.6 s | 0.07 s | 0.07 s | **0.069 s** | 95.6× |
-| Spatial index build (kd-tree) | n/a | n/a | < 0.5 s | (included) | — |
+| Spatial index build (kd-tree) | n/a | n/a | < 0.5 s | (included) | - |
 | **Total workflow** | **14.3 s** | **3.33 s** | **3.33 s** | **4.637 s** | **3.1×** |
 
 **Note (v0.4.1):** Recompiled May 21, 2026 on updated environment (Python 3.11.15, Linux x86_64). Full init performance slightly degraded vs. v0.4.0 baseline (3.26s → 4.568s), likely due to environment/CPU variance. Quality analysis latency remains sub-millisecond. All query operations maintain O(1) amortized complexity.
@@ -228,11 +228,11 @@ The 3.33 s end-to-end figure for init + quality analysis on WNAT_Hagen is theref
 
 ### Layer-paths (PR #118)
 
-The `chilmesh.layer_paths` traversal previously built a full mesh subgraph per layer (`O(L·m)` where `L` = layer count, `m` = edges). The v0.4.0 path scopes the subgraph to layer elements only, dropping the dependency on `L` and yielding **O(m)** per layer for typical inputs.
+The `chilmesh.layer_paths` traversal builds a subgraph of the layer elements only, so the cost is **O(m)** per layer for typical inputs (`m` = edges). The v0.3.0 baseline built a full mesh subgraph per layer (`O(L·m)`, `L` = layer count).
 
 ---
 
-## Historical baseline — WNAT_Hagen v0.2.0 (April 2026)
+## Historical baseline: WNAT_Hagen v0.2.0 (April 2026)
 
 ### Mesh Specifications
 ```
@@ -271,18 +271,18 @@ Layers:    30 (skeletonization)
 
 O(n²) algorithms for critical ops:
 
-1. **Edge Discovery:** O(n²) linear search — 98,365 elements × adjacency scans — estimated 1,800-2,200s
-2. **Adjacency Building (Vert2Edge/Vert2Elem):** O(n²) — per-vertex linear search — estimated 1,200-1,600s
-3. **Skeletonization:** O(n log n) with large constant — 30 layers × complex neighbor finding — estimated 1,200-1,400s
-4. **Quality/Angle Computation:** O(n) with high constant — full double-precision per element — estimated 4,500-5,200s
+1. **Edge Discovery:** O(n²) linear search; 98,365 elements × adjacency scans, estimated 1,800-2,200s
+2. **Adjacency Building (Vert2Edge/Vert2Elem):** O(n²), per-vertex linear search, estimated 1,200-1,600s
+3. **Skeletonization:** O(n log n) with large constant; 30 layers × complex neighbor finding, estimated 1,200-1,400s
+4. **Quality/Angle Computation:** O(n) with high constant; full double-precision per element, estimated 4,500-5,200s
 
 **Total v0.1.1 Estimate:** 8,700-10,400s (2.4-2.9 hours)
 
 ### v0.2.0 Optimizations
 
-1. **Phase 1 — EdgeMap O(1):** edge discovery O(n log n) sorting; adjacency building O(1) hash lookups — **actual: 7.7s**
-2. **Phase 2 — Dict-based Structures:** Vert2Edge: `Dict[int, Set[int]]` with O(1) lookup; zero-cost inline validation — **query: 0.7-4.4μs**
-3. **Phase 3 — Bridge Adapters:** public API stable; getter methods with defensive copies — **still O(1) per op**
+1. **Phase 1, EdgeMap O(1):** edge discovery O(n log n) sorting; adjacency building O(1) hash lookups, **actual: 7.7s**
+2. **Phase 2, Dict-based Structures:** Vert2Edge: `Dict[int, Set[int]]` with O(1) lookup; zero-cost inline validation, **query: 0.7-4.4μs**
+3. **Phase 3, Bridge Adapters:** public API stable; getter methods with defensive copies, **still O(1) per op**
 
 ---
 
@@ -344,7 +344,7 @@ Quality assess:     6.6s
 Total:             14.7s ✅ Interactive development
 ```
 
-**Speedup: 259×** — 64-minute operation in 15 seconds.
+**Speedup: 259×**, 64-minute operation in 15 seconds.
 
 ---
 
@@ -410,15 +410,15 @@ PYTHON
 
 As of 2026-05-21, Phase 5 is investigating two optimization paths:
 
-1. **Half-Edge Data Structure** (#137) — Evaluate DCEL (doubly-connected edge list) as alternative to current EdgeMap + dict-based adjacencies. Preliminary design documented in `.planning/PHASE-5-HALF-EDGE-OPTIMIZATION-SPEC.md`.
+1. **Half-Edge Data Structure** (#137): Evaluate DCEL (doubly-connected edge list) as alternative to current EdgeMap + dict-based adjacencies. Preliminary design documented in `.planning/PHASE-5-HALF-EDGE-OPTIMIZATION-SPEC.md`.
 
-2. **Language Optimization** — Conditional on half-edge showing >2× performance gain; may pursue Rust/C++ bindings in Phase 6.
+2. **Language Optimization**: Conditional on half-edge showing >2× performance gain; may pursue Rust/C++ bindings in Phase 6.
 
-Current baseline (v0.4.1) serves as the reference for optimization decisions.
+The v0.4.1 baseline is the reference for optimization decisions.
 
 ---
 
-## ENPAC2003 — full Python pipeline (parse → render)
+## ENPAC2003: full Python pipeline (parse → render)
 
 End-to-end cost including I/O and rendering, which the cross-language table omits. Single machine, medians of 3, chilmesh 1.2.2.
 
@@ -431,7 +431,7 @@ End-to-end cost including I/O and rendering, which the cross-language table omit
 | Quality (signed area) | 41 ms | over 531,680 elements |
 | Render | 11.49 s | `plot()` → PNG; dominates wall-clock |
 
-The timed compute stage is the **layer peel** (`_peel`), distinct from medial axis / skeleton / distance — see [`CONCEPTS.md`](CONCEPTS.md) and [#221](https://github.com/domattioli/CHILmesh/issues/221). At this scale rendering, not topology, is the wall-clock bottleneck.
+The timed compute stage is the **layer peel** (`_peel`), distinct from medial axis / skeleton / distance; see [`CONCEPTS.md`](CONCEPTS.md) and [#221](https://github.com/domattioli/CHILmesh/issues/221). At this scale rendering, not topology, is the wall-clock bottleneck.
 
 ## Cross-backend layer parity (Valence catalog)
 
@@ -451,17 +451,17 @@ All three backends produce identical `n_layers` (layerize) across the Valence ca
 | Great Lakes | 132,162 | 250,905 | 46 | 46 | 46 | ✅ |
 | EasternPacific_ENPAC2003 | 272,913 | 531,680 | 75 | 75 | 75 | ✅ |
 
-## ENPAC2003 — mesh quality
+## ENPAC2003: mesh quality
 
 Element + connectivity quality on ENPAC2003 (531,680 mostly-triangular elements).
 
 | Metric | Value | Call |
 |---|---:|---|
-| Angular skew — mean / min | 0.875 / 0.15 | `elem_quality()` |
-| Min interior angle — worst / per-elem mean | 8.98° / 52.5° | `interior_angles()` |
-| Aspect ratio — mean / min | 0.972 / 0.081 | `element_quality(metric='aspect_ratio')` |
+| Angular skew, mean / min | 0.875 / 0.15 | `elem_quality()` |
+| Min interior angle, worst / per-elem mean | 8.98° / 52.5° | `interior_angles()` |
+| Aspect ratio, mean / min | 0.972 / 0.081 | `element_quality(metric='aspect_ratio')` |
 | Irregular interior vertices (valence ≠ 6) | 3.9% | `adjacencies['Vert2Elem']` degree |
-| Mean interior valence | 6.0 | — |
+| Mean interior valence | 6.0 | - |
 
 Skew and aspect ratio apply to triangles and quads; valence regularity compares each interior vertex against its ideal degree (6 for triangles, 4 for quads), so the irregular-vertex fraction flags topological defects independent of geometry.
 

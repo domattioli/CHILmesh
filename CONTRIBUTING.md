@@ -1,7 +1,7 @@
 # Contributing to CHILmesh
 
-Thanks for your interest in CHILmesh — a Python library for 2D mesh generation,
-manipulation, and analysis. This is the **canonical** contributor guide
+Thanks for your interest in CHILmesh, a Python library for 2D mesh generation,
+manipulation, and analysis. This is the canonical contributor guide
 (day-to-day mechanics). Architecture and adjacency invariants are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/ADJACENCY_STRUCTURES.md](docs/ADJACENCY_STRUCTURES.md).
@@ -33,7 +33,7 @@ The `[dev]` extra installs pytest, pytest-cov, mypy, and other development
 dependencies declared in `pyproject.toml`.
 
 Optional C++ backend is built automatically if a C++ compiler is available;
-the library gracefully falls back to pure Python if compilation fails (see
+the library falls back to pure Python if compilation fails (see
 `BUILDING.md` for details on compiler requirements and custom build flags).
 
 ## Run the tests
@@ -71,8 +71,7 @@ The full suite runs on all four; the fast subset skips `block_o`.
 - Open a PR on `development`, pass CI, merge to `main` only via PR squash-merge
   or rebase-merge. Delete the branch after merge.
 
-This strict policy prevents branch sprawl, keeps the history clean, and ensures
-all changes are reviewed before reaching production.
+This policy prevents branch sprawl and keeps the history clean. A PR reviews every change before it reaches `main`.
 
 ## Commit discipline
 
@@ -96,7 +95,7 @@ all changes are reviewed before reaching production.
 - Public API functions must have type hints.
 - Internal helpers should have type hints where they clarify intent.
 - Run `mypy src/chilmesh` to check (if available in your dev environment).
-- Code clarity is the goal — comments explain *why*, not *what*.
+- Code clarity is the goal; comments explain *why*, not *what*.
 
 ## Testing before push
 

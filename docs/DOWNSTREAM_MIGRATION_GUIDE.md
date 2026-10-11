@@ -10,7 +10,7 @@
 
 Guide for developers of downstream research projects integrating with CHILmesh v1.0.0+.
 
-**TL;DR:** Existing code keeps working — `CHILmesh` is still importable. The new `Mesh` alias is the v1.0.0 preferred idiom; adopt it when convenient. Optional C++ backend gives 46× speedup with bit-identical output.
+**TL;DR:** Existing code keeps working; `CHILmesh` is still importable. The new `Mesh` alias is the v1.0.0 preferred idiom; adopt it when convenient. Optional C++ backend gives 46× speedup with bit-identical output.
 
 > **⚠️ v1.4.0 is the exception to "existing code keeps working."** The #187 lexicon
 > ratification renamed several public/semi-public symbols **without compatibility
@@ -24,7 +24,7 @@ Guide for developers of downstream research projects integrating with CHILmesh v
 
 v1.4.0 (2026-07-11) ratified the CHILmesh skeleton/layer lexicon (#187) and renamed
 the symbols below **with no compatibility aliases**. Because it shipped as a *minor*
-bump, a `chilmesh>=1.x,<2` / caret pin does **not** exclude it — a consumer that (a)
+bump, a `chilmesh>=1.x,<2` / caret pin does **not** exclude it, a consumer that (a)
 admits 1.4.x and (b) still calls a renamed symbol breaks on upgrade. The
 `smooth_mesh` signature change (#251) shipped in the same release and is a second
 break vector.
@@ -34,20 +34,20 @@ break vector.
 | Old (≤1.3.x) | New (≥1.4.0) | Surface |
 |---|---|---|
 | `mesh.skeletonize()` | `mesh.peel_layers()` | `CHILmesh` public |
-| `mesh._skeletonize()` | `mesh._peel()` | `CHILmesh` private (**removed** — no alias) |
+| `mesh._skeletonize()` | `mesh._peel()` | `CHILmesh` private (**removed**; no alias) |
 | `_layerize` | `_peel` | `CHILmesh` private |
 | `MutableMesh.reskeletonize_local(...)` | `MutableMesh.repeel_local(...)` | `chilmesh.mutations` |
 | `MutableMesh.skeletonize_diff(...)` | `MutableMesh.layers_diff(...)` | `chilmesh.mutations` |
 | `smooth_mesh(...)` positional splat | `smooth_mesh(method, acknowledge_change=False, *, sdf=None, size_fn=None, **kwargs)` | `CHILmesh` public (#251) |
 
 `skeletonize` / `_skeletonize` / `_layerize` / `reskeletonize_local` / `skeletonize_diff`
-no longer exist under their old names — grep your tree for those five groups.
+no longer exist under their old names; grep your tree for those five groups.
 
 ### `smooth_mesh` signature (#251)
 
 `method` and `acknowledge_change` remain positional-or-keyword, so an existing
 `mesh.smooth_mesh("laplacian", True)` or `mesh.smooth_mesh(method=..., acknowledge_change=True)`
-call is safe. What changed: `sdf` and `size_fn` are now **keyword-only** — any call
+call is safe. What changed: `sdf` and `size_fn` are now **keyword-only**, any call
 that passed them positionally must switch to keyword form.
 
 ```python
@@ -92,7 +92,7 @@ from chilmesh import Mesh
 mesh = Mesh.read_from_fort14("ocean.14")
 ```
 
-`Mesh` is an alias for `CHILmesh` — no behaviour change. Existing imports continue to work through the v1.x series. A `DeprecationWarning` lands in v1.1.0; removal no earlier than v2.0.0.
+`Mesh` is an alias for `CHILmesh`: no behaviour change. Existing imports continue to work through the v1.x series. A `DeprecationWarning` lands in v1.1.0; removal no earlier than v2.0.0.
 
 ### Optional C++ Acceleration
 Heavy initialization workloads can opt into the bundled C++ half-edge extension. Output is bit-identical to Python (verified by `tests/test_backend_equivalence.py`, 36 parametrized cases).
@@ -112,23 +112,23 @@ Force a specific backend with the `CHILMESH_BACKEND` environment variable
 (`python`, `cpp`, or `rust`). When unset, the fastest available is auto-selected
 (order: C++ → Rust → Python).
 
-> **Downstream note:** the **Rust** backend is **frozen** — kept and
+> **Downstream note:** the **Rust** backend is **frozen**, kept and
 > output-equivalent, but not developed further; build **C++** for acceleration.
 > See [`RUST_EVALUATION.md`](RUST_EVALUATION.md).
 
 ### New Public Surface (cumulative since v0.4.1)
 - the legacy research adapter, `MeshAdapterForADMESH`, `MeshAdapterForADMESHDomains` re-exported at package root.
-- `CHILmesh.submesh(elem_ids)` — public sub-mesh factory (#138).
-- `CHILmesh.rebuild_adjacencies()` / `invalidate_adjacencies()` — for mid-sweep mutation flows (#143).
-- `CHILmesh.ccw_edges_around_vert(vert_id)` — counter-clockwise edge walk (#133).
+- `CHILmesh.submesh(elem_ids)`: public sub-mesh factory (#138).
+- `CHILmesh.rebuild_adjacencies()` / `invalidate_adjacencies()`: for mid-sweep mutation flows (#143).
+- `CHILmesh.ccw_edges_around_vert(vert_id)`: counter-clockwise edge walk (#133).
 - `compute_adjacencies` kwarg on the constructor and `read_from_fort14` / `read_from_2dm` / `from_admesh_domain` (#134).
-- `chilmesh.backend_info()` — runtime backend introspection.
+- `chilmesh.backend_info()`: runtime backend introspection.
 
 ### Guarantees
 - **Public API frozen under semver.** Breaking changes require a v2.x bump.
 - `CHILmesh` import preserved through v1.x; DeprecationWarning in v1.1, earliest removal v2.0.
 - C++ / Rust backends produce bit-identical output to Python on the official fixture set.
-- Python `>=3.10` (3.8 / 3.9 dropped — EOL).
+- Python `>=3.10` (3.8 / 3.9 dropped; EOL).
 
 ---
 
@@ -433,7 +433,7 @@ edges = mesh.get_vertex_edges(v)
 
 ### Performance Issues
 
-**Problem:** Code slower after upgrading? (Rare — should be faster.)
+**Problem:** Code slower after upgrading? (Rare; should be faster.)
 
 1. **Verify 0.2.0+:**
    ```python
@@ -523,7 +523,7 @@ Report at: https://github.com/domattioli/CHILmesh/issues
 | 0.2.0    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Current, use this |
 | 0.2.x    | ✅ Recommended | ✅ Recommended | ✅ Recommended | Bug fixes, recommended |
 | 1.0.0    | ✅ | ✅ | ✅ | `Mesh` alias, C++ backend |
-| 1.4.0+   | ⚠️ | ⚠️ | ⚠️ | **#187 breaking renames — see [above](#-v140-breaking-renames-187)** |
+| 1.4.0+   | ⚠️ | ⚠️ | ⚠️ | **#187 breaking renames; see [above](#-v140-breaking-renames-187)** |
 
 ---
 

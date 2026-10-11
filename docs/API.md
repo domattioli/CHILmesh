@@ -30,7 +30,7 @@ from chilmesh.bridge import (
 
 Load mesh from ADCIRC `.fort.14` file.
 
-**Parameters:** `path` — fort.14 file path; `compute_layers` — if False, skip skeletonization (fast bulk loading)
+**Parameters:** `path`; fort.14 file path; `compute_layers`; if False, skip skeletonization (fast bulk loading)
 
 ```python
 mesh = CHILmesh.read_from_fort14(Path("mesh.fort.14"))
@@ -122,7 +122,7 @@ Returns array of shape (m, 3|4) with edge IDs for specified elements (None = all
 #### `edge2elem(edge_ids: Optional[int|List[int]]) -> np.ndarray`
 **Stability:** Stable | **Complexity:** O(m)
 
-Returns array of shape (m, 2) — col 0: first adjacent element; col 1: second element (-1 for boundary).
+Returns array of shape (m, 2); col 0: first adjacent element; col 1: second element (-1 for boundary).
 
 ---
 
@@ -173,7 +173,7 @@ Returns dict: `node_count`, `element_count`, `element_type` ('tri'/'quad'/'mixed
 
 Add element during advancing-front generation. Returns new element ID.
 
-**Parameters:** `vertices` — [v0, v1, v2] for tri or [v0, v1, v2, v3] for quad; `elem_type` — 'tri' or 'quad'
+**Parameters:** `vertices`; [v0, v1, v2] for tri or [v0, v1, v2, v3] for quad; `elem_type`, 'tri' or 'quad'
 
 ```python
 new_elem_id = mesh.add_advancing_front_element([v1, v2, v3], 'tri')
@@ -211,7 +211,7 @@ for edge_id in boundary[:10]:
 
 Returns sorted list of bottleneck vertex IDs for domain splitting.
 
-**Parameters:** `width_threshold` — ratio threshold [0, 1]
+**Parameters:** `width_threshold`, ratio threshold [0, 1]
 
 ```python
 pinches = mesh.pinch_points(width_threshold=0.3)
