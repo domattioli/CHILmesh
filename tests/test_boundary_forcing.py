@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
 import synthetic_adcirc as syn  # noqa: E402
 
 from chilmesh import (  # noqa: E402
-    CHILmesh, read_fort19, write_fort19, read_fort20, write_fort20,
+    read_fort19, write_fort19, read_fort20, write_fort20,
     read_fort24, write_fort24, examples,
 )
 
@@ -19,7 +19,6 @@ from chilmesh import (  # noqa: E402
 @pytest.fixture
 def mesh():
     m = examples.annulus.__wrapped__()
-    n = m.n_verts
     m.boundary_segments = [
         {"kind": "open", "ibtype": None, "nodes": np.array([0, 1, 2])},
         {"kind": "open", "ibtype": None, "nodes": np.array([3, 4])},
