@@ -2716,7 +2716,7 @@ class CHILmesh(CHILmeshPlotMixin):
         if path.suffix in (".14", ".fort14"):
             write_fort14(self, filename)
         elif path.suffix == ".2dm":
-            self._write_2dm(filename)
+            self.write_to_2dm(filename)
         else:
             raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
 
@@ -2752,14 +2752,20 @@ class CHILmesh(CHILmeshPlotMixin):
         else:
             raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
 
-    def _write_2dm(self, filename: str) -> None:
+    def write_to_2dm(self, filename: str, *, nodestrings: bool = True) -> None:
         """Write mesh to SMS 2dm format.
 
-        Serializes node coordinates (ND) and element connectivity (E3T/E4Q)
-        only. Boundary-segment / nodestring metadata is NOT written, so a
-        ``save('.2dm')`` -> ``read_from_2dm`` roundtrip is lossless for
-        geometry and topology but drops boundary records (see issue #228).
+        Serializes node coordinates (ND), element connectivity (E3T/E4Q) and,
+        when ``nodestrings`` is true, one ``NS`` card group per boundary
+        segment in ``boundary_segments``. Node order is kept and the last node
+        of each string is negative (SMS convention). Meshes without boundary
+        segments write no NS cards.
+
+        Example:
+            >>> mesh.write_to_2dm("out.2dm")                    # doctest: +SKIP
+            >>> CHILmesh.read_from_2dm("out.2dm").boundary_segments  # doctest: +SKIP
         """
+        segs = (getattr(self, 'boundary_segments', None) or []) if nodestrings else []
         with open(filename, 'w', encoding='utf-8', newline='\n') as f:
             f.write("MESH2D\n")
             for i, elem in enumerate(self.connectivity_list):
@@ -2771,6 +2777,17 @@ class CHILmesh(CHILmeshPlotMixin):
                     f.write(f"E4Q {i+1} {' '.join(str(v+1) for v in verts)}\n")
             for i, pt in enumerate(self.points):
                 f.write(f"ND {i+1} {pt[0]:.10f} {pt[1]:.10f} {pt[2]:.10f}\n")
+            for seg in segs:
+                ids = [int(n) + 1 for n in seg["nodes"]]
+                if len(ids) < 2:
+                    continue
+                ids[-1] = -ids[-1]
+                for j in range(0, len(ids), 10):
+                    f.write("NS " + " ".join(str(v) for v in ids[j:j + 10]) + "\n")
+
+    def _write_2dm(self, filename: str) -> None:
+        """Alias of :meth:`write_to_2dm` (kept for backward compatibility)."""
+        self.write_to_2dm(filename)
 
     @classmethod
     def read_from_2dm(cls, filename: Path, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
@@ -2783,11 +2800,15 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies: See :meth:`read_from_fort14`. (#192)
 
         Returns:
-            A CHILmesh instance.
+            A CHILmesh instance. ``NS`` nodestring cards fill
+            ``boundary_segments`` (kind ``"nodestring"``, 0-based node ids,
+            order kept). Other SMS cards are ignored.
         """
         filename = Path(filename)
         nodes = {}
         elems = []
+        strings: list = []
+        cur_ns: list = []
         has_mixed = False
         has_tri = False
         has_quad = False
@@ -2812,6 +2833,22 @@ class CHILmesh(CHILmeshPlotMixin):
                 elif parts[0] == 'ND':
                     nid = int(parts[1]) - 1
                     nodes[nid] = [float(x) for x in parts[2:]]
+                elif parts[0] == 'NS':
+                    # NS: up to 10 node ids per card; a negative id ends the string.
+                    for tok in parts[1:]:
+                        try:
+                            v = int(float(tok))
+                        except ValueError:
+                            break
+                        if v < 0:
+                            cur_ns.append(-v - 1)
+                            strings.append(cur_ns)
+                            cur_ns = []
+                        else:
+                            cur_ns.append(v - 1)
+                # all other cards (BEG, GM, BCP, MAT, ...) are ignored
+        if cur_ns:
+            strings.append(cur_ns)
 
         if not nodes:
             raise ValueError("No nodes found in 2dm file")
@@ -2836,9 +2873,14 @@ class CHILmesh(CHILmeshPlotMixin):
             conn = np.array(padded_elems, dtype=int)
         else:
             conn = np.array(elems, dtype=int)
-        return cls(connectivity=conn, points=pts,
+        mesh = cls(connectivity=conn, points=pts,
                    grid_name=filename.stem, compute_layers=compute_layers,
                    compute_adjacencies=compute_adjacencies)
+        mesh.boundary_segments = [
+            {"kind": "nodestring", "ibtype": None, "nodes": np.array(ns, dtype=int)}
+            for ns in strings if len(ns) >= 2
+        ]
+        return mesh
 
     @classmethod
     def read_from_fort14(

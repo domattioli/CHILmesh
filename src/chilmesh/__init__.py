@@ -65,6 +65,14 @@ _LAZY_ATTRS = {
     # .summary_io
     "summary": ".summary_io",
     "SummaryError": ".summary_io",
+    # .coloring
+    "ElementColoring": ".coloring",
+    "color_elements": ".coloring",
+    "check_coloring": ".coloring",
+    # .partition
+    "PartitionReport": ".partition",
+    "partition_report": ".partition",
+    "partition_mesh": ".partition",
     # .mesh_topology
     "EdgeMap": ".mesh_topology",
     "quad_from_tri_pair": ".mesh_topology",
@@ -198,6 +206,12 @@ __all__ = [
     "Fort14ParseError",
     "summary",
     "SummaryError",
+    "ElementColoring",
+    "color_elements",
+    "check_coloring",
+    "PartitionReport",
+    "partition_report",
+    "partition_mesh",
     # Standalone quality computation
     "element_quality",
     "courant_number",

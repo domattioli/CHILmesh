@@ -1,0 +1,17 @@
+{
+  "schema": ["name", "format", "stage", "url", "lfs", "sha256", "size", "source", "license", "notes"],
+  "entries": [
+    {
+      "name": "estuary.2dm",
+      "format": "2dm",
+      "stage": "B1",
+      "url": "https://raw.githubusercontent.com/pwcazenave/PyFVCOM/f98e11234d8f92bc45c497b18477978d482ab9d8/examples/estuary.2dm",
+      "lfs": false,
+      "sha256": "82ada67cbf0dfbe0b3877a6e41ae1739f736f7dbc50d2dcf63457a90858a0996",
+      "size": 79700,
+      "source": "pwcazenave/PyFVCOM examples (SMS-written)",
+      "license": "MIT",
+      "notes": "1570 E3T, 845 ND, 3 NS cards plus SMS extra cards the reader ignores"
+    }
+  ]
+}

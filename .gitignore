@@ -99,3 +99,6 @@ scripts/hooks/
 scripts/instructions.sh
 scripts/instructions_on_start.sh
 docs/sessions/
+
+# ADCIRC testsuite gate cache (scripts/check_adcirc_testsuite.py)
+.adcirc_testsuite/

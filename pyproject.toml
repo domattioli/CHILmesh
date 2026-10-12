@@ -54,7 +54,14 @@ dev = [
     "pytest-xdist",
     "build",
     "twine",
+    "netCDF4",
 ]
+
+# NetCDF ADCIRC output readers (lazy import inside the reader functions).
+netcdf = ["netCDF4"]
+
+# Optional METIS partitioner backend for partition_mesh(method="metis").
+partition = ["pymetis"]
 
 # Opt-in GPU plot backend (chilplotting_gpu). Minimums are the versions this
 # was developed and measured against (PyPI latest on 2026-10-01).

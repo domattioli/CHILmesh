@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `CHILmesh.write_to_2dm(filename, *, nodestrings=True)`: public SMS `.2dm` writer that emits `NS` nodestring cards for `boundary_segments` (node order kept, last node negative). `_write_2dm` remains as an alias.
+- `chilmesh.partition_mesh(mesh, k, method="spectral")`: element partitioner using recursive spectral bisection of the element dual graph (scipy only); `method="metis"` uses the optional `partition` extra (pymetis).
+- `read_from_2dm` parses `NS` cards (multi-line, negative terminator) into `boundary_segments`; unknown SMS cards are ignored.
+- `chilmesh.color_elements` / `check_coloring`: deterministic greedy element coloring over node-sharing adjacency.
+- `chilmesh.partition_report`: sizes, imbalance, cut edges and connected pieces per part for a partition labeling.
+- `scripts/check_adcirc_testsuite.py` and `scripts/adcirc_testsuite_manifest.json`: SHA-256-pinned real-file gate. Optional `netcdf` extra.
+
 ## [1.5.5] - 2026-10-11
 
 ### Added
