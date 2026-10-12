@@ -21,4 +21,4 @@ AI/ML training. This states the licensor's intent under the license; it does
 not waive any right or grant any permission.
 
 ## Licensing inquiries
-Commercial or AI/ML-training licenses: domburner@duck.com
+Commercial or AI/ML-training licenses: contact the author through https://github.com/domattioli

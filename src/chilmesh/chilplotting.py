@@ -621,3 +621,43 @@ def _fill_mesh(mesh, elem_ids, facecolor, edgecolor="k", linewidth=1.0,
                         linewidths=linewidth, linestyles=linestyle, alpha=alpha)
     ax.add_collection(pc)
     ax.autoscale_view()
+
+
+def plot_field(mesh, values, *, ax: Optional[plt.Axes] = None, cmap: str = "viridis",
+               colorbar: bool = True, clabel: Optional[str] = None,
+               vmin: Optional[float] = None, vmax: Optional[float] = None,
+               edgecolor="none") -> Tuple[plt.Figure, plt.Axes]:
+    """Draw a node-aligned field (e.g. one ADCIRC output record) on the mesh.
+
+    Each element takes the mean of its node values. An element with any NaN
+    node (dry or fill) is left blank. ``values`` must have ``mesh.n_verts``
+    entries or ``ValueError`` names both lengths.
+
+    Example:
+        >>> import matplotlib; matplotlib.use("Agg")
+        >>> from chilmesh import examples
+        >>> m = examples.annulus()
+        >>> fig, ax = plot_field(m, m.points[:, 0])
+        >>> len(fig.axes)  # main axes and the color bar
+        2
+
+    Tested by: tests/test_plot_field.py::test_colorbar_present_and_one_polygon_per_element.
+    """
+    vals = np.asarray(values, dtype=float).ravel()
+    if len(vals) != mesh.n_verts:
+        raise ValueError(
+            f"values length {len(vals)} != number of mesh nodes {mesh.n_verts}")
+    conn = np.asarray(mesh.connectivity_list)
+    pad = (conn.shape[1] == 4) & (conn[:, 3] == conn[:, 0]) if conn.shape[1] == 4 \
+        else np.zeros(len(conn), dtype=bool)
+    vsum = vals[conn].sum(axis=1)
+    cnt = np.where(pad, 3, conn.shape[1])
+    elem_vals = vsum / cnt
+    if conn.shape[1] == 4:  # padded triangles repeat node 0; do not count it twice
+        elem_vals = np.where(pad, (vsum - vals[conn[:, 3]]) / 3, elem_vals)
+    finite = elem_vals[np.isfinite(elem_vals)]
+    lo = (float(finite.min()) if finite.size else 0.0) if vmin is None else vmin
+    hi = (float(finite.max()) if finite.size else 1.0) if vmax is None else vmax
+    return plot_filled(np.asarray(mesh.points), conn, values=elem_vals, cmap=cmap,
+                       vmin=lo, vmax=hi, edgecolor=edgecolor, colorbar=colorbar,
+                       clabel=clabel, ax=ax)

@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [1.6.0] - 2026-10-12
+
+ADCIRC file I/O, element coloring and mesh partitioning ([#289](https://github.com/domattioli/CHILmesh/issues/289)). This release also carries every 1.5.5 change below.
+
+### Added
+- `CHILmesh.write_to_2dm(filename, *, nodestrings=True)`: public SMS `.2dm` writer that emits `NS` nodestring cards for `boundary_segments` (node order kept, last node negative). `_write_2dm` remains as an alias.
+- `chilmesh.partition_mesh(mesh, k, method="spectral")`: element partitioner using recursive spectral bisection of the element dual graph (scipy only); `method="metis"` uses the optional `partition` extra (pymetis).
+- `read_from_2dm` parses `NS` cards (multi-line, negative terminator) into `boundary_segments`; unknown SMS cards are ignored.
+- `chilmesh.color_elements` / `check_coloring`: deterministic greedy element coloring over node-sharing adjacency.
+- `chilmesh.partition_report`: sizes, imbalance, cut edges and connected pieces per part for a partition labeling.
+- `scripts/check_adcirc_testsuite.py`: a local check that parses real ADCIRC files, pinned by SHA-256 and fetched at run time. Optional `netcdf` extra (netCDF4).
+- `chilmesh.read_adcirc_output` / `OutputSeries`: ASCII fort.61/62/63/64, maxele.63, maxvel.63 (full and sparse forms, single-step seek, -99999 to NaN, node-count check, truncation warning with dropped count).
+- `chilmesh.read_adcirc_output_nc`: the same for fort.61/62/63/64.nc, maxele.63.nc, maxvel.63.nc (optional `netcdf` extra; `import chilmesh` does not need netCDF4).
+- `chilmesh.chilplotting.plot_field(mesh, values)`: node-aligned field on the mesh with color bar and blank NaN elements.
+- `chilmesh.read_fort19` / `write_fort19`, `read_fort20` / `write_fort20`, `read_fort24` / `write_fort24`: ADCIRC boundary forcing and tidal potential files, with `BoundaryForcingSeries` and `TidalConstituent`. fort.20 nodes follow the IBTYPE set 2, 12, 22.
+- `chilmesh.read_fort22_besttrack` / `write_fort22_besttrack`: NOAA best-track (ATCF) files, with `StormTrack` and `StormRecord`.
+- `chilmesh.read_owi` / `write_owi`: OWI wind and pressure files, with `OWISnapshot`.
+- Optional `partition` extra (pymetis) for `partition_mesh(method="metis")`; `ElementColoring` and `PartitionReport` result types.
+- Every new public function docstring names the test that exercises it.
+
 ## [1.5.5] - 2026-10-11
 
 ### Added

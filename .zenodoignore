@@ -40,6 +40,8 @@ copilot-instructions.md
 .aider.conf.yml
 .windsurf/
 .workerbee/
+.zenodo.json
 # <<< release-ignore:end
+
 
 
