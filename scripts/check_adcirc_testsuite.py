@@ -27,8 +27,26 @@ def _read_2dm(path: Path) -> str:
     return f"{m.n_verts} nodes, {m.n_elems} elems, {len(m.boundary_segments)} nodestrings"
 
 
+def _read_output(path: Path) -> str:
+    from chilmesh import read_adcirc_output
+    s = read_adcirc_output(path)
+    if s.dropped_records:
+        raise ValueError(f"{s.dropped_records} record(s) dropped (truncated file)")
+    return f"{s.kind} {s.location} {s.values.shape}, t=[{s.times[0]:g}..{s.times[-1]:g}]"
+
+
+def _read_output_nc(path: Path) -> str:
+    from chilmesh import read_adcirc_output_nc
+    s = read_adcirc_output_nc(path)
+    return f"{s.kind} {s.location} {s.values.shape}, t=[{s.times[0]:g}..{s.times[-1]:g}]"
+
+
+_B2_ASCII = ["fort.61", "fort.62", "fort.63", "fort.64", "maxele.63", "maxvel.63"]
+
 # format -> reader(path) -> description; raises on parse failure.
 READERS = {"2dm": _read_2dm}
+READERS.update({f: _read_output for f in _B2_ASCII})
+READERS.update({f + ".nc": _read_output_nc for f in _B2_ASCII})
 
 
 def _fetch(url: str, dest: Path) -> None:

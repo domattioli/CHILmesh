@@ -1,5 +1,16 @@
 {
-  "schema": ["name", "format", "stage", "url", "lfs", "sha256", "size", "source", "license", "notes"],
+  "schema": [
+    "name",
+    "format",
+    "stage",
+    "url",
+    "lfs",
+    "sha256",
+    "size",
+    "source",
+    "license",
+    "notes"
+  ],
   "entries": [
     {
       "name": "estuary.2dm",
@@ -12,6 +23,150 @@
       "source": "pwcazenave/PyFVCOM examples (SMS-written)",
       "license": "MIT",
       "notes": "1570 E3T, 845 ND, 3 NS cards plus SMS extra cards the reader ignores"
+    },
+    {
+      "name": "quarterannular-2d.fort.61",
+      "format": "fort.61",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d/control/fort.61",
+      "lfs": true,
+      "sha256": "94546b1d0dcc013b4865a93fcf71a2de4475fb91116f3d162a63f404efd60bf2",
+      "size": 113052,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d/control/fort.61 at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d.fort.62",
+      "format": "fort.62",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d/control/fort.62",
+      "lfs": true,
+      "sha256": "23fe1dd7cb2be9b0f45a18534439823ec8f4a64a089ae49db1a38587437d192f",
+      "size": 162492,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d/control/fort.62 at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d.fort.63",
+      "format": "fort.63",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d/control/fort.63",
+      "lfs": true,
+      "sha256": "3995d51dff113f8979d1bf631d8b771b65354d104c09d90b9574641c24a594e2",
+      "size": 1744575,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d/control/fort.63 at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d.fort.64",
+      "format": "fort.64",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d/control/fort.64",
+      "lfs": true,
+      "sha256": "f4bb2d5a77912599687ad47f0554e8d36143e3e7e0df87128af7dff08a0ce946",
+      "size": 2782815,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d/control/fort.64 at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d.maxele.63",
+      "format": "maxele.63",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d/control/maxele.63",
+      "lfs": true,
+      "sha256": "0335a90c14cb3e5264ee3096fc4c9d3d78c68cf2c09a08367b7f1b5810565d7a",
+      "size": 4401,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d/control/maxele.63 at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d.maxvel.63",
+      "format": "maxvel.63",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d/control/maxvel.63",
+      "lfs": true,
+      "sha256": "808432b6a57a89ba491fdce443cdcf6d38d36357fce0e197c29ea69ad6db8427",
+      "size": 4401,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d/control/maxvel.63 at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d-netcdf.fort.61.nc",
+      "format": "fort.61.nc",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d-netcdf/control/fort.61.nc",
+      "lfs": true,
+      "sha256": "2305d583bd9edc021dfa42715961ea037afddcf6fd5a972168acc0976d4ebb86",
+      "size": 126458,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d-netcdf/control/fort.61.nc at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d-netcdf.fort.62.nc",
+      "format": "fort.62.nc",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d-netcdf/control/fort.62.nc",
+      "lfs": true,
+      "sha256": "8fc46318ae5f2b2b115725c9109d7f1a4995db89bbf45b5c42d0fc3e597004a7",
+      "size": 196218,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d-netcdf/control/fort.62.nc at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d-netcdf.fort.63.nc",
+      "format": "fort.63.nc",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d-netcdf/control/fort.63.nc",
+      "lfs": true,
+      "sha256": "be65a3d38fc7fd905c30c14e483b232c231bc2b01074e75082cbabc017cf205d",
+      "size": 362026,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d-netcdf/control/fort.63.nc at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d-netcdf.fort.64.nc",
+      "format": "fort.64.nc",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d-netcdf/control/fort.64.nc",
+      "lfs": true,
+      "sha256": "61e7587c8254181c0eba4a78af8b0b2b3714af97e785922868c15fb7fcbded5a",
+      "size": 906250,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d-netcdf/control/fort.64.nc at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d-netcdf.maxele.63.nc",
+      "format": "maxele.63.nc",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d-netcdf/control/maxele.63.nc",
+      "lfs": true,
+      "sha256": "6576576545c33d6c21cd8a4be55985eac1a34b339183f4ef333a7c0e04f6b8b7",
+      "size": 62747,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d-netcdf/control/maxele.63.nc at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
+    },
+    {
+      "name": "quarterannular-2d-netcdf.maxvel.63.nc",
+      "format": "maxvel.63.nc",
+      "stage": "B2",
+      "url": "https://media.githubusercontent.com/media/adcirc/adcirc-testsuite/aeba15eb5e665f2eaf21defe7ecf593a276ccc46/adcirc/adcirc_quarterannular-2d-netcdf/control/maxvel.63.nc",
+      "lfs": true,
+      "sha256": "a9ee94f22ff049f68f28c995d3500c0c091dc5b5ed024207b2a1e66b5a432cef",
+      "size": 62946,
+      "source": "adcirc/adcirc-testsuite adcirc/adcirc_quarterannular-2d-netcdf/control/maxvel.63.nc at aeba15e",
+      "license": "see adcirc/adcirc-testsuite repository; fetched at run time, not vendored",
+      "notes": "quarter annular, 63 nodes; Git LFS object"
     }
   ]
 }

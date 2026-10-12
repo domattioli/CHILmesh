@@ -73,6 +73,11 @@ _LAZY_ATTRS = {
     "PartitionReport": ".partition",
     "partition_report": ".partition",
     "partition_mesh": ".partition",
+    # .adcirc_output_io
+    "OutputSeries": ".adcirc_output_io",
+    "read_adcirc_output": ".adcirc_output_io",
+    # .adcirc_netcdf_io
+    "read_adcirc_output_nc": ".adcirc_netcdf_io",
     # .mesh_topology
     "EdgeMap": ".mesh_topology",
     "quad_from_tri_pair": ".mesh_topology",
@@ -212,6 +217,9 @@ __all__ = [
     "PartitionReport",
     "partition_report",
     "partition_mesh",
+    "OutputSeries",
+    "read_adcirc_output",
+    "read_adcirc_output_nc",
     # Standalone quality computation
     "element_quality",
     "courant_number",

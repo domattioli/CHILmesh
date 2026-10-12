@@ -13,6 +13,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - `chilmesh.color_elements` / `check_coloring`: deterministic greedy element coloring over node-sharing adjacency.
 - `chilmesh.partition_report`: sizes, imbalance, cut edges and connected pieces per part for a partition labeling.
 - `scripts/check_adcirc_testsuite.py` and `scripts/adcirc_testsuite_manifest.json`: SHA-256-pinned real-file gate. Optional `netcdf` extra.
+- `chilmesh.read_adcirc_output` / `OutputSeries`: ASCII fort.61/62/63/64, maxele.63, maxvel.63 (full and sparse forms, single-step seek, -99999 to NaN, node-count check, truncation warning with dropped count).
+- `chilmesh.read_adcirc_output_nc`: the same for fort.61/62/63/64.nc, maxele.63.nc, maxvel.63.nc (optional `netcdf` extra; `import chilmesh` does not need netCDF4).
+- `chilmesh.chilplotting.plot_field(mesh, values)`: node-aligned field on the mesh with color bar and blank NaN elements.
+- Real-file gate: `--stage B2` pins and parses one adcirc-testsuite file per output format.
 
 ## [1.5.5] - 2026-10-11
 
