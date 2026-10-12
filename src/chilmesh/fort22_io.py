@@ -29,7 +29,7 @@ class StormRecord:
 
     ``extra`` holds the untyped columns (basin, cyclone number, technique,
     wind code, storm name, NWS 20 extras, ...) as stripped text in column
-    order; ``ncols`` is the original column count so the writer reproduces
+    order; ``_ncols`` (private) is the original column count so the writer reproduces
     short lines without padding them.
     """
 
@@ -42,7 +42,7 @@ class StormRecord:
     radii: List[Optional[float]]
     rmw: Optional[float]
     extra: List[str] = field(default_factory=list)
-    ncols: int = 0
+    _ncols: int = field(default=0, repr=False)
 
 
 @dataclass
@@ -109,7 +109,7 @@ def _parse_line(line: str) -> StormRecord:
         radii=[_num(col(i)) for i in _C_RADII],
         rmw=_num(col(_C_RMW)),
         extra=[c for i, c in enumerate(cols) if i not in _TYPED],
-        ncols=len(cols),
+        _ncols=len(cols),
     )
 
 
@@ -171,7 +171,7 @@ def write_fort22_besttrack(track: StormTrack, path, nws: int = 8) -> None:
         }
         typed.update({c: _fmt_num(v) for c, v in zip(_C_RADII, r.radii)})
         extra = iter(r.extra)
-        cols = [typed[i] if i in _TYPED else next(extra) for i in range(r.ncols)]
+        cols = [typed[i] if i in _TYPED else next(extra) for i in range(r._ncols)]
         lines.append(", ".join(cols))
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
