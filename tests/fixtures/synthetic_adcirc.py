@@ -103,3 +103,40 @@ def write_output_nc(path, times, values, *, variable: str = "zeta", stations: bo
             d.createDimension("namelen", 8)
             d.createVariable("station_name", "S1", (dim, "namelen"))
     return Path(path)
+
+
+# --------------------------------------------------------------------------
+# Stage B3: OWI grids, boundary forcing (fort.19/20), tidal load (fort.24)
+# --------------------------------------------------------------------------
+def write_owi_synth(path, snaps, *, wind: bool = False, start="2005082500", end="2005082506") -> Path:
+    """Write an OWI WIN/PRE file from the format description.
+
+    ``snaps`` is a list of ``(dt12, ilat, ilon, dx, dy, swlat, swlon, a, b)``
+    where ``a`` (and ``b`` for wind) are ``(ilat, ilon)`` arrays.
+    """
+    lines = [f"{'Oceanweather WIN/PRE Format':<59}{start}     {end}"]
+    for dt12, ilat, ilon, dx, dy, swlat, swlon, a, b in snaps:
+        lines.append(f"iLat={ilat:4d}iLong={ilon:4d}DX={dx:6.4f}DY={dy:6.4f}"
+                     f"SWLat={swlat:8.5f}SWLon={swlon:8.4f}DT={dt12}")
+        blocks = [a, b] if wind else [a]
+        for blk in blocks:
+            flat = np.asarray(blk, float).ravel()
+            for i in range(0, flat.size, 8):
+                lines.append("".join(f"{v:10.4f}" for v in flat[i:i + 8]))
+    return write_text(path, lines)
+
+
+def write_forcing_synth(path, dt, flat_values, *, comments: bool = False) -> Path:
+    """Write a fort.19/fort.20 style file: time increment, then one value per line."""
+    suffix = "   ! note" if comments else ""
+    lines = [f"{dt!r}{suffix}"] + [f"{float(v)!r}{suffix}" for v in flat_values]
+    return write_text(path, lines)
+
+
+def write_fort24_synth(path, consts) -> Path:
+    """Write fort.24 from ``[(name, freq, amp_list, phase_list), ...]``."""
+    lines = []
+    for name, freq, amp, pha in consts:
+        lines += [f"{name} SAL", f"{freq!r}", "1", name]
+        lines += [f"{i + 1} \t{a:14.8f} {p:14.6f}" for i, (a, p) in enumerate(zip(amp, pha))]
+    return write_text(path, lines)

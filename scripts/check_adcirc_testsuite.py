@@ -41,11 +41,50 @@ def _read_output_nc(path: Path) -> str:
     return f"{s.kind} {s.location} {s.values.shape}, t=[{s.times[0]:g}..{s.times[-1]:g}]"
 
 
+def _read_f19(path: Path) -> str:
+    from chilmesh import read_fort19
+    s = read_fort19(path)  # no mesh: flat series
+    return f"dt={s.time_increment:g}, {s.values.size} values"
+
+
+def _read_f20(path: Path) -> str:
+    from chilmesh import read_fort20
+    s = read_fort20(path)
+    return f"dt={s.time_increment:g}, {s.values.size} values"
+
+
+def _read_f22(nws: int):
+    def reader(path: Path) -> str:
+        from chilmesh import read_fort22_besttrack
+        t = read_fort22_besttrack(path, nws=nws)
+        return f"NWS {nws}: {len(t.records)} records, {t.records[0].time:%Y-%m-%d %H} .. {t.records[-1].time:%Y-%m-%d %H}"
+    return reader
+
+
+def _read_owi_file(path: Path) -> str:
+    from chilmesh import read_owi
+    snaps = read_owi(path)
+    s = snaps[0]
+    kind = "pressure" if s.values is not None else "wind"
+    return f"{kind}, {len(snaps)} snapshots, grid {s.ilat}x{s.ilon}"
+
+
+def _read_f24(path: Path) -> str:
+    from chilmesh import read_fort24
+    c = read_fort24(path)
+    return f"{len(c)} constituent(s) [{', '.join(x.name for x in c)}], {c[0].amp.size} nodes"
+
+
 _B2_ASCII = ["fort.61", "fort.62", "fort.63", "fort.64", "maxele.63", "maxvel.63"]
 
 # format -> reader(path) -> description; raises on parse failure.
 READERS = {"2dm": _read_2dm}
 READERS.update({f: _read_output for f in _B2_ASCII})
+READERS.update({
+    "fort.19": _read_f19, "fort.20": _read_f20,
+    "fort.22": _read_f22(8), "fort.22.nws20": _read_f22(20),
+    "fort.221": _read_owi_file, "fort.222": _read_owi_file, "fort.24": _read_f24,
+})
 READERS.update({f + ".nc": _read_output_nc for f in _B2_ASCII})
 
 

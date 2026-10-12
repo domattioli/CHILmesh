@@ -76,6 +76,24 @@ _LAZY_ATTRS = {
     # .adcirc_output_io
     "OutputSeries": ".adcirc_output_io",
     "read_adcirc_output": ".adcirc_output_io",
+    # .fort22_io
+    "StormRecord": ".fort22_io",
+    "StormTrack": ".fort22_io",
+    "read_fort22_besttrack": ".fort22_io",
+    "write_fort22_besttrack": ".fort22_io",
+    # .owi_io
+    "OWISnapshot": ".owi_io",
+    "read_owi": ".owi_io",
+    "write_owi": ".owi_io",
+    # .boundary_forcing_io
+    "BoundaryForcingSeries": ".boundary_forcing_io",
+    "TidalConstituent": ".boundary_forcing_io",
+    "read_fort19": ".boundary_forcing_io",
+    "write_fort19": ".boundary_forcing_io",
+    "read_fort20": ".boundary_forcing_io",
+    "write_fort20": ".boundary_forcing_io",
+    "read_fort24": ".boundary_forcing_io",
+    "write_fort24": ".boundary_forcing_io",
     # .adcirc_netcdf_io
     "read_adcirc_output_nc": ".adcirc_netcdf_io",
     # .mesh_topology
@@ -220,6 +238,21 @@ __all__ = [
     "OutputSeries",
     "read_adcirc_output",
     "read_adcirc_output_nc",
+    "StormRecord",
+    "StormTrack",
+    "read_fort22_besttrack",
+    "write_fort22_besttrack",
+    "OWISnapshot",
+    "read_owi",
+    "write_owi",
+    "BoundaryForcingSeries",
+    "TidalConstituent",
+    "read_fort19",
+    "write_fort19",
+    "read_fort20",
+    "write_fort20",
+    "read_fort24",
+    "write_fort24",
     # Standalone quality computation
     "element_quality",
     "courant_number",
