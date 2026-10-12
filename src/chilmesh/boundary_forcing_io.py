@@ -129,12 +129,20 @@ def read_fort19(path, mesh=None, n_nodes: Optional[int] = None) -> BoundaryForci
     >>> s = read_fort19("fort.19", n_nodes=5)  # doctest: +SKIP
     >>> s.values.shape  # doctest: +SKIP
     (3, 5)
+
+    Tested by: tests/test_boundary_forcing.py::test_fort19_n_nodes_kwarg, ::test_fort19_with_mesh_counts_open_nodes.
     """
     return _read_forcing(path, mesh, n_nodes, _open_count, "open")
 
 
 def write_fort19(series: BoundaryForcingSeries, path) -> None:
-    """Write a fort.19 file: time increment, then one value per line."""
+    """Write a fort.19 file: time increment, then one value per line.
+
+    Example:
+        >>> write_fort19(series, "fort.19")  # doctest: +SKIP
+
+    Tested by: tests/test_boundary_forcing.py::test_fort19_round_trip.
+    """
     _write_forcing(series, path)
 
 
@@ -149,12 +157,20 @@ def read_fort20(path, mesh=None, n_nodes: Optional[int] = None) -> BoundaryForci
     -------
     >>> read_fort20("fort.20").time_increment  # doctest: +SKIP
     31536000.0
+
+    Tested by: tests/test_boundary_forcing.py::test_fort20_matching_nodes_use_only_flux_types.
     """
     return _read_forcing(path, mesh, n_nodes, _flux_count, "normal-flow")
 
 
 def write_fort20(series: BoundaryForcingSeries, path) -> None:
-    """Write a fort.20 file: time increment, then one value per line."""
+    """Write a fort.20 file: time increment, then one value per line.
+
+    Example:
+        >>> write_fort20(series, "fort.20")  # doctest: +SKIP
+
+    Tested by: tests/test_boundary_forcing.py::test_fort20_round_trip.
+    """
     _write_forcing(series, path)
 
 
@@ -169,6 +185,8 @@ def read_fort24(path, mesh=None) -> List[TidalConstituent]:
     >>> c = read_fort24("fort.24")  # doctest: +SKIP
     >>> c[0].name, c[0].amp.shape  # doctest: +SKIP
     ('M2', (27330,))
+
+    Tested by: tests/test_boundary_forcing.py::test_fort24_fields.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         lines = f.read().split("\n")
@@ -212,7 +230,13 @@ def read_fort24(path, mesh=None) -> List[TidalConstituent]:
 
 
 def write_fort24(constituents: List[TidalConstituent], path) -> None:
-    """Write fort.24: per constituent the alpha line, frequency, nodal factor, name, node lines."""
+    """Write fort.24: per constituent the alpha line, frequency, nodal factor, name, node lines.
+
+    Example:
+        >>> write_fort24(constituents, "fort.24")  # doctest: +SKIP
+
+    Tested by: tests/test_boundary_forcing.py::test_fort24_round_trip.
+    """
     lines = []
     for c in constituents:
         if len(c.amp) != len(c.phase):

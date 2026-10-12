@@ -67,6 +67,8 @@ def read_owi(path) -> List[OWISnapshot]:
     >>> snaps = read_owi("fort.221")  # doctest: +SKIP
     >>> snaps[0].values.shape  # doctest: +SKIP
     (100, 100)
+
+    Tested by: tests/test_owi.py::test_wind_u_v_blocks.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         lines = f.read().split("\n")
@@ -116,6 +118,8 @@ def write_owi(snapshots: List[OWISnapshot], path) -> None:
     Example
     -------
     >>> write_owi(snaps, "fort.221")  # doctest: +SKIP
+
+    Tested by: tests/test_owi.py::test_round_trip.
     """
     if not snapshots:
         raise ValueError("no snapshots to write")

@@ -640,6 +640,8 @@ def plot_field(mesh, values, *, ax: Optional[plt.Axes] = None, cmap: str = "viri
         >>> fig, ax = plot_field(m, m.points[:, 0])
         >>> len(fig.axes)  # main axes and the color bar
         2
+
+    Tested by: tests/test_plot_field.py::test_colorbar_present_and_one_polygon_per_element.
     """
     vals = np.asarray(values, dtype=float).ravel()
     if len(vals) != mesh.n_verts:

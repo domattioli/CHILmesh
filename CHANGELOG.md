@@ -17,6 +17,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - `chilmesh.read_adcirc_output_nc`: the same for fort.61/62/63/64.nc, maxele.63.nc, maxvel.63.nc (optional `netcdf` extra; `import chilmesh` does not need netCDF4).
 - `chilmesh.chilplotting.plot_field(mesh, values)`: node-aligned field on the mesh with color bar and blank NaN elements.
 - Real-file gate: `--stage B2` pins and parses one adcirc-testsuite file per output format.
+- `chilmesh.read_fort19` / `write_fort19`, `read_fort20` / `write_fort20`, `read_fort24` / `write_fort24`: ADCIRC boundary forcing and tidal potential files, with `BoundaryForcingSeries` and `TidalConstituent`. fort.20 nodes follow the IBTYPE set 2, 12, 22.
+- `chilmesh.read_fort22_besttrack` / `write_fort22_besttrack`: NOAA best-track (ATCF) files, with `StormTrack` and `StormRecord`.
+- `chilmesh.read_owi` / `write_owi`: OWI wind and pressure files, with `OWISnapshot`.
+- Optional `partition` extra (pymetis) for `partition_mesh(method="metis")`; `ElementColoring` and `PartitionReport` result types.
+- Every new public function docstring names the test that exercises it.
 
 ## [1.5.5] - 2026-10-11
 

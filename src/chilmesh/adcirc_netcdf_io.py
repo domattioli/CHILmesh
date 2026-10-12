@@ -43,6 +43,8 @@ def read_adcirc_output_nc(path, mesh=None, step: Optional[int] = None,
     Example:
         >>> from chilmesh import read_adcirc_output_nc  # doctest: +SKIP
         >>> series = read_adcirc_output_nc("fort.63.nc", step=0)  # doctest: +SKIP
+
+    Tested by: tests/test_adcirc_output_netcdf.py.
     """
     nc4 = _import_netcdf4()
     location = _location(path)

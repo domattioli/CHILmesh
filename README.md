@@ -53,9 +53,28 @@
 pip install chilmesh             # PyPI, pure Python
 pip install "chilmesh[cpp]"      # adds the prebuilt C++ backend
 pip install "chilmesh[gpu]"      # adds the experimental GPU renderer
+pip install "chilmesh[netcdf]"   # adds netCDF4 for read_adcirc_output_nc
+pip install "chilmesh[partition]" # adds pymetis for partition_mesh(method="metis")
 ```
 
 Python 3.10 or newer. Prebuilt C++ wheels cover Linux x86_64, macOS (x86_64, arm64) and Windows x86_64; other platforms build from source (`pip install ./src/chilmesh_cpp`, needs a C++ toolchain and CMake). Check with `chilmesh.backend_info()`. Backend details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+**File formats**
+
+| Format | Read | Write |
+|---|---|---|
+| ADCIRC fort.14 mesh | `Mesh.read_from_fort14`, `read_fort14_raw` | `Mesh.write_to_fort14`, `write_fort14_raw` |
+| ADCIRC fort.13 / fort.15 | `read_fort13`, `read_fort15` | `write_fort13`, `write_fort15` |
+| ADCIRC output fort.61/62/63/64, maxele.63, maxvel.63 | `read_adcirc_output` | none |
+| ADCIRC NetCDF output (`.nc`) | `read_adcirc_output_nc` (needs `[netcdf]`) | none |
+| ADCIRC fort.19 / fort.20 boundary forcing | `read_fort19`, `read_fort20` | `write_fort19`, `write_fort20` |
+| ADCIRC fort.24 tidal potential | `read_fort24` | `write_fort24` |
+| fort.22 best-track (ATCF) | `read_fort22_besttrack` | `write_fort22_besttrack` |
+| OWI wind and pressure | `read_owi` | `write_owi` |
+| SMS .2dm (with `NS` nodestrings) | `Mesh.read_from_2dm` | `Mesh.write_to_2dm` |
+| Gmsh .msh | `Mesh.read_from_msh` | `write_msh` |
+
+Also: `color_elements` / `check_coloring` (element coloring), `partition_mesh` / `partition_report` (element partitioning), and `chilplotting.plot_field` (nodal results on the mesh).
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 

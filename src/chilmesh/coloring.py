@@ -41,6 +41,13 @@ def color_elements(mesh) -> ElementColoring:
     Elements are visited largest node-sharing degree first, ties by element
     id, each taking the smallest free color. Deterministic; uses at most
     ``max_degree + 1`` colors.
+
+    Example:
+        >>> c = color_elements(mesh)  # doctest: +SKIP
+        >>> check_coloring(mesh, c)  # doctest: +SKIP
+        True
+
+    Tested by: tests/test_coloring.py::test_mixed_mesh, ::test_deterministic, ::test_all_bundled_meshes.
     """
     n = mesh.n_elems
     if "Vert2Elem" not in mesh.adjacencies:
@@ -58,7 +65,14 @@ def color_elements(mesh) -> ElementColoring:
 
 
 def check_coloring(mesh, colors) -> bool:
-    """Return True when no two node-sharing elements share a color."""
+    """Return True when no two node-sharing elements share a color.
+
+    Example:
+        >>> check_coloring(mesh, color_elements(mesh))  # doctest: +SKIP
+        True
+
+    Tested by: tests/test_coloring.py::test_check_coloring_detects_bad.
+    """
     c = colors.colors if isinstance(colors, ElementColoring) else np.asarray(colors)
     if len(c) != mesh.n_elems:
         return False

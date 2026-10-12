@@ -24,6 +24,12 @@ def partition_report(mesh, labels) -> PartitionReport:
     ``labels`` has one integer per element, 0 <= label < k, with
     1 < k <= n_elems where k = max label + 1. Pieces count connected
     components of each part over edge (Edge2Elem) adjacency.
+
+    Example:
+        >>> rep = partition_report(mesh, labels)  # doctest: +SKIP
+        >>> rep.imbalance, rep.cut_edges  # doctest: +SKIP
+
+    Tested by: tests/test_partition_report.py::test_sizes_imbalance_cut_pieces, ::test_disconnected_part, ::test_k_bounds.
     """
     labels = np.asarray(labels)
     n = mesh.n_elems
@@ -138,6 +144,13 @@ def partition_mesh(mesh, k: int, method: str = "spectral") -> np.ndarray:
     the size-proportional position, then reassigning stray components so each
     part is connected. Deterministic. ``method="metis"`` needs the optional
     ``partition`` extra (``pip install chilmesh[partition]``).
+
+    Example:
+        >>> labels = partition_mesh(mesh, 4)  # doctest: +SKIP
+        >>> partition_report(mesh, labels).imbalance <= 1.25  # doctest: +SKIP
+        True
+
+    Tested by: tests/test_partition_mesh.py::test_spectral_threshold, ::test_k_range, ::test_metis_missing.
     """
     n = mesh.n_elems
     if method not in ("spectral", "metis"):

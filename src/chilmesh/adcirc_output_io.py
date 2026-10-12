@@ -117,6 +117,8 @@ def read_adcirc_output(path, mesh=None, step: Optional[int] = None) -> OutputSer
         >>> s = read_adcirc_output(p)
         >>> s.values.tolist()
         [[0.5, nan]]
+
+    Tested by: tests/test_adcirc_output_ascii.py::test_full_scalar_values.
     """
     location = _location(path)
     with open(path, "rb") as f:

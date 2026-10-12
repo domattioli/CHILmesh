@@ -2764,6 +2764,8 @@ class CHILmesh(CHILmeshPlotMixin):
         Example:
             >>> mesh.write_to_2dm("out.2dm")                    # doctest: +SKIP
             >>> CHILmesh.read_from_2dm("out.2dm").boundary_segments  # doctest: +SKIP
+
+        Tested by: tests/test_2dm_nodestrings.py::test_tri_nodestrings_roundtrip.
         """
         segs = (getattr(self, 'boundary_segments', None) or []) if nodestrings else []
         with open(filename, 'w', encoding='utf-8', newline='\n') as f:

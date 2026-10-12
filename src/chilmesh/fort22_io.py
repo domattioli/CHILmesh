@@ -128,6 +128,8 @@ def read_fort22_besttrack(path, nws: int = 8) -> StormTrack:
     >>> track = read_fort22_besttrack("bal092011.dat")  # doctest: +SKIP
     >>> track.records[0].vmax  # doctest: +SKIP
     45.0
+
+    Tested by: tests/test_fort22.py::test_typed_fields_from_real_atcf_file.
     """
     _check_nws(nws)
     records = []
@@ -152,6 +154,8 @@ def write_fort22_besttrack(track: StormTrack, path, nws: int = 8) -> None:
     Example
     -------
     >>> write_fort22_besttrack(track, "fort.22", nws=8)  # doctest: +SKIP
+
+    Tested by: tests/test_fort22.py::test_round_trip_real_file.
     """
     _check_nws(nws)
     lines = []
