@@ -50,3 +50,6 @@ copilot-instructions.md export-ignore
 
 # Text fixtures are byte-compared in tests; never convert line endings on checkout.
 tests/fixtures/** -text
+
+# Registry contract fixture is SHA-256 hashed byte-for-byte; never convert line endings.
+tests/data/registry-contract.v1.json -text
