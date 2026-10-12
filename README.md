@@ -39,9 +39,10 @@
 
 ## 1. Status & Roadmap
 
-**Current release: 1.5.0 (2026-10-02). Next: 1.5.5 (unreleased); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
+**Current release: 1.5.5 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
 
-- **Now:** a native `.chil` container format on a sandbox branch ([#201](https://github.com/domattioli/CHILmesh/issues/201)); **Next:** a documentation site and a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)).
+- **Now:** ADCIRC output, forcing and boundary file I/O, element coloring and a partition quality report ([#289](https://github.com/domattioli/CHILmesh/issues/289)); a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)).
+- **Next:** MCP server tools ([#286](https://github.com/domattioli/CHILmesh/issues/286)); a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
 - **Later:** one ecosystem with <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3" alt="QuADMESH PyPI version"></a>.
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
