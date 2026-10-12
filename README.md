@@ -39,9 +39,9 @@
 
 ## 1. Status & Roadmap
 
-**Current release: 1.5.5 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
+**Current release: 1.6.0 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
 
-- **Now:** ADCIRC output, forcing and boundary file I/O, element coloring and a partition quality report ([#289](https://github.com/domattioli/CHILmesh/issues/289)); a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)).
+- **Now:** a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); ADCIRC hot-start files and byte-preserving fort.15 edits ([#289](https://github.com/domattioli/CHILmesh/issues/289)).
 - **Next:** MCP server tools ([#286](https://github.com/domattioli/CHILmesh/issues/286)); a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
 - **Later:** one ecosystem with <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3" alt="QuADMESH PyPI version"></a>.
 
@@ -95,7 +95,7 @@ mesh.write_to_fort14("ocean_smoothed.14")
 
 ## 4. Fetching meshes from Valence
 
-The `chilmesh.registry` module ships in 1.5.5 (unreleased). Meshes come through Valence, a token-gated mesh service. Sign in with GitHub at https://valence-api.iqh766c2.workers.dev. A GitHub account at least 30 days old gets a token at once; it is shown once. A token allows 500 downloads per day (the count resets at midnight UTC) and expires after one year.
+The `chilmesh.registry` module ships since 1.5.5. Meshes come through Valence, a token-gated mesh service. Sign in with GitHub at https://valence-api.iqh766c2.workers.dev. A GitHub account at least 30 days old gets a token at once; it is shown once. A token allows 500 downloads per day (the count resets at midnight UTC) and expires after one year.
 
 ```bash
 export VALENCE_TOKEN=<your token>
