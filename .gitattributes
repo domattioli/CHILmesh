@@ -44,7 +44,9 @@ copilot-instructions.md export-ignore
 .aider.conf.yml export-ignore
 .windsurf/ export-ignore
 .workerbee/ export-ignore
+.zenodo.json export-ignore
 # <<< release-ignore:end
+
 
 
 
