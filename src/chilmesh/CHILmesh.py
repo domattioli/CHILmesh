@@ -2696,7 +2696,7 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies=compute_adjacencies,
         )
 
-    def save(self, filename: str) -> None:
+    def save(self, filename: str, metadata: Opt[dict] = None) -> None:
         """
         Save the mesh to a file.
 
@@ -2713,12 +2713,17 @@ class CHILmesh(CHILmeshPlotMixin):
             >>> mesh.save("output.2dm")
         """
         path = Path(filename)
-        if path.suffix in (".14", ".fort14"):
+        if metadata is not None and path.suffix != ".chil":
+            raise ValueError("metadata is only supported for .chil files")
+        if path.suffix == ".chil":
+            from .chil_io import write_chil
+            write_chil(self, filename, metadata=metadata)
+        elif path.suffix in (".14", ".fort14"):
             write_fort14(self, filename)
         elif path.suffix == ".2dm":
             self.write_to_2dm(filename)
         else:
-            raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
+            raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm, .chil")
 
     @classmethod
     def load(cls, filename: str, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
@@ -2745,6 +2750,9 @@ class CHILmesh(CHILmeshPlotMixin):
         path = Path(filename)
         if not path.exists():
             raise FileNotFoundError(f"File not found: {filename}")
+        if path.suffix == ".chil":
+            from .chil_io import read_chil
+            return read_chil(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
         if path.suffix in (".14", ".fort14"):
             return cls.read_from_fort14(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
         elif path.suffix == ".2dm":
