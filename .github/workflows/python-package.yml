@@ -26,10 +26,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # PR runs: ubuntu × py3.11 only (fast feedback).
-        # Push to main / release branches: full matrix incl. windows-latest (#121).
-        os: ${{ fromJson(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
-        python-version: ${{ fromJson(github.event_name == 'pull_request' && '["3.11"]' || '["3.10","3.11","3.12"]') }}
+        # Full matrix on PRs too (#121): a green PR to main must mean a green
+        # main. The old ubuntu × py3.11 PR subset let platform failures merge.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v5
@@ -47,17 +47,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: Run pytest (PR — fast subset, parallel, exclude slow)
-        if: github.event_name == 'pull_request'
-        env:
-          MPLBACKEND: Agg
-          # Per-run matplotlib cache off `$HOME` (#122). Step-level env: the
-          # `runner` context is not available in job-level env.
-          MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
-        run: python -m pytest -n auto -m "not slow"
-
-      - name: Run pytest (push — full suite, parallel, coverage-gated)
-        if: github.event_name != 'pull_request'
+      - name: Run pytest (full suite, parallel, coverage-gated)
         env:
           MPLBACKEND: Agg
           # Per-run matplotlib cache off `$HOME` (#122). Step-level env: the
@@ -67,7 +57,6 @@ jobs:
 
   build-and-smoke:
     name: build sdist+wheel + smoke install
-    if: github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -184,3 +173,16 @@ jobs:
           # `runner` context is not available in job-level env.
           MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
         run: python -m pytest tests/test_backend_equivalence.py -v
+
+  # Single required status check for branch protection on main. Matrix job
+  # names change with the matrix; this one name stays fixed.
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [test, build-and-smoke, cpp-equivalence, rust-equivalence]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every job succeeded
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
+      - run: echo "all CI jobs passed"
