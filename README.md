@@ -5,7 +5,7 @@
 <h1 align="center">CHILmesh</h1>
 
 <p align="center">
-  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; C++ backend 8.6× to 14.7× faster than Python on full init.</strong>
+  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; C++ backend 8.6× to 14.8× faster than Python on full init, depending on mesh and machine.</strong>
 </p>
 
 <p align="center">
