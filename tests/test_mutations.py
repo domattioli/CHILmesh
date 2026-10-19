@@ -852,7 +852,9 @@ class TestIncrementalAdjacency:
         start = time.perf_counter()
         mutable.smooth_topology(max_passes=200)
         elapsed = time.perf_counter() - start
-        assert elapsed < 10.0, f"smooth_topology took {elapsed:.2f}s (expected < 10s)"
+        import os
+        budget = 10.0 * (3.0 if os.environ.get("CI") else 1.0)  # noisy shared runners
+        assert elapsed < budget, f"smooth_topology took {elapsed:.2f}s (expected < {budget:.0f}s)"
 
 
 class TestPaddedTrianglePaddingConvention:

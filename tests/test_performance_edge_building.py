@@ -4,10 +4,14 @@ Verifies that EdgeMap-based edge lookups provide 1.5x+ speedup
 on large meshes compared to baseline linear search.
 """
 
+import os
 import time
 import pytest
 import numpy as np
 from chilmesh import CHILmesh, examples
+
+# Shared CI runners are noisy; widen wall-clock budgets there.
+_CI_SLACK = 3.0 if os.environ.get("CI") else 1.0
 
 
 class TestEdgeBuildingPerformance:
@@ -197,8 +201,10 @@ class TestVectorizedAdjacencyBuild:
         for _ in range(5):
             mesh._build_adjacencies()
         elapsed = (time.perf_counter() - t0) / 5
-        assert elapsed < 0.02, (
-            f"{mesh_name} _build_adjacencies took {elapsed*1000:.1f} ms, expected < 20 ms"
+        budget = 0.02 * _CI_SLACK
+        assert elapsed < budget, (
+            f"{mesh_name} _build_adjacencies took {elapsed*1000:.1f} ms, "
+            f"expected < {budget*1000:.0f} ms"
         )
 
     @pytest.mark.parametrize("mesh_name", ["annulus", "donut", "structured"])
