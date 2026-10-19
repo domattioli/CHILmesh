@@ -14,6 +14,7 @@ import time
 from importlib.resources import files
 
 from chilmesh import CHILmesh
+from perf_budget import budget as perf_budget
 
 # Generous regression tripwire. Observed ~0.2-0.3s; >200s was the original
 # #202 cliff. 30s catches a real regression long before a hang.
@@ -30,7 +31,7 @@ def test_block_o_pure_python_init_under_ceiling():
     # Sanity: this is the real Block_O mesh and layers were computed.
     assert mesh.n_elems > 5000
     assert mesh.n_layers > 0
-    assert elapsed < BLOCK_O_INIT_CEILING_S, (
+    assert elapsed < perf_budget(BLOCK_O_INIT_CEILING_S), (
         f"Block_O pure-Python full init took {elapsed:.1f}s "
         f"(ceiling {BLOCK_O_INIT_CEILING_S}s) — possible #202 perf regression."
     )
