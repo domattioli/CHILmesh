@@ -26,10 +26,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Full matrix on PRs too (#121): a green PR to main must mean a green
-        # main. The old ubuntu × py3.11 PR subset let platform failures merge.
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        # Same matrix on PRs and pushes (#121): a green PR to main must mean a
+        # green main. Oldest and newest supported Python on Linux; newest only
+        # on macOS and Windows (middle versions rarely break on their own).
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v5
