@@ -126,8 +126,11 @@ def read_fort19(path, mesh=None, n_nodes: Optional[int] = None) -> BoundaryForci
 
     Example
     -------
-    >>> s = read_fort19("fort.19", n_nodes=5)  # doctest: +SKIP
-    >>> s.values.shape  # doctest: +SKIP
+    >>> import os, tempfile
+    >>> p = os.path.join(tempfile.mkdtemp(), "fort.19")
+    >>> _ = open(p, "w").write("3600.0\\n" + "0.1\\n" * 15)
+    >>> s = read_fort19(p, n_nodes=5)
+    >>> s.values.shape
     (3, 5)
 
     Tested by: tests/test_boundary_forcing.py::test_fort19_n_nodes_kwarg, ::test_fort19_with_mesh_counts_open_nodes.
@@ -139,7 +142,11 @@ def write_fort19(series: BoundaryForcingSeries, path) -> None:
     """Write a fort.19 file: time increment, then one value per line.
 
     Example:
-        >>> write_fort19(series, "fort.19")  # doctest: +SKIP
+        >>> import os, tempfile
+        >>> p = os.path.join(tempfile.mkdtemp(), "fort.19")
+        >>> write_fort19(BoundaryForcingSeries(3600.0, np.zeros((2, 3))), p)
+        >>> read_fort19(p, n_nodes=3).values.shape
+        (2, 3)
 
     Tested by: tests/test_boundary_forcing.py::test_fort19_round_trip.
     """
@@ -155,7 +162,10 @@ def read_fort20(path, mesh=None, n_nodes: Optional[int] = None) -> BoundaryForci
 
     Example
     -------
-    >>> read_fort20("fort.20").time_increment  # doctest: +SKIP
+    >>> import os, tempfile
+    >>> p = os.path.join(tempfile.mkdtemp(), "fort.20")
+    >>> _ = open(p, "w").write("31536000.0\\n1.5 ! flux\\n2.5\\n")
+    >>> read_fort20(p).time_increment
     31536000.0
 
     Tested by: tests/test_boundary_forcing.py::test_fort20_matching_nodes_use_only_flux_types.
@@ -167,7 +177,11 @@ def write_fort20(series: BoundaryForcingSeries, path) -> None:
     """Write a fort.20 file: time increment, then one value per line.
 
     Example:
-        >>> write_fort20(series, "fort.20")  # doctest: +SKIP
+        >>> import os, tempfile
+        >>> p = os.path.join(tempfile.mkdtemp(), "fort.20")
+        >>> write_fort20(BoundaryForcingSeries(60.0, np.array([1.0, 2.0])), p)
+        >>> read_fort20(p).values.tolist()
+        [1.0, 2.0]
 
     Tested by: tests/test_boundary_forcing.py::test_fort20_round_trip.
     """
@@ -182,9 +196,12 @@ def read_fort24(path, mesh=None) -> List[TidalConstituent]:
 
     Example
     -------
-    >>> c = read_fort24("fort.24")  # doctest: +SKIP
-    >>> c[0].name, c[0].amp.shape  # doctest: +SKIP
-    ('M2', (27330,))
+    >>> import os, tempfile
+    >>> p = os.path.join(tempfile.mkdtemp(), "fort.24")
+    >>> _ = open(p, "w").write("M2 SAL\\n0.000140518902509\\n1\\nM2\\n1 0.01 10.0\\n2 0.02 20.0\\n")
+    >>> c = read_fort24(p)
+    >>> c[0].name, c[0].amp.shape
+    ('M2', (2,))
 
     Tested by: tests/test_boundary_forcing.py::test_fort24_fields.
     """
@@ -233,7 +250,12 @@ def write_fort24(constituents: List[TidalConstituent], path) -> None:
     """Write fort.24: per constituent the alpha line, frequency, nodal factor, name, node lines.
 
     Example:
-        >>> write_fort24(constituents, "fort.24")  # doctest: +SKIP
+        >>> import os, tempfile
+        >>> p = os.path.join(tempfile.mkdtemp(), "fort.24")
+        >>> c = TidalConstituent("M2", "M2 SAL", 1.405e-4, 1.0, np.array([0.01]), np.array([10.0]))
+        >>> write_fort24([c], p)
+        >>> read_fort24(p)[0].phase.tolist()
+        [10.0]
 
     Tested by: tests/test_boundary_forcing.py::test_fort24_round_trip.
     """
