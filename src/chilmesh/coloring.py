@@ -43,8 +43,10 @@ def color_elements(mesh) -> ElementColoring:
     ``max_degree + 1`` colors.
 
     Example:
-        >>> c = color_elements(mesh)  # doctest: +SKIP
-        >>> check_coloring(mesh, c)  # doctest: +SKIP
+        >>> from chilmesh import examples
+        >>> mesh = examples.donut()
+        >>> c = color_elements(mesh)
+        >>> check_coloring(mesh, c)
         True
 
     Tested by: tests/test_coloring.py::test_mixed_mesh, ::test_deterministic, ::test_all_bundled_meshes.
@@ -68,8 +70,12 @@ def check_coloring(mesh, colors) -> bool:
     """Return True when no two node-sharing elements share a color.
 
     Example:
-        >>> check_coloring(mesh, color_elements(mesh))  # doctest: +SKIP
+        >>> from chilmesh import examples
+        >>> mesh = examples.donut()
+        >>> check_coloring(mesh, color_elements(mesh))
         True
+        >>> check_coloring(mesh, [0] * mesh.n_elems)
+        False
 
     Tested by: tests/test_coloring.py::test_check_coloring_detects_bad.
     """

@@ -12,6 +12,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - CI tests Python 3.11 and 3.13 on Linux and 3.13 on macOS and Windows, on both pushes and PRs to `main`.
 
+### Fixed
+- `partition_mesh` and `partition_report` build mesh adjacencies on demand, so a mesh loaded with `compute_layers=False` no longer raises `KeyError: 'Edge2Elem'` ([#293](https://github.com/domattioli/CHILmesh/issues/293)).
+- Docstring examples for `partition_mesh`, `partition_report`, `color_elements`, `check_coloring`, `read_adcirc_output_nc`, the fort.19/20/24, fort.22 and OWI readers and writers, and `write_to_2dm` now run on bundled meshes or temporary files instead of `+SKIP`, and CI runs them with `pytest --doctest-modules` ([#290](https://github.com/domattioli/CHILmesh/issues/290)).
+
 ## [1.6.0] - 2026-10-12
 
 ADCIRC file I/O, element coloring and mesh partitioning ([#289](https://github.com/domattioli/CHILmesh/issues/289)). This release also carries every 1.5.5 change below.
