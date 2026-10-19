@@ -41,8 +41,18 @@ def read_adcirc_output_nc(path, mesh=None, step: Optional[int] = None,
     so ``iterations`` is -1. Needs the ``netcdf`` extra.
 
     Example:
-        >>> from chilmesh import read_adcirc_output_nc  # doctest: +SKIP
-        >>> series = read_adcirc_output_nc("fort.63.nc", step=0)  # doctest: +SKIP
+        >>> import os, tempfile, netCDF4
+        >>> from chilmesh import read_adcirc_output_nc
+        >>> p = os.path.join(tempfile.mkdtemp(), "fort.63.nc")
+        >>> with netCDF4.Dataset(p, "w") as d:
+        ...     _ = d.createDimension("time", None)
+        ...     _ = d.createDimension("node", 3)
+        ...     d.createVariable("time", "f8", ("time",))[:] = [10.0, 20.0]
+        ...     d.createVariable("zeta", "f8", ("time", "node"))[:] = [[0.1, 0.2, -99999.0],
+        ...                                                            [0.3, 0.4, 0.5]]
+        >>> series = read_adcirc_output_nc(p, step=0)
+        >>> series.times.tolist(), series.values.tolist()
+        ([10.0], [[0.1, 0.2, nan]])
 
     Tested by: tests/test_adcirc_output_netcdf.py.
     """

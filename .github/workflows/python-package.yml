@@ -61,6 +61,19 @@ jobs:
           MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
         run: python -m pytest -n auto -v --cov=src/chilmesh --cov-report=term --cov-fail-under=80
 
+      # Docstring examples (#290). Listed modules only; CHILmesh.py has older
+      # illustrative examples that do not run, so only write_to_2dm is named.
+      - name: Run doctests
+        env:
+          MPLBACKEND: Agg
+          MPLCONFIGDIR: ${{ runner.temp }}/mpl-cache-${{ github.run_id }}-${{ github.run_attempt }}
+        run: >-
+          python -m pytest -v -p no:cacheprovider --doctest-modules
+          src/chilmesh/partition.py src/chilmesh/coloring.py
+          src/chilmesh/adcirc_netcdf_io.py src/chilmesh/adcirc_output_io.py
+          src/chilmesh/boundary_forcing_io.py src/chilmesh/fort22_io.py src/chilmesh/owi_io.py
+          src/chilmesh/CHILmesh.py::chilmesh.CHILmesh.CHILmesh.write_to_2dm
+
   build-and-smoke:
     name: build sdist+wheel + smoke install
     needs: test
