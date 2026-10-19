@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 from chilmesh.examples import annulus, donut
 from chilmesh import examples as _examples
+from perf_budget import budget as perf_budget
 
 
 class TestSpatialIndexing:
@@ -185,7 +186,7 @@ class TestSpatialIndexingPerformance:
             assert elem_id >= -1, "find_element must return a valid element ID or -1 if not found"
         elapsed = time.time() - start
 
-        assert elapsed < 5.0, f"100 queries took {elapsed:.2f}s, should be <5s"
+        assert elapsed < perf_budget(5.0), f"100 queries took {elapsed:.2f}s, should be <5s"
 
     def test_spatial_index_build_time(self):
         """Spatial index build should be fast (<0.5s for large mesh)."""
@@ -194,4 +195,4 @@ class TestSpatialIndexingPerformance:
         start = time.time()
         mesh._build_spatial_indices()
         elapsed = time.time() - start
-        assert elapsed < 0.5, f"Building spatial indices took {elapsed:.2f}s, should be <0.5s"
+        assert elapsed < perf_budget(0.5), f"Building spatial indices took {elapsed:.2f}s, should be <0.5s"

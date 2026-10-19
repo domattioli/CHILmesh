@@ -6,6 +6,7 @@ import pytest
 import numpy as np
 from chilmesh import CHILmesh, MutableMesh
 from chilmesh import examples
+from perf_budget import budget as perf_budget
 
 
 @pytest.fixture(params=["annulus", "donut"])
@@ -852,8 +853,7 @@ class TestIncrementalAdjacency:
         start = time.perf_counter()
         mutable.smooth_topology(max_passes=200)
         elapsed = time.perf_counter() - start
-        import os
-        budget = 10.0 * (3.0 if os.environ.get("CI") else 1.0)  # noisy shared runners
+        budget = perf_budget(10.0)
         assert elapsed < budget, f"smooth_topology took {elapsed:.2f}s (expected < {budget:.0f}s)"
 
 

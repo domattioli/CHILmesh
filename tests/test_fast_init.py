@@ -4,6 +4,7 @@ import time
 import pytest
 
 import chilmesh
+from perf_budget import budget as perf_budget
 
 
 _FIXTURE_FILES = {
@@ -31,7 +32,7 @@ class TestFastInitialization:
         elapsed = time.perf_counter() - start
 
         # Should be very fast: <2s even for Block_O (~5,200 elements)
-        assert elapsed < 2.0, f"Fast init took {elapsed:.2f}s, should be <2s for {fixture_name}"
+        assert elapsed < perf_budget(2.0), f"Fast init took {elapsed:.2f}s, should be <2s for {fixture_name}"
         assert mesh.n_verts > 0
         assert mesh.n_elems > 0
 
@@ -88,6 +89,6 @@ class TestFastInitialization:
         mesh = chilmesh.CHILmesh.from_admesh_domain(record, compute_layers=False)
         elapsed = time.perf_counter() - start
 
-        assert elapsed < 1.0, f"from_admesh_domain with fast init took {elapsed:.2f}s"
+        assert elapsed < perf_budget(1.0), f"from_admesh_domain with fast init took {elapsed:.2f}s"
         assert mesh.n_layers == 0
         assert mesh.adjacencies == {}

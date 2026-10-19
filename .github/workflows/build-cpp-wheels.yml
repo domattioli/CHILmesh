@@ -44,7 +44,7 @@ jobs:
         run: python -m cibuildwheel --output-dir wheelhouse src/chilmesh_cpp
         env:
           # cp314t (free-threaded) is not matched by "cp314-*", so it is not built.
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp314-*"
+          CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-*"
           CIBW_ARCHS: ${{ matrix.archs }}
           CIBW_SKIP: "*-musllinux*"
           # C++17 floor for macOS (aligned allocation, std::filesystem). 10.15

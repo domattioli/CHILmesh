@@ -6,6 +6,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+- Python 3.10 support. `requires-python` is now `>=3.11` for `chilmesh` and the C++ backend; C++ wheels are no longer built for CPython 3.10. Python 3.10 reaches end of life in October 2026; 1.6.x remains installable on 3.10.
+
+### Changed
+- CI tests Python 3.11 and 3.13 on Linux and 3.13 on macOS and Windows, on both pushes and PRs to `main`.
+
 ## [1.6.0] - 2026-10-12
 
 ADCIRC file I/O, element coloring and mesh partitioning ([#289](https://github.com/domattioli/CHILmesh/issues/289)). This release also carries every 1.5.5 change below.
