@@ -125,9 +125,13 @@ def read_fort22_besttrack(path, nws: int = 8) -> StormTrack:
 
     Example
     -------
-    >>> track = read_fort22_besttrack("bal092011.dat")  # doctest: +SKIP
-    >>> track.records[0].vmax  # doctest: +SKIP
-    45.0
+    >>> import os, tempfile
+    >>> p = os.path.join(tempfile.mkdtemp(), "fort.22")
+    >>> _ = open(p, "w").write("AL, 09, 2011082100,   , BEST,   0, 150N,  590W,  45, 1006, TS,"
+    ...                        "  34, NEQ,   60,    0,    0,   60, 1012,  150,  40,\\n")
+    >>> track = read_fort22_besttrack(p)
+    >>> track.records[0].vmax, track.records[0].lon
+    (45.0, -59.0)
 
     Tested by: tests/test_fort22.py::test_typed_fields_from_real_atcf_file.
     """
@@ -153,7 +157,14 @@ def write_fort22_besttrack(track: StormTrack, path, nws: int = 8) -> None:
 
     Example
     -------
-    >>> write_fort22_besttrack(track, "fort.22", nws=8)  # doctest: +SKIP
+    >>> import os, tempfile
+    >>> d = tempfile.mkdtemp()
+    >>> line = "AL, 09, 2011082100,   , BEST,   0, 150N,  590W,  45, 1006, TS,  34\\n"
+    >>> _ = open(os.path.join(d, "in.22"), "w").write(line)
+    >>> track = read_fort22_besttrack(os.path.join(d, "in.22"))
+    >>> write_fort22_besttrack(track, os.path.join(d, "fort.22"), nws=8)
+    >>> read_fort22_besttrack(os.path.join(d, "fort.22")).records[0].pmin
+    1006.0
 
     Tested by: tests/test_fort22.py::test_round_trip_real_file.
     """

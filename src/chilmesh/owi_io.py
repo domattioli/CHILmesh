@@ -64,9 +64,13 @@ def read_owi(path) -> List[OWISnapshot]:
 
     Example
     -------
-    >>> snaps = read_owi("fort.221")  # doctest: +SKIP
-    >>> snaps[0].values.shape  # doctest: +SKIP
-    (100, 100)
+    >>> import datetime, os, tempfile
+    >>> p = os.path.join(tempfile.mkdtemp(), "fort.221")
+    >>> t = datetime.datetime(2011, 8, 21)
+    >>> write_owi([OWISnapshot(t, 2, 3, 0.25, 0.25, 10.0, -80.0, values=np.full((2, 3), 1013.0))], p)
+    >>> snaps = read_owi(p)
+    >>> snaps[0].values.shape
+    (2, 3)
 
     Tested by: tests/test_owi.py::test_wind_u_v_blocks.
     """
@@ -117,7 +121,13 @@ def write_owi(snapshots: List[OWISnapshot], path) -> None:
 
     Example
     -------
-    >>> write_owi(snaps, "fort.221")  # doctest: +SKIP
+    >>> import datetime, os, tempfile
+    >>> p = os.path.join(tempfile.mkdtemp(), "fort.222")
+    >>> t = datetime.datetime(2011, 8, 21)
+    >>> wind = OWISnapshot(t, 1, 2, 0.25, 0.25, 10.0, -80.0, u=np.ones((1, 2)), v=np.zeros((1, 2)))
+    >>> write_owi([wind], p)
+    >>> read_owi(p)[0].u.tolist()
+    [[1.0, 1.0]]
 
     Tested by: tests/test_owi.py::test_round_trip.
     """

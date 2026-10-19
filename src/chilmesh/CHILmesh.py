@@ -2762,8 +2762,14 @@ class CHILmesh(CHILmeshPlotMixin):
         segments write no NS cards.
 
         Example:
-            >>> mesh.write_to_2dm("out.2dm")                    # doctest: +SKIP
-            >>> CHILmesh.read_from_2dm("out.2dm").boundary_segments  # doctest: +SKIP
+            >>> import os, tempfile
+            >>> from chilmesh import examples
+            >>> mesh = examples.donut()
+            >>> p = os.path.join(tempfile.mkdtemp(), "out.2dm")
+            >>> mesh.write_to_2dm(p)
+            >>> back = CHILmesh.read_from_2dm(p)
+            >>> back.n_elems == mesh.n_elems, back.boundary_segments == mesh.boundary_segments
+            (True, True)
 
         Tested by: tests/test_2dm_nodestrings.py::test_tri_nodestrings_roundtrip.
         """

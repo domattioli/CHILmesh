@@ -18,6 +18,13 @@ class PartitionReport:
     pieces: np.ndarray
 
 
+def _edge2elem(mesh) -> np.ndarray:
+    # Meshes loaded with compute_layers=False carry no adjacencies (#293).
+    if "Edge2Elem" not in mesh.adjacencies:
+        mesh._build_adjacencies()
+    return mesh.adjacencies["Edge2Elem"]
+
+
 def partition_report(mesh, labels) -> PartitionReport:
     """Summarize a partition of mesh elements.
 
@@ -26,8 +33,11 @@ def partition_report(mesh, labels) -> PartitionReport:
     components of each part over edge (Edge2Elem) adjacency.
 
     Example:
-        >>> rep = partition_report(mesh, labels)  # doctest: +SKIP
-        >>> rep.imbalance, rep.cut_edges  # doctest: +SKIP
+        >>> from chilmesh import examples
+        >>> mesh = examples.donut()
+        >>> rep = partition_report(mesh, partition_mesh(mesh, 2))
+        >>> int(rep.sizes.sum()) == mesh.n_elems, rep.pieces.tolist()
+        (True, [1, 1])
 
     Tested by: tests/test_partition_report.py::test_sizes_imbalance_cut_pieces, ::test_disconnected_part, ::test_k_bounds.
     """
@@ -42,7 +52,7 @@ def partition_report(mesh, labels) -> PartitionReport:
         raise ValueError(f"k={k} out of range: need 1 < k <= n_elems ({n})")
     sizes = np.bincount(labels, minlength=k)
     imbalance = float(sizes.max() / sizes.mean())
-    e2e = mesh.adjacencies["Edge2Elem"]
+    e2e = _edge2elem(mesh)
     inter = e2e[(e2e[:, 0] >= 0) & (e2e[:, 1] >= 0)]
     cut = int(np.count_nonzero(labels[inter[:, 0]] != labels[inter[:, 1]]))
     nbrs = [[] for _ in range(n)]
@@ -71,7 +81,7 @@ def _dual_graph(mesh):
     import scipy.sparse as sp
 
     n = mesh.n_elems
-    e2e = mesh.adjacencies["Edge2Elem"]
+    e2e = _edge2elem(mesh)
     inter = e2e[(e2e[:, 0] >= 0) & (e2e[:, 1] >= 0)]
     a, b = inter[:, 0], inter[:, 1]
     g = sp.coo_matrix((np.ones(2 * len(a)), (np.r_[a, b], np.r_[b, a])), shape=(n, n)).tocsr()
@@ -146,8 +156,10 @@ def partition_mesh(mesh, k: int, method: str = "spectral") -> np.ndarray:
     ``partition`` extra (``pip install chilmesh[partition]``).
 
     Example:
-        >>> labels = partition_mesh(mesh, 4)  # doctest: +SKIP
-        >>> partition_report(mesh, labels).imbalance <= 1.25  # doctest: +SKIP
+        >>> from chilmesh import examples
+        >>> mesh = examples.donut()
+        >>> labels = partition_mesh(mesh, 4)
+        >>> partition_report(mesh, labels).imbalance <= 1.25
         True
 
     Tested by: tests/test_partition_mesh.py::test_spectral_threshold, ::test_k_range, ::test_metis_missing.

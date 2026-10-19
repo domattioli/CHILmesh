@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from chilmesh import CHILmesh, partition_report
+from chilmesh import CHILmesh, check_coloring, color_elements, examples, partition_mesh, partition_report
 
 
 def _strip(n):
@@ -36,3 +36,27 @@ def test_k_bounds():
         partition_report(m, np.array([0, 1]))  # wrong length
     with pytest.raises(ValueError):
         partition_report(m, np.array([0, 1, 2, 9]))  # k=10 > n_elems
+
+
+def _bare(name="donut_domain.fort.14"):
+    m = CHILmesh.read_from_fort14(examples.fixture_path(name), compute_layers=False)
+    assert m.adjacencies == {}
+    return m
+
+
+def test_bare_mesh_partition_mesh():
+    """#293: no KeyError 'Edge2Elem' on a compute_layers=False mesh."""
+    labels = partition_mesh(_bare(), 4)
+    assert labels.shape == (examples.donut().n_elems,)
+    assert set(labels.tolist()) == {0, 1, 2, 3}
+
+
+def test_bare_mesh_partition_report():
+    m = _bare()
+    r = partition_report(m, np.arange(m.n_elems) % 2)
+    assert r.sizes.sum() == m.n_elems and r.cut_edges > 0
+
+
+def test_bare_mesh_color_elements():
+    m = _bare()
+    assert check_coloring(_bare(), color_elements(m))
