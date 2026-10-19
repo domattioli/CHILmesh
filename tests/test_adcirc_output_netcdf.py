@@ -91,13 +91,39 @@ def test_single_step_is_lazy(tmp_path, monkeypatch):
     vals = _scalar()
     p = syn.write_output_nc(tmp_path / "fort.63.nc", TIMES, vals)
     seen = []
-    orig = netCDF4.Variable.__getitem__
+    orig_dataset = netCDF4.Dataset
 
-    def spy(self, key):
-        seen.append((self.name, key))
-        return orig(self, key)
+    # netCDF4.Variable is an immutable extension type in recent releases, so
+    # spy on reads through a proxy Dataset instead of patching the class.
+    class SpyVar:
+        def __init__(self, var):
+            self._var = var
 
-    monkeypatch.setattr(netCDF4.Variable, "__getitem__", spy)
+        def __getitem__(self, key):
+            seen.append((self._var.name, key))
+            return self._var[key]
+
+        def __len__(self):
+            return len(self._var)
+
+        def __getattr__(self, attr):
+            return getattr(self._var, attr)
+
+    class SpyDataset:
+        def __init__(self, *args, **kwargs):
+            self._ds = orig_dataset(*args, **kwargs)
+            self.variables = {k: SpyVar(v) for k, v in self._ds.variables.items()}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self._ds.close()
+
+        def __getattr__(self, attr):
+            return getattr(self._ds, attr)
+
+    monkeypatch.setattr(netCDF4, "Dataset", SpyDataset)
     s = read_adcirc_output_nc(p, step=1)
     assert s.values.shape == (1, N)
     np.testing.assert_allclose(s.values[0], vals[1], atol=1e-9, equal_nan=True)
