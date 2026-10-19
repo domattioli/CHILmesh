@@ -24,6 +24,7 @@ from chilmesh import (
     optimize_with_admesh_truss_arrays,
     examples,
 )
+from perf_budget import budget as perf_budget
 
 # Skip all tests if ADMESH is not available
 try:
@@ -428,7 +429,7 @@ class TestQualityAndPerformance:
         )
         elapsed = time.perf_counter() - start
 
-        assert elapsed < 60.0, f"Took {elapsed:.1f}s, limit is 60s"
+        assert elapsed < perf_budget(60.0), f"Took {elapsed:.1f}s, limit is 60s"
 
 
 if __name__ == "__main__":

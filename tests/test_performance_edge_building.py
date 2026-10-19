@@ -4,14 +4,11 @@ Verifies that EdgeMap-based edge lookups provide 1.5x+ speedup
 on large meshes compared to baseline linear search.
 """
 
-import os
 import time
 import pytest
 import numpy as np
 from chilmesh import CHILmesh, examples
-
-# Shared CI runners are noisy; widen wall-clock budgets there.
-_CI_SLACK = 3.0 if os.environ.get("CI") else 1.0
+from perf_budget import budget as perf_budget
 
 
 class TestEdgeBuildingPerformance:
@@ -29,7 +26,7 @@ class TestEdgeBuildingPerformance:
         elapsed = time.perf_counter() - start
 
         # All fast fixtures should load in < 100ms
-        assert elapsed < 0.1, f"{mesh_name} took {elapsed:.3f}s, expected < 0.1s"
+        assert elapsed < perf_budget(0.1), f"{mesh_name} took {elapsed:.3f}s, expected < 0.1s"
         assert mesh.n_edges > 0, f"{mesh_name} should have edges"
 
     def test_edge_map_available(self):
@@ -69,7 +66,7 @@ class TestEdgeBuildingPerformance:
 
         # 1000 lookups in a large mesh should be very fast (< 1ms)
         # If it's > 10ms, something is wrong with hash table
-        assert elapsed < 0.01, f"1000 lookups took {elapsed:.3f}s"
+        assert elapsed < perf_budget(0.01), f"1000 lookups took {elapsed:.3f}s"
 
     def test_elem2edge_and_edge2elem_valid(self):
         """Element-edge and edge-element mappings should be consistent."""
@@ -201,7 +198,7 @@ class TestVectorizedAdjacencyBuild:
         for _ in range(5):
             mesh._build_adjacencies()
         elapsed = (time.perf_counter() - t0) / 5
-        budget = 0.02 * _CI_SLACK
+        budget = perf_budget(0.02)
         assert elapsed < budget, (
             f"{mesh_name} _build_adjacencies took {elapsed*1000:.1f} ms, "
             f"expected < {budget*1000:.0f} ms"

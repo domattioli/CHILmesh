@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import chilmesh
+from perf_budget import budget as perf_budget
 
 
 def test_quad_load_basic():
@@ -60,7 +61,7 @@ def test_quad_compute_layers_false():
     elapsed = time.perf_counter() - start
 
     # Should be very fast
-    assert elapsed < 1.0, f"Fast init took {elapsed:.2f}s, should be <1s"
+    assert elapsed < perf_budget(1.0), f"Fast init took {elapsed:.2f}s, should be <1s"
 
     # Verify mesh loaded correctly
     assert mesh.n_verts == 9, f"quad_2x2 fast-init n_verts={mesh.n_verts}, expected 9"
