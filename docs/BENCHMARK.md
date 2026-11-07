@@ -35,7 +35,7 @@ Section-specific commands appear beside their tables.
 
 On the 531,680-element ENPAC2003 mesh, C++ full init takes 1.44 s and Python takes 12.30 s, an 8.6× speedup. On the 98,365-element WNAT_Hagen mesh the ratio is 14.7× (1.65 s → 0.112 s).
 
-Reference workload: EasternPacific_ENPAC2003, 272,913 vertices, 531,680 elements, 75 layers, available through Valence. The medians come from 3 runs on one machine at chilmesh 1.2.2. The algorithms have not changed since. A 1.4.1 rerun on a second machine gave Python 11.89 s and C++ 0.803 s for full init.
+Reference workload: EasternPacific_ENPAC2003, 272,913 vertices, 531,680 elements, 75 layers, available through Valence. The medians come from 3 runs on one machine at chilmesh 1.2.2. The algorithms have not changed since. A 1.4.1 rerun on a second machine gave Python 11.89 s and C++ 0.803 s for full init (14.8×).
 
 | Stage | MATLAB (Octave 8.4) | Python | C++ | Rust |
 |---|---:|---:|---:|---:|
@@ -219,7 +219,7 @@ Reproduce: `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh src/chilmesh
 
 ### Heavy meshes: the `--max-elements` gate (#155, #168)
 
-At WNAT scale (~4M DOF) the FEM direct smoother and the ADMESH truss stage run out of memory or time. The FEM direct sparse solver alone exceeds typical CI RAM (see #168).
+On meshes of several million nodes the FEM direct smoother and the ADMESH truss stage run out of memory or time. WNAT_Hagen (52,774 nodes, about 105k DOF at two per node) is not in this range: its full lifecycle completes (section below). The FEM direct sparse solver alone exceeds typical CI RAM (see #168).
 
 Pass `--max-elements N` to skip those two stages when a mesh exceeds `N` elements (`n_elems > N`).
 
@@ -242,7 +242,7 @@ The solver is a Jacobi-preconditioned MINRES Krylov solver (`direct_smoother(sol
 Direct vs. iterative on real WNAT scale (WNAT_Hagen, 52,774 verts / 98,365 tri):
 
 * Wall-clock is comparable: direct `spsolve` ~4.7 s, elimination+MINRES ~4.6 s.
-* Peak RSS is equal here. MINRES wins on memory only at the ~4M-DOF STOFS scale, where `spsolve` OOMs.
+* Peak RSS is equal here. MINRES wins on memory only at STOFS scale (12,785,004 nodes, about 25.6M DOF), where `spsolve` OOMs.
 
 Solution parity, direct − iterative:
 
