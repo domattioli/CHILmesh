@@ -1,0 +1,4 @@
+# Environment for the xarray adapter (reads NetCDF only). Not a chilmesh dependency.
+xarray
+netcdf4
+numpy

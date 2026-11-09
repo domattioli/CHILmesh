@@ -1,0 +1,4 @@
+# Environment for the thalassa adapter. Not a chilmesh dependency; install in its own venv.
+# Version pins are set after research.md T003/T005.
+thalassa
+numpy

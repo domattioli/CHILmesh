@@ -1,0 +1,4 @@
+# Environment for the oceanmesh adapter (GPL: keep it in its own venv, never import it in chilmesh).
+# Version pins are set after research.md T003/T005.
+oceanmesh
+numpy

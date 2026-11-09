@@ -26,6 +26,7 @@ prune specs
 prune tests
 prune docs
 prune scripts
+prune benchmarks
 prune .github
 prune output
 prune src/chilmesh_cpp/build_local

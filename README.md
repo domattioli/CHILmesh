@@ -5,7 +5,7 @@
 <h1 align="center">CHILmesh</h1>
 
 <p align="center">
-  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; C++ backend 8.6× to 14.7× faster than Python on full init.</strong>
+  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; the optional C++ backend speeds up instantiation (full init) 8.6× on ENPAC2003 (chilmesh 1.2.2) and 14.7× on WNAT_Hagen (chilmesh 1.1.0).</strong>
 </p>
 
 <p align="center">
@@ -24,8 +24,6 @@
 
 > **MATLAB users.** The Python library succeeds the original MATLAB code, which is no longer maintained ([`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m)). Run `pip install chilmesh` and call it through the `py.` bridge, for example `py.chilmesh.Mesh.read_from_fort14('ocean.14')`.
 
-> **Python 3.10 support ends in the next release.** Python 3.10 reaches end of life in October 2026. The next CHILmesh release will require Python 3.11 or newer; 1.6.x stays installable on 3.10.
-
 ## Table of Contents
 
 1. [Status & Roadmap](#1-status--roadmap)
@@ -41,9 +39,9 @@
 
 ## 1. Status & Roadmap
 
-**Current release: 1.6.0 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
+**Current release: 1.6.0 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization (adjacency build plus layer peel) takes 1.44 s in C++ against 12.30 s in Python (8.6×, chilmesh 1.2.2). On WNAT_Hagen (98,365 elements, chilmesh 1.1.0) it takes 0.112 s against 1.65 s (14.7×). A chilmesh 1.4.1 rerun of ENPAC2003 on a second machine gave 0.803 s against 11.89 s (14.8×). Each figure is one mesh at one version; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
-- **Now:** dropping Python 3.10 (end of life October 2026); the next release requires Python 3.11+. A native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); ADCIRC hot-start files and byte-preserving fort.15 edits ([#289](https://github.com/domattioli/CHILmesh/issues/289)).
+- **Now:** a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); ADCIRC hot-start files and byte-preserving fort.15 edits ([#289](https://github.com/domattioli/CHILmesh/issues/289)).
 - **Next:** MCP server tools ([#286](https://github.com/domattioli/CHILmesh/issues/286)); a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
 - **Later:** one ecosystem with <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3" alt="QuADMESH PyPI version"></a>.
 

@@ -1031,8 +1031,8 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         point = np.asarray(point)
         _, candidates = self._centroid_tree.query(point, k=min(20, self.n_elems))
-        if isinstance(candidates, np.int64):
-            candidates = np.array([candidates])
+        # k=1 returns a bare scalar (Python int or numpy int); normalise to 1-D.
+        candidates = np.atleast_1d(candidates)
         for elem_id in candidates:
             # Skip deleted elements (marked as all zeros)
             elem = self.connectivity_list[elem_id]

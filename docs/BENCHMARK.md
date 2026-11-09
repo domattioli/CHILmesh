@@ -219,9 +219,9 @@ Reproduce: `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh src/chilmesh
 
 ### Heavy meshes: the `--max-elements` gate (#155, #168)
 
-At WNAT scale (~4M DOF) the FEM direct smoother and the ADMESH truss stage run out of memory or time. The FEM direct sparse solver alone exceeds typical CI RAM (see #168).
+WNAT_Hagen has 52,774 nodes, about 105k DOF. A direct solve is feasible at this size (about 4.7 s, see the comparison below). The gate keeps WNAT-scale and larger meshes manual-only in CI, where time and RAM are limited. At STOFS scale (about 25.6M DOF) the FEM direct sparse solver runs out of memory (see #168).
 
-Pass `--max-elements N` to skip those two stages when a mesh exceeds `N` elements (`n_elems > N`).
+Pass `--max-elements N` to skip the FEM direct smoother and the ADMESH truss stage when a mesh exceeds `N` elements (`n_elems > N`).
 
 * The scalable stages (adjacency, skeletonization, quality, angle smoother) always report.
 * `N=0` (default) runs every stage, so local and manual profiling is unaffected.
@@ -242,7 +242,7 @@ The solver is a Jacobi-preconditioned MINRES Krylov solver (`direct_smoother(sol
 Direct vs. iterative on real WNAT scale (WNAT_Hagen, 52,774 verts / 98,365 tri):
 
 * Wall-clock is comparable: direct `spsolve` ~4.7 s, elimination+MINRES ~4.6 s.
-* Peak RSS is equal here. MINRES wins on memory only at the ~4M-DOF STOFS scale, where `spsolve` OOMs.
+* Peak RSS is equal here. MINRES wins on memory only at the ~25.6M-DOF STOFS scale, where `spsolve` OOMs.
 
 Solution parity, direct − iterative:
 
