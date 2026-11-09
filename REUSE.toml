@@ -1,0 +1,13 @@
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2017-2026 Dominik O. Mattioli and Ethan J. Kubatko"
+SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0 AND LicenseRef-Mattioli-NoAI-Training-1.0"
+
+[[annotations]]
+path = "src/@CHILmesh/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2017 Ethan J. Kubatko, Dominik Mattioli, Dustin J. West, Dylan Wood, Omar El Khoury"
+SPDX-License-Identifier = "MIT"
