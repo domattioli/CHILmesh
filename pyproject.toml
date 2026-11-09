@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "chilmesh"
 version = "1.6.0"
 description = "Fast 2D mesh library for hydrodynamic domains — Python API with optional C++ acceleration"
 authors = [{name = "Dominik Mattioli"}]
-license = {text = "PolyForm Noncommercial License 1.0.0"}
+license = "PolyForm-Noncommercial-1.0.0 AND LicenseRef-Mattioli-NoAI-Training-1.0"
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = [
@@ -25,7 +25,6 @@ keywords = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -83,7 +82,7 @@ Documentation = "https://github.com/domattioli/CHILmesh#readme"
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["chilmesh", "chilmesh.utils", "chilmesh.data", "chilmesh.backends"]
-license-files = []
+license-files = ["LICENSE", "LICENSE-AI.md", "NOTICE", "LICENSES/*"]
 
 [tool.setuptools.package-data]
 "chilmesh.data" = ["*.fort.14", "*.14"]
