@@ -6,6 +6,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Release notes for 1.7.0 (unreleased; version not yet bumped).
+
+### Added (1.7.0)
+
+- Private stderr progress line for layer peel, angle-based smoothing, fort.14 read/write and quality analysis; auto mode shows it only on a TTY after 1 s, `CHILMESH_PROGRESS=0|1|auto` overrides, and `tqdm` is used when installed (spec 008).
+
+### Fixed (1.7.0)
+- fort.14 open-boundary `IBTYPEE` is kept on read and written back, so a read, write, re-read round trip compares equal. A missing `IBTYPEE` stays missing ([#309](https://github.com/domattioli/CHILmesh/issues/309)).
+- `angle_based_smoother` rejects any quad move that folds a corner: every quad corner needs a positive scaled Jacobian (`SJ_MIN = 1e-6`), not just the two diagonal triangles. Quad smoothing output may differ from 1.6.x; triangle smoothing is unchanged ([#306](https://github.com/domattioli/CHILmesh/issues/306)).
+
+### Changed (1.7.0)
+- Licence text replaced by the official PolyForm text, with separate no-AI terms ([#308](https://github.com/domattioli/CHILmesh/pull/308)).
+- Benchmark documentation corrects the degree-of-freedom figures and the speedup range ([#304](https://github.com/domattioli/CHILmesh/pull/304)).
+
 ### Removed
 - Python 3.10 support. `requires-python` is now `>=3.11` for `chilmesh` and the C++ backend; C++ wheels are no longer built for CPython 3.10. Python 3.10 reaches end of life in October 2026; 1.6.x remains installable on 3.10.
 

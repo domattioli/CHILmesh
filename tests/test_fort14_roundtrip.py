@@ -51,6 +51,46 @@ def test_fort14_roundtrip_identity(name, tmp_path):
     )
 
 
+_OPEN_BC_MESH = """
+    open ibtype mesh
+    1 3
+    1 0.0 0.0 0.0
+    2 1.0 0.0 0.0
+    3 0.0 1.0 0.0
+    1 3 1 2 3
+    1
+    2
+    2 {ibtype}
+    1
+    2
+    0
+    0
+    """
+
+
+@pytest.mark.parametrize("ibtype", [None, 7])
+def test_fort14_open_boundary_ibtype_roundtrip(tmp_path, ibtype):
+    """#309: open-boundary IBTYPEE survives read, write, re-read; absent stays absent."""
+    text = textwrap.dedent(_OPEN_BC_MESH).strip().format(
+        ibtype="" if ibtype is None else ibtype
+    ).replace("2 \n", "2\n")
+    src = tmp_path / "in.14"
+    src.write_text(text + "\n", encoding="utf-8")
+    mesh = CHILmesh.read_from_fort14(src, compute_layers=False, compute_adjacencies=False)
+    open_segs = [s for s in mesh.boundary_segments if s["kind"] == "open"]
+    assert [s["ibtype"] for s in open_segs] == [ibtype]
+
+    out = tmp_path / "out.14"
+    assert mesh.write_to_fort14(str(out), grid_name="x") is True
+    lines = out.read_text(encoding="utf-8").splitlines()
+    # Lines: title, counts, 3 nodes, 1 element, NOPE, total, then the NVDLL row.
+    assert lines[8] == ("2" if ibtype is None else f"2 {ibtype}")
+    again = CHILmesh.read_from_fort14(out, compute_layers=False, compute_adjacencies=False)
+    segs2 = [s for s in again.boundary_segments if s["kind"] == "open"]
+    assert [s["ibtype"] for s in segs2] == [ibtype]
+    np.testing.assert_array_equal(segs2[0]["nodes"], open_segs[0]["nodes"])
+
+
 def test_chilmesh_boundaries_present_distinguishes_empty_from_absent(tmp_path):
     """#259: CHILmesh.read_from_fort14 distinguishes present-but-empty from absent."""
     # Minimal 1-element triangle mesh WITH physical 0/0/0/0 boundary block.
