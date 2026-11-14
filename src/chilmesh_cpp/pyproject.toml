@@ -7,6 +7,7 @@ name = "chilmesh-cpp"
 version = "0.6.0"
 description = "C++ half-edge backend for CHILmesh"
 requires-python = ">=3.11"
+license = "PolyForm-Noncommercial-1.0.0 AND LicenseRef-Mattioli-NoAI-Training-1.0"
 
 [tool.scikit-build]
 cmake.build-type = "Release"

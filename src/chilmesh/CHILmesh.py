@@ -4,6 +4,7 @@ from pathlib import Path
 import warnings
 
 from .utils.plot_utils import CHILmeshPlotMixin
+from ._progress import track as _track
 
 import numpy as np
 from scipy.spatial import Delaunay, cKDTree
@@ -1141,7 +1142,8 @@ class CHILmesh(CHILmeshPlotMixin):
             )
         return np.unique(np.concatenate([seg["nodes"] for seg in matching]))
 
-    def _peel(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> None:
+    def _peel(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None,
+              *, _progress=None, _tick=None) -> None:
         """
         Peel the mesh by iteratively peeling concentric layers inward.
 
@@ -1174,6 +1176,10 @@ class CHILmesh(CHILmeshPlotMixin):
                 vertices belong to segments with matching IBTYPE. Combined with
                 ``seed_boundary_kinds`` via intersection. (#129)
         """
+        if _tick is None:
+            # Private progress line (spec 008 FR-8..FR-14): re-enter once with a tick callback.
+            with _track("Peeling layers", "layer", past="Peeled", _progress=_progress) as _t:
+                return self._peel(seed_boundary_kinds, seed_ibtypes, _tick=_t.tick)
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
 
         # Compute boundary-type seed node set for layer-0 filtering (#129).
@@ -1261,10 +1267,12 @@ class CHILmesh(CHILmeshPlotMixin):
             self.layers["IV"].append(iLIV)
 
             iL += 1
+            _tick()
 
         self.n_layers = iL
 
-    def peel_layers(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None) -> dict:
+    def peel_layers(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None,
+                    *, _progress=None) -> dict:
         """Recompute the mesh's onion-peel layer decomposition (public entry).
 
         Iteratively peels boundary elements inward, recording each ring as a
@@ -1277,7 +1285,8 @@ class CHILmesh(CHILmeshPlotMixin):
         dict
             ``self.layers`` after the peel.
         """
-        self._peel(seed_boundary_kinds=seed_boundary_kinds, seed_ibtypes=seed_ibtypes)
+        self._peel(seed_boundary_kinds=seed_boundary_kinds, seed_ibtypes=seed_ibtypes,
+                   _progress=_progress)
         return self.layers
 
     def get_layer( self, layer_idx: int ) -> Dict[str, np.ndarray]:
@@ -1381,7 +1390,7 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return qualities
 
-    def elem_quality(self, elem_ids=None, quality_type='skew') -> Tuple[np.ndarray, np.ndarray, dict]:
+    def elem_quality(self, elem_ids=None, quality_type='skew', *, _progress=None, _tick=None) -> Tuple[np.ndarray, np.ndarray, dict]:
         """
         Calculate the quality of mesh elements.
 
@@ -1402,6 +1411,14 @@ class CHILmesh(CHILmeshPlotMixin):
         if np.isscalar(elem_ids):
             elem_ids = np.array([elem_ids])
         elem_ids = np.asarray(elem_ids)
+
+        if _tick is None:
+            # Private progress line (spec 008 FR-8..FR-14): re-enter once with a tick callback.
+            with _track("Analyzing quality", "element", len(elem_ids),
+                        past="Analyzed", _progress=_progress) as _t:
+                result = self.elem_quality(elem_ids, quality_type, _tick=_t.tick)
+                _t.tick(len(elem_ids))
+                return result
 
         # Compute boolean masks without O(n²) membership checks
         if self.connectivity_list.shape[1] == 3:
@@ -1522,7 +1539,7 @@ class CHILmesh(CHILmeshPlotMixin):
             version,
         )
 
-    def write_to_fort14( self, filename: str, grid_name: Opt[str] = None) -> bool:
+    def write_to_fort14( self, filename: str, grid_name: Opt[str] = None, *, _progress=None) -> bool:
         """
         Export the current mesh to ADCIRC .fort.14 format.
 
@@ -1544,11 +1561,11 @@ class CHILmesh(CHILmeshPlotMixin):
             saved = self.grid_name
             self.grid_name = grid_name
             try:
-                write_fort14(self, filename)
+                write_fort14(self, filename, _progress=_progress)
             finally:
                 self.grid_name = saved
         else:
-            write_fort14(self, filename)
+            write_fort14(self, filename, _progress=_progress)
         return True
 
     def interior_angles(self, elem_ids=None) -> np.ndarray:
@@ -1772,7 +1789,8 @@ class CHILmesh(CHILmeshPlotMixin):
 
     def angle_based_smoother(self, n_iter: int = 100, omega: float = 0.5,
                               tol: float = 1e-8,
-                              size_fn: Opt[Callable[[np.ndarray], np.ndarray]] = None) -> np.ndarray:
+                              size_fn: Opt[Callable[[np.ndarray], np.ndarray]] = None,
+                              *, _progress=None, _tick=None) -> np.ndarray:
         """
         Iterative angle-based smoother (Zhou & Shimada 2000).
 
@@ -1813,6 +1831,10 @@ class CHILmesh(CHILmeshPlotMixin):
             "An angle-based approach to two-dimensional mesh smoothing".
             Proceedings of the 9th International Meshing Roundtable, 373-384.
         """
+        if _tick is None:
+            # Private progress line (spec 008 FR-8..FR-14): re-enter once with a tick callback.
+            with _track("Smoothing", "iteration", n_iter, past="Smoothed", _progress=_progress) as _t:
+                return self.angle_based_smoother(n_iter, omega, tol, size_fn, _tick=_t.tick)
         p = self.points[:, :2].copy()
         n = self.n_verts
 
@@ -1884,6 +1906,10 @@ class CHILmesh(CHILmeshPlotMixin):
                     dx1 = px[2]-px[0]; dy1 = py[2]-py[0]
                     dx2 = px[3]-px[0]; dy2 = py[3]-py[0]
                     if dx1*dy2 - dy1*dx2 <= 0.0:
+                        return -1.0
+                    # All-corner scaled-Jacobian check (#306): a reflex corner
+                    # can hide behind two positive diagonal triangles.
+                    if not _quad_corners_ok(px, py):
                         return -1.0
                     a0 = _acos_deg(px[0],py[0], px[3],py[3], px[1],py[1])
                     a1 = _acos_deg(px[1],py[1], px[0],py[0], px[2],py[2])
@@ -1980,6 +2006,7 @@ class CHILmesh(CHILmeshPlotMixin):
                     if move > max_move:
                         max_move = move
 
+            _tick()
             if max_move < tol:
                 break
 
@@ -2896,6 +2923,8 @@ class CHILmesh(CHILmeshPlotMixin):
         filename: Path,
         compute_layers: bool = True,
         compute_adjacencies: Opt[bool] = None,
+        *,
+        _progress=None,
     ) -> "CHILmesh":
         """
         Read mesh from ADCIRC fort.14 format.
@@ -2922,8 +2951,12 @@ class CHILmesh(CHILmeshPlotMixin):
         parts = lines[i].split(); i += 1
         n_elems, n_verts = int(parts[0]), int(parts[1])
 
-        pts, i = _read_fort14_points(lines, i, n_verts)
-        conn, i = _read_fort14_connectivity(lines, i, n_elems, n_verts)
+        with _track("Reading fort.14", "record", n_verts + n_elems,
+                    past="Read", _progress=_progress) as _t:
+            pts, i = _read_fort14_points(lines, i, n_verts)
+            _t.tick(n_verts)
+            conn, i = _read_fort14_connectivity(lines, i, n_elems, n_verts)
+            _t.tick(n_elems)
 
         mesh = cls(
             connectivity=conn,
@@ -2948,7 +2981,7 @@ class CHILmesh(CHILmeshPlotMixin):
         # Now run adjacencies + layerization with segments in place.
         if compute_layers:
             mesh._build_adjacencies()
-            mesh._peel()
+            mesh._peel(_progress=_progress)
         elif compute_adjacencies:
             mesh._build_adjacencies()
         mesh._build_spatial_indices()
@@ -3043,6 +3076,24 @@ def _read_fort14_node_list(lines: list, i: int, n_seg: int) -> tuple:
     return nodes, i
 
 
+_SJ_MIN = 1e-6
+
+
+def _quad_corners_ok(px, py) -> bool:
+    """True when every corner of the CCW quad has a positive scaled Jacobian.
+
+    Corner ``k`` passes when ``cross(p[k+1]-p[k], p[k-1]-p[k]) >
+    _SJ_MIN * |u| * |w|``. Catches reflex ("dart") quads that two positive
+    diagonal triangles miss. (#306)
+    """
+    for k in range(4):
+        ux = px[(k + 1) % 4] - px[k]; uy = py[(k + 1) % 4] - py[k]
+        wx = px[k - 1] - px[k]; wy = py[k - 1] - py[k]
+        if ux * wy - uy * wx <= _SJ_MIN * (((ux * ux + uy * uy) * (wx * wx + wy * wy)) ** 0.5):
+            return False
+    return True
+
+
 def _read_fort14_open_segments(lines: list, i: int, segments: list, state: dict) -> int:
     """Parse the NOPE block, appending to ``segments``; returns the next index.
 
@@ -3053,9 +3104,11 @@ def _read_fort14_open_segments(lines: list, i: int, segments: list, state: dict)
     int(lines[i].split()[0]); i += 1  # total_nope (not used)
     state["present"] = True  # NOPE/NBOU block physically present (#259)
     for _ in range(nope):
-        n_seg = int(lines[i].split()[0]); i += 1
+        hdr = lines[i].split(); i += 1
+        n_seg = int(hdr[0])
+        ibtype = int(hdr[1]) if len(hdr) > 1 else None  # IBTYPEE (#309)
         nodes, i = _read_fort14_node_list(lines, i, n_seg)
-        segments.append({"kind": "open", "ibtype": None, "nodes": np.array(nodes, dtype=int)})
+        segments.append({"kind": "open", "ibtype": ibtype, "nodes": np.array(nodes, dtype=int)})
     return i
 
 
@@ -3114,7 +3167,10 @@ def _write_fort14_boundaries(f, mesh) -> None:
     f.write(f"{len(open_segs)}\n")
     f.write(f"{total_open_nodes}\n")
     for seg in open_segs:
-        f.write(f"{len(seg['nodes'])}\n")
+        f.write(f"{len(seg['nodes'])}")
+        if seg.get("ibtype") is not None:
+            f.write(f" {seg['ibtype']}")
+        f.write("\n")
         for node in seg["nodes"]:
             f.write(f"{node + 1}\n")
 
@@ -3131,7 +3187,11 @@ def _write_fort14_boundaries(f, mesh) -> None:
             f.write(f"{node + 1}\n")
 
 
-def write_fort14(mesh, filename: str) -> bool:
+# Rows per progress tick in fort.14 read/write (tick per chunk, never per row).
+_PROGRESS_CHUNK = 20000
+
+
+def write_fort14(mesh, filename: str, *, _progress=None) -> bool:
     """
     Write a CHILmesh to ADCIRC fort.14 format.
 
@@ -3153,19 +3213,28 @@ def write_fort14(mesh, filename: str) -> bool:
         >>> write_fort14(mesh, "output.14")
         True
     """
-    with open(filename, 'w', encoding='utf-8', newline='\n') as f:
+    chunk = _PROGRESS_CHUNK
+    with _track("Writing fort.14", "record", mesh.n_verts + mesh.n_elems,
+                past="Wrote", _progress=_progress) as _t, \
+            open(filename, 'w', encoding='utf-8', newline='\n') as f:
         name = mesh.grid_name or "CHILmesh"
         f.write(f"{name}\n")
         f.write(f"{mesh.n_elems} {mesh.n_verts}\n")
-        for i, pt in enumerate(mesh.points):
-            f.write(f"{i+1} {pt[0]:.10f} {pt[1]:.10f} {pt[2]:.10f}\n")
-        for i, elem in enumerate(mesh.connectivity_list):
-            if elem.size == 3 or (elem.size == 4 and elem[3] == elem[0]):
-                verts = elem[:3]
-                f.write(f"{i+1} 3 {' '.join(str(v+1) for v in verts)}\n")
-            else:
-                verts = elem[:4]
-                f.write(f"{i+1} 4 {' '.join(str(v+1) for v in verts)}\n")
+        for s in range(0, mesh.n_verts, chunk):
+            block = mesh.points[s:s + chunk]
+            for i, pt in enumerate(block, start=s):
+                f.write(f"{i+1} {pt[0]:.10f} {pt[1]:.10f} {pt[2]:.10f}\n")
+            _t.tick(len(block))
+        for s in range(0, mesh.n_elems, chunk):
+            block = mesh.connectivity_list[s:s + chunk]
+            for i, elem in enumerate(block, start=s):
+                if elem.size == 3 or (elem.size == 4 and elem[3] == elem[0]):
+                    verts = elem[:3]
+                    f.write(f"{i+1} 3 {' '.join(str(v+1) for v in verts)}\n")
+                else:
+                    verts = elem[:4]
+                    f.write(f"{i+1} 4 {' '.join(str(v+1) for v in verts)}\n")
+            _t.tick(len(block))
 
         _write_fort14_boundaries(f, mesh)
 

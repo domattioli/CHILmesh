@@ -267,3 +267,46 @@ def test_ordered_vertex_ring_padded_triangle_recognized():
     assert ring is not None
     assert set(ring) == {1, 2, 3, 4, 5, 6}
     assert len(ring) == 6
+
+
+# --- #306: all-corner scaled-Jacobian check for quads -----------------------
+
+def test_quad_corner_check_rejects_dart_quad():
+    """#306: reflex corner at p0 passes both diagonal-triangle tests but must fail."""
+    from chilmesh.CHILmesh import _quad_corners_ok
+
+    px = np.array([1.0, 0.0, 2.0, 1.0])
+    py = np.array([0.5, 0.0, 0.0, 2.0])
+    assert not _quad_corners_ok(px, py)
+    # A unit square passes.
+    assert _quad_corners_ok(np.array([0.0, 1.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0, 1.0]))
+
+
+def _quad_grid(n_cells: int, jitter: float, seed: int):
+    nv = n_cells + 1
+    xs, ys = np.meshgrid(np.arange(nv, dtype=float), np.arange(nv, dtype=float))
+    pts = np.column_stack([xs.ravel(), ys.ravel(), np.zeros(xs.size)])
+    rng = np.random.default_rng(seed)
+    interior = [j * nv + i for j in range(1, n_cells) for i in range(1, n_cells)]
+    pts[interior, :2] += rng.uniform(-jitter, jitter, size=(len(interior), 2))
+    conn = np.array([
+        [j * nv + i, j * nv + i + 1, (j + 1) * nv + i + 1, (j + 1) * nv + i]
+        for j in range(n_cells) for i in range(n_cells)
+    ])
+    return conn, pts
+
+
+def _bad_quads(conn, pts) -> set:
+    from chilmesh.CHILmesh import _quad_corners_ok
+    return {e for e, row in enumerate(conn) if not _quad_corners_ok(pts[row, 0], pts[row, 1])}
+
+
+@pytest.mark.parametrize("seed", [4, 14, 41])
+def test_angle_smoother_creates_no_new_inverted_quads(seed):
+    """#306: smoothing a jittered 7x7 quad grid never folds a quad corner."""
+    conn, pts = _quad_grid(7, 0.8, seed)
+    mesh = CHILmesh(connectivity=conn, points=pts, grid_name=f"jit{seed}", validate=False)
+    before = _bad_quads(conn, pts)
+    smoothed = mesh.angle_based_smoother(n_iter=20)
+    after = _bad_quads(mesh.connectivity_list, smoothed)
+    assert after <= before, f"seed {seed}: new inverted quads {sorted(after - before)}"
