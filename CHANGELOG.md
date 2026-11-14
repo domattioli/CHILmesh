@@ -6,6 +6,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- `chilmesh-cpp` 0.6.1: ships the 1.7.0 licence text and the Python 3.11 floor. macOS arm64 wheels now build on `macos-15`, since the `macos-14` runner no longer starts.
+
 ## [1.7.0] — 2026-11-14
 
 ### Fixed
