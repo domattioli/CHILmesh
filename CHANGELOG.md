@@ -6,29 +6,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Release notes for 1.7.0 (unreleased; version not yet bumped).
+## [1.7.0] — 2026-11-14
 
-### Added (1.7.0)
-
-- Private stderr progress line for layer peel, angle-based smoothing, fort.14 read/write and quality analysis; auto mode shows it only on a TTY after 1 s, `CHILMESH_PROGRESS=0|1|auto` overrides, and `tqdm` is used when installed (spec 008).
-
-### Fixed (1.7.0)
+### Fixed
 - fort.14 open-boundary `IBTYPEE` is kept on read and written back, so a read, write, re-read round trip compares equal. A missing `IBTYPEE` stays missing ([#309](https://github.com/domattioli/CHILmesh/issues/309)).
 - `angle_based_smoother` rejects any quad move that folds a corner: every quad corner needs a positive scaled Jacobian (`SJ_MIN = 1e-6`), not just the two diagonal triangles. Quad smoothing output may differ from 1.6.x; triangle smoothing is unchanged ([#306](https://github.com/domattioli/CHILmesh/issues/306)).
+- `partition_mesh` and `partition_report` build mesh adjacencies on demand, so a mesh loaded with `compute_layers=False` no longer raises `KeyError: 'Edge2Elem'` ([#293](https://github.com/domattioli/CHILmesh/issues/293)).
+- Docstring examples for `partition_mesh`, `partition_report`, `color_elements`, `check_coloring`, `read_adcirc_output_nc`, the fort.19/20/24, fort.22 and OWI readers and writers, and `write_to_2dm` now run on bundled meshes or temporary files instead of `+SKIP`, and CI runs them with `pytest --doctest-modules` ([#290](https://github.com/domattioli/CHILmesh/issues/290)).
 
-### Changed (1.7.0)
+### Changed
 - Licence text replaced by the official PolyForm text, with separate no-AI terms ([#308](https://github.com/domattioli/CHILmesh/pull/308)).
 - Benchmark documentation corrects the degree-of-freedom figures and the speedup range ([#304](https://github.com/domattioli/CHILmesh/pull/304)).
+- CI tests Python 3.11 and 3.13 on Linux and 3.13 on macOS and Windows, on both pushes and PRs to `main`.
 
 ### Removed
 - Python 3.10 support. `requires-python` is now `>=3.11` for `chilmesh` and the C++ backend; C++ wheels are no longer built for CPython 3.10. Python 3.10 reaches end of life in October 2026; 1.6.x remains installable on 3.10.
-
-### Changed
-- CI tests Python 3.11 and 3.13 on Linux and 3.13 on macOS and Windows, on both pushes and PRs to `main`.
-
-### Fixed
-- `partition_mesh` and `partition_report` build mesh adjacencies on demand, so a mesh loaded with `compute_layers=False` no longer raises `KeyError: 'Edge2Elem'` ([#293](https://github.com/domattioli/CHILmesh/issues/293)).
-- Docstring examples for `partition_mesh`, `partition_report`, `color_elements`, `check_coloring`, `read_adcirc_output_nc`, the fort.19/20/24, fort.22 and OWI readers and writers, and `write_to_2dm` now run on bundled meshes or temporary files instead of `+SKIP`, and CI runs them with `pytest --doctest-modules` ([#290](https://github.com/domattioli/CHILmesh/issues/290)).
 
 ## [1.6.0] - 2026-10-12
 
