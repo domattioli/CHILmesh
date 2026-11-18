@@ -323,6 +323,9 @@ class CHILmesh(CHILmeshPlotMixin):
         self.n_edges: int = 0
         self.n_layers: int = 0
         self.layers: Dict[str, List] = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
+        self._peel_backend: Opt[str] = None  # "cpp" or "python" after a peel
+        self._adjacency_backend: Opt[str] = None  # edge numbering source, same values
+        self._cpp_init: Any = None  # CppMesh shared by adjacency + peel during init
         self.type: Opt[str] = None
 
         # If no inputs are provided, create a random Delaunay triangulation
@@ -391,37 +394,52 @@ class CHILmesh(CHILmeshPlotMixin):
             else:
                 self.type = "Mixed-Element"
 
-            if compute_adjacencies:
-                self._build_adjacencies( validate=validate )
-            if compute_layers:
-                global _SLOW_PATH_WARNED
-                if (not _SLOW_PATH_WARNED
-                        and self.n_elems >= _SLOW_PATH_ELEM_THRESHOLD):
-                    from .backends.cpp_backend import CPP_AVAILABLE
-                    from .backends.rust_backend import RUST_AVAILABLE
-                    if not (CPP_AVAILABLE or RUST_AVAILABLE):
-                        _SLOW_PATH_WARNED = True
-                        warnings.warn(
-                            f"chilmesh: layerizing a {self.n_elems}-element mesh "
-                            "on the pure-Python backend (no compiled C++/Rust extension "
-                            "found). The pure-Python path is linear in element count "
-                            "(~1s per 60k elements) but slower than the compiled backend; "
-                            "the gap grows with mesh size and repeated re-inits. Build the "
-                            "extension (pip install ./src/chilmesh_cpp) or pass "
-                            "compute_layers=False for fast metadata-only loading. Introspect "
-                            "with chilmesh.backend_info(). See CHILmesh #202.",
-                            UserWarning,
-                            stacklevel=2,
-                        )
-                self._peel(
-                    seed_boundary_kinds=seed_boundary_kinds,
-                    seed_ibtypes=seed_ibtypes,
-                )
+            # One C++ build (when C++ is selected) serves both the adjacency
+            # edge numbering and the peel; it is dropped after init.
+            self._cpp_init = (self._cpp_full_init()
+                              if compute_adjacencies and compute_layers else None)
+            try:
+                self._init_adjacency_and_layers(
+                    compute_adjacencies, compute_layers, validate,
+                    seed_boundary_kinds, seed_ibtypes)
+            finally:
+                self._cpp_init = None
 
             # Build spatial indices unless caller opts out (#204)
             if build_spatial_indices:
                 self._build_spatial_indices()
-    
+
+    def _init_adjacency_and_layers(self, compute_adjacencies: bool, compute_layers: bool,
+                                   validate: bool, seed_boundary_kinds: Opt[List[str]],
+                                   seed_ibtypes: Opt[List[int]]) -> None:
+        """Adjacency and layer steps of ``_initialize_mesh``."""
+        if compute_adjacencies:
+            self._build_adjacencies( validate=validate )
+        if compute_layers:
+            global _SLOW_PATH_WARNED
+            if (not _SLOW_PATH_WARNED
+                    and self.n_elems >= _SLOW_PATH_ELEM_THRESHOLD):
+                from .backends.cpp_backend import CPP_AVAILABLE
+                from .backends.rust_backend import RUST_AVAILABLE
+                if not (CPP_AVAILABLE or RUST_AVAILABLE):
+                    _SLOW_PATH_WARNED = True
+                    warnings.warn(
+                        f"chilmesh: layerizing a {self.n_elems}-element mesh "
+                        "on the pure-Python backend (no compiled C++/Rust extension "
+                        "found). The pure-Python path is linear in element count "
+                        "(~1s per 60k elements) but slower than the compiled backend; "
+                        "the gap grows with mesh size and repeated re-inits. Build the "
+                        "extension (pip install ./src/chilmesh_cpp) or pass "
+                        "compute_layers=False for fast metadata-only loading. Introspect "
+                        "with chilmesh.backend_info(). See CHILmesh #202.",
+                        UserWarning,
+                        stacklevel=3,
+                    )
+            self._peel(
+                seed_boundary_kinds=seed_boundary_kinds,
+                seed_ibtypes=seed_ibtypes,
+            )
+
     def _ensure_ccw_orientation( self ) -> None:
         """Ensure counter-clockwise orientation of every element.
 
@@ -589,6 +607,34 @@ class CHILmesh(CHILmeshPlotMixin):
 
         return tri_elems, quad_elems
     
+    @staticmethod
+    def _edges_from_cpp(cpp: Any, elem_flat: np.ndarray, slot_flat: np.ndarray,
+                        v0: np.ndarray, v1: np.ndarray) -> Opt[Tuple[np.ndarray, np.ndarray]]:
+        """Edge table and per-(element, slot) edge ids from a ``CppMesh``.
+
+        Returns ``(edge2vert, inverse)`` in the exact form the NumPy path in
+        ``_build_adjacencies`` produces (canonical ``(min, max)`` rows,
+        first-encounter numbering), or ``None`` when the C++ tables do not
+        reproduce it, so the caller falls back to NumPy.
+        """
+        e2v = np.sort(np.asarray(cpp.edge2vert, dtype=np.int64), axis=1)
+        e2e = np.asarray(cpp.elem2edge)
+        n_edges = e2v.shape[0]
+        if n_edges == 0 or len(elem_flat) == 0 or e2e.ndim != 2:
+            return None
+        if slot_flat.max() >= e2e.shape[1] or elem_flat.max() >= e2e.shape[0]:
+            return None
+        inverse = e2e[elem_flat, slot_flat].astype(np.int64)
+        if inverse.min() < 0 or inverse.max() >= n_edges:
+            return None
+        if not (np.array_equal(e2v[inverse, 0], np.minimum(v0, v1))
+                and np.array_equal(e2v[inverse, 1], np.maximum(v0, v1))):
+            return None
+        run_max = np.maximum.accumulate(inverse)
+        if inverse[0] != 0 or run_max[-1] != n_edges - 1 or np.any(np.diff(run_max) > 1):
+            return None
+        return e2v, inverse
+
     def _build_adjacencies( self, validate: bool = True ) -> None:
         """Build adjacency lists for the mesh (vectorized)."""
         from .mesh_topology import EdgeMap
@@ -619,16 +665,23 @@ class CHILmesh(CHILmeshPlotMixin):
         v0 = v0[valid]; v1 = v1[valid]
         elem_flat = elem_flat[valid]; slot_flat = slot_flat[valid]
 
-        edges_canon = np.column_stack([np.minimum(v0, v1), np.maximum(v0, v1)])
-        unique_lex, first_occur, inverse_lex = np.unique(
-            edges_canon, axis=0, return_index=True, return_inverse=True
-        )
-        # Restore first-encounter ordering so edge IDs match the C++ backend.
-        insert_order = np.argsort(first_occur, kind='stable')
-        unique_edges = unique_lex[insert_order]
-        lex_to_ins = np.empty(len(insert_order), dtype=np.int64)
-        lex_to_ins[insert_order] = np.arange(len(insert_order), dtype=np.int64)
-        inverse = lex_to_ins[inverse_lex]
+        cpp = getattr(self, "_cpp_init", None)
+        cpp_edges = self._edges_from_cpp(cpp, elem_flat, slot_flat, v0, v1) if cpp is not None else None
+        self._adjacency_backend = "cpp" if cpp_edges is not None else "python"
+        if cpp_edges is not None:
+            # C++ half-edge numbering is first-encounter, same as below (#301).
+            unique_edges, inverse = cpp_edges
+        else:
+            edges_canon = np.column_stack([np.minimum(v0, v1), np.maximum(v0, v1)])
+            unique_lex, first_occur, inverse_lex = np.unique(
+                edges_canon, axis=0, return_index=True, return_inverse=True
+            )
+            # Restore first-encounter ordering so edge IDs match the C++ backend.
+            insert_order = np.argsort(first_occur, kind='stable')
+            unique_edges = unique_lex[insert_order]
+            lex_to_ins = np.empty(len(insert_order), dtype=np.int64)
+            lex_to_ins[insert_order] = np.arange(len(insert_order), dtype=np.int64)
+            inverse = lex_to_ins[inverse_lex]
 
         n_edges = len(unique_edges)
         self.n_edges = n_edges
@@ -1032,8 +1085,8 @@ class CHILmesh(CHILmeshPlotMixin):
         """
         point = np.asarray(point)
         _, candidates = self._centroid_tree.query(point, k=min(20, self.n_elems))
-        if isinstance(candidates, np.int64):
-            candidates = np.array([candidates])
+        # k=1 returns a bare scalar (Python int or numpy int); normalise to 1-D.
+        candidates = np.atleast_1d(candidates)
         for elem_id in candidates:
             # Skip deleted elements (marked as all zeros)
             elem = self.connectivity_list[elem_id]
@@ -1142,6 +1195,82 @@ class CHILmesh(CHILmeshPlotMixin):
             )
         return np.unique(np.concatenate([seg["nodes"] for seg in matching]))
 
+    def _cpp_full_init(self) -> Any:
+        """Build the C++ half-edge mesh (adjacency + peel) when C++ is selected.
+
+        Returns the ``CppMesh`` from ``chilmesh_cpp.full_init``, or ``None``
+        when C++ is not the selected backend (``chilmesh.backend_info()``,
+        ``CHILMESH_BACKEND``) or the mesh is outside what the half-edge build
+        accepts. The C++ build assumes a valid 2-manifold: in-range vertex
+        ids, no repeated vertex inside an element, at most two elements per
+        edge. Anything else stays on the Python path.
+        """
+        if not self.n_elems or not self.n_verts:
+            return None
+        from . import backend_info
+        if backend_info()["selected"] != "cpp":
+            return None
+        from .backends import cpp_backend
+
+        conn = np.array(self.connectivity_list, dtype=np.int32)
+        if conn.ndim != 2 or conn.shape[1] not in (3, 4):
+            return None
+        if conn.shape[1] == 4:
+            tri_elems, _ = self._elem_type()
+            conn[tri_elems, 3] = -1  # C++ marks a triangle row with -1 padding
+        if conn[:, :3].min() < 0 or conn.max() >= self.n_verts:
+            return None
+        srt = np.sort(conn, axis=1)
+        if np.any((srt[:, 1:] == srt[:, :-1]) & (srt[:, 1:] >= 0)):
+            return None
+        # Edge use count from 1-D int64 keys: a key seen 3+ times is non-manifold.
+        v0 = conn.astype(np.int64)
+        v1 = np.roll(v0, -1, axis=1)
+        if conn.shape[1] == 4:
+            pad = v0[:, 3] < 0
+            v1[pad, 2] = v0[pad, 0]  # triangle row closes on slot 2
+        ok = (v0 >= 0) & (v1 >= 0)
+        lo = np.minimum(v0, v1)[ok]
+        hi = np.maximum(v0, v1)[ok]
+        keys = np.sort(lo * self.n_verts + hi)
+        if keys.size > 2 and np.any(keys[2:] == keys[:-2]):
+            return None
+        return cpp_backend.full_init(self.points, conn)
+
+    def _peel_cpp(self) -> bool:
+        """Run the layer peel on the C++ backend when it is selected.
+
+        Returns ``True`` when ``self.layers`` and ``self.n_layers`` were filled
+        from ``chilmesh_cpp.full_init`` (reusing the mesh built during
+        ``_initialize_mesh`` when present). Returns ``False`` (caller runs the
+        Python peel) when ``_cpp_full_init`` declines, or when the C++ edge
+        numbering differs from ``self.adjacencies["Edge2Vert"]``, so
+        ``bEdgeIDs`` always index the Python edge table. Layer arrays are
+        sorted int64, the same form the Python peel produces.
+        """
+        self._peel_backend = "python"
+        if "Edge2Vert" not in self.adjacencies:
+            return False
+        cpp = getattr(self, "_cpp_init", None)
+        if cpp is None:
+            cpp = self._cpp_full_init()
+        if cpp is None:
+            return False
+
+        py_e2v = self.adjacencies["Edge2Vert"]
+        cpp_e2v = np.sort(np.asarray(cpp.edge2vert, dtype=np.int64), axis=1)
+        if cpp_e2v.shape != py_e2v.shape or not np.array_equal(cpp_e2v, py_e2v):
+            return False
+
+        layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
+        for layer in cpp.layers:
+            for key in layers:
+                layers[key].append(np.sort(np.asarray(layer[key], dtype=np.int64)))
+        self.layers = layers
+        self.n_layers = len(layers["OE"])
+        self._peel_backend = "cpp"
+        return True
+
     def _peel(self, seed_boundary_kinds: Opt[List[str]] = None, seed_ibtypes: Opt[List[int]] = None,
               *, _progress=None, _tick=None) -> None:
         """
@@ -1181,11 +1310,14 @@ class CHILmesh(CHILmeshPlotMixin):
             with _track("Peeling layers", "layer", past="Peeled", _progress=_progress) as _t:
                 return self._peel(seed_boundary_kinds, seed_ibtypes, _tick=_t.tick)
         self.layers = {"OE": [], "IE": [], "OV": [], "IV": [], "bEdgeIDs": []}
+        self._peel_backend = "python"
 
         # Compute boundary-type seed node set for layer-0 filtering (#129).
         seed_nodes: Opt[np.ndarray] = None
         if seed_boundary_kinds is not None or seed_ibtypes is not None:
             seed_nodes = self._resolve_seed_nodes(seed_boundary_kinds, seed_ibtypes)
+        elif self._peel_cpp():
+            return
 
         edge2vert_work = self.adjacencies["Edge2Vert"].copy()
         edge2elem_work = self.adjacencies["Edge2Elem"].copy()
@@ -2395,6 +2527,11 @@ class CHILmesh(CHILmeshPlotMixin):
             raise ValueError(
                 f"unknown solver {solver!r}; expected 'direct' or 'iterative'")
         new_xy = c.reshape(-1, 2)
+        # The kinf penalty and the MINRES reduction only approximate the pin;
+        # restore pinned nodes exactly so boundary displacement is 0.
+        if pinned:
+            pin_idx = np.fromiter(pinned, dtype=np.intp, count=len(pinned))
+            new_xy[pin_idx] = p[pin_idx]
         domain_diag = float(np.linalg.norm(np.ptp(p, axis=0)))
         max_disp = float(np.max(np.linalg.norm(new_xy - p, axis=1)))
         if not np.isfinite(c).all() or max_disp > domain_diag:

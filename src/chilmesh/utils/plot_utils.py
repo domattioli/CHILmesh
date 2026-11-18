@@ -82,6 +82,10 @@ class CHILmeshPlotMixin:
         """Plot peel layers as filled elements colored by layer index."""
         return _cp.plot_layer(self, layers=layers, cmap=cmap, ax=ax)
 
+    def cartogram(self, values, **kw) -> Tuple[plt.Figure, plt.Axes]:
+        """Size-controlled cartogram of ``values``; see ``chilplotting.cartogram``."""
+        return _cp.cartogram(self, values, **kw)
+
     def plot_quality(self, elem_ids=None, cmap='cool',
                      ax=None) -> Tuple[plt.Figure, plt.Axes]:
         """Plot element quality as a filled colormap."""

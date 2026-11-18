@@ -17,7 +17,7 @@ import pytest
 
 import chilmesh
 from chilmesh import CHILmesh
-from conftest import TRI_FIXTURE_NAMES as FIXTURES
+from _fixture_names import TRI_FIXTURE_NAMES as FIXTURES
 
 
 @pytest.mark.parametrize("name", FIXTURES)

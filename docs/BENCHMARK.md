@@ -1,6 +1,6 @@
 # CHILmesh Performance Benchmarks
 
-The C++ backend full-initializes the 531,680-element ENPAC2003 mesh in 1.44 s against 12.30 s in Python, an 8.6× speedup. Every number below regenerates from the committed harness. Absolute times are machine-dependent.
+The C++ extension runs adjacency plus layer peel on the 531,680-element ENPAC2003 mesh in 1.44 s against 12.30 s for the Python full init on the same arrays, an 8.6× speedup at chilmesh 1.2.2. That is an extension-level figure: in releases up to 1.6.0, `CHILmesh(...)` construction did not call the C++ backend. With the wiring added after 1.6.0, end-to-end `CHILmesh(...)` construction gains about 1.3× (section 2). Every number below regenerates from the committed harness. Absolute times are machine-dependent.
 
 **Version:** 1.2.2
 **Headline reference mesh:** EasternPacific_ENPAC2003 (272,913 vertices, 531,680 elements, 804,728 edges, 75 layers). It is a continental-scale ADCIRC mesh; meshes come through Valence (see `chilmesh.registry`).
@@ -33,7 +33,15 @@ Section-specific commands appear beside their tables.
 
 ## 2. Headline results and figures
 
-On the 531,680-element ENPAC2003 mesh, C++ full init takes 1.44 s and Python takes 12.30 s, an 8.6× speedup. On the 98,365-element WNAT_Hagen mesh the ratio is 14.7× (1.65 s → 0.112 s).
+On the 531,680-element ENPAC2003 mesh, the C++ extension's full init takes 1.44 s and the Python full init takes 12.30 s, an 8.6× speedup (chilmesh 1.2.2). On the 98,365-element WNAT_Hagen mesh the ratio is 14.7× (1.65 s → 0.112 s, chilmesh 1.1.0). Both compare the extension with Python on the same in-memory arrays.
+
+End-to-end `CHILmesh(...)` construction is a different measurement. After 1.6.0, `CHILmesh(...)` takes edge numbering and the layer peel from C++ when the extension is the selected backend (`chilmesh.backend_info()`, `CHILMESH_BACKEND`), with bit-identical adjacency and layers (`tests/test_cpp_peel_wiring.py`). Measured on the development tree after 1.6.0, one Apple arm64 machine, Python 3.14, medians of 3 runs:
+
+| Mesh | Elements | Python `CHILmesh(...)` | C++ `CHILmesh(...)` | End-to-end speedup | C++ extension only | Extension speedup |
+|---|---:|---:|---:|---:|---:|---:|
+| ENPAC2003 | 531,680 | 8.59 s | 6.58 s | 1.31× | 0.61 s | 14.1× |
+
+The remaining end-to-end time is Python work that the C++ extension does not expose: the `Vert2Edge` and `Vert2Elem` dictionaries, `Edge2Elem`, adjacency validation and the spatial index. A stage split on ENPAC2003 gave adjacency 2.6 s (0.84 s of it edge numbering, which C++ now replaces), validation 1.2 s, Python peel 3.3 s against 0.7 s through C++, and spatial index 0.3 s.
 
 Reference workload: EasternPacific_ENPAC2003, 272,913 vertices, 531,680 elements, 75 layers, available through Valence. The medians come from 3 runs on one machine at chilmesh 1.2.2. The algorithms have not changed since. A 1.4.1 rerun on a second machine gave Python 11.89 s and C++ 0.803 s for full init (14.8×).
 
@@ -68,7 +76,7 @@ Method and raw data are in this document. The layer-parity catalog (557 to 273k 
 
 ## 3. Cross-language at continental scale (v1.2.2, EasternPacific_ENPAC2003, medians)
 
-C++ leads every stage. Full init is 8.6× faster than Python and 11.6× faster than Octave.
+C++ leads every stage. At the extension level, full init is 8.6× faster than Python and 11.6× faster than Octave. End-to-end `CHILmesh(...)` construction gains less; see section 2.
 
 Setup:
 
@@ -221,7 +229,7 @@ Reproduce: `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh src/chilmesh
 
 On meshes of several million nodes the FEM direct smoother and the ADMESH truss stage run out of memory or time. WNAT_Hagen (52,774 nodes, about 105k DOF at two per node) is not in this range: its full lifecycle completes (section below). The FEM direct sparse solver alone exceeds typical CI RAM (see #168).
 
-Pass `--max-elements N` to skip those two stages when a mesh exceeds `N` elements (`n_elems > N`).
+Pass `--max-elements N` to skip the FEM direct smoother and the ADMESH truss stage when a mesh exceeds `N` elements (`n_elems > N`).
 
 * The scalable stages (adjacency, skeletonization, quality, angle smoother) always report.
 * `N=0` (default) runs every stage, so local and manual profiling is unaffected.

@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 # Cancel superseded runs on the same ref so rapid rotation pushes / PR
-# syncs don't pile up redundant full-matrix (ubuntu+macOS+windows × 3 py)
+# syncs don't pile up redundant full-matrix (ubuntu+macOS+windows × 2 py)
 # jobs and burn runner minutes. Each ref gets an independent group, so an
 # in-progress main-branch run is never cancelled by activity on another ref.
 concurrency:
