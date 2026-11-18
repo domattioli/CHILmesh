@@ -1,0 +1,31 @@
+# Fair-campaign image (#301): one CPython 3.11 base, four isolated venvs
+# (chilmesh with the C++ extension, adcircpy, thalassa, xarray).
+# Build from the repository root:
+#   docker build -f docker/Dockerfile.fair -t chilmesh-fair .
+# Pin the base image by digest before a campaign run and record it in the
+# campaign manifest.
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
+    CHILMESH_FAIR_PYTHON=/usr/local/bin/python3.11 \
+    FAIR_VENV_ROOT=/opt/fair
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential cmake git ca-certificates \
+      libnetcdf-dev libhdf5-dev libgeos-dev libproj-dev proj-bin libgdal-dev \
+      procps util-linux \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+COPY . /workspace
+
+# Locks and import results land in /opt/fair/locks; copy them out with
+#   docker run --rm -v "$PWD/.scratch/fair-locks:/out" chilmesh-fair cp -r /opt/fair/locks/. /out/
+RUN bash docker/fair_envs.sh /workspace /opt/fair/locks
+
+# The controller runs on the base interpreter and imports chilmesh (benchmarks/competitors/w2/run.py).
+RUN python3.11 -m pip install --no-cache-dir --root-user-action=ignore /workspace
+
+CMD ["bash"]

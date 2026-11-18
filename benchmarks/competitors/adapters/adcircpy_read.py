@@ -7,6 +7,7 @@ confirms it; a mismatch surfaces as a non-zero exit, recorded as ``failed``.
 """
 import argparse
 import json
+import importlib.metadata
 import sys
 import time
 
@@ -14,16 +15,21 @@ import time
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mesh", required=True)
+    ap.add_argument("--fair", action="store_true", help="emit materialized fair-campaign evidence")
     args = ap.parse_args()
 
     import adcircpy
+
+    if args.fair:
+        from benchmarks.competitors.protocol import run_adapter, adcircpy_output
+        return run_adapter("adcircpy", lambda: adcircpy.AdcircMesh.open(args.mesh, crs=None), extract=adcircpy_output)
 
     t0 = time.perf_counter()
     mesh = adcircpy.AdcircMesh.open(args.mesh, crs=None)
     parse_s = time.perf_counter() - t0
     n_nodes = len(mesh.coords) if hasattr(mesh, "coords") else None
     n_elems = len(mesh.elements.elements) if hasattr(mesh, "elements") and hasattr(mesh.elements, "elements") else None
-    print(json.dumps({"tool": "adcircpy", "version": getattr(adcircpy, "__version__", "unknown"),
+    print(json.dumps({"tool": "adcircpy", "version": importlib.metadata.version("adcircpy"),
                       "parse_s": parse_s, "n_nodes": n_nodes, "n_elems": n_elems, "input_format": "fort.14"}))
     return 0
 

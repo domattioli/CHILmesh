@@ -90,3 +90,65 @@ def test_exclusions_listed():
     md = render.render_markdown([_rec("a", metrics={"m": R.metric(1.0)})], tools=["a"], metrics=["m"],
                                 exclusions=[{"mesh": "WNAT_Hagen", "reason": "no rights entry"}])
     assert "WNAT_Hagen" in md and "no rights entry" in md
+
+
+def test_fair_report_complete_grouped_hashed_and_rights_first(tmp_path):
+    from _fair_saved import saved, persist, ruling
+    m,rows,refs=saved(tmp_path,meshes=('STOFS','WNAT_Hagen'),operations=('parse','parse-netcdf','write'))
+    # Even a diagnostic must never leak an excluded mesh's numeric evidence.
+    for row in rows:
+        if refs[row['reference_id']]['name']=='WNAT_Hagen':
+            row['termination']['stdout_tail']='SECRET_NUMBER_87654321'
+            row['termination'].get('missing',{}).pop('stdout_tail',None)
+    persist(tmp_path,m,rows,refs)
+    result=render.fair_report(tmp_path,published=True,rights={'STOFS':ruling()})
+    text=result['markdown']
+    for needle in ['Native like-for-like','conversion / NetCDF','CHILmesh-only','not-comparable','STOFS','123','sha256','raw','median','growth','10 ms']:
+        assert needle in text
+    assert 'SECRET_NUMBER_87654321' not in str(result)
+    assert len(result['cells'])==18
+    assert result['excluded']==[{'mesh':'WNAT_Hagen','reason':'publication rights unavailable or invalid'}]
+    assert all(c['mesh']=='STOFS' for c in result['cells'].values())
+
+
+def test_fair_report_missing_attempt_or_tamper_fails_before_rights(tmp_path):
+    from _fair_saved import saved, persist
+    m,rows,refs=saved(tmp_path)
+    persist(tmp_path,m,rows[:-1],refs)
+    with pytest.raises(R.MissingCellError): render.fair_report(tmp_path,published=True)
+    p=next((tmp_path/'attempts').glob('*.json'));p.write_text(p.read_text()+' ')
+    with pytest.raises(R.RecordError): render.fair_report(tmp_path)
+
+
+def test_fair_report_failures_and_incomplete_descriptive_series(tmp_path):
+    from _fair_saved import saved, persist, ruling
+    m,rows,refs=saved(tmp_path)
+    triggers=['timeout','rss-limit','kernel-oom','signal-unknown']
+    for i,row in enumerate(rows):
+        if row['outcome']=='ok':
+            row.update(outcome='failed',reason=triggers[i%4])
+            row['termination'].update(trigger=triggers[i%4],returncode=-9,signal=9)
+            row['termination']['missing'].pop('signal',None)
+            if triggers[i%4]=='kernel-oom':
+                row['termination']['memory_events_delta']['oom_kill']=1;row['termination']['memory_events_after']['oom_kill']=1
+    persist(tmp_path,m,rows,refs)
+    r=render.fair_report(tmp_path,published=True,rights={'STOFS':ruling()})
+    for tool in m['tools']: assert tool in r['markdown']
+    assert 'incomplete' in r['markdown'] and 'timeout' in r['markdown'] and 'limits' in r['markdown']
+
+
+def test_public_claim_diagnostics_contain_no_excluded_numbers_hashes_or_free_text(tmp_path):
+    from _fair_saved import saved,persist,ruling,proposal
+    import json
+    m,rows,refs=saved(tmp_path,meshes=('STOFS','WNAT_Hagen'),tools=('chilmesh','adcircpy'))
+    persist(tmp_path,m,rows,refs)
+    private=[r for r in rows if refs[r['reference_id']]['name']=='WNAT_Hagen']
+    p=proposal(private[0]['cell_id'],private[1]['cell_id'])
+    p.update(claim_id='PRIVATE_VALUE_1234567',sentence='PRIVATE_VALUE_1234567',mesh='WNAT_Hagen')
+    r=render.fair_report(tmp_path,published=True,rights={'STOFS':ruling()},proposals=[p])
+    text=json.dumps(r)
+    assert 'PRIVATE_VALUE_1234567' not in text
+    index=json.loads((tmp_path/'evidence/record-hashes.json').read_text())
+    for entry in index['records']:
+        if entry['repeat_id'] in {row['repeat_id'] for row in private}: assert entry['sha256'] not in text
+    assert not r['publication_passed']

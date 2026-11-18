@@ -5,6 +5,7 @@ judged by the same code. ``run_chilmesh`` and ``run_external`` produce one run r
 """
 from __future__ import annotations
 
+import multiprocessing
 import os
 import shutil
 import tempfile
@@ -76,20 +77,50 @@ def _failed(tool, license_, run_mode, mesh, track, reason, command, *, status="f
         machine=machine.describe_machine(), chilmesh_git_sha=machine.chilmesh_git_sha())
 
 
+def _smoother_child(sender, smoother, points, conn):
+    try:
+        sender.send((True, tools.CHILMESH_SMOOTHERS[smoother](points, conn)))
+    except Exception as exc:
+        sender.send((False, f"{type(exc).__name__}: {exc}"))
+    finally:
+        sender.close()
+
+
 def run_chilmesh(smoother, points, conn, depths, *, mesh, crs, dt, courant_max=1.0, track=TRACK, frozen=FROZEN,
-                 cache="unknown", repeat_index=0, extra_metrics_fn=None):
+                 cache="unknown", repeat_index=0, extra_metrics_fn=None, timeout_s=3600):
     tool = f"chilmesh:{smoother}"
     mesh = {**mesh, "crs": crs}
     t0 = time.perf_counter()
+    ctx = multiprocessing.get_context("fork")
+    receiver, sender = ctx.Pipe(duplex=False)
+    proc = ctx.Process(target=_smoother_child, args=(sender, smoother, points, conn))
+    proc.start()
+    sender.close()
     try:
-        new_points = tools.CHILMESH_SMOOTHERS[smoother](points, conn)
-    except Exception as exc:  # recorded, never silently dropped
-        return _failed(tool, "PolyForm-NC", "in-process", mesh, track, f"{type(exc).__name__}: {exc}",
-                       [smoother], cache=cache, repeat_index=repeat_index, tool_version=chilmesh.__version__)
+        if not receiver.poll(timeout_s):
+            proc.kill()
+            proc.join()
+            return _failed(tool, "PolyForm-NC", "subprocess", mesh, track, f"timeout after {timeout_s:g} s",
+                           [smoother], cache=cache, repeat_index=repeat_index, tool_version=chilmesh.__version__,
+                           wall_s=time.perf_counter() - t0)
+        try:
+            ok, result = receiver.recv()
+        except EOFError:
+            ok, result = False, "smoother subprocess exited without a result"
+        proc.join()
+    finally:
+        receiver.close()
+        if proc.is_alive():
+            proc.kill()
+            proc.join()
     wall = time.perf_counter() - t0
+    if not ok:
+        return _failed(tool, "PolyForm-NC", "subprocess", mesh, track, result, [smoother], cache=cache,
+                       repeat_index=repeat_index, tool_version=chilmesh.__version__, wall_s=wall)
+    new_points = result
     extra = extra_metrics_fn(points, new_points) if extra_metrics_fn else None
     return build_record(
-        tool=tool, tool_version=chilmesh.__version__, license_="PolyForm-NC", run_mode="in-process", mesh=mesh,
+        tool=tool, tool_version=chilmesh.__version__, license_="PolyForm-NC", run_mode="subprocess", mesh=mesh,
         crs=crs, dt=dt, courant_max=courant_max, points_before=points, conn_before=conn, depths=depths,
         points_after=new_points, conn_after=conn, wall_s=wall, peak_rss_bytes=None, command=[smoother],
         track=track, frozen=frozen, cache=cache, repeat_index=repeat_index, extra_metrics=extra)

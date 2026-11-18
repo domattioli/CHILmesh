@@ -360,3 +360,201 @@ def test_cli_w2_collects_scaling_across_meshes(tmp_path, monkeypatch, capsys):
     saved = json.loads((tmp_path / "scaling" / "w2_scaling.json").read_text(encoding="utf-8"))
     assert saved["sizes"] == [1_000, 10_000, 100_000]
     assert "scaling" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize('tool', ['chilmesh', 'adcircpy', 'thalassa', 'xarray', 'oceanmesh', 'OceanMesh2D'])
+def test_fair_inventory_all_operations(fair_fixture, tool):
+    from benchmarks.competitors.w2 import tools
+    cells = tools.operation_inventory(fair_fixture['meshes'])
+    assert len(cells) == 4 * 6 * len(tools.FAIR_OPERATIONS)
+    selected = [c for c in cells if c['tool'] == tool]
+    assert len(selected) == 4 * len(tools.FAIR_OPERATIONS)
+    assert all(c['reason'] for c in selected if c['equivalence'] == 'not-comparable')
+    parse = next(c for c in selected if c['operation'] == 'parse')
+    assert parse['equivalence'] == ('like-for-like' if tool in ('chilmesh', 'adcircpy') else 'not-comparable')
+    if tool in ('thalassa', 'xarray'):
+        assert tools.operation_contract(tool, 'parse-netcdf')['input_format'] == 'NetCDF'
+    if tool in ('oceanmesh', 'OceanMesh2D'): assert 'W1' in parse['reason']
+
+
+def test_contract_options_and_backend_are_bound():
+    from benchmarks.competitors.w2 import tools
+    a = tools.operation_contract('chilmesh', 'adjacency-cpp', options={'query_sha256': 'a'})
+    b = tools.operation_contract('chilmesh', 'adjacency-cpp', options={'query_sha256': 'b'})
+    assert a['contract_id'] != b['contract_id']
+    assert a['actual_backend'] is None
+    assert a['equivalence'] == 'CHILmesh-only'
+
+
+def test_fair_injected_results_not_stdout(fair_fixture):
+    from benchmarks.competitors.reference import build_reference
+    reference = build_reference(fair_fixture['mesh'], fair_fixture['output'])
+    result = {'output': {**fair_fixture['adapter'], 'mapping_provenance': {'kind': 'file ids'}}, 'new_modules': [], 'materialization': True}
+    out = run.fair_evidence('adcircpy', 'parse', reference, result)
+    assert out['verification'] == 'verified'
+    result['new_modules'] = ['late.module']
+    assert run.fair_evidence('adcircpy', 'parse', reference, result)['outcome'] == 'invalid'
+    assert run.fair_evidence('adcircpy', 'parse', reference, None)['outcome'] == 'not-run'
+
+
+def test_fair_v2_record_from_injected_per_operation_evidence(fair_fixture):
+    from test_records import successful_fair_data
+    from benchmarks.competitors.reference import build_reference
+    reference = build_reference(fair_fixture['mesh'], fair_fixture['output'])
+    identity = successful_fair_data()
+    result = {key: identity[key] for key in ('protocol', 'measurement', 'termination', 'cache', 'load', 'measurement_validity')}
+    result.update(output={**fair_fixture['adapter'], 'mapping_provenance': {'kind': 'original IDs'}}, new_modules=[], materialization=True, version='1', argv=['fake-python', 'parse-only'])
+    rec = run.fair_record(identity, 'adcircpy', 'parse', reference, result)
+    assert rec['schema_version'] == 2 and rec['outcome'] == 'ok'
+    assert rec['argv'] == ['fake-python', 'parse-only']
+    assert rec['reference_id'] == reference['reference_id']
+    assert rec['output_verification']['n_nodes'] == 4
+    assert rec['adapter_result'] == result and len(rec['adapter_result_sha256']) == 64
+    result['output']['coordinates'][1][0] += .1
+    bad = run.fair_record(identity, 'adcircpy', 'parse', reference, result)
+    assert bad['outcome'] == 'invalid' and bad['verification'] == 'failed'
+    assert bad['termination']['returncode'] == 0
+
+
+def test_fair_missing_and_unsupported_records(fair_fixture):
+    from test_records import fair_data
+    for tool, outcome in [('adcircpy', 'not-run'), ('oceanmesh', 'not-comparable'), ('thalassa', 'not-comparable')]:
+        rec = run.fair_record(fair_data(), tool, 'parse', None, None)
+        assert rec['outcome'] == outcome and rec['reason']
+        assert rec['output_verification']['n_nodes'] is None
+        assert rec['measurement']['operation_elapsed_s'] is None
+
+
+def test_fair_native_conversion_crossing_rejected(fair_fixture):
+    from benchmarks.competitors.reference import build_reference
+    reference = build_reference(fair_fixture['mesh'], fair_fixture['output'])
+    result = dict(output={**fair_fixture['adapter'], 'mapping_provenance': {'kind': 'explicit'}}, new_modules=[], materialization=True)
+    assert run.fair_evidence('xarray', 'parse', reference, result)['outcome'] == 'not-comparable'
+    out = run.fair_evidence('xarray', 'parse-netcdf', reference, result)
+    assert out['outcome'] == 'invalid' and out['conversion']['verification_state'] == 'incomplete'
+
+
+def test_native_contract_shared_but_conversion_separate():
+    from benchmarks.competitors.w2.tools import operation_contract
+    native = operation_contract('chilmesh', 'parse')
+    assert native['contract_id'] == operation_contract('adcircpy', 'parse')['contract_id']
+    assert native['contract_id'] != operation_contract('xarray', 'parse-netcdf')['contract_id']
+
+
+def test_fair_matrix_missing_results_preserved():
+    from test_records import fair_data
+    identities = [dict(fair_data(), tool=tool, repeat_id=tool, operation='parse') for tool in ('chilmesh', 'adcircpy', 'thalassa', 'xarray', 'oceanmesh', 'OceanMesh2D')]
+    rows = run.fair_operation_records(identities, None, {})
+    assert len(rows) == 6
+    assert [r['outcome'] for r in rows] == ['not-run', 'not-run', 'not-comparable', 'not-comparable', 'not-comparable', 'not-comparable']
+
+
+def test_explicit_supported_prerequisite_failure(fair_fixture):
+    out = run.fair_evidence('chilmesh', 'stations', {'reference_id': 'unused'}, {'status': 'not-run', 'reason': 'missing field'})
+    assert out['outcome'] == 'not-run' and out['reason'] == 'missing field'
+
+
+@pytest.mark.parametrize('mesh_class,n',[('small',5),('stofs',3)])
+def test_us2_common_launch_recomputes_raw_series(fair_fixture, tmp_path, mesh_class,n):
+    from test_records import successful_fair_data
+    from test_campaign import runtime
+    from benchmarks.competitors.reference import build_reference
+    from benchmarks.competitors.aggregate import aggregate_series
+    from benchmarks.competitors.campaign import THREAD_ENV
+    reference=build_reference(fair_fixture['mesh'],fair_fixture['output'])
+    rows=[];calls=[]
+    for tool in ['chilmesh','adcircpy']:
+        tool_rows=[]
+        for i in range(n):
+            identity=successful_fair_data();identity.update(tool=tool,repeat_id=f'{tool}-{i}',repeat_index=i,tool_version='1')
+            def launch(cmd,**kw):
+                calls.append((cmd,kw)); r=successful_fair_data()
+                from benchmarks.competitors.measure import summarize_samples,save_samples
+                samples=r['measurement']['samples']
+                samples[1]['rss_bytes']+=i
+                m=summarize_samples(samples,launch_s=1.98,start_s=2.,end_s=2.01)
+                path,digest=save_samples(samples,tmp_path/f'{tool}-{i}-raw.json')
+                m.update(process_wall_s=2.03-1.98,samples_path=str(path),samples_sha256=digest)
+                m['missing']={'wait4_lifetime_maxrss_bytes':'unavailable'}
+                r['measurement']=m
+                r.update(status='ok',reason='',returncode=0,argv=list(cmd),wall_s=30.,
+                         adapter_result=dict(output={**fair_fixture['adapter'],'mapping_provenance':{'kind':'file IDs'}},
+                          materialization=True,new_modules=[],version='1',runtime=runtime()))
+                return r
+            def reset(): return successful_fair_data()['cache']
+            def load(): return successful_fair_data()['load']
+            r=run.measure_fair_attempt(identity,reference,['fake-python',tool],mesh_class=mesh_class,
+                 expected_runtime=runtime(),cache_reset=reset,load_evidence=load,launcher=launch,
+                 artifact_dir=tmp_path/f'{tool}-{i}')
+            assert r['outcome']=='ok',r
+            assert r['measurement']['operation_elapsed_s']==2.01-2.
+            tool_rows.append(r)
+        s=aggregate_series(tool_rows,mesh_class=mesh_class)
+        assert s['complete'] and s['stable']
+        for metric in ('operation_elapsed_s','rss_whole_process_peak_bytes','rss_growth_bytes'):
+            import statistics
+            from pathlib import Path
+            values=[row['measurement'][metric] for row in tool_rows]
+            assert s['metrics'][metric]['median']==statistics.median(values)
+            assert s['metrics'][metric]['absolute_spread']==max(values)-min(values)
+            for row in tool_rows:
+                saved=json.loads(Path(row['measurement']['samples_path']).read_text())
+                if metric=='rss_whole_process_peak_bytes': assert row['measurement'][metric]==max(sample['rss_bytes'] for sample in saved)
+                if metric=='rss_growth_bytes': assert row['measurement'][metric]==max(sample['rss_bytes'] for sample in saved[1:])-saved[0]['rss_bytes']
+            assert s['metrics'][metric]['n']==n
+        rows.extend(tool_rows)
+    assert len(calls)==2*n
+    assert all(all(kw['env'][k]==v for k,v in THREAD_ENV.items()) for _,kw in calls)
+    assert all(kw['rss_limit_bytes']==(8 if mesh_class=='small' else 48)*1024**3 for _,kw in calls)
+
+
+@pytest.mark.parametrize('drift',['runtime','cache','load','allocation'])
+def test_us2_rejects_conditions_drift(fair_fixture,tmp_path,drift):
+    from test_records import successful_fair_data
+    from test_campaign import runtime
+    from benchmarks.competitors.reference import build_reference
+    identity=successful_fair_data();identity['tool_version']='1'
+    result=successful_fair_data();result.update(status='ok',returncode=0,reason='',adapter_result=dict(
+        output={**fair_fixture['adapter'],'mapping_provenance':{'kind':'IDs'}},version='1',materialization=True,new_modules=[],runtime=runtime()))
+    cache=successful_fair_data()['cache'];load=successful_fair_data()['load']
+    if drift=='runtime': result['adapter_result']['runtime']['sha256']='f'*64
+    if drift=='cache': cache['success']=False
+    if drift=='load': load['verdict']='contaminated'
+    if drift=='allocation': load['allocation']={}
+    reference=build_reference(fair_fixture['mesh'],fair_fixture['output'])
+    rec=run.measure_fair_attempt(identity,reference,['fake'],mesh_class='small',expected_runtime=runtime(),cache_reset=lambda:cache,load_evidence=lambda:load,launcher=lambda *a,**k:result,artifact_dir=tmp_path)
+    assert rec['outcome']=='invalid'
+
+
+def test_us2_full_schedule_joins_common_measurement_and_records(fair_fixture,tmp_path):
+    from test_campaign import ready_manifest,runtime,locked_environment
+    from test_records import successful_fair_data
+    from benchmarks.competitors import campaign as C,records as R
+    from benchmarks.competitors.reference import build_reference
+    from benchmarks.competitors.w2.tools import operation_contract
+    reference=build_reference(fair_fixture['mesh'],fair_fixture['output'])
+    base=ready_manifest();envs=[]
+    for tool in ('chilmesh','adcircpy'):
+        env=locked_environment();env['environment_id']=tool;envs.append(env)
+    manifest=C.make_manifest('joined',['Shinnecock','STOFS'],['parse'],['chilmesh','adcircpy'],
+       **{k:base[k] for k in C.MANIFEST_EVIDENCE if k!='environment_manifests'},environment_manifests=envs)
+    identities={};commands={}
+    for entry in manifest['schedule']:
+        data=successful_fair_data();data.update({k:entry[k] for k in ('tool','cell_id','series_id','repeat_id','repeat_index','execution_order')})
+        data.update(campaign_id='joined',manifest_sha256=manifest['manifest_sha256'],environment_id=entry['tool'],backend=entry['backend'],reference_id=reference['reference_id'],
+                    contract_id=operation_contract(entry['tool'],'parse')['contract_id'],host_allocation={k:base['host_manifest'][k] for k in ('affinity','cpu_quota','cpuset','memory_limits')})
+        identities[entry['repeat_id']]=data;commands[entry['repeat_id']]=['/venv/bin/python','fake-parse']
+    calls=[]
+    def launch(cmd,**kw):
+        calls.append(kw['repeat_id']);r=successful_fair_data();r.update(status='ok',returncode=0,reason='',adapter_result=dict(
+           version='1',runtime=runtime(),new_modules=[],materialization=True,
+           output={**fair_fixture['adapter'],'mapping_provenance':{'kind':'IDs'}}))
+        return r
+    def load():
+        evidence=successful_fair_data()['load'];evidence['allocation']=next(iter(identities.values()))['host_allocation'];return evidence
+    rows=run.run_fair_campaign(manifest,identities,{'Shinnecock':reference,'STOFS':reference},commands,tmp_path/'joined',
+        host_probe=lambda:manifest['host_manifest'],runtime_probe=runtime,cache_reset=lambda:successful_fair_data()['cache'],
+        load_evidence=load,launcher=launch,lock_check=lambda e:True,cgroup_check=lambda p:{'memory_events':{'oom_kill':0}},lock_path=tmp_path/'host.lock')
+    assert len(rows)==16 and all(r['outcome']=='ok' for r in rows)
+    assert calls==[entry['repeat_id'] for entry in manifest['schedule']]
+    assert R.read_record_hashes(tmp_path/'joined/evidence/record-hashes.json')==rows

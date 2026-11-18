@@ -51,7 +51,7 @@ def fetch_mesh_file(name: str, dest_dir, *, registry=None, opener=None,
         f"{base}/meshes/{urllib.parse.quote(name, safe='')}",
         headers={"Authorization": f"Bearer {token}", "User-Agent": "chilmesh-bench/1"},
     )
-    dest = Path(dest_dir) / f"{name}.14"
+    dest = Path(dest_dir) / (name if name.endswith(".14") else f"{name}.14")
     dest.parent.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
     total = 0
@@ -100,3 +100,57 @@ def apply_rights(names: list, rights: dict) -> tuple[list, list]:
         else:
             excluded.append({"mesh": name, "reason": entry.get("note") or "rights do not allow publishing results"})
     return allowed, excluded
+
+
+def reference_from_fetch(name, version, asset, fetched, output_dir):
+    """Bind a Valence-only streamed acquisition to an exact-version reference."""
+    if fetched.get('status') != 'ok':
+        return dict(fetched)
+    if not version or not asset or not fetched.get('sha256'):
+        return {'status': 'not-run', 'reason': 'missing exact Valence asset/version/served digest'}
+    from .reference import build_reference, ReferenceError
+    try:
+        reference = build_reference(fetched['path'], output_dir, name=name, version=version,
+                                    valence_asset=asset, served_sha256=fetched['sha256'])
+        if reference['raw_size_bytes'] != fetched['bytes']:
+            return {'status': 'failed', 'reason': 'Valence payload byte count mismatch'}
+    except (OSError, ValueError, KeyError, ReferenceError) as exc:
+        return {'status': 'failed', 'reason': f'independent reference failed: {exc}'}
+    return dict(reference, status='ok')
+
+
+def fair_rights_decision(name, exact_version, entry):
+    """Exact-version publication gate. Legacy apply_rights remains unchanged.
+
+    The local entry transcribes an authoritative ruling; it does not create one.
+    A citation must identify a Valence GitHub issue/PR, with date, scope and an
+    evidence hash retained for independent review. No mesh has implicit rights.
+    """
+    import re
+    from datetime import date
+    entry = entry if isinstance(entry, dict) else {}
+    reasons = []
+    if entry.get('mesh') != name or entry.get('exact_version') != exact_version or not exact_version:
+        reasons.append('mesh/exact-version ruling mismatch or missing')
+    if entry.get('publish_results') is not True or entry.get('ambiguous'):
+        reasons.append('no unambiguous permitting publication decision')
+    citation = entry.get('citation', '')
+    match = re.fullmatch(r'https://github\.com/([^/]+)/([^/]+)/(issues|pull)/([1-9][0-9]*)', str(citation))
+    if not match or 'valence' not in (match[1].lower(), match[2].lower()):
+        reasons.append('missing authoritative Valence issue/PR citation')
+    try:
+        stamp = entry.get('ruling_date', '')
+        if date.fromisoformat(stamp).isoformat() != stamp:
+            raise ValueError('noncanonical date')
+    except (ValueError, TypeError):
+        reasons.append('missing ISO ruling date')
+    scope = entry.get('scope', '')
+    if not isinstance(scope, str) or 'publication' not in scope.lower() or 'results' not in scope.lower():
+        reasons.append('missing publication-results scope')
+    if not re.fullmatch('[0-9a-f]{64}', str(entry.get('evidence_sha256', ''))):
+        reasons.append('missing ruling evidence hash')
+    result = dict(allowed=not reasons, reasons=reasons)
+    if not reasons:
+        result.update(citation=citation, ruling_date=stamp, scope=scope,
+                      evidence_sha256=entry['evidence_sha256'])
+    return result

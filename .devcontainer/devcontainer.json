@@ -1,0 +1,11 @@
+{
+  "name": "chilmesh-fair-bench",
+  "build": { "dockerfile": "../docker/Dockerfile.fair", "context": ".." },
+  "containerEnv": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  },
+  "hostRequirements": { "cpus": 16, "memory": "64gb" }
+}

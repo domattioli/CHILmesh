@@ -71,3 +71,118 @@ SHA-256 and the CHILmesh git SHA, so differences can be traced.
 Each run writes one JSON record (`schema_version` 1) with status `ok`, `failed`, `not-run` or `invalid`.
 A cell that a tool cannot produce is `not applicable` with a stated reason. The report step fails if any
 tool x metric cell has no value, no failure reason and no justified `not applicable`.
+
+## Fair comparison (schema v2)
+
+The legacy commands above preserve historical W1/W2 behavior. Their cache labels,
+first-value tables and schema-v1 records cannot establish fair-comparison eligibility.
+Use the [fair-comparison quickstart](../../specs/007-fair-comparison/quickstart.md)
+for the offline checks and operator handoff. No real campaign or publication is
+established by synthetic tests.
+
+```bash
+python -m benchmarks.competitors fair-preflight --manifest campaign.json --out results/fair
+# Later, with operator authorization and all prerequisites satisfied:
+CHILMESH_RUN_BENCH=1 python -m benchmarks.competitors fair-run --manifest campaign.json --out results/fair
+python -m benchmarks.competitors fair-report --campaign results/fair
+python -m benchmarks.competitors fair-report --campaign results/fair --published --rights rights.json --claims claims.json
+```
+
+Preflight is read-only: no downloads, measured children or cache reset. It checks
+the frozen manifest, physical locks, common Python 3.11 realpath/digest, host and
+allocation, readable cgroup OOM counters, reset permission and load observability.
+Real exact direct/transitive/native locks and successful install/import compatibility
+must be supplied; placeholder locks block execution. Every environment and the
+parent use the same declared base Python. Four thread variables (OMP, OPENBLAS,
+MKL and NUMEXPR thread counts) must equal 1.
+
+Preparation is explicit. Beside `campaign.json`, provide `evidence/prepared.json`
+with `identities` and `commands` keyed by frozen repeat ID, `references` keyed by
+manifest mesh alias, and optional `conversions` keyed by repeat ID. A tool-keyed
+conversion remains supported for a single source; repeat keys bind distinct sources
+in multi-mesh campaigns. These are the `run_fair_campaign` API inputs, with full
+RepeatRecord identity and MeshReference/ConversionReference objects, not invented
+pins or source-count defaults. Acquire inputs only through `valence.fetch_mesh_file`
+and `reference_from_fetch`; use `campaign.prepare_conversion` for independent
+reader-specific conversion. Prepare references, inputs, queries and conversions
+before scheduling. The CLI does not download a replacement source or invent
+preparation when this file is absent: it writes the full scheduled matrix as
+reasoned not-run/not-comparable outcomes and exits 1.
+
+For the Codespace wrapper, declare the same base interpreter and default to preflight:
+
+```bash
+CHILMESH_FAIR_PYTHON=/absolute/base/python3.11 bash benchmarks/competitors/scripts/run_fair_codespace.sh --manifest campaign.json --out results/fair
+CHILMESH_RUN_BENCH=1 CHILMESH_FAIR_PYTHON=/absolute/base/python3.11 bash benchmarks/competitors/scripts/run_fair_codespace.sh --run --manifest campaign.json --out results/fair
+```
+
+The wrapper never installs packages or publishes. It serializes output controllers;
+Python also holds a host-wide campaign lock across output directories. Run mode
+retains `evidence/`, immutable `attempts/`, `raw/` sample/diagnostic files and a new
+`evidence-archive.tar.gz`. Existing attempts and archives are never overwritten.
+A replacement requires a new manifest/series/output, the superseded series ID and
+a rationale; no success selection across series. Five repeats are required for
+small meshes, three for STOFS. A failed or invalid attempt makes its series incomplete;
+all three metrics must have range/median <=10% to support claims.
+
+Each fresh child follows one protocol: a one-second load baseline; `sync` and write
+`3` to drop_caches with ordered status/timestamp and lower `Cached:` evidence; launch;
+imports; READY/GO; START/materialized operation/END; ACK; output verification.
+A `--cache cold` label cannot satisfy this protocol. Load is observed every 100 ms;
+unrelated CPU >5 percentage points of one core or I/O >1 MiB/s invalidates evidence.
+Unknown load/cache/runtime evidence also invalidates comparison.
+
+Child-only VmRSS samples use a 10 ms cadence; gaps >20 ms, descendants or missing
+baseline/region samples invalidate memory. Whole-process sampled peak covers launch
+through END, including imports. Growth is max(0, region peak minus pre-START baseline),
+an upper bound affected by allocator retention and mapped pages, not total mesh
+allocation. Shorter spikes can be missed. Verification is outside both windows;
+wait4 lifetime peak is a separate diagnostic. Watchdogs cover startup through exit:
+600 s / 8 GiB for small meshes, 1800 s / 48 GiB for STOFS. RSS-limit, timeout,
+cgroup-evidenced kernel OOM and unknown signal stay distinct failures. Interruptions
+retain active partial evidence and every unstarted cell.
+
+Fair reports recompute saved hashes, full declared schedule coverage and exact
+series summaries offline. Reference metadata and sample/stdout/stderr sidecars are
+hash checked before rights filtering. Native fort.14, conversion / NetCDF,
+CHILmesh-only and not-comparable sections remain distinct. Thalassa/xarray have no
+native fort.14 comparison; oceanmesh/OceanMesh2D remain W1-only with explicit reasons.
+NetCDF conversion cost, measured read cost and their end-to-end sum stay separate.
+
+All public results default to denied rights, including WNAT_Hagen and the other
+three meshes. An entry must transcribe an actual permitting Valence ruling; the
+following illustrates its format and grants no permission:
+
+```json
+{
+  "STOFS": {
+    "mesh": "STOFS",
+    "exact_version": "EXACT-SERVED-VERSION",
+    "publish_results": true,
+    "citation": "https://github.com/Valence/Valence/issues/123",
+    "ruling_date": "2026-11-10",
+    "scope": "publication of benchmark results",
+    "evidence_sha256": "SHA256-OF-RETAINED-AUTHORITATIVE-RULING"
+  }
+}
+```
+
+Citations identify a GitHub Valence repository/owner issue or PR (`pull/N`); review
+its authority and retain the ruling evidence hash. Missing, denied, ambiguous,
+undated or version-mismatched rulings exclude all measurements, including failure
+numbers and claim diagnostics. Public exclusions contain only mesh names/reasons.
+Admitted meshes show the citation/date/scope/hash. Legacy `apply_rights` remains
+unchanged for historical workflows.
+
+Claims are a JSON list of proposals with `claim_id`, `template: "less"`, numerator
+and denominator cell IDs, `mesh`, `exact_version`, `operation`, `metric`, `unit`,
+`direction: "lower"`, `formula: "100*(B-A)/B"` and
+`resource_condition_reference` equal to the manifest SHA-256. Supported metrics are
+`operation_elapsed_s` (seconds), `rss_whole_process_peak_bytes` and `rss_growth_bytes`
+(bytes). The denominator is B and must be positive. Both cells must be native,
+like-for-like, verified, complete, stable across every metric, condition-valid and
+rights-cleared. Accepted bounded sentences cite versions, medians, spreads, repeats,
+series, resource scope and raw hashes. Free prose and historical memory claims
+cannot be certified. Exit 0 means valid command artifacts; recorded tool failures
+alone are not controller errors. Exit 2 means malformed arguments/missing opt-in;
+exit 1 means preflight, coverage, integrity, publication or claim-gate failure.

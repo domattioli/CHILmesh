@@ -52,3 +52,14 @@ def mixed_grid(nx: int = 4, ny: int = 4):
 
 
 GRIDS = {"tri": tri_grid, "quad": quad_grid, "mixed": mixed_grid}
+
+# Original IDs are deliberately sparse and connectivity keeps its winding.
+FAIR_FORT14 = """synthetic mixed mesh
+2 4
+10 0.0 -0.0 1.0
+20 1.0 0.0 2.0
+40 1.0 1.0 3.0
+80 0.0 1.0 4.0
+7 3 10 20 40
+9 4 10 20 40 80
+"""

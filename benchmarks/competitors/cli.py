@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-COMMANDS = ("w2", "w1", "report")
+COMMANDS = ("w2", "w1", "report", "fair-preflight", "fair-run", "fair-report")
 GATE_MESSAGE = ("refusing to run: real benchmark runs download meshes and take a long time. "
                 "Set CHILMESH_RUN_BENCH=1 to opt in.")
 
@@ -22,9 +22,9 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--mesh", required=True, action="append", help="Valence mesh name; repeatable")
         p.add_argument("--out", required=True, help="directory for run records")
         p.add_argument("--timeout", type=float, default=3600.0)
+        p.add_argument("--cache", choices=["cold", "warm", "unknown"], default="unknown")
         if name == "w2":
             p.add_argument("--repeats", type=int, default=3)
-            p.add_argument("--cache", choices=["cold", "warm", "unknown"], default="unknown")
             p.add_argument("--aux-dir", help="directory with the fetched CO-OPS station list and "
                                              "points.cwl.nc; absent files record station sampling as not run")
     r = sub.add_parser("report", help="render Markdown from run records")
@@ -32,6 +32,15 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--workflow", choices=["w1", "w2"], required=True)
     r.add_argument("--published", action="store_true", help="exclude non-cold runs")
     r.add_argument("--rights", help="rights.json; meshes without a publishable entry are excluded")
+    for name in ('fair-preflight', 'fair-run'):
+        p = sub.add_parser(name, help='validate a frozen fair campaign' if name == 'fair-preflight' else 'execute a prepared fair campaign (opt-in)')
+        p.add_argument('--manifest', required=True)
+        p.add_argument('--out', required=True)
+    p = sub.add_parser('fair-report', help='recompute saved fair evidence offline')
+    p.add_argument('--campaign', required=True)
+    p.add_argument('--published', action='store_true')
+    p.add_argument('--rights')
+    p.add_argument('--claims')
     return ap
 
 
@@ -59,8 +68,62 @@ def _report(args) -> int:
     return 0
 
 
+def _fair(args):
+    import json
+    from . import campaign, records, valence
+    if args.command == 'fair-run' and os.environ.get('CHILMESH_RUN_BENCH') != '1':
+        print(GATE_MESSAGE, file=sys.stderr)
+        return 2
+    try:
+        if args.command == 'fair-report':
+            from .report.render import fair_report
+            rights = valence.load_rights(args.rights) if args.rights else {}
+            proposals = json.loads(Path(args.claims).read_text()) if args.claims else []
+            if not isinstance(proposals, list):
+                raise ValueError('claims must be a list of structured proposals')
+            result = fair_report(args.campaign, published=args.published, rights=rights, proposals=proposals)
+            print(result['markdown'])
+            return 0 if result['publication_passed'] else 1
+        manifest = campaign.validate_manifest(json.loads(Path(args.manifest).read_text()))
+        preflight = campaign.execution_preflight(manifest)
+        out = Path(args.out)
+        path = out / 'evidence' / 'preflight.json'
+        # Preserve earlier preflight evidence, never replace it silently.
+        if not path.exists():
+            records._write_new((json.dumps(preflight, sort_keys=True, allow_nan=False)+'\n').encode(), path)
+        elif json.loads(path.read_text()) != preflight:
+            raise ValueError('preflight changed; use a new output directory/campaign')
+        if args.command == 'fair-preflight':
+            print(json.dumps(preflight, sort_keys=True))
+            return 0 if preflight['ready'] else 1
+        prepared_path = Path(args.manifest).parent / 'evidence' / 'prepared.json'
+        reason = '; '.join(preflight['reasons'])
+        if not prepared_path.exists():
+            reason = (reason+'; missing evidence/prepared.json').lstrip('; ')
+        if reason:
+            campaign.finalize_unstarted_campaign(manifest, out, 'preflight: '+reason)
+            print('execution blocked: '+reason, file=sys.stderr)
+            return 1
+        prepared = json.loads(prepared_path.read_text())
+        from .w2.run import run_fair_campaign
+        try:
+            rows = run_fair_campaign(manifest, prepared['identities'], prepared['references'], prepared['commands'], out,
+                                     conversions=prepared.get('conversions'))
+        except (campaign.CampaignError, KeyError, OSError, ValueError) as exc:
+            if not (out/'evidence'/'campaign.json').exists():
+                campaign.finalize_unstarted_campaign(manifest,out,'preparation/preflight: '+str(exc))
+            raise
+        return 1 if any('controller abort' in r['reason'] for r in rows) else 0
+    except (OSError, ValueError, TypeError, KeyError, records.MissingCellError) as exc:
+        # Public integrity errors cannot echo private record values or diagnostics.
+        print('fair command failed: '+ (type(exc).__name__ if getattr(args,'published',False) else str(exc)), file=sys.stderr)
+        return 1
+
+
 def main(argv=None) -> int:
     args = _parser().parse_args(argv)
+    if args.command.startswith('fair-'):
+        return _fair(args)
     if args.command == "report":
         return _report(args)
     if os.environ.get("CHILMESH_RUN_BENCH") != "1":
@@ -78,7 +141,7 @@ def main(argv=None) -> int:
     else:
         from .w1 import run
         for name in args.mesh:
-            run.run_mesh(name, args.out, timeout_s=args.timeout)
+            run.run_mesh(name, args.out, timeout_s=args.timeout, cache=args.cache)
     return 0
 
 

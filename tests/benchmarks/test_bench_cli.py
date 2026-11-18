@@ -57,3 +57,32 @@ def test_env_requirements_exist_and_are_not_in_pyproject():
     pyproject = (REPO / "pyproject.toml").read_text().lower()
     for dep in ("oceanmesh", "adcircpy", "thalassa"):
         assert dep not in pyproject
+
+
+def test_fair_preflight_no_run_default_and_failed_run_full_inventory(tmp_path,monkeypatch,capsys,fair_manifest):
+    import json
+    manifest=tmp_path/'manifest.json';manifest.write_text(json.dumps(fair_manifest))
+    monkeypatch.delenv('CHILMESH_RUN_BENCH',raising=False)
+    assert cli.main(['fair-run','--manifest',str(manifest),'--out',str(tmp_path/'denied')])==2
+    assert not (tmp_path/'denied').exists()
+    assert cli.main(['fair-preflight','--manifest',str(manifest),'--out',str(tmp_path/'preflight')])==1
+    assert not (tmp_path/'preflight'/'attempts').exists()
+    monkeypatch.setenv('CHILMESH_RUN_BENCH','1')
+    assert cli.main(['fair-run','--manifest',str(manifest),'--out',str(tmp_path/'run')])==1
+    from benchmarks.competitors.records import read_record_hashes
+    rows=read_record_hashes(tmp_path/'run'/'evidence'/'record-hashes.json')
+    assert len(rows)==len(fair_manifest['schedule'])
+    assert {r['outcome'] for r in rows}=={'not-run','not-comparable'}
+
+
+def test_fair_report_offline_exit_integrity_rights_and_claims(tmp_path,capsys):
+    import json
+    from _fair_saved import saved,persist,ruling,proposal
+    m,rows,refs=saved(tmp_path);persist(tmp_path,m,rows,refs)
+    assert cli.main(['fair-report','--campaign',str(tmp_path)])==0
+    assert cli.main(['fair-report','--campaign',str(tmp_path),'--published'])==1
+    rights=tmp_path/'rights.json';rights.write_text(json.dumps({'STOFS':ruling()}))
+    claims=tmp_path/'claims.json';claims.write_text(json.dumps([proposal('missing','also-missing')]))
+    assert cli.main(['fair-report','--campaign',str(tmp_path),'--published','--rights',str(rights),'--claims',str(claims)])==1
+    p=next((tmp_path/'attempts').glob('*.json'));p.write_text(p.read_text()+' ')
+    assert cli.main(['fair-report','--campaign',str(tmp_path)])==1

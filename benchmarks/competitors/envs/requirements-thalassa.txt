@@ -1,4 +1,5 @@
 # Environment for the thalassa adapter. Not a chilmesh dependency; install in its own venv.
-# Version pins are set after research.md T003/T005.
+# decorator: imported by thalassa.utils but not declared by the package (fair-env import test, 2026-11-11).
 thalassa
+decorator
 numpy

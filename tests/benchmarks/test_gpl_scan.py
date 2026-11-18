@@ -56,3 +56,11 @@ def test_adapters_are_standalone_scripts_not_package_imports():
 
 def test_benchmarks_pruned_from_sdist():
     assert "prune benchmarks" in (REPO / "MANIFEST.in").read_text().splitlines()
+
+
+def test_fair_adapter_harness_imports_only_protocol():
+    import ast
+    for path in ADAPTERS.glob('*_read.py'):
+        for node in ast.walk(ast.parse(path.read_text())):
+            names = [node.module] if isinstance(node, ast.ImportFrom) else [a.name for a in node.names] if isinstance(node, ast.Import) else []
+            assert all(not name.startswith('benchmarks.') or name == 'benchmarks.competitors.protocol' for name in names)
