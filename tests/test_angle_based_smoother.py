@@ -27,7 +27,7 @@ import pytest
 
 import chilmesh
 from chilmesh import CHILmesh
-from conftest import TRI_FIXTURE_NAMES
+from _fixture_names import TRI_FIXTURE_NAMES
 
 # block_o is in TRI_FIXTURE_NAMES but its ~14s warmup dominates this file.
 # Quality / convergence checks below run on the smaller meshes; block_o
