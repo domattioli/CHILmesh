@@ -5,7 +5,7 @@
 <h1 align="center">CHILmesh</h1>
 
 <p align="center">
-  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; the optional C++ backend speeds up instantiation (full init) 8.6× on ENPAC2003 (chilmesh 1.2.2) and 14.7× on WNAT_Hagen (chilmesh 1.1.0).</strong>
+  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; the optional C++ backend runs the adjacency build and layer peel 14× faster than Python and cuts end-to-end mesh construction about 1.3× on ENPAC2003.</strong>
 </p>
 
 <p align="center">
@@ -39,7 +39,12 @@
 
 ## 1. Status & Roadmap
 
-**Current release: 1.6.0 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization (adjacency build plus layer peel) takes 1.44 s in C++ against 12.30 s in Python (8.6×, chilmesh 1.2.2). On WNAT_Hagen (98,365 elements, chilmesh 1.1.0) it takes 0.112 s against 1.65 s (14.7×). A chilmesh 1.4.1 rerun of ENPAC2003 on a second machine gave 0.803 s against 11.89 s (14.8×). Each figure is one mesh at one version; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
+**Current release: 1.6.0 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. With the C++ extension installed, `CHILmesh(...)` takes its edge numbering and layer peel from C++ and produces bit-identical adjacency and layers. Two numbers describe the gain, measured on the development tree after 1.6.0 on one Apple arm64 machine (medians of 3 runs):
+
+- The C++ extension alone (half-edge build, adjacency and peel) runs 14.1× faster than the Python full init on the 531,680-element ENPAC2003 mesh (0.61 s against 8.59 s).
+- End-to-end `CHILmesh(...)` construction on ENPAC2003 gains 1.31× (6.58 s against 8.59 s). The Python-side vertex dictionaries, adjacency validation and spatial index still run in Python.
+
+Earlier releases quoted 8.6× (ENPAC2003, chilmesh 1.2.2) and 14.7× (WNAT_Hagen, chilmesh 1.1.0). Those figures compared the C++ extension with Python on raw arrays. They did not describe `CHILmesh(...)` construction, which did not call the C++ backend in releases up to 1.6.0. Method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
 - **Now:** a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); ADCIRC hot-start files and byte-preserving fort.15 edits ([#289](https://github.com/domattioli/CHILmesh/issues/289)).
 - **Next:** MCP server tools ([#286](https://github.com/domattioli/CHILmesh/issues/286)); a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
