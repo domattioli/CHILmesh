@@ -3,6 +3,9 @@
 # Note: directives are applied in order, so prunes come before re-includes.
 
 include LICENSE
+include LICENSE-AI.md
+include NOTICE
+recursive-include LICENSES *
 include README.md
 include CHANGELOG.md
 include pyproject.toml

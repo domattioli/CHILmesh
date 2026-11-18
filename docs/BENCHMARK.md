@@ -43,7 +43,7 @@ End-to-end `CHILmesh(...)` construction is a different measurement. After 1.6.0,
 
 The remaining end-to-end time is Python work that the C++ extension does not expose: the `Vert2Edge` and `Vert2Elem` dictionaries, `Edge2Elem`, adjacency validation and the spatial index. A stage split on ENPAC2003 gave adjacency 2.6 s (0.84 s of it edge numbering, which C++ now replaces), validation 1.2 s, Python peel 3.3 s against 0.7 s through C++, and spatial index 0.3 s.
 
-Reference workload: EasternPacific_ENPAC2003, 272,913 vertices, 531,680 elements, 75 layers, available through Valence. The medians come from 3 runs on one machine at chilmesh 1.2.2. The algorithms have not changed since. A 1.4.1 rerun on a second machine gave Python 11.89 s and C++ 0.803 s for full init.
+Reference workload: EasternPacific_ENPAC2003, 272,913 vertices, 531,680 elements, 75 layers, available through Valence. The medians come from 3 runs on one machine at chilmesh 1.2.2. The algorithms have not changed since. A 1.4.1 rerun on a second machine gave Python 11.89 s and C++ 0.803 s for full init (14.8×).
 
 | Stage | MATLAB (Octave 8.4) | Python | C++ | Rust |
 |---|---:|---:|---:|---:|
@@ -227,7 +227,7 @@ Reproduce: `CHILMESH_RUN_BENCH=1 python scripts/benchmark.py --mesh src/chilmesh
 
 ### Heavy meshes: the `--max-elements` gate (#155, #168)
 
-WNAT_Hagen has 52,774 nodes, about 105k DOF. A direct solve is feasible at this size (about 4.7 s, see the comparison below). The gate keeps WNAT-scale and larger meshes manual-only in CI, where time and RAM are limited. At STOFS scale (about 25.6M DOF) the FEM direct sparse solver runs out of memory (see #168).
+On meshes of several million nodes the FEM direct smoother and the ADMESH truss stage run out of memory or time. WNAT_Hagen (52,774 nodes, about 105k DOF at two per node) is not in this range: its full lifecycle completes (section below). The FEM direct sparse solver alone exceeds typical CI RAM (see #168).
 
 Pass `--max-elements N` to skip the FEM direct smoother and the ADMESH truss stage when a mesh exceeds `N` elements (`n_elems > N`).
 
@@ -250,7 +250,7 @@ The solver is a Jacobi-preconditioned MINRES Krylov solver (`direct_smoother(sol
 Direct vs. iterative on real WNAT scale (WNAT_Hagen, 52,774 verts / 98,365 tri):
 
 * Wall-clock is comparable: direct `spsolve` ~4.7 s, elimination+MINRES ~4.6 s.
-* Peak RSS is equal here. MINRES wins on memory only at the ~25.6M-DOF STOFS scale, where `spsolve` OOMs.
+* Peak RSS is equal here. MINRES wins on memory only at STOFS scale (12,785,004 nodes, about 25.6M DOF), where `spsolve` OOMs.
 
 Solution parity, direct − iterative:
 

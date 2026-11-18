@@ -5,7 +5,7 @@
 <h1 align="center">CHILmesh</h1>
 
 <p align="center">
-  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; the optional C++ backend runs the adjacency build and layer peel 14× faster than Python and cuts end-to-end mesh construction about 1.3× on ENPAC2003.</strong>
+  <strong>2D mesh I/O, layer peel, smoothing, and quality analysis for triangular, quadrilateral, and mixed-element hydrodynamic meshes; C++ backend 8.6× to 14.8× faster than Python on full init, depending on mesh and machine.</strong>
 </p>
 
 <p align="center">
@@ -19,10 +19,12 @@
     <a href="https://github.com/domattioli/CHILmesh/actions/workflows/python-package.yml"><img src="https://img.shields.io/github/actions/workflow/status/domattioli/CHILmesh/python-package.yml?label=Tests&logo=github" alt="Tests"></a>
     <a href="https://github.com/domattioli/CHILmesh/issues"><img src="https://img.shields.io/github/issues/domattioli/CHILmesh.svg?color=orange" alt="Open issues"></a>
   <a href="https://doi.org/10.5281/zenodo.20263853"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.20263853.svg" alt="DOI"></a>
-    <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20NC%20%2B%20No--AI-red.svg?style=flat-square" alt="License"></a>
+    <a href="https://github.com/domattioli/CHILmesh/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20NC%201.0.0%20%2B%20no--AI%20terms-red.svg?style=flat-square" alt="License"></a>
 </p>
 
 > **MATLAB users.** The Python library succeeds the original MATLAB code, which is no longer maintained ([`src/@CHILmesh/CHILmesh.m`](src/@CHILmesh/CHILmesh.m)). Run `pip install chilmesh` and call it through the `py.` bridge, for example `py.chilmesh.Mesh.read_from_fort14('ocean.14')`.
+
+> **Python 3.10 is no longer supported.** CHILmesh 1.7.0 requires Python 3.11 or newer; 1.6.x stays installable on 3.10.
 
 ## Table of Contents
 
@@ -39,14 +41,13 @@
 
 ## 1. Status & Roadmap
 
-**Current release: 1.6.0 (2026-10-12); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. With the C++ extension installed, `CHILmesh(...)` takes its edge numbering and layer peel from C++ and produces bit-identical adjacency and layers. Two numbers describe the gain, measured on the development tree after 1.6.0 on one Apple arm64 machine (medians of 3 runs):
+**Current release: 1.7.0 (2026-11-14); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
 
 - The C++ extension alone (half-edge build, adjacency and peel) runs 14.1× faster than the Python full init on the 531,680-element ENPAC2003 mesh (0.61 s against 8.59 s).
 - End-to-end `CHILmesh(...)` construction on ENPAC2003 gains 1.31× (6.58 s against 8.59 s). The Python-side vertex dictionaries, adjacency validation and spatial index still run in Python.
 
-Earlier releases quoted 8.6× (ENPAC2003, chilmesh 1.2.2) and 14.7× (WNAT_Hagen, chilmesh 1.1.0). Those figures compared the C++ extension with Python on raw arrays. They did not describe `CHILmesh(...)` construction, which did not call the C++ backend in releases up to 1.6.0. Method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
-- **Now:** a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); ADCIRC hot-start files and byte-preserving fort.15 edits ([#289](https://github.com/domattioli/CHILmesh/issues/289)).
+- **Now:** a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); benchmarks against competing mesh libraries ([#301](https://github.com/domattioli/CHILmesh/issues/301)).
 - **Next:** MCP server tools ([#286](https://github.com/domattioli/CHILmesh/issues/286)); a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
 - **Later:** one ecosystem with <a href="https://github.com/domattioli/ADMESH"><img src="https://img.shields.io/pypi/v/admesh2D?label=ADMESH&color=9ae6b4&labelColor=2f855a" alt="ADMESH PyPI version"></a> and <a href="https://github.com/domattioli/QuADMESH"><img src="https://img.shields.io/pypi/v/quadmesh?label=QuADMESH&color=f5d0fe&labelColor=c026d3" alt="QuADMESH PyPI version"></a>.
 
@@ -172,4 +173,4 @@ Issues and pull requests at [github.com/domattioli/CHILmesh](https://github.com/
 
 ## 10. License
 
-**Noncommercial and research use only.** PolyForm Noncommercial License 1.0.0 with an additional No-AI/ML-training restriction; see [LICENSE](LICENSE) and [docs/AI-USAGE.md](docs/AI-USAGE.md). Commercial use, and use as training, fine-tuning or evaluation data for any model, require a separate written license from [github.com/domattioli](https://github.com/domattioli).
+Licensed under the PolyForm Noncommercial License 1.0.0 (`LICENSE`) plus additional terms that forbid AI training (`LICENSE-AI.md`). Both apply. The original MATLAB code in `src/@CHILmesh/` is MIT; see `NOTICE`. For commercial or AI-training licenses, open an issue or contact via https://github.com/domattioli.

@@ -10,7 +10,9 @@ PY310 = re.compile(r"python\s*3\.10|py3\.10|cp310|>=\s*3\.10", re.I)
 
 def test_readme_has_no_python_310_mention():
     text = (REPO / "README.md").read_text(encoding="utf-8")
-    hits = [m.group(0) for m in PY310.finditer(text)]
+    # The 1.7.0 drop notice names 3.10 on purpose; any other mention is stale.
+    kept = "\n".join(l for l in text.splitlines() if "no longer supported" not in l)
+    hits = [m.group(0) for m in PY310.finditer(kept)]
     assert not hits, f"README still mentions Python 3.10: {hits}"
     assert "Python 3.11" in text
 
