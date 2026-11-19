@@ -196,7 +196,8 @@ def build_polygons(points: np.ndarray, connectivity: np.ndarray,
 
     Handles all-triangle, all-quad, and mixed / padded-triangle connectivity.
     Gathers are vectorised; only mixed meshes fall back to a Python list build
-    (still O(1) matplotlib draw calls downstream).
+    (still O(1) matplotlib draw calls downstream). Polygons are returned in
+    input row order, so ``polys[i]`` is element ``i`` (or ``elem_ids[i]``).
     """
     points = np.asarray(points)
     connectivity = np.asarray(connectivity)
@@ -219,11 +220,13 @@ def build_polygons(points: np.ndarray, connectivity: np.ndarray,
     if not tri_mask.any():
         return list(points[rows, :2])
 
-    polys = []
-    if tri_mask.any():
-        polys.extend(points[rows[tri_mask, :3], :2])
-    if quad_mask.any():
-        polys.extend(points[rows[quad_mask], :2])
+    # Mixed: scatter triangles and quads back to their input row positions so
+    # polygon i always belongs to element i (values align in plot_filled).
+    polys = [None] * len(rows)
+    for i, poly in zip(np.flatnonzero(tri_mask), points[rows[tri_mask, :3], :2]):
+        polys[i] = poly
+    for i, poly in zip(np.flatnonzero(quad_mask), points[rows[quad_mask], :2]):
+        polys[i] = poly
     return polys
 
 

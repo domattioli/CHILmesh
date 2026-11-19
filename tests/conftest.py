@@ -11,8 +11,7 @@ import pytest
 
 from chilmesh import examples as _examples
 
-FIXTURE_NAMES = ["annulus", "donut", "block_o", "structured", "quad_2x2"]
-TRI_FIXTURE_NAMES = [n for n in FIXTURE_NAMES if n != "quad_2x2"]
+from _fixture_names import FIXTURE_NAMES, TRI_FIXTURE_NAMES, _load  # noqa: F401
 
 
 # Memoize the example loaders for the duration of the test session so repeated
@@ -44,10 +43,6 @@ def _make_cached(name):
 for _n in FIXTURE_NAMES:
     if hasattr(_examples, _n):
         setattr(_examples, _n, _make_cached(_n))
-
-
-def _load(name: str):
-    return getattr(_examples, name)()
 
 
 @pytest.fixture(params=FIXTURE_NAMES)

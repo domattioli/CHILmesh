@@ -17,7 +17,8 @@ from typing import Optional, Sequence
 
 from . import __version__
 from .CHILmesh import CHILmesh
-from .summary_io import summary
+from .chil_io import ChilFormatError, validate_chil
+from .summary_io import SummaryError, summary
 
 _READERS = {
     "fort14": "read_from_fort14",
@@ -180,7 +181,16 @@ def cmd_plot(args: argparse.Namespace) -> int:
 
 def cmd_summary(args: argparse.Namespace) -> int:
     """Print lazy header-only mesh metadata (counts, no layers/quality)."""
-    data = summary(Path(args.input), deep=args.deep)
+    try:
+        data = summary(Path(args.input), deep=args.deep)
+    except ChilFormatError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except SummaryError as exc:
+        if isinstance(exc.__cause__, ChilFormatError):
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        raise
 
     # Pretty-print with human-friendly format
     grid_name = data.get("grid_name", "Mesh")
@@ -208,12 +218,55 @@ def cmd_summary(args: argparse.Namespace) -> int:
         max_y = bbox.get("max_y", "N/A")
         print(f"  Bbox:       x[{min_x}..{max_x}] y[{min_y}..{max_y}]")
 
+    if data.get("format") == "chil":
+        print(f"  Version:    {data['format_version']}")
+        print(f"  CRS:        {data['crs']}")
+        parts = ", ".join(f"{p['name']} ({p['role']})" for p in data["parts"])
+        print(f"  Parts:      {parts}")
+        cached = data.get("cached_summary")
+        if cached is None:
+            if args.deep:
+                print("  Cache:      none")
+            else:
+                print("  Cache:      none (run with --deep to compute from the payload)")
+        elif args.deep:
+            print("  Cache:      yes")
+        else:
+            print("  Cache:      yes (declared in manifest, not checked; use --deep)")
+        if args.deep:
+            if cached is None:
+                print("  Mismatch:   n/a (no cached summary)")
+            elif data["mismatches"]:
+                for k in data["mismatches"]:
+                    print(f"  Mismatch:   {k}")
+            else:
+                print("  Mismatch:   none")
+
     return 0
 
 
 # ----------------------------------------------------------------------
 # Parser
 # ----------------------------------------------------------------------
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    try:
+        r = validate_chil(args.input)
+    except ChilFormatError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"OK: {args.input}")
+    print(f"  format_version: {r.format_version}")
+    print(f"  crs:            {r.crs}")
+    print(f"  parts:          {len(r.parts)}")
+    for p in r.parts:
+        print(f"    {p.name}  {p.kind}  {p.role}  {p.size} bytes  "
+              f"sha256 {p.sha256[:4]}...{p.sha256[-2:]}")
+    print(f"  domain_boundary: {r.domain_boundary or '(none)'}")
+    print(f"  summary cached: {'yes' if r.summary else 'no'}")
+    print(f"  ext tables:     {', '.join(r.ext_namespaces) or '(none)'}")
+    return 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -264,13 +317,22 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p_summary.add_argument("input", help="Input mesh path (.14, .fort.14, .grd, .2dm).")
+    p_summary.add_argument("input", help="Input mesh path (.14, .fort.14, .grd, .2dm, .chil; .chil is experimental).")
     p_summary.add_argument(
         "--deep",
         action="store_true",
-        help="Also load points for bbox + element type.",
+        help="Also load points for bbox + element type. For .chil: validate and recompute from the payload.",
     )
     p_summary.set_defaults(func=cmd_summary)
+
+    p_validate = sub.add_parser(
+        "validate",
+        help="Validate a .chil archive (experimental).",
+        description="Validate a .chil archive (experimental format, format_version 0).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_validate.add_argument("input", metavar="FILE", help="Path to a .chil archive.")
+    p_validate.set_defaults(func=cmd_validate)
 
     p_conv = sub.add_parser(
         "convert",

@@ -17,7 +17,7 @@ import pytest
 
 from chilmesh import CHILmesh
 from chilmesh.CHILmesh import _shoelace, _unique_in_order
-from conftest import FIXTURE_NAMES, _load
+from _fixture_names import FIXTURE_NAMES, _load
 
 
 def _graded_x_size(mesh: CHILmesh):

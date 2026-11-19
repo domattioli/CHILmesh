@@ -1,0 +1,27 @@
+# W1 GPL competitors (#301), isolated from the chilmesh image:
+#   oceanmesh (GPLv3) in its own venv, OceanMesh2D (GPLv3) run by Octave.
+# The harness runs them as separate processes only.
+# Build from the repository root:
+#   docker build -f docker/Dockerfile.oceanmesh -t chilmesh-oceanmesh .
+# Optional pins: --build-arg OCEANMESH_REF=<tag> --build-arg OCEANMESH2D_REF=<tag>
+FROM python:3.11-slim-bookworm
+
+ARG OCEANMESH_REF=master
+ARG OCEANMESH2D_REF=
+ENV DEBIAN_FRONTEND=noninteractive \
+    CHILMESH_FAIR_PYTHON=/usr/local/bin/python3.11 \
+    FAIR_VENV_ROOT=/opt/fair \
+    OCEANMESH_REF=${OCEANMESH_REF} \
+    OCEANMESH2D_REF=${OCEANMESH2D_REF}
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential cmake git ca-certificates \
+      libcgal-dev libgdal-dev gdal-bin libgeos-dev libproj-dev \
+      octave \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY docker/oceanmesh_env.sh /opt/fair-src/oceanmesh_env.sh
+RUN bash /opt/fair-src/oceanmesh_env.sh /opt/fair/locks
+
+CMD ["bash"]

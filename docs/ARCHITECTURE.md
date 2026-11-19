@@ -48,7 +48,7 @@ is set in [#221](https://github.com/domattioli/CHILmesh/issues/221).
 | Backend | Role | Status | How to get it |
 |---|---|---|---|
 | Python | Reference implementation; every other backend is validated against it | Default | `pip install chilmesh` |
-| C++ (half-edge) | Accelerator, bit-identical output, 8.6× to 14.7× on full init | Recommended | `pip install "chilmesh[cpp]"` (prebuilt wheel), or `pip install ./src/chilmesh_cpp` (source build) |
+| C++ (half-edge) | Accelerator, bit-identical output, 8.6× to 14.7× on extension-level full init, about 1.3× on end-to-end `CHILmesh(...)` construction ([`BENCHMARK.md`](BENCHMARK.md) section 2) | Recommended | `pip install "chilmesh[cpp]"` (prebuilt wheel), or `pip install ./src/chilmesh_cpp` (source build) |
 | Rust (quad-edge) | Output-equivalent on all four fixtures (`rust-equivalence` CI); measured 2× to 5× slower than C++ on full init | Frozen, not developed further ([`docs/RUST_EVALUATION.md`](RUST_EVALUATION.md)) | `maturin build` in `src/chilmesh_core`, not recommended |
 | MATLAB | Original 2017 implementation | Archived | [`src/@CHILmesh/CHILmesh.m`](../src/@CHILmesh/CHILmesh.m) |
 

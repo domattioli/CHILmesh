@@ -124,3 +124,25 @@ def test_mesh_plot_filled_via_module(mesh):
                              facecolor="C1")
     assert len(ax.collections) == 1
     plt.close(fig)
+
+
+def test_build_polygons_mixed_keeps_input_row_order():
+    # interleaved padded triangles and quads: polygon i must be element i
+    pts = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [0.0, 1.0],
+                    [1.0, 1.0], [2.0, 1.0]])
+    conn = np.array([[0, 1, 4, 0],     # padded triangle
+                     [1, 2, 5, 4],     # quad
+                     [0, 4, 3, 0],     # padded triangle
+                     [0, 1, 4, 3],     # quad
+                     [1, 2, 5, 1]])    # padded triangle
+    polys = cp.build_polygons(pts, conn)
+    assert len(polys) == len(conn)
+    for i, row in enumerate(conn):
+        k = 3 if row[3] == row[0] else 4   # padding stripped
+        np.testing.assert_array_equal(polys[i], pts[row[:k]])
+    # same guarantee through elem_ids
+    ids = np.array([4, 1, 0])
+    sub = cp.build_polygons(pts, conn, ids)
+    for poly, e in zip(sub, ids):
+        k = 3 if conn[e, 3] == conn[e, 0] else 4
+        np.testing.assert_array_equal(poly, pts[conn[e, :k]])

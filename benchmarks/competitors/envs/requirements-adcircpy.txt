@@ -1,0 +1,9 @@
+# Environment for the adcircpy adapter. Not a chilmesh dependency; install in its own venv.
+# matplotlib<3.9: adcircpy 1.2.7 imports matplotlib.cm.get_cmap, removed in 3.9 (fair-env import test, 2026-11-11).
+adcircpy==1.2.7
+matplotlib<3.9
+numpy
+# pandas<3: adcircpy 1.2.7 calls pandas.read_csv(delim_whitespace=...), removed in pandas 3 (fair smoke run, 2026-11-11).
+pandas<3
+# cryptography 50.0.2 aarch64 wheel raises SIGILL under Docker Desktop on Apple silicon (paramiko import, 2026-11-11); amd64 is not affected.
+cryptography<45; platform_machine == "aarch64"

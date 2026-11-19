@@ -142,7 +142,7 @@ Set the `CHILMESH_BACKEND` environment variable to force a backend (`python`, `c
 - The public API is frozen under semver. Breaking changes require a v2.x bump.
 - The `CHILmesh` import stays through v1.x. A DeprecationWarning arrives in v1.1. Earliest removal is v2.0.
 - The C++ and Rust backends produce bit-identical output to Python on the official fixture set.
-- Python `>=3.10` is required (3.8 and 3.9 are dropped; EOL).
+- Python `>=3.11` is required (3.8, 3.9 and 3.10 are dropped).
 
 ---
 

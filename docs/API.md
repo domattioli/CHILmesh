@@ -14,6 +14,7 @@ CHILmesh processes, smooths, and analyzes 2D triangular, quadrilateral, and mixe
 2. [Core class: CHILmesh](#core-class-chilmesh)
 3. [Bridge adapters](#bridge-adapters-v020)
 4. [Module functions](#module-functions)
+   - [`.chil` container (experimental)](#chil-container-experimental)
 5. [Stability, deprecations, and errors](#stability-guarantees)
 6. [Performance notes](#performance-notes)
 7. [Examples](#examples)
@@ -313,6 +314,47 @@ Applies the direct smoothing method. Returns the new point coordinates.
 #### `write_fort14(filename: Path, points: np.ndarray, elements: np.ndarray, grid_name: str) -> bool`
 
 Writes mesh data directly to fort.14, without a CHILmesh instance. Complexity: O(n).
+
+---
+
+## `.chil` container (experimental)
+
+The `.chil` container and `chilmesh.chil_io` are experimental. The stability guarantee of this file does not cover them. Format details: [`CHIL_FORMAT.md`](CHIL_FORMAT.md).
+
+### `CHILmesh.save` and `CHILmesh.load` with a `.chil` path
+
+```python
+CHILmesh.save(self, filename, *, crs: str | None = None, limits: ChilLimits | None = None) -> None
+CHILmesh.load(filename, compute_layers: bool = True, compute_adjacencies: bool | None = None, *, limits: ChilLimits | None = None) -> CHILmesh
+```
+
+The `.chil` suffix is matched case-insensitively. For a `.chil` target, `crs=None` records `"unknown"`; `crs` is a label and is never used to transform coordinates. A non-`None` `crs` with another suffix raises `ValueError`. `limits` is ignored for `.14`, `.fort14` and `.2dm`.
+
+### `chilmesh.chil_io`
+
+Import from `chilmesh.chil_io`; none of these names is reachable as `chilmesh.<name>`.
+
+| Name | Description |
+|------|-------------|
+| `pack(dst, fort14, *, fort13=None, fort15=None, domain_boundary=None, crs="unknown", limits=None) -> ChilReport` | Copies existing files into an archive byte for byte |
+| `rewrite_chil(src, dst, *, ext=None, set_parts=None, remove_parts=(), crs=None, limits=None) -> ChilReport` | Writes a new archive from an old one, keeping extension tables and untouched members; never replaces or removes the `fort.14` |
+| `validate_chil(path, *, limits=None) -> ChilReport` | Checks the whole archive; raises `ChilFormatError` |
+| `read_member(path, name_or_kind, *, limits=None) -> bytes` | Validates the archive and returns the bytes of one part |
+| `summary_chil(path, *, deep=False, limits=None) -> dict` | Summary; plain mode reports declared values (`verified` is `False`), `deep=True` recomputes them (`verified` is `True`) |
+| `save_chil(mesh, dst, *, crs=None, limits=None) -> ChilReport` | Module-level form of `CHILmesh.save` for `.chil` |
+| `load_chil(path, *, compute_layers=True, compute_adjacencies=None, limits=None) -> CHILmesh` | Module-level form of `CHILmesh.load` for `.chil` |
+| `ChilFormatError` | `ValueError` subclass; `.check` holds a stable slug |
+| `ChilLimits` | Frozen dataclass of four size and count limits |
+| `ChilReport` | Result of `validate_chil`, `pack`, `save_chil` and `rewrite_chil` |
+| `PartInfo` | One manifest part: `name`, `role`, `kind`, `size`, `sha256` |
+| `MemberSpec` | One member input for `rewrite_chil`: `source` (path or bytes) and optional `name` |
+
+### Command line
+
+- `chilmesh validate FILE` validates a `.chil` archive; exit 0 when valid, 1 when refused, 2 when the file is missing.
+- `chilmesh summary FILE.chil [--deep]` prints the summary; `--deep` validates and recomputes from the payload and prints a `Mismatch:` line.
+
+The verbs `info`, `convert`, `smooth` and `plot` do not accept `.chil`.
 
 ---
 
