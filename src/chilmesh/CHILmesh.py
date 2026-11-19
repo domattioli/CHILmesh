@@ -2860,41 +2860,59 @@ class CHILmesh(CHILmeshPlotMixin):
             compute_adjacencies=compute_adjacencies,
         )
 
-    def save(self, filename: str) -> None:
+    def save(self, filename: str, *, crs: Opt[str] = None, limits=None) -> None:
         """
         Save the mesh to a file.
 
-        Supported formats: ADCIRC fort.14 (`.14`, `.fort14`), SMS 2dm (`.2dm`).
+        Supported formats: ADCIRC fort.14 (`.14`, `.fort14`), SMS 2dm (`.2dm`),
+        experimental `.chil` container.
 
         Parameters:
             filename: Output file path (format inferred from extension).
+            crs: CRS label recorded in a `.chil` manifest (``None`` records
+                ``"unknown"``). Coordinates are not transformed. Any other
+                target with a non-None ``crs`` raises ``ValueError``.
+            limits: ``chil_io.ChilLimits`` for a `.chil` target; ignored otherwise.
 
         Raises:
-            ValueError: If the file format is not recognized.
+            ValueError: If the file format is not recognized, or ``crs`` is
+                given for a non-`.chil` target.
 
         Example:
             >>> mesh.save("output.14")
             >>> mesh.save("output.2dm")
+            >>> mesh.save("output.chil", crs="EPSG:4326")  # label only, no transform
+            >>> from chilmesh.chil_io import ChilLimits
+            >>> mesh.save("small.chil", limits=ChilLimits(max_members=8))
         """
         path = Path(filename)
-        if path.suffix in (".14", ".fort14"):
+        suffix = path.suffix
+        is_chil = suffix.lower() == ".chil"
+        if crs is not None and not is_chil:
+            raise ValueError("crs is only supported for a .chil target")
+        if is_chil:
+            from . import chil_io
+            chil_io.save_chil(self, filename, crs=crs, limits=limits)
+        elif suffix in (".14", ".fort14"):
             write_fort14(self, filename)
-        elif path.suffix == ".2dm":
+        elif suffix == ".2dm":
             self.write_to_2dm(filename)
         else:
-            raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
+            raise ValueError(f"Unrecognized file format: {suffix!r}. Supported: .14, .fort14, .2dm, .chil")
 
     @classmethod
-    def load(cls, filename: str, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None) -> "CHILmesh":
+    def load(cls, filename: str, compute_layers: bool = True, compute_adjacencies: Opt[bool] = None, *, limits=None) -> "CHILmesh":
         """
         Load a mesh from a file.
 
-        Supported formats: ADCIRC fort.14 (`.14`, `.fort14`), SMS 2dm (`.2dm`).
+        Supported formats: ADCIRC fort.14 (`.14`, `.fort14`), SMS 2dm (`.2dm`),
+        experimental `.chil` container.
 
         Parameters:
             filename: Input file path.
             compute_layers: If False, skip layerization for fast init.
             compute_adjacencies: Forwarded to the reader. (#192)
+            limits: ``chil_io.ChilLimits`` for a `.chil` file; ignored otherwise.
 
         Returns:
             A CHILmesh instance.
@@ -2905,16 +2923,21 @@ class CHILmesh(CHILmeshPlotMixin):
 
         Example:
             >>> mesh = CHILmesh.load("input.14")
+            >>> mesh = CHILmesh.load("output.chil", limits=ChilLimits(max_member_bytes=2**20))
         """
         path = Path(filename)
         if not path.exists():
             raise FileNotFoundError(f"File not found: {filename}")
+        if path.suffix.lower() == ".chil":
+            from . import chil_io
+            return chil_io.load_chil(path, compute_layers=compute_layers,
+                                     compute_adjacencies=compute_adjacencies, limits=limits)
         if path.suffix in (".14", ".fort14"):
             return cls.read_from_fort14(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
         elif path.suffix == ".2dm":
             return cls.read_from_2dm(path, compute_layers=compute_layers, compute_adjacencies=compute_adjacencies)
         else:
-            raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm")
+            raise ValueError(f"Unrecognized file format: {path.suffix!r}. Supported: .14, .fort14, .2dm, .chil")
 
     def write_to_2dm(self, filename: str, *, nodestrings: bool = True) -> None:
         """Write mesh to SMS 2dm format.
@@ -3082,7 +3105,19 @@ class CHILmesh(CHILmeshPlotMixin):
         filename = Path(filename)
         with open(filename, encoding='utf-8') as f:
             lines = f.readlines()
+        return cls._from_fort14_lines(
+            lines, compute_layers, compute_adjacencies, _progress=_progress)
 
+    @classmethod
+    def _from_fort14_lines(
+        cls,
+        lines: list,
+        compute_layers: bool = True,
+        compute_adjacencies: Opt[bool] = None,
+        *,
+        _progress=None,
+    ) -> "CHILmesh":
+        """Build a mesh from the lines of a fort.14 file (private)."""
         i = 0
         grid_name = lines[i].strip(); i += 1
         parts = lines[i].split(); i += 1
@@ -3350,10 +3385,16 @@ def write_fort14(mesh, filename: str, *, _progress=None) -> bool:
         >>> write_fort14(mesh, "output.14")
         True
     """
+    with open(filename, 'w', encoding='utf-8', newline='\n') as f:
+        _write_fort14_stream(mesh, f, _progress=_progress)
+    return True
+
+
+def _write_fort14_stream(mesh, f, *, _progress=None) -> None:
+    """Write fort.14 text for ``mesh`` to the open text stream ``f`` (private)."""
     chunk = _PROGRESS_CHUNK
     with _track("Writing fort.14", "record", mesh.n_verts + mesh.n_elems,
-                past="Wrote", _progress=_progress) as _t, \
-            open(filename, 'w', encoding='utf-8', newline='\n') as f:
+                past="Wrote", _progress=_progress) as _t:
         name = mesh.grid_name or "CHILmesh"
         f.write(f"{name}\n")
         f.write(f"{mesh.n_elems} {mesh.n_verts}\n")
@@ -3374,8 +3415,6 @@ def write_fort14(mesh, filename: str, *, _progress=None) -> bool:
             _t.tick(len(block))
 
         _write_fort14_boundaries(f, mesh)
-
-    return True
 
 
 def _check_fort14(filename) -> bool:

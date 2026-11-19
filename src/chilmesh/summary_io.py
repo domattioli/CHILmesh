@@ -103,6 +103,7 @@ _SUFFIX_FORMATS = {
     '.npy': 'npy',
     '.npz': 'npz',
     '.msh': 'gmsh',
+    '.chil': 'chil',
 }
 
 
@@ -149,6 +150,13 @@ def _summary_from_file(path: Path, *, deep: bool = False) -> dict:
         raise FileNotFoundError(f"No such file: {path}")
 
     fmt = _detect_format(path)
+
+    if fmt == 'chil':
+        from .chil_io import ChilFormatError, summary_chil
+        try:
+            return summary_chil(path, deep=deep)
+        except ChilFormatError as e:
+            raise SummaryError(str(e)) from e
 
     # Get file size
     try:
