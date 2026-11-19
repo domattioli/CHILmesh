@@ -1,4 +1,3 @@
-import copy
 import math
 import pytest
 from benchmarks.competitors import records as R

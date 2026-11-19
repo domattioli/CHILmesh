@@ -1,9 +1,8 @@
 """Saved synthetic campaigns; no benchmark process or privileged operations."""
-import copy
 import hashlib
 import json
 from benchmarks.competitors import campaign as C, records as R
-from benchmarks.competitors.w2.tools import FAIR_TOOLS, FAIR_OPERATIONS, operation_contract
+from benchmarks.competitors.w2.tools import FAIR_TOOLS, operation_contract
 from test_records import successful_fair_data
 
 

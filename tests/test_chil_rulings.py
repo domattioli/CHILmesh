@@ -4,7 +4,6 @@ Written before the fixes. Refusals assert ``ChilFormatError`` and the exact slug
 """
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import os

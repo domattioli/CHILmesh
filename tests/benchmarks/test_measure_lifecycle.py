@@ -1,8 +1,6 @@
 """Bounded child lifecycle; no benchmark or external tool needed."""
 import os
-import signal
 import sys
-import time
 import pytest
 from benchmarks.competitors import measure as M
 

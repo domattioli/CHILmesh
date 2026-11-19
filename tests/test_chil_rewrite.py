@@ -5,7 +5,6 @@ import hashlib
 import importlib
 import json
 import os
-import stat
 import zipfile
 
 import pytest

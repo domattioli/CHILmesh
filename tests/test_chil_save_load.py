@@ -4,7 +4,6 @@ T004 guard: the fort.14 reader/writer refactors (R1, R2) are pure.
 """
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 

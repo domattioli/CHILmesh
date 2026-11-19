@@ -1,4 +1,3 @@
-import copy
 import pytest
 from _fair_saved import claim_cells, proposal
 

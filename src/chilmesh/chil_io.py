@@ -22,7 +22,6 @@ __all__ = [
     "MemberSpec",
 ]
 
-import collections.abc
 import contextlib
 import dataclasses
 import hashlib

@@ -9,7 +9,7 @@ import warnings
 import pytest
 
 import chilmesh.chil_io as chil_io
-from _chil_builders import build_archive, default_manifest, good_fort14_bytes
+from _chil_builders import build_archive, good_fort14_bytes
 
 Err = chil_io.ChilFormatError
 
@@ -100,7 +100,6 @@ def test_fort14_wrong_name_is_member_name(tmp_path):
 
 
 def test_ext_member_outside_ext_still_refused(tmp_path):
-    from _chil_builders import _sha
 
     d = b"x"
     path = _custom(tmp_path, [

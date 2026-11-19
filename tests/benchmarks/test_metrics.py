@@ -122,7 +122,6 @@ def test_courant_is_linear_in_dt():
 
 
 def test_quad_edges_are_the_four_sides_not_diagonals():
-    pts = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
     edges = C.edges_from_connectivity(np.array([[0, 1, 2, 3]]))
     assert len(edges) == 4
 

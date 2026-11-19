@@ -201,7 +201,7 @@ def test_abort_finalization_preserves_prepared_cell_identity_after_success(tmp_p
 
 def test_campaign_conversion_transport_binds_each_repeat_source(tmp_path,monkeypatch):
     from test_campaign import ready_manifest,locked_environment,runtime
-    from benchmarks.competitors.w2 import run,tools
+    from benchmarks.competitors.w2 import run
     base=ready_manifest();env=locked_environment();env.update(environment_id='thalassa')
     m=C.make_manifest('conversion-transport',['STOFS'],['parse-netcdf'],['thalassa'],
         **{k:base[k] for k in C.MANIFEST_EVIDENCE if k!='environment_manifests'},environment_manifests=[env])

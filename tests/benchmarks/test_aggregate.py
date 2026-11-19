@@ -1,4 +1,3 @@
-import copy
 import json
 import pytest
 from test_records import successful_fair_data
