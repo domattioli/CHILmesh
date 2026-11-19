@@ -513,6 +513,7 @@ def test_remove_fort14_refused(tmp_path):
     _only(tmp_path, "in.chil")
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no mkfifo")
 def test_fifo_input_refused(tmp_path):
     """FR-066: a FIFO source is refused (request) without blocking."""
     fifo = tmp_path / "fifo.chil"
@@ -529,17 +530,26 @@ def test_directory_input_refused(tmp_path):
     assert not os.path.exists(_dst(tmp_path))
 
 
-def test_fifo_and_directory_member_inputs_refused(tmp_path):
-    """FR-066: a FIFO or directory given as a set_parts path is refused (request)."""
+def _member_input_refused(tmp_path, bad):
     src = _full(tmp_path)
+    out = _dst(tmp_path, "o0.chil")
+    _refused("request", lambda: _g("rewrite_chil")(src, out, set_parts={"fort13": str(bad)}))
+    assert not os.path.exists(out)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no mkfifo")
+def test_fifo_member_input_refused(tmp_path):
+    """FR-066: a FIFO given as a set_parts path is refused (request)."""
     fifo = tmp_path / "f.fifo"
     os.mkfifo(fifo)
+    _member_input_refused(tmp_path, fifo)
+
+
+def test_directory_member_input_refused(tmp_path):
+    """FR-066: a directory given as a set_parts path is refused (request)."""
     d = tmp_path / "d"
     d.mkdir()
-    for i, bad in enumerate((fifo, d)):
-        out = _dst(tmp_path, f"o{i}.chil")
-        _refused("request", lambda: _g("rewrite_chil")(src, out, set_parts={"fort13": str(bad)}))
-        assert not os.path.exists(out)
+    _member_input_refused(tmp_path, d)
 
 
 def test_member_input_changed_between_passes_refused(tmp_path, monkeypatch):
