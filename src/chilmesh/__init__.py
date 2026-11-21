@@ -96,6 +96,12 @@ _LAZY_ATTRS = {
     "write_fort24": ".boundary_forcing_io",
     # .adcirc_netcdf_io
     "read_adcirc_output_nc": ".adcirc_netcdf_io",
+    # .front_validity
+    "check_quad_against_front": ".front_validity",
+    "check_front_invariants": ".front_validity",
+    "ProposalSource": ".front_audit",
+    "AuditReport": ".front_audit",
+    "audit": ".front_audit",
     # .mesh_topology
     "EdgeMap": ".mesh_topology",
     "quad_from_tri_pair": ".mesh_topology",
@@ -253,6 +259,11 @@ __all__ = [
     "write_fort20",
     "read_fort24",
     "write_fort24",
+    "check_quad_against_front",
+    "check_front_invariants",
+    "ProposalSource",
+    "AuditReport",
+    "audit",
     # Standalone quality computation
     "element_quality",
     "courant_number",
