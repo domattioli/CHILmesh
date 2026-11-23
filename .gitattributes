@@ -55,3 +55,6 @@ tests/fixtures/** -text
 
 # Registry contract fixture is SHA-256 hashed byte-for-byte; never convert line endings.
 tests/data/registry-contract.v1.json -text
+
+# Golden fixtures are compared byte for byte; never convert line endings.
+tests/_golden/** -text

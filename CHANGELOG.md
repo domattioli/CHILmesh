@@ -6,6 +6,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Experimental `.chil` container (`format_version = 0`, #201): a zip archive with a first-entry `manifest.json` and a `fort.14`, with a SHA-256 and size for every member. `CHILmesh.save` and `CHILmesh.load` take a `.chil` path (new keyword-only `crs` and `limits`), `chilmesh.summary` and the `summary` command read it (`--deep` recomputes from the payload), and `chilmesh validate FILE` checks an archive. The module `chilmesh.chil_io` holds `pack`, `rewrite_chil`, `validate_chil`, `read_member`, `summary_chil`, `save_chil`, `load_chil`, `ChilFormatError`, `ChilLimits`, `ChilReport`, `PartInfo` and `MemberSpec`; none is exported from `chilmesh`. The format is described in `docs/CHIL_FORMAT.md`. CHILmesh 1.8.x reads `format_version = 0` archives written by 1.8.x; later minor releases may require migration.
+
 ### Changed
 - `chilmesh-cpp` 0.6.1: ships the 1.7.0 licence text and the Python 3.11 floor. macOS arm64 wheels now build on `macos-15`, since the `macos-14` runner no longer starts.
 

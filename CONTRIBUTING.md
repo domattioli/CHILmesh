@@ -19,7 +19,7 @@ docs/                         Reference documentation
 
 ## Set up a dev environment
 
-**Canonical setup (Python 3.10+):**
+**Canonical setup (Python 3.11+):**
 
 ```bash
 git clone https://github.com/domattioli/CHILmesh.git

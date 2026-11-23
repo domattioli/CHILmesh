@@ -32,7 +32,7 @@ It has no performance niche over C++, so it is outside the distribution plan.
 
 | Piece | State |
 |---|---|
-| `chilmesh` (main pkg) | pure-Python, setuptools, `requires-python >=3.10`, PyPI = no compiled ext (#229) |
+| `chilmesh` (main pkg) | pure-Python, setuptools, `requires-python >=3.11`, PyPI = no compiled ext (#229) |
 | `chilmesh-cpp` (`src/chilmesh_cpp`) | separate package, scikit-build-core + pybind11, version `0.6.0.dev0`, **not on PyPI** |
 | `build-cpp-wheels.yml` | **build-only**: cibuildwheel manylinux **x86_64 only**, `cp310–312`, musllinux skipped, asserts `import chilmesh_cpp`; uploads **artifacts only, no publish**; manual dispatch |
 | `publish-pypi.yml` | publishes the **main** pkg on `release`; `twine` + `PYPI_API_TOKEN` secret |

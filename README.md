@@ -31,6 +31,7 @@
 1. [Status & Roadmap](#1-status--roadmap)
 2. [Installation](#2-installation)
 3. [Quick start](#3-quick-start)
+   - [The `.chil` container (experimental)](#3a-the-chil-container-experimental)
 4. [Fetching meshes from Valence](#4-fetching-meshes-from-valence)
 5. [Examples and CLI](#5-examples-and-cli)
 6. [Limitations](#6-limitations)
@@ -42,6 +43,10 @@
 ## 1. Status & Roadmap
 
 **Current release: 1.7.0 (2026-11-14); see [CHANGELOG](CHANGELOG.md).** The v1.x API is stable; downstream projects can pin `chilmesh>=1.0,<2`. CHILmesh reads and writes ADCIRC, SMS and Gmsh meshes, peels concentric element layers, smooths and measures quality on triangular, quadrilateral and mixed meshes, and offers an optional C++ backend. On the 531,680-element ENPAC2003 mesh, full initialization takes 1.44 s in C++ against 12.30 s in Python (8.6×; method in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)).
+
+- The C++ extension alone (half-edge build, adjacency and peel) runs 14.1× faster than the Python full init on the 531,680-element ENPAC2003 mesh (0.61 s against 8.59 s).
+- End-to-end `CHILmesh(...)` construction on ENPAC2003 gains 1.31× (6.58 s against 8.59 s). The Python-side vertex dictionaries, adjacency validation and spatial index still run in Python.
+
 
 - **Now:** a native `.chil` container format ([#201](https://github.com/domattioli/CHILmesh/issues/201)); benchmarks against competing mesh libraries ([#301](https://github.com/domattioli/CHILmesh/issues/301)).
 - **Next:** MCP server tools ([#286](https://github.com/domattioli/CHILmesh/issues/286)); a streaming GPU mesh view ([#167](https://github.com/domattioli/CHILmesh/issues/167)); a full-lifecycle benchmark on the STOFS-2D-Global mesh ([#276](https://github.com/domattioli/CHILmesh/issues/276)).
@@ -92,6 +97,27 @@ quality, angles, stats = mesh.elem_quality()      # per-element skew quality
 elem = mesh.find_element(np.array([-75.2, 35.1]))  # O(log n) point location
 mesh.write_to_fort14("ocean_smoothed.14")
 ```
+
+<div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
+
+## 3a. The `.chil` container (experimental)
+
+A `.chil` file is a zip archive that holds a `fort.14` and a JSON manifest with a SHA-256 for every member. The format is experimental (`format_version = 0`); see [`docs/CHIL_FORMAT.md`](docs/CHIL_FORMAT.md).
+
+<!-- chil-example -->
+```python
+from chilmesh import CHILmesh, summary
+from chilmesh.chil_io import validate_chil
+
+mesh = CHILmesh.read_from_fort14("ocean.14")
+mesh.save("ocean.chil", crs="EPSG:4326")      # crs is a label; coordinates are not changed
+mesh2 = CHILmesh.load("ocean.chil")
+report = validate_chil("ocean.chil")          # raises ChilFormatError if the archive is refused
+print(report.crs, [p.name for p in report.parts])
+print(summary("ocean.chil", deep=True)["verified"])
+```
+
+From the shell: `chilmesh validate ocean.chil` and `chilmesh summary ocean.chil --deep`.
 
 <div align="right"><a href="#chilmesh"><sub>^ Back to top</sub></a></div>
 
