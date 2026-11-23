@@ -72,3 +72,22 @@ def fair_fixture(tmp_path, monkeypatch):
 def fair_manifest(fair_fixture):
     from benchmarks.competitors.campaign import make_manifest
     return make_manifest("synthetic", fair_fixture["meshes"], ["parse"], fair_fixture["tools"])
+
+
+# The measurement harness uses POSIX process APIs (fork, killpg, wait4, fcntl,
+# pass_fds, cgroups). These modules cannot run on Windows.
+_POSIX_ONLY_MODULES = {
+    "test_campaign.py", "test_fair_adapters.py", "test_fair_campaign.py",
+    "test_fair_codespace.py", "test_machine_evidence.py",
+    "test_measure_lifecycle.py", "test_w1_fixes.py", "test_w1_tracks.py",
+    "test_w2_consumer_metrics.py", "test_w2_wiring.py",
+}
+
+
+def pytest_collection_modifyitems(config, items):
+    if sys.platform != "win32":
+        return
+    skip = pytest.mark.skip(reason="benchmark harness needs POSIX process APIs")
+    for item in items:
+        if item.path.name in _POSIX_ONLY_MODULES:
+            item.add_marker(skip)

@@ -42,7 +42,7 @@ def test_group_kill_reaps_child_and_kills_descendant(tmp_path, trigger):
     def sample(pid, **kw):
         s=M.read_rss_sample(pid, **kw)
         if trigger=='abort' and pidfile.exists(): raise KeyboardInterrupt
-        if trigger=='rss-limit' and pidfile.exists(): s['rss_bytes']=101
+        if trigger=='rss-limit': s['rss_bytes']=101 if pidfile.exists() and pidfile.read_text() else 0
         return s
     if trigger=='abort':
         with pytest.raises(KeyboardInterrupt):
