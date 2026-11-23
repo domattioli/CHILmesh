@@ -95,7 +95,6 @@ def test_large_grid_timing():
 def test_mixed_angles():
     from chilmesh import Mesh
     p=np.array([[0,0],[1,0],[1,1],[0,1],[2,0],[2,1]],float)
-    e=[[0,1,2,3],[1,4,2],[4,5,2]]
     mesh=Mesh(points=p,connectivity=np.array([[0,1,2,3],[1,4,2,1],[4,5,2,4]]))
     s=score_mesh(mesh); expected=mesh.interior_angles()
     for i,m in enumerate(s.element_measures):
