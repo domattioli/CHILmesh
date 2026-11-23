@@ -1,6 +1,7 @@
 """Bounded child lifecycle; no benchmark or external tool needed."""
 import os
 import sys
+import time
 import pytest
 from benchmarks.competitors import measure as M
 
@@ -53,7 +54,14 @@ def test_group_kill_reaps_child_and_kills_descendant(tmp_path, trigger):
         assert r['termination']['reap_diagnostics']['reaped'] and r['measurement']['samples']
     child=int(pidfile.read_text())
     status='/proc/%s/status'%child
-    assert not os.path.exists(status) or '\nState:\tZ' in open(status).read()
+    # SIGKILL delivery to the reparented descendant is asynchronous; wait for it.
+    def gone():
+        try:
+            with open(status) as fh: return '\nState:\tZ' in fh.read()
+        except FileNotFoundError: return True
+    deadline=time.monotonic()+5
+    while not gone() and time.monotonic()<deadline: time.sleep(.02)
+    assert gone()
 
 
 def test_launch_error_has_explicit_partial_evidence(tmp_path):
